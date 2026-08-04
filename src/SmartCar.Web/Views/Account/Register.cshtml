@@ -1,50 +1,119 @@
 @model SmartCar.Web.ViewModels.RegisterViewModel
 @{
     ViewData["Title"] = "Đăng ký";
+    ViewData["FullWidth"] = true;
+    ViewData["AccountPage"] = true;
 }
 
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-5">
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
-                <h1 class="h3 mb-4">Đăng ký khách hàng</h1>
-                <form asp-action="Register" method="post">
-                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-                    <div class="mb-3">
-                        <label asp-for="FullName" class="form-label"></label>
-                        <input asp-for="FullName" class="form-control" />
-                        <span asp-validation-for="FullName" class="text-danger"></span>
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="PhoneNumber" class="form-label"></label>
-                        <input asp-for="PhoneNumber" class="form-control" />
-                        <span asp-validation-for="PhoneNumber" class="text-danger"></span>
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="Email" class="form-label"></label>
-                        <input asp-for="Email" class="form-control" />
-                        <span asp-validation-for="Email" class="text-danger"></span>
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="Password" class="form-label"></label>
-                        <input asp-for="Password" class="form-control" />
-                        <span asp-validation-for="Password" class="text-danger"></span>
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="ConfirmPassword" class="form-label"></label>
-                        <input asp-for="ConfirmPassword" class="form-control" />
-                        <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">Tạo tài khoản</button>
-                </form>
-                <p class="text-center mt-3 mb-0">
-                    Đã có tài khoản? <a asp-action="Login">Đăng nhập</a>
-                </p>
+@section Styles {
+    <link rel="stylesheet" href="~/css/home-photo-hero.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/account-modal.css" asp-append-version="true" />
+}
+
+<section class="account-modal-page" aria-labelledby="registerTitle">
+    <div class="account-modal-card account-modal-card--register">
+        <a class="account-modal-close" asp-controller="Home" asp-action="Index" aria-label="Đóng và quay lại trang chủ">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+        </a>
+
+        <header class="account-modal-header">
+            <div class="account-modal-logo">
+                <svg viewBox="0 0 64 32" fill="none" aria-hidden="true">
+                    <path d="M10 21h44l-3.8-9.2A6 6 0 0 0 44.6 8H22.3a7 7 0 0 0-5.8 3.1L10 21Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round" />
+                    <circle cx="18" cy="24" r="5" fill="#fff" stroke="currentColor" stroke-width="3" />
+                    <circle cx="47" cy="24" r="5" fill="#fff" stroke="currentColor" stroke-width="3" />
+                </svg>
+                <span>SmartCar</span>
             </div>
-        </div>
+            <h1 id="registerTitle">Đăng ký</h1>
+            <p>Đăng ký thành viên để tìm xe, gửi yêu cầu thuê và theo dõi đơn dễ dàng hơn.</p>
+        </header>
+
+        <form asp-action="Register" method="post" class="account-form" novalidate>
+            <div asp-validation-summary="ModelOnly" class="account-validation-summary"></div>
+
+            <div class="account-form-grid">
+                <div class="account-field">
+                    <label asp-for="FullName" class="form-label"></label>
+                    <input asp-for="FullName" class="form-control" autocomplete="name" placeholder="Nhập họ và tên" />
+                    <span asp-validation-for="FullName" class="field-validation-error"></span>
+                </div>
+
+                <div class="account-field">
+                    <label asp-for="PhoneNumber" class="form-label"></label>
+                    <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" inputmode="tel" placeholder="Nhập số điện thoại" />
+                    <span asp-validation-for="PhoneNumber" class="field-validation-error"></span>
+                </div>
+
+                <div class="account-field account-field--full">
+                    <label asp-for="Email" class="form-label">Email</label>
+                    <input asp-for="Email" class="form-control" autocomplete="email" placeholder="Nhập email của bạn" />
+                    <span asp-validation-for="Email" class="field-validation-error"></span>
+                </div>
+
+                <div class="account-field">
+                    <label asp-for="Password" class="form-label"></label>
+                    <div class="account-password-wrap">
+                        <input asp-for="Password" class="form-control" autocomplete="new-password" placeholder="Ít nhất 6 ký tự" />
+                        <button type="button" class="account-password-toggle" data-password-toggle="Password" aria-label="Hiện mật khẩu">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6S2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.8" />
+                                <circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.8" />
+                            </svg>
+                        </button>
+                    </div>
+                    <span asp-validation-for="Password" class="field-validation-error"></span>
+                </div>
+
+                <div class="account-field">
+                    <label asp-for="ConfirmPassword" class="form-label"></label>
+                    <div class="account-password-wrap">
+                        <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" placeholder="Nhập lại mật khẩu" />
+                        <button type="button" class="account-password-toggle" data-password-toggle="ConfirmPassword" aria-label="Hiện mật khẩu xác nhận">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6S2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.8" />
+                                <circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.8" />
+                            </svg>
+                        </button>
+                    </div>
+                    <span asp-validation-for="ConfirmPassword" class="field-validation-error"></span>
+                </div>
+            </div>
+
+            <div class="account-terms">
+                <input asp-for="AcceptTerms" class="form-check-input" />
+                <label asp-for="AcceptTerms">
+                    Tôi đã đọc và đồng ý với
+                    <a asp-controller="Home" asp-action="Index" asp-fragment="rentalInfo" target="_blank">điều khoản sử dụng</a>
+                    và
+                    <a asp-controller="Home" asp-action="Privacy" target="_blank">chính sách bảo mật</a> của SmartCar.
+                </label>
+            </div>
+            <span asp-validation-for="AcceptTerms" class="field-validation-error mb-3"></span>
+
+            <button type="submit" class="btn btn-primary account-submit w-100">Đăng ký</button>
+        </form>
+
+        <p class="account-switch">
+            Bạn đã là thành viên? <a asp-action="Login">Đăng nhập ngay</a>
+        </p>
     </div>
-</div>
+</section>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.querySelectorAll("[data-password-toggle]").forEach(button => {
+            button.addEventListener("click", () => {
+                const input = document.getElementById(button.dataset.passwordToggle);
+                if (!input) return;
+
+                const showPassword = input.type === "password";
+                input.type = showPassword ? "text" : "password";
+                button.setAttribute("aria-label", showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu");
+            });
+        });
+    </script>
 }
