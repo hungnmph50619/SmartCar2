@@ -10,6 +10,16 @@ namespace SmartCar.Infrastructure.Persistence;
 
 public static class DatabaseSeeder
 {
+    private static readonly string[] RequiredBrandNames =
+    {
+        "Toyota",
+        "Honda",
+        "Hyundai",
+        "Kia",
+        "Ford",
+        "Mazda"
+    };
+
     public static async Task SeedAsync(IServiceProvider services)
     {
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
@@ -67,23 +77,32 @@ public static class DatabaseSeeder
             }
         }
 
-        if (!await dbContext.Brands.AnyAsync())
-        {
-            dbContext.Brands.AddRange(
-                new Brand { BrandName = "Toyota" },
-                new Brand { BrandName = "Honda" },
-                new Brand { BrandName = "Hyundai" },
-                new Brand { BrandName = "Kia" },
-                new Brand { BrandName = "Ford" },
-                new Brand { BrandName = "Mazda" });
+        var existingBrands = await dbContext.Brands.ToListAsync();
+        var existingBrandNames = existingBrands
+            .Select(brand => brand.BrandName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+        foreach (var brandName in RequiredBrandNames)
+        {
+            if (!existingBrandNames.Contains(brandName))
+            {
+                dbContext.Brands.Add(new Brand { BrandName = brandName });
+            }
+        }
+
+        if (dbContext.ChangeTracker.HasChanges())
+        {
             await dbContext.SaveChangesAsync();
         }
 
         if (!await dbContext.Vehicles.AnyAsync())
         {
-            var brands = await dbContext.Brands
-                .ToDictionaryAsync(brand => brand.BrandName, StringComparer.OrdinalIgnoreCase);
+            var brandList = await dbContext.Brands
+                .AsNoTracking()
+                .ToListAsync();
+            var brands = brandList.ToDictionary(
+                brand => brand.BrandName,
+                StringComparer.OrdinalIgnoreCase);
 
             dbContext.Vehicles.AddRange(
                 CreateVehicle(brands["Toyota"].BrandId, "Toyota Vios 2024", "Vios", "30A-123.45", 2024, 5, "Tự động", "Xăng", "Trắng", 700_000m, 18_250,
