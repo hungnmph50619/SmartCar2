@@ -31,6 +31,14 @@
             <p>Đăng nhập để quản lý đơn thuê và theo dõi hành trình của bạn.</p>
         </header>
 
+        @if (TempData["LoginSuccessMessage"] is string loginSuccessMessage)
+        {
+            <div class="account-success-message" role="status">
+                <span class="account-success-message__icon" aria-hidden="true">✓</span>
+                <span>@loginSuccessMessage</span>
+            </div>
+        }
+
         <form asp-action="Login" method="post" class="account-form" novalidate>
             <input asp-for="ReturnUrl" type="hidden" />
 
