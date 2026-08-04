@@ -100,6 +100,59 @@
     border-radius: 9px;
 }
 
+.smartcar-notification-link {
+    display: inline-flex;
+    width: 42px;
+    height: 42px;
+    margin-right: 5px;
+    align-items: center;
+    justify-content: center;
+    color: #344054;
+    border-radius: 50%;
+    text-decoration: none;
+    transition: color .18s ease, background .18s ease;
+}
+
+.smartcar-notification-link:hover {
+    color: #0755c7;
+    background: #eef5ff;
+}
+
+.smartcar-notification-link svg {
+    width: 22px;
+    height: 22px;
+}
+
+.smartcar-account-dropdown {
+    width: 230px;
+    padding: 8px;
+    border-radius: 13px;
+}
+
+.smartcar-account-dropdown__heading {
+    padding: 8px 10px 7px;
+    color: #98a2b3;
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.smartcar-account-dropdown .dropdown-item {
+    padding: 9px 10px;
+    border-radius: 8px;
+    font-size: .86rem;
+}
+
+.smartcar-account-dropdown .dropdown-item:hover {
+    color: #0755c7;
+    background: #eef5ff;
+}
+
+.smartcar-account-dropdown form {
+    margin: 0;
+}
+
 @media (max-width: 991.98px) {
     .smartcar-nav--compact {
         margin: 14px 0 6px;
@@ -114,6 +167,23 @@
     .smartcar-login-compact {
         width: 100%;
         justify-content: center;
+    }
+
+    .smartcar-notification-link {
+        width: 100%;
+        min-height: 44px;
+        margin: 3px 0;
+        border-radius: 9px;
+        background: #f7f9fc;
+    }
+
+    .smartcar-user-button {
+        width: 100%;
+        justify-content: flex-start !important;
+    }
+
+    .smartcar-account-dropdown {
+        width: 100%;
     }
 
     .direct-service-panel {
@@ -151,5 +221,12 @@
 
     .direct-service-panel__content h2 {
         font-size: 2rem;
+    }
+
+    .smartcar-user-name {
+        max-width: 230px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 }
