@@ -167,12 +167,12 @@ public class VehiclesController : Controller
                 .ThenInclude(booking => booking.Review)
             .FirstOrDefaultAsync(item => item.VehicleId == id, cancellationToken);
 
-        if (vehicle is null || vehicle.Status is VehicleStatus.Inactive or VehicleStatus.Maintenance)
+        if (vehicle is null || vehicle.Status != VehicleStatus.Available)
         {
             return NotFound();
         }
 
-        var similarVehicles = await _dbContext.Vehicles
+        var similarVehicleCandidates = await _dbContext.Vehicles
             .AsNoTracking()
             .Include(item => item.Brand)
             .Include(item => item.Images)
@@ -182,8 +182,15 @@ public class VehiclesController : Controller
                 item.VehicleId != id
                 && item.Status == VehicleStatus.Available
                 && (item.Seats == vehicle.Seats || item.BrandId == vehicle.BrandId))
-            .Take(4)
             .ToListAsync(cancellationToken);
+
+        var similarVehicles = similarVehicleCandidates
+            .Where(item => !item.Bookings.Any(booking =>
+                BlockingBookingStatuses.Contains(booking.Status)
+                && pickupDateTime < booking.ReturnDate
+                && returnDateTime > booking.PickupDate))
+            .Take(4)
+            .ToList();
 
         var rentalDays = Math.Max(1, (int)Math.Ceiling((returnDateTime - pickupDateTime).TotalDays));
         var rentalAmount = vehicle.DailyPrice * rentalDays;
@@ -259,6 +266,10 @@ public class VehiclesController : Controller
             return Challenge();
         }
 
+        model.PickupLocation = string.IsNullOrWhiteSpace(model.PickupLocation)
+            ? "SmartCar Cầu Giấy"
+            : model.PickupLocation.Trim();
+
         var (pickupDateTime, returnDateTime) = BuildDateRange(
             model.PickupDate,
             model.PickupTime,
@@ -313,7 +324,10 @@ public class VehiclesController : Controller
         }
 
         var rentalDays = Math.Max(1, (int)Math.Ceiling((returnDateTime - pickupDateTime).TotalDays));
-        var deliveryFee = model.PickupLocation.Equals("SmartCar Cầu Giấy", StringComparison.OrdinalIgnoreCase)
+        var deliveryFee = string.Equals(
+            model.PickupLocation,
+            "SmartCar Cầu Giấy",
+            StringComparison.OrdinalIgnoreCase)
             ? 0m
             : 100_000m;
         var rentalAmount = vehicle.DailyPrice * rentalDays;
@@ -402,7 +416,7 @@ public class VehiclesController : Controller
             FuelType = vehicle.FuelType,
             DailyPrice = vehicle.DailyPrice,
             ImageUrl = primaryImage is null
-                ? BuildPlaceholderImage(vehicle.VehicleName, vehicle.Color ?? "Xanh đậm")
+                ? BuildPlaceholderImage(vehicle.VehicleName, GetVehicleColor(vehicle.Color))
                 : NormalizeImagePath(primaryImage.ImagePath),
             Rating = completedReviews.Count == 0 ? 5 : completedReviews.Average(review => review.Rating),
             RentalCount = vehicle.Bookings.Count(booking => booking.Status == BookingStatus.Completed),
@@ -480,6 +494,17 @@ public class VehiclesController : Controller
         <= 6 => "Nội thất",
         7 => "Khoang hành lý",
         _ => "Tình trạng xe"
+    };
+
+    private static string GetVehicleColor(string? color) => color?.Trim().ToLowerInvariant() switch
+    {
+        "trắng" => "#dfe7ef",
+        "đen" => "#111827",
+        "bạc" => "#7b8794",
+        "đỏ" => "#b42318",
+        "xanh" => "#0f5c78",
+        "xanh đậm" => "#123d6a",
+        _ => "#123d6a"
     };
 
     private static string GetPlaceholderColor(int index) => index switch
