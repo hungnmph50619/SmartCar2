@@ -1,0 +1,370 @@
+@model SmartCar.Web.ViewModels.VehicleDetailsViewModel
+@{
+    ViewData["Title"] = Model.Name;
+    ViewData["FullWidth"] = true;
+    var mainImage = Model.Images.FirstOrDefault()?.Url ?? string.Empty;
+    var currentUrl = Url.Action("Details", "Vehicles", new
+    {
+        id = Model.VehicleId,
+        pickupLocation = Model.PickupLocation,
+        pickupDate = Model.PickupDateTime.ToString("yyyy-MM-dd"),
+        pickupTime = Model.PickupDateTime.ToString("HH:mm"),
+        returnDate = Model.ReturnDateTime.ToString("yyyy-MM-dd"),
+        returnTime = Model.ReturnDateTime.ToString("HH:mm")
+    });
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/vehicles-catalog.css" asp-append-version="true" />
+}
+
+<div class="vd-page">
+    <nav class="vd-tabs" aria-label="Điều hướng chi tiết xe">
+        <div class="vc-container vd-tabs__inner">
+            <a href="#vehicleFeatures">Đặc điểm</a>
+            <a href="#rentalDocuments">Giấy tờ thuê xe</a>
+            <a href="#pickupInformation">Giao nhận xe</a>
+            <a href="#smartcarOperator">SmartCar quản lý</a>
+            <a class="vd-tabs__back" asp-action="Index"
+               asp-route-pickupLocation="@Model.PickupLocation"
+               asp-route-pickupDate="@Model.PickupDateTime.ToString("yyyy-MM-dd")"
+               asp-route-pickupTime="@Model.PickupDateTime.ToString("HH:mm")"
+               asp-route-returnDate="@Model.ReturnDateTime.ToString("yyyy-MM-dd")"
+               asp-route-returnTime="@Model.ReturnDateTime.ToString("HH:mm")">×</a>
+        </div>
+    </nav>
+
+    <main class="vc-container vd-main">
+        @if (TempData["ErrorMessage"] is string errorMessage)
+        {
+            <div class="alert alert-danger mt-3">@errorMessage</div>
+        }
+
+        <section class="vd-gallery" aria-label="Ảnh thực tế của @Model.Name">
+            <button type="button" class="vd-gallery__main" data-gallery-index="0">
+                <img src="@mainImage" alt="@Model.Name - @Model.Images.FirstOrDefault()?.Caption" />
+            </button>
+            <div class="vd-gallery__side">
+                @for (var index = 1; index < Math.Min(4, Model.Images.Count); index++)
+                {
+                    <button type="button" class="vd-gallery__small" data-gallery-index="@index">
+                        <img src="@Model.Images[index].Url" alt="@Model.Name - @Model.Images[index].Caption" />
+                        @if (index == 3)
+                        {
+                            <span class="vd-gallery__all">▧ Xem tất cả @Model.Images.Count ảnh</span>
+                        }
+                    </button>
+                }
+            </div>
+        </section>
+
+        <div class="vd-layout">
+            <div class="vd-content">
+                <header class="vd-title-block">
+                    <div>
+                        <span class="vc-eyebrow">XE THUỘC ĐỘI XE SMARTCAR</span>
+                        <h1>@Model.Name</h1>
+                        <p class="vd-title-block__meta">
+                            <span>★ @Model.Rating.ToString("0.0")</span>
+                            <span>· @Model.RentalCount lượt thuê</span>
+                            <span>· @Model.ManufactureYear</span>
+                        </p>
+                    </div>
+                    <div class="vd-title-actions">
+                        <button type="button" aria-label="Chia sẻ">↗</button>
+                        <button type="button" aria-label="Yêu thích">♡</button>
+                    </div>
+                </header>
+
+                <div class="vd-trust-tags">
+                    <span>✓ Ảnh do SmartCar cập nhật</span>
+                    <span>✓ Xe được kiểm tra trước chuyến</span>
+                    <span>⌖ Có giao xe tận nơi</span>
+                </div>
+
+                <section class="vd-section" id="vehicleFeatures">
+                    <h2>Đặc điểm</h2>
+                    <div class="vd-spec-grid">
+                        <div><span class="vd-spec-grid__icon">⚙</span><small>Truyền động</small><strong>@Model.Transmission</strong></div>
+                        <div><span class="vd-spec-grid__icon">▥</span><small>Số ghế</small><strong>@Model.Seats chỗ</strong></div>
+                        <div><span class="vd-spec-grid__icon">▱</span><small>Nhiên liệu</small><strong>@Model.FuelType</strong></div>
+                        <div><span class="vd-spec-grid__icon">↗</span><small>Số kilomet</small><strong>@Model.CurrentMileage.ToString("N0") km</strong></div>
+                    </div>
+                </section>
+
+                <section class="vd-section">
+                    <h2>Mô tả xe</h2>
+                    <p>@Model.Description</p>
+                    <ul class="vd-highlight-list">
+                        <li>Xe thuộc sở hữu và được SmartCar trực tiếp quản lý.</li>
+                        <li>Ngoại thất, nội thất, nhiên liệu và kilomet được ghi nhận trước bàn giao.</li>
+                        <li>Thông tin tình trạng xe được đối chiếu bằng ảnh và biên bản nhận xe.</li>
+                    </ul>
+                </section>
+
+                <section class="vd-section">
+                    <h2>Tiện nghi</h2>
+                    <div class="vd-amenity-grid">
+                        <span>⌁ Bluetooth</span>
+                        <span>⌖ Định vị GPS</span>
+                        <span>◉ Camera lùi</span>
+                        <span>▣ Cổng USB</span>
+                        <span>ETC</span>
+                        <span>◈ Túi khí an toàn</span>
+                        <span>◌ Cảm biến va chạm</span>
+                        <span>▤ Màn hình giải trí</span>
+                    </div>
+                </section>
+
+                <section class="vd-section" id="rentalDocuments">
+                    <h2>Giấy tờ thuê xe</h2>
+                    <p class="vd-muted">Khách xuất trình bản gốc khi nhận xe và cập nhật ảnh xác minh trong tài khoản.</p>
+                    <div class="vd-document-list">
+                        <div><span>▣</span><strong>Giấy phép lái xe còn hiệu lực</strong><small>Phù hợp với loại xe đăng ký thuê.</small></div>
+                        <div><span>▤</span><strong>CCCD hoặc hộ chiếu</strong><small>Thông tin phải trùng khớp với tài khoản SmartCar.</small></div>
+                    </div>
+                </section>
+
+                <section class="vd-section">
+                    <h2>Điều kiện sử dụng</h2>
+                    <ul class="vd-rule-list">
+                        <li>Sử dụng xe đúng mục đích và tuân thủ pháp luật.</li>
+                        <li>Không giao xe cho người chưa đăng ký trong hợp đồng điều khiển.</li>
+                        <li>Không tự ý sửa chữa, thay thế phụ tùng hoặc cầm cố xe.</li>
+                        <li>Trả xe đúng giờ, đúng mức nhiên liệu và tình trạng đã thỏa thuận.</li>
+                        <li>Liên hệ SmartCar ngay khi có sự cố; không tự ý xử lý ngoài hướng dẫn.</li>
+                    </ul>
+                </section>
+
+                <section class="vd-section">
+                    <h2>Phụ phí có thể phát sinh</h2>
+                    <div class="vd-fee-table">
+                        <div><span><strong>Phí vượt kilomet</strong><small>Áp dụng khi vượt giới hạn ghi trong hợp đồng.</small></span><b>3.000đ/km</b></div>
+                        <div><span><strong>Phí trả xe quá giờ</strong><small>Trễ quá 3 giờ có thể được tính thêm một ngày thuê.</small></span><b>70.000đ/giờ</b></div>
+                        <div><span><strong>Phí vệ sinh</strong><small>Áp dụng khi xe trả lại không bảo đảm vệ sinh thông thường.</small></span><b>70.000đ</b></div>
+                        <div><span><strong>Phí khử mùi</strong><small>Áp dụng khi có mùi thuốc lá, thực phẩm hoặc chất gây mùi.</small></span><b>500.000đ</b></div>
+                    </div>
+                </section>
+
+                <section class="vd-section" id="pickupInformation">
+                    <h2>Giao nhận xe</h2>
+                    <div class="vd-pickup-box">
+                        <span class="vd-pickup-box__icon">⌖</span>
+                        <div><strong>@Model.PickupLocation</strong><p>Địa chỉ cụ thể và nhân viên giao nhận được hiển thị sau khi đơn đã được xác nhận và khách hoàn tất thanh toán cọc.</p></div>
+                    </div>
+                </section>
+
+                <section class="vd-section" id="smartcarOperator">
+                    <h2>Xe do SmartCar trực tiếp vận hành</h2>
+                    <div class="vd-operator">
+                        <div class="vd-operator__brand">SC</div>
+                        <div>
+                            <h3>SmartCar Cầu Giấy</h3>
+                            <p>Một đơn vị thống nhất quản lý xe, xác nhận đơn, giao nhận, bảo trì và tiếp nhận hỗ trợ.</p>
+                        </div>
+                    </div>
+                    <div class="vd-operator-stats">
+                        <div><strong>100%</strong><span>Xe do SmartCar quản lý</span></div>
+                        <div><strong>Trực tiếp</strong><span>Tiếp nhận và xử lý sự cố</span></div>
+                        <div><strong>Minh bạch</strong><span>Giá, cọc và phụ phí</span></div>
+                    </div>
+                </section>
+
+                <section class="vd-section">
+                    <div class="vd-section__head">
+                        <h2>Đánh giá từ khách đã thuê</h2>
+                        <span>★ @Model.Rating.ToString("0.0")</span>
+                    </div>
+                    @if (Model.Reviews.Count == 0)
+                    {
+                        <div class="vd-no-review">Xe chưa có đánh giá. Đánh giá chỉ được mở sau khi khách hoàn thành đơn thuê.</div>
+                    }
+                    else
+                    {
+                        <div class="vd-review-grid">
+                            @foreach (var review in Model.Reviews)
+                            {
+                                <article class="vd-review">
+                                    <div class="vd-review__avatar">K</div>
+                                    <div><strong>@review.CustomerName</strong><span class="vd-review__stars">@string.Concat(Enumerable.Repeat("★", review.Rating))</span><p>@review.Comment</p><time>@review.CreatedAt.ToString("dd/MM/yyyy")</time></div>
+                                </article>
+                            }
+                        </div>
+                    }
+                </section>
+            </div>
+
+            <aside class="vd-booking-card">
+                <div class="vd-booking-card__price"><strong>@Model.DailyPrice.ToString("N0")đ</strong><span>/ngày</span></div>
+                <div class="vd-booking-card__dates">
+                    <div><small>Nhận xe</small><strong>@Model.PickupDateTime.ToString("HH:mm dd/MM/yyyy")</strong></div>
+                    <div><small>Trả xe</small><strong>@Model.ReturnDateTime.ToString("HH:mm dd/MM/yyyy")</strong></div>
+                </div>
+                <div class="vd-booking-card__location">
+                    <small>Địa điểm giao nhận</small>
+                    <strong>⌖ @Model.PickupLocation</strong>
+                    <a asp-action="Index"
+                       asp-route-pickupLocation="@Model.PickupLocation"
+                       asp-route-pickupDate="@Model.PickupDateTime.ToString("yyyy-MM-dd")"
+                       asp-route-pickupTime="@Model.PickupDateTime.ToString("HH:mm")"
+                       asp-route-returnDate="@Model.ReturnDateTime.ToString("yyyy-MM-dd")"
+                       asp-route-returnTime="@Model.ReturnDateTime.ToString("HH:mm")">Thay đổi lịch thuê</a>
+                </div>
+                <div class="vd-price-lines">
+                    <div><span>Đơn giá thuê</span><b>@Model.DailyPrice.ToString("N0")đ/ngày</b></div>
+                    <div><span>@Model.RentalDays ngày thuê</span><b>@Model.RentalAmount.ToString("N0")đ</b></div>
+                    <div><span>Phí giao nhận</span><b>@(Model.DeliveryFee == 0 ? "Miễn phí" : $"{Model.DeliveryFee:N0}đ")</b></div>
+                    <div><span>Tiền cọc dự kiến</span><b>@Model.DepositAmount.ToString("N0")đ</b></div>
+                    <div class="vd-price-lines__total"><span>Tổng dự kiến</span><b>@Model.EstimatedTotal.ToString("N0")đ</b></div>
+                </div>
+                <p class="vd-booking-card__note">Bạn chưa phải thanh toán ngay. SmartCar sẽ kiểm tra lịch và xác nhận xe trước.</p>
+
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <form asp-action="RequestRental" method="post">
+                        <input type="hidden" name="VehicleId" value="@Model.VehicleId" />
+                        <input type="hidden" name="PickupLocation" value="@Model.PickupLocation" />
+                        <input type="hidden" name="PickupDate" value="@Model.PickupDateTime.ToString("yyyy-MM-dd")" />
+                        <input type="hidden" name="PickupTime" value="@Model.PickupDateTime.ToString("HH:mm")" />
+                        <input type="hidden" name="ReturnDate" value="@Model.ReturnDateTime.ToString("yyyy-MM-dd")" />
+                        <input type="hidden" name="ReturnTime" value="@Model.ReturnDateTime.ToString("HH:mm")" />
+                        <button type="submit" class="btn btn-primary vd-booking-card__button">Gửi yêu cầu thuê</button>
+                    </form>
+                }
+                else
+                {
+                    <a class="btn btn-primary vd-booking-card__button" asp-controller="Account" asp-action="Login" asp-route-returnUrl="@currentUrl">Đăng nhập để gửi yêu cầu</a>
+                }
+                <small class="vd-booking-card__time">Thời gian xác nhận dự kiến: tối đa 120 phút.</small>
+            </aside>
+        </div>
+
+        @if (Model.SimilarVehicles.Count > 0)
+        {
+            <section class="vd-similar">
+                <div class="vd-section__head"><h2>Xe tương tự</h2><a asp-action="Index">Xem tất cả xe →</a></div>
+                <div class="vc-grid">
+                    @foreach (var vehicle in Model.SimilarVehicles)
+                    {
+                        <article class="vc-card">
+                            <a class="vc-card__image" asp-action="Details" asp-route-id="@vehicle.VehicleId"
+                               asp-route-pickupLocation="@Model.PickupLocation"
+                               asp-route-pickupDate="@Model.PickupDateTime.ToString("yyyy-MM-dd")"
+                               asp-route-pickupTime="@Model.PickupDateTime.ToString("HH:mm")"
+                               asp-route-returnDate="@Model.ReturnDateTime.ToString("yyyy-MM-dd")"
+                               asp-route-returnTime="@Model.ReturnDateTime.ToString("HH:mm")">
+                                <img src="@vehicle.ImageUrl" alt="@vehicle.Name" loading="lazy" />
+                                <span class="vc-card__badge">@vehicle.Badge</span>
+                            </a>
+                            <div class="vc-card__body">
+                                <h2>@vehicle.Name</h2>
+                                <div class="vc-card__specs"><span>@vehicle.Transmission</span><span>@vehicle.Seats chỗ</span><span>@vehicle.FuelType</span></div>
+                                <div class="vc-card__footer"><span class="vc-card__rating">★ @vehicle.Rating.ToString("0.0")</span><span class="vc-card__price"><strong>@vehicle.DailyPrice.ToString("N0")đ</strong>/ngày</span></div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+    </main>
+</div>
+
+<div class="vd-lightbox" id="vehicleLightbox" aria-hidden="true">
+    <div class="vd-lightbox__top">
+        <span id="lightboxCounter">1/@Model.Images.Count</span>
+        <div class="vd-lightbox__actions">
+            <button type="button" id="lightboxZoomOut" aria-label="Thu nhỏ">−</button>
+            <button type="button" id="lightboxZoomIn" aria-label="Phóng to">＋</button>
+            <button type="button" id="lightboxClose" aria-label="Đóng">×</button>
+        </div>
+    </div>
+    <div class="vd-lightbox__filters">
+        <button type="button" class="active" data-gallery-filter="Tất cả">Tất cả</button>
+        <button type="button" data-gallery-filter="Ngoại thất">Ngoại thất</button>
+        <button type="button" data-gallery-filter="Nội thất">Nội thất</button>
+        <button type="button" data-gallery-filter="Khoang hành lý">Khoang hành lý</button>
+        <button type="button" data-gallery-filter="Tình trạng xe">Tình trạng xe</button>
+    </div>
+    <button type="button" class="vd-lightbox__nav vd-lightbox__nav--prev" id="lightboxPrev" aria-label="Ảnh trước">‹</button>
+    <figure class="vd-lightbox__figure"><img id="lightboxImage" src="@mainImage" alt="Ảnh xe" /><figcaption id="lightboxCaption"></figcaption></figure>
+    <button type="button" class="vd-lightbox__nav vd-lightbox__nav--next" id="lightboxNext" aria-label="Ảnh tiếp theo">›</button>
+    <div class="vd-lightbox__thumbs" id="lightboxThumbs"></div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const images = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Images));
+            const lightbox = document.getElementById("vehicleLightbox");
+            const image = document.getElementById("lightboxImage");
+            const caption = document.getElementById("lightboxCaption");
+            const counter = document.getElementById("lightboxCounter");
+            const thumbs = document.getElementById("lightboxThumbs");
+            let filtered = images.map((item, index) => ({ ...item, originalIndex: index }));
+            let current = 0;
+            let zoom = 1;
+
+            const renderThumbs = () => {
+                thumbs.innerHTML = "";
+                filtered.forEach((item, index) => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = index === current ? "active" : "";
+                    button.innerHTML = `<img src="${item.Url}" alt="${item.Caption}">`;
+                    button.addEventListener("click", () => { current = index; render(); });
+                    thumbs.appendChild(button);
+                });
+            };
+
+            const render = () => {
+                if (!filtered.length) return;
+                current = (current + filtered.length) % filtered.length;
+                const item = filtered[current];
+                image.src = item.Url;
+                image.alt = item.Caption;
+                image.style.transform = `scale(${zoom})`;
+                caption.textContent = `${item.Caption} · Ảnh do SmartCar cập nhật`;
+                counter.textContent = `${current + 1}/${filtered.length}`;
+                renderThumbs();
+            };
+
+            const open = originalIndex => {
+                filtered = images.map((item, index) => ({ ...item, originalIndex: index }));
+                current = Math.max(0, filtered.findIndex(item => item.originalIndex === originalIndex));
+                zoom = 1;
+                lightbox.classList.add("open");
+                lightbox.setAttribute("aria-hidden", "false");
+                document.body.style.overflow = "hidden";
+                document.querySelectorAll("[data-gallery-filter]").forEach(button => button.classList.toggle("active", button.dataset.galleryFilter === "Tất cả"));
+                render();
+            };
+
+            const close = () => {
+                lightbox.classList.remove("open");
+                lightbox.setAttribute("aria-hidden", "true");
+                document.body.style.overflow = "";
+            };
+
+            document.querySelectorAll("[data-gallery-index]").forEach(button => button.addEventListener("click", () => open(Number(button.dataset.galleryIndex))));
+            document.getElementById("lightboxClose")?.addEventListener("click", close);
+            document.getElementById("lightboxPrev")?.addEventListener("click", () => { current--; render(); });
+            document.getElementById("lightboxNext")?.addEventListener("click", () => { current++; render(); });
+            document.getElementById("lightboxZoomIn")?.addEventListener("click", () => { zoom = Math.min(2.5, zoom + .25); render(); });
+            document.getElementById("lightboxZoomOut")?.addEventListener("click", () => { zoom = Math.max(.75, zoom - .25); render(); });
+            document.querySelectorAll("[data-gallery-filter]").forEach(button => button.addEventListener("click", () => {
+                const filter = button.dataset.galleryFilter;
+                filtered = images.map((item, index) => ({ ...item, originalIndex: index })).filter(item => filter === "Tất cả" || item.Category === filter);
+                current = 0;
+                zoom = 1;
+                document.querySelectorAll("[data-gallery-filter]").forEach(item => item.classList.toggle("active", item === button));
+                render();
+            }));
+            document.addEventListener("keydown", event => {
+                if (!lightbox.classList.contains("open")) return;
+                if (event.key === "Escape") close();
+                if (event.key === "ArrowLeft") { current--; render(); }
+                if (event.key === "ArrowRight") { current++; render(); }
+            });
+        })();
+    </script>
+}
