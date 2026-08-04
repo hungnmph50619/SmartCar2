@@ -1,0 +1,321 @@
+/* Trang tài khoản dạng hộp thoại toàn màn hình, lấy cảm hứng từ UI thuê xe hiện đại. */
+.account-body {
+    overflow: hidden;
+}
+
+.account-modal-page {
+    position: fixed;
+    z-index: 3000;
+    inset: 0;
+    display: grid;
+    min-height: 100dvh;
+    padding: 28px 16px;
+    place-items: center;
+    overflow-y: auto;
+    background:
+        linear-gradient(rgba(7, 15, 29, .68), rgba(7, 15, 29, .76)),
+        var(--smartcar-photo-hero);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.account-modal-card {
+    position: relative;
+    width: min(100%, 430px);
+    padding: 34px 30px 28px;
+    border: 1px solid rgba(255, 255, 255, .58);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, .98);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, .32);
+}
+
+.account-modal-card--register {
+    width: min(100%, 470px);
+}
+
+.account-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    color: #344054;
+    border: 1px solid #e4e7ec;
+    border-radius: 50%;
+    background: #fff;
+    text-decoration: none;
+    transition: background .2s ease, border-color .2s ease, transform .2s ease;
+}
+
+.account-modal-close:hover {
+    color: #101828;
+    border-color: #cfd5dd;
+    background: #f7f9fc;
+    transform: rotate(5deg);
+}
+
+.account-modal-header {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.account-modal-logo {
+    display: inline-flex;
+    margin-bottom: 14px;
+    align-items: center;
+    gap: 8px;
+    color: #0755c7;
+    font-size: .92rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+}
+
+.account-modal-logo svg {
+    width: 30px;
+    height: 18px;
+}
+
+.account-modal-header h1 {
+    margin: 0 0 8px;
+    color: #101828;
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: -.03em;
+}
+
+.account-modal-header p {
+    margin: 0;
+    color: #667085;
+    font-size: .93rem;
+    line-height: 1.55;
+}
+
+.account-form .form-label {
+    margin-bottom: 7px;
+    color: #475467;
+    font-size: .86rem;
+    font-weight: 600;
+}
+
+.account-form .form-control {
+    min-height: 48px;
+    padding: 11px 13px;
+    color: #101828;
+    border: 1px solid #d0d5dd;
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: none;
+}
+
+.account-form .form-control::placeholder {
+    color: #98a2b3;
+}
+
+.account-form .form-control:focus {
+    border-color: #5b8def;
+    box-shadow: 0 0 0 4px rgba(11, 98, 220, .10);
+}
+
+.account-field {
+    margin-bottom: 17px;
+}
+
+.account-password-wrap {
+    position: relative;
+}
+
+.account-password-wrap .form-control {
+    padding-right: 48px;
+}
+
+.account-password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    color: #667085;
+    border: 0;
+    background: transparent;
+    transform: translateY(-50%);
+}
+
+.account-password-toggle:hover {
+    color: #0755c7;
+}
+
+.account-password-toggle svg {
+    width: 20px;
+    height: 20px;
+}
+
+.account-form-row {
+    display: flex;
+    margin: -2px 0 18px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.account-form .form-check {
+    min-height: auto;
+    margin: 0;
+}
+
+.account-form .form-check-input {
+    margin-top: .16rem;
+    border-color: #b8c0cc;
+}
+
+.account-form .form-check-input:checked {
+    border-color: #0755c7;
+    background-color: #0755c7;
+}
+
+.account-form .form-check-label {
+    color: #667085;
+    font-size: .85rem;
+}
+
+.account-link {
+    color: #0755c7;
+    font-size: .85rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.account-link:hover {
+    color: #063b82;
+    text-decoration: underline;
+}
+
+.account-submit {
+    min-height: 50px;
+    border: 0;
+    border-radius: 9px;
+    background: #0755c7;
+    box-shadow: 0 10px 22px rgba(7, 85, 199, .20);
+    font-weight: 700;
+}
+
+.account-submit:hover,
+.account-submit:focus {
+    background: #0649ab;
+}
+
+.account-switch {
+    margin: 17px 0 0;
+    color: #667085;
+    font-size: .87rem;
+    text-align: center;
+}
+
+.account-switch a {
+    color: #0755c7;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.account-switch a:hover {
+    text-decoration: underline;
+}
+
+.account-validation-summary {
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    color: #b42318;
+    border: 1px solid #fecdca;
+    border-radius: 8px;
+    background: #fef3f2;
+    font-size: .84rem;
+}
+
+.account-validation-summary:empty,
+.account-validation-summary.validation-summary-valid {
+    display: none;
+}
+
+.account-form .field-validation-error {
+    display: block;
+    margin-top: 5px;
+    color: #b42318;
+    font-size: .78rem;
+}
+
+.account-terms {
+    display: flex;
+    margin: 3px 0 18px;
+    align-items: flex-start;
+    gap: 9px;
+}
+
+.account-terms .form-check-input {
+    margin-top: 4px;
+    flex: 0 0 auto;
+}
+
+.account-terms label {
+    color: #667085;
+    font-size: .84rem;
+    line-height: 1.55;
+}
+
+.account-terms a {
+    color: #0755c7;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.account-terms a:hover {
+    text-decoration: underline;
+}
+
+.account-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 14px;
+}
+
+.account-form-grid .account-field--full {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 575.98px) {
+    .account-modal-page {
+        padding: 0;
+        align-items: start;
+        background: #fff;
+    }
+
+    .account-modal-card,
+    .account-modal-card--register {
+        width: 100%;
+        min-height: 100dvh;
+        padding: 58px 22px 30px;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .account-modal-close {
+        top: 16px;
+        right: 16px;
+    }
+
+    .account-form-grid {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .account-form-grid .account-field--full {
+        grid-column: auto;
+    }
+}
