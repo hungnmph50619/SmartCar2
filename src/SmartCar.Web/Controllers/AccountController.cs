@@ -64,8 +64,13 @@ public class AccountController : Controller
             return View(model);
         }
 
-        TempData["SuccessMessage"] = "Đăng ký tài khoản thành công.";
-        return RedirectToAction("Index", "Home");
+        // Đảm bảo tài khoản vừa tạo không được giữ trạng thái đăng nhập tự động.
+        await _accountService.LogoutAsync();
+
+        TempData["LoginSuccessMessage"] =
+            "Đăng ký tài khoản thành công. Vui lòng đăng nhập để tiếp tục.";
+
+        return RedirectToAction(nameof(Login));
     }
 
     [HttpGet]
