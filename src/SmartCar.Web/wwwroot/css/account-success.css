@@ -1,0 +1,27 @@
+.account-success-message {
+    display: flex;
+    margin: -4px 0 18px;
+    padding: 12px 13px;
+    align-items: flex-start;
+    gap: 10px;
+    color: #067647;
+    border: 1px solid #abefc6;
+    border-radius: 9px;
+    background: #ecfdf3;
+    font-size: .86rem;
+    line-height: 1.5;
+}
+
+.account-success-message__icon {
+    display: inline-flex;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    border-radius: 50%;
+    background: #079455;
+    font-size: .78rem;
+    font-weight: 800;
+}
