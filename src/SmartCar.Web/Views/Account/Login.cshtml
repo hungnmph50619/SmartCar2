@@ -1,40 +1,90 @@
 @model SmartCar.Web.ViewModels.LoginViewModel
 @{
     ViewData["Title"] = "Đăng nhập";
+    ViewData["FullWidth"] = true;
+    ViewData["AccountPage"] = true;
 }
 
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-5">
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
-                <h1 class="h3 mb-4">Đăng nhập SmartCar</h1>
-                <form asp-action="Login" method="post">
-                    <input asp-for="ReturnUrl" type="hidden" />
-                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-                    <div class="mb-3">
-                        <label asp-for="Email" class="form-label"></label>
-                        <input asp-for="Email" class="form-control" autocomplete="email" />
-                        <span asp-validation-for="Email" class="text-danger"></span>
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="Password" class="form-label"></label>
-                        <input asp-for="Password" class="form-control" autocomplete="current-password" />
-                        <span asp-validation-for="Password" class="text-danger"></span>
-                    </div>
-                    <div class="form-check mb-3">
-                        <input asp-for="RememberMe" class="form-check-input" />
-                        <label asp-for="RememberMe" class="form-check-label"></label>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">Đăng nhập</button>
-                </form>
-                <p class="text-center mt-3 mb-0">
-                    Chưa có tài khoản? <a asp-action="Register">Đăng ký</a>
-                </p>
+@section Styles {
+    <link rel="stylesheet" href="~/css/home-photo-hero.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/account-modal.css" asp-append-version="true" />
+}
+
+<section class="account-modal-page" aria-labelledby="loginTitle">
+    <div class="account-modal-card">
+        <a class="account-modal-close" asp-controller="Home" asp-action="Index" aria-label="Đóng và quay lại trang chủ">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+        </a>
+
+        <header class="account-modal-header">
+            <div class="account-modal-logo">
+                <svg viewBox="0 0 64 32" fill="none" aria-hidden="true">
+                    <path d="M10 21h44l-3.8-9.2A6 6 0 0 0 44.6 8H22.3a7 7 0 0 0-5.8 3.1L10 21Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round" />
+                    <circle cx="18" cy="24" r="5" fill="#fff" stroke="currentColor" stroke-width="3" />
+                    <circle cx="47" cy="24" r="5" fill="#fff" stroke="currentColor" stroke-width="3" />
+                </svg>
+                <span>SmartCar</span>
             </div>
-        </div>
+            <h1 id="loginTitle">Đăng nhập</h1>
+            <p>Đăng nhập để quản lý đơn thuê và theo dõi hành trình của bạn.</p>
+        </header>
+
+        <form asp-action="Login" method="post" class="account-form" novalidate>
+            <input asp-for="ReturnUrl" type="hidden" />
+
+            <div asp-validation-summary="ModelOnly" class="account-validation-summary"></div>
+
+            <div class="account-field">
+                <label asp-for="Email" class="form-label">Email</label>
+                <input asp-for="Email" class="form-control" autocomplete="email" placeholder="Nhập email của bạn" />
+                <span asp-validation-for="Email" class="field-validation-error"></span>
+            </div>
+
+            <div class="account-field">
+                <label asp-for="Password" class="form-label"></label>
+                <div class="account-password-wrap">
+                    <input asp-for="Password" class="form-control" autocomplete="current-password" placeholder="Nhập mật khẩu" />
+                    <button type="button" class="account-password-toggle" data-password-toggle="Password" aria-label="Hiện mật khẩu">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6S2.5 12 2.5 12Z" stroke="currentColor" stroke-width="1.8" />
+                            <circle cx="12" cy="12" r="2.8" stroke="currentColor" stroke-width="1.8" />
+                        </svg>
+                    </button>
+                </div>
+                <span asp-validation-for="Password" class="field-validation-error"></span>
+            </div>
+
+            <div class="account-form-row">
+                <div class="form-check">
+                    <input asp-for="RememberMe" class="form-check-input" />
+                    <label asp-for="RememberMe" class="form-check-label"></label>
+                </div>
+                <a class="account-link" asp-controller="Home" asp-action="Index" asp-fragment="contact">Quên mật khẩu?</a>
+            </div>
+
+            <button type="submit" class="btn btn-primary account-submit w-100">Đăng nhập</button>
+        </form>
+
+        <p class="account-switch">
+            Bạn chưa có tài khoản? <a asp-action="Register">Đăng ký ngay</a>
+        </p>
     </div>
-</div>
+</section>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.querySelectorAll("[data-password-toggle]").forEach(button => {
+            button.addEventListener("click", () => {
+                const input = document.getElementById(button.dataset.passwordToggle);
+                if (!input) return;
+
+                const showPassword = input.type === "password";
+                input.type = showPassword ? "text" : "password";
+                button.setAttribute("aria-label", showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu");
+            });
+        });
+    </script>
 }
