@@ -7,6 +7,7 @@
     <title>@ViewData["Title"] - SmartCar</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/home-layout-fixes.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/SmartCar.Web.styles.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
 </head>
@@ -29,28 +30,18 @@
                 </button>
 
                 <div class="collapse navbar-collapse" id="smartcarNavbar">
-                    <ul class="navbar-nav mx-auto smartcar-nav">
+                    <ul class="navbar-nav smartcar-nav smartcar-nav--compact">
                         <li class="nav-item">
-                            <a class="nav-link" asp-controller="Home" asp-action="Index">Trang chủ</a>
+                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="aboutSmartCar">Về SmartCar</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="featuredCars">Thuê xe</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="rentalProcess">Hướng dẫn thuê</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="rentalInfo">Chính sách</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="contact">Liên hệ</a>
-                        </li>
+
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a>
                             </li>
                         }
+
                         @if (User.IsInRole(RoleNames.Manager))
                         {
                             <li class="nav-item">
@@ -82,10 +73,10 @@
                         else
                         {
                             <li class="nav-item">
-                                <a class="btn btn-outline-primary smartcar-login-button" asp-controller="Account" asp-action="Login">Đăng nhập</a>
+                                <a class="nav-link smartcar-register-link" asp-controller="Account" asp-action="Register">Đăng ký</a>
                             </li>
                             <li class="nav-item">
-                                <a class="btn btn-primary smartcar-register-button" asp-controller="Account" asp-action="Register">Đăng ký</a>
+                                <a class="btn btn-outline-primary smartcar-login-compact" asp-controller="Account" asp-action="Login">Đăng nhập</a>
                             </li>
                         }
                     </ul>
@@ -171,6 +162,24 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const aboutPanel = document.querySelector(".direct-service-panel");
+            const aboutSection = aboutPanel?.closest("section");
+
+            if (!aboutSection) {
+                return;
+            }
+
+            aboutSection.id = "aboutSmartCar";
+
+            if (window.location.hash === "#aboutSmartCar") {
+                window.setTimeout(() => {
+                    aboutSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 80);
+            }
+        });
+    </script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
