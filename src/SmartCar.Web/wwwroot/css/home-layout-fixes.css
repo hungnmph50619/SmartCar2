@@ -1,0 +1,155 @@
+/* Bản vá bố cục sau khi kiểm tra trực tiếp trên trình duyệt. */
+
+#aboutSmartCar {
+    scroll-margin-top: 92px;
+}
+
+/* Khối giới thiệu SmartCar: giảm khoảng trắng, bỏ ảnh sedan bị phóng mờ. */
+.home-section:has(.direct-service-panel) {
+    padding-top: 34px;
+    padding-bottom: 54px;
+}
+
+.direct-service-panel {
+    display: grid;
+    grid-template-columns: 46% 54%;
+    width: 100%;
+    max-width: 1120px;
+    min-height: 390px;
+    margin: 0 auto;
+    overflow: hidden;
+    border: 1px solid #dcebe6;
+    border-radius: 24px;
+    background: #eaf8f3;
+    box-shadow: 0 16px 42px rgba(20, 60, 75, .10);
+}
+
+.direct-service-panel__photo {
+    min-height: 390px;
+    background-image:
+        linear-gradient(180deg, rgba(3, 22, 48, .04), rgba(3, 22, 48, .22)),
+        var(--smartcar-photo-hero) !important;
+    background-position: 79% center !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+}
+
+.direct-service-panel__content {
+    display: flex;
+    padding: 46px 50px;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.direct-service-panel__content h2 {
+    max-width: 570px;
+    margin: 6px 0 16px;
+    font-size: clamp(2rem, 3.15vw, 3.15rem);
+    line-height: 1.08;
+    letter-spacing: -.045em;
+}
+
+.direct-service-panel__content > p {
+    max-width: 600px;
+    margin-bottom: 12px;
+    line-height: 1.7;
+}
+
+.direct-service-list {
+    margin-top: 6px;
+    margin-bottom: 24px;
+    gap: 10px;
+}
+
+.direct-service-list li {
+    line-height: 1.55;
+}
+
+.direct-service-panel__content .btn {
+    min-width: 165px;
+}
+
+/* Header công khai chỉ gồm logo, Về SmartCar, Đăng ký và Đăng nhập. */
+.smartcar-nav--compact {
+    margin-left: auto;
+    margin-right: 26px;
+}
+
+.smartcar-nav--compact .nav-link {
+    padding-right: 18px !important;
+    padding-left: 18px !important;
+    font-weight: 600;
+}
+
+.smartcar-register-link {
+    min-height: 42px;
+    padding: 10px 12px !important;
+    color: #17233a !important;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.smartcar-register-link:hover {
+    color: var(--primary) !important;
+}
+
+.smartcar-login-compact {
+    min-width: 104px;
+    min-height: 42px;
+    padding: 9px 18px;
+    border-radius: 9px;
+}
+
+@media (max-width: 991.98px) {
+    .smartcar-nav--compact {
+        margin: 14px 0 6px;
+    }
+
+    .smartcar-auth-nav {
+        align-items: stretch !important;
+        padding-bottom: 14px;
+    }
+
+    .smartcar-register-link,
+    .smartcar-login-compact {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .direct-service-panel {
+        grid-template-columns: 1fr;
+        max-width: 760px;
+    }
+
+    .direct-service-panel__photo {
+        min-height: 320px;
+        background-position: 75% center !important;
+    }
+
+    .direct-service-panel__content {
+        padding: 38px 34px;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .home-section:has(.direct-service-panel) {
+        padding-top: 20px;
+        padding-bottom: 38px;
+    }
+
+    .direct-service-panel {
+        border-radius: 18px;
+    }
+
+    .direct-service-panel__photo {
+        min-height: 250px;
+    }
+
+    .direct-service-panel__content {
+        padding: 30px 22px 34px;
+    }
+
+    .direct-service-panel__content h2 {
+        font-size: 2rem;
+    }
+}
