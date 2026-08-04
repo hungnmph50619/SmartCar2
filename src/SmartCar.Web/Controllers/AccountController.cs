@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Accounts;
@@ -57,7 +58,7 @@ public class AccountController : Controller
         {
             foreach (var error in result.Errors)
             {
-                ModelState.AddModelError(string.Empty, error);
+                ModelState.AddModelError(string.Empty, TranslateIdentityError(error));
             }
 
             return View(model);
@@ -99,7 +100,7 @@ public class AccountController : Controller
         {
             ModelState.AddModelError(
                 string.Empty,
-                result.ErrorMessage ?? "Không thể đăng nhập.");
+                TranslateLoginError(result.ErrorMessage));
             return View(model);
         }
 
@@ -124,4 +125,107 @@ public class AccountController : Controller
 
     [HttpGet]
     public IActionResult AccessDenied() => View();
+
+    private static string TranslateIdentityError(string error)
+    {
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            return "Không thể tạo tài khoản. Vui lòng kiểm tra lại thông tin.";
+        }
+
+        if (error.Contains("at least one lowercase", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Mật khẩu phải có ít nhất một chữ thường (a–z).";
+        }
+
+        if (error.Contains("at least one uppercase", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Mật khẩu phải có ít nhất một chữ hoa (A–Z).";
+        }
+
+        if (error.Contains("at least one digit", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Mật khẩu phải có ít nhất một chữ số (0–9).";
+        }
+
+        if (error.Contains("non alphanumeric", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Mật khẩu phải có ít nhất một ký tự đặc biệt, ví dụ: !, @, # hoặc $.";
+        }
+
+        if (error.Contains("must be at least", StringComparison.OrdinalIgnoreCase))
+        {
+            var number = Regex.Match(error, @"\d+").Value;
+            return string.IsNullOrWhiteSpace(number)
+                ? "Mật khẩu chưa đủ độ dài tối thiểu."
+                : $"Mật khẩu phải có ít nhất {number} ký tự.";
+        }
+
+        if (error.Contains("different characters", StringComparison.OrdinalIgnoreCase))
+        {
+            var number = Regex.Match(error, @"\d+").Value;
+            return string.IsNullOrWhiteSpace(number)
+                ? "Mật khẩu phải sử dụng nhiều ký tự khác nhau hơn."
+                : $"Mật khẩu phải có ít nhất {number} ký tự khác nhau.";
+        }
+
+        if (error.Contains("email", StringComparison.OrdinalIgnoreCase)
+            && error.Contains("already taken", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Email này đã được sử dụng. Vui lòng đăng nhập hoặc chọn email khác.";
+        }
+
+        if (error.Contains("username", StringComparison.OrdinalIgnoreCase)
+            && error.Contains("already taken", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Tên đăng nhập này đã được sử dụng.";
+        }
+
+        if (error.Contains("email", StringComparison.OrdinalIgnoreCase)
+            && error.Contains("invalid", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Địa chỉ email không hợp lệ.";
+        }
+
+        if (error.Contains("username", StringComparison.OrdinalIgnoreCase)
+            && error.Contains("invalid", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Tên đăng nhập không hợp lệ.";
+        }
+
+        if (error.Contains("phone", StringComparison.OrdinalIgnoreCase)
+            && error.Contains("already", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Số điện thoại này đã được sử dụng.";
+        }
+
+        return "Không thể tạo tài khoản. Vui lòng kiểm tra lại thông tin và thử lại.";
+    }
+
+    private static string TranslateLoginError(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            return "Không thể đăng nhập. Vui lòng thử lại.";
+        }
+
+        if (error.Contains("invalid", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("incorrect", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("not found", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Email hoặc mật khẩu không chính xác.";
+        }
+
+        if (error.Contains("locked", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Tài khoản đang tạm khóa. Vui lòng thử lại sau hoặc liên hệ SmartCar.";
+        }
+
+        if (error.Contains("not allowed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Tài khoản chưa được phép đăng nhập. Vui lòng liên hệ SmartCar.";
+        }
+
+        return error;
+    }
 }
