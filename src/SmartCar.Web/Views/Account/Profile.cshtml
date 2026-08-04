@@ -1,0 +1,623 @@
+@model SmartCar.Web.ViewModels.CustomerAccountDashboardViewModel
+@{
+    ViewData["Title"] = "Tài khoản của tôi";
+    ViewData["FullWidth"] = true;
+
+    string NavClass(string section) =>
+        Model.ActiveSection == section
+            ? "account-nav__item is-active"
+            : "account-nav__item";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/customer-account.css" asp-append-version="true" />
+}
+
+<div class="customer-account-page">
+    <div class="container-xl">
+        <div class="customer-account-layout">
+            <aside class="customer-account-sidebar" aria-label="Menu tài khoản">
+                <div class="account-welcome">
+                    <span class="account-welcome__eyebrow">Xin chào</span>
+                    <h1>@Model.Profile.FullName</h1>
+                </div>
+
+                <div class="account-sidebar-card">
+                    <nav class="account-nav">
+                        <a class="@NavClass("profile")" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="profile">
+                            <span class="account-nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c.7-4 3-6 7-6s6.3 2 7 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            </span>
+                            Tài khoản của tôi
+                        </a>
+                        <a class="@NavClass("documents")" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="documents">
+                            <span class="account-nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            </span>
+                            Xác minh giấy tờ
+                            @if (Model.VerifiedDocumentCount > 0)
+                            {
+                                <span class="account-nav__badge" style="background:#079455">@Model.VerifiedDocumentCount</span>
+                            }
+                        </a>
+                        <a class="@NavClass("bookings")" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="bookings">
+                            <span class="account-nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none"><path d="M4 15V9l2-4h12l2 4v6" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 15h18v4H3z" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="19" r="2" fill="white" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="19" r="2" fill="white" stroke="currentColor" stroke-width="1.8"/></svg>
+                            </span>
+                            Đơn thuê của tôi
+                        </a>
+                        <a class="@NavClass("address")" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="address">
+                            <span class="account-nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-5.1 7-12a7 7 0 1 0-14 0c0 6.9 7 12 7 12Z" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="2.5" stroke="currentColor" stroke-width="1.8"/></svg>
+                            </span>
+                            Địa chỉ giao nhận
+                        </a>
+                        <a class="@NavClass("payments")" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="payments">
+                            <span class="account-nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M7 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            </span>
+                            Lịch sử thanh toán
+                        </a>
+                        <a class="@NavClass("notifications")" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="notifications">
+                            <span class="account-nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3V9Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            </span>
+                            Thông báo
+                            @if (Model.UnreadNotificationCount > 0)
+                            {
+                                <span class="account-nav__badge">@Model.UnreadNotificationCount</span>
+                            }
+                        </a>
+                        <a class="@NavClass("support")" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="support">
+                            <span class="account-nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 16 0v5a2 2 0 0 1-2 2h-3" stroke="currentColor" stroke-width="1.8"/><path d="M4 12v4a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 1ZM20 12v6h-3v-7h1a2 2 0 0 1 2 1Z" stroke="currentColor" stroke-width="1.8"/></svg>
+                            </span>
+                            Hỗ trợ SmartCar
+                        </a>
+
+                        <div class="account-nav__divider"></div>
+
+                        <a class="@NavClass("password")" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="password">
+                            <span class="account-nav__icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="15" r="1.5" fill="currentColor"/></svg>
+                            </span>
+                            Đổi mật khẩu
+                        </a>
+                        <form asp-controller="Account" asp-action="Logout" method="post">
+                            <button type="submit" class="account-nav__logout">
+                                <span class="account-nav__icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none"><path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                </span>
+                                Đăng xuất
+                            </button>
+                        </form>
+                    </nav>
+                </div>
+            </aside>
+
+            <main class="customer-account-content">
+                @if (TempData["AccountSuccessMessage"] is string successMessage)
+                {
+                    <div class="account-flash account-flash--success" role="status">
+                        <strong>✓</strong>
+                        <span>@successMessage</span>
+                    </div>
+                }
+
+                @if (TempData["AccountErrorMessage"] is string errorMessage)
+                {
+                    <div class="account-flash account-flash--error" role="alert">
+                        <strong>!</strong>
+                        <span>@errorMessage</span>
+                    </div>
+                }
+
+                @if (Model.ActiveSection == "profile")
+                {
+                    <section class="account-panel">
+                        <div class="account-profile-hero">
+                            <div class="account-profile-main">
+                                <div class="account-avatar">
+                                    @if (!string.IsNullOrWhiteSpace(Model.Profile.AvatarPath))
+                                    {
+                                        <img src="@Model.Profile.AvatarPath" alt="Ảnh đại diện của @Model.Profile.FullName" />
+                                    }
+                                    else
+                                    {
+                                        <span>@Model.Profile.Initial</span>
+                                    }
+                                </div>
+                                <div class="account-profile-copy">
+                                    <h2>@Model.Profile.FullName</h2>
+                                    <p>@Model.Profile.Email</p>
+                                    <small>Tham gia ngày @Model.Profile.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small>
+                                </div>
+                            </div>
+                            <div class="account-profile-stats">
+                                <div class="account-stat"><strong>@Model.Bookings.Count</strong><span>Tổng đơn thuê</span></div>
+                                <div class="account-stat"><strong>@Model.CompletedBookingCount</strong><span>Đơn hoàn thành</span></div>
+                                <div class="account-stat"><strong>@Model.VerifiedDocumentCount/3</strong><span>Giấy tờ đã duyệt</span></div>
+                            </div>
+                        </div>
+
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Thông tin tài khoản</h2>
+                                <p>Cập nhật thông tin để SmartCar liên hệ và giao nhận xe chính xác.</p>
+                            </div>
+                        </div>
+                        <div class="account-panel__body">
+                            <form asp-controller="CustomerAccount" asp-action="UpdateProfile" method="post">
+                                <input type="hidden" name="ReturnSection" value="profile" />
+                                <div class="account-form-grid">
+                                    <div class="account-form-field">
+                                        <label for="profileFullName">Họ và tên</label>
+                                        <input id="profileFullName" name="FullName" class="form-control" value="@Model.Profile.FullName" maxlength="100" required />
+                                    </div>
+                                    <div class="account-form-field">
+                                        <label for="profilePhone">Số điện thoại</label>
+                                        <input id="profilePhone" name="PhoneNumber" class="form-control" value="@Model.Profile.PhoneNumber" inputmode="tel" placeholder="Nhập số điện thoại" />
+                                    </div>
+                                    <div class="account-form-field account-form-field--full">
+                                        <label for="profileEmail">Email</label>
+                                        <input id="profileEmail" class="form-control" value="@Model.Profile.Email" readonly />
+                                        <small class="account-form-field__note">Email được dùng để đăng nhập và không thay đổi tại đây.</small>
+                                    </div>
+                                    <div class="account-form-field account-form-field--full">
+                                        <label for="profileAddress">Địa chỉ giao nhận mặc định</label>
+                                        <input id="profileAddress" name="Address" class="form-control" value="@Model.Profile.Address" maxlength="250" placeholder="Ví dụ: 123 Trần Thái Tông, Cầu Giấy, Hà Nội" />
+                                    </div>
+                                </div>
+                                <div class="account-form-actions">
+                                    <button type="submit" class="btn btn-primary account-primary-btn">Lưu thay đổi</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <section class="account-panel">
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Mức độ hoàn thiện hồ sơ</h2>
+                                <p>Hoàn thiện giấy tờ trước khi gửi yêu cầu thuê để quá trình xác nhận nhanh hơn.</p>
+                            </div>
+                            <a class="account-outline-btn text-decoration-none" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="documents">Cập nhật giấy tờ</a>
+                        </div>
+                        <div class="account-panel__body">
+                            <div class="account-info-banner mb-0">
+                                <span class="account-info-banner__icon">i</span>
+                                <div>
+                                    SmartCar trực tiếp giao tài sản cho khách hàng nên CCCD và giấy phép lái xe phải được kiểm tra trước khi nhận xe. Thông tin chỉ được sử dụng để xác minh và phục vụ hợp đồng thuê.
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                }
+                else if (Model.ActiveSection == "documents")
+                {
+                    <section class="account-panel">
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Xác minh giấy tờ</h2>
+                                <p>Tải ảnh rõ nét, đầy đủ bốn góc. Admin SmartCar sẽ kiểm tra và phản hồi trạng thái.</p>
+                            </div>
+                            <span class="status-pill status-pill--info">@Model.VerifiedDocumentCount/3 đã xác minh</span>
+                        </div>
+                        <div class="account-panel__body">
+                            <div class="account-info-banner">
+                                <span class="account-info-banner__icon">i</span>
+                                <div>
+                                    Ảnh phải đúng giấy tờ của người trực tiếp nhận xe. Khi giao xe, bạn vẫn cần mang theo CCCD và giấy phép lái xe bản gốc để đối chiếu.
+                                </div>
+                            </div>
+
+                            <div class="document-grid">
+                                @foreach (var document in Model.Documents)
+                                {
+                                    <article class="document-card">
+                                        <div class="document-card__preview">
+                                            @if (document.IsUploaded)
+                                            {
+                                                <img src="@document.ImagePath" alt="@document.TypeLabel" />
+                                            }
+                                            else
+                                            {
+                                                <div class="document-placeholder">
+                                                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="1.6"/><path d="m7 17 3-3 2 2 2.5-3 2.5 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                                    <span>Chưa có ảnh giấy tờ</span>
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="document-card__body">
+                                            <div class="document-card__title-row">
+                                                <h3>@document.TypeLabel</h3>
+                                                <span class="status-pill status-pill--@document.StatusClass">@document.StatusText</span>
+                                            </div>
+                                            <div class="document-meta">
+                                                @if (!string.IsNullOrWhiteSpace(document.DocumentNumber))
+                                                {
+                                                    <div>Số giấy tờ: <strong>@document.DocumentNumber</strong></div>
+                                                }
+                                                @if (document.ExpiryDate.HasValue)
+                                                {
+                                                    <div>Hết hạn: <strong>@document.ExpiryDate.Value.ToString("dd/MM/yyyy")</strong></div>
+                                                }
+                                                @if (string.IsNullOrWhiteSpace(document.DocumentNumber))
+                                                {
+                                                    <div>Nhập thông tin và tải ảnh để gửi SmartCar kiểm tra.</div>
+                                                }
+                                            </div>
+
+                                            @if (!string.IsNullOrWhiteSpace(document.RejectionReason))
+                                            {
+                                                <div class="document-rejection"><strong>Lý do cần bổ sung:</strong> @document.RejectionReason</div>
+                                            }
+
+                                            <form asp-controller="CustomerAccount" asp-action="UploadDocument" method="post" enctype="multipart/form-data" class="document-upload-form">
+                                                <input type="hidden" name="documentType" value="@document.DocumentType" />
+                                                <div>
+                                                    <label for="number-@document.DocumentType">Số giấy tờ</label>
+                                                    <input id="number-@document.DocumentType" name="documentNumber" class="form-control" value="@document.DocumentNumber" required />
+                                                </div>
+                                                @if (document.DocumentType == "DRIVER_LICENSE")
+                                                {
+                                                    <div>
+                                                        <label for="expiry-@document.DocumentType">Ngày hết hạn</label>
+                                                        <input id="expiry-@document.DocumentType" name="expiryDate" type="date" class="form-control" value="@(document.ExpiryDate?.ToString("yyyy-MM-dd"))" />
+                                                    </div>
+                                                }
+                                                <div>
+                                                    <label for="file-@document.DocumentType">Chọn ảnh mới</label>
+                                                    <input id="file-@document.DocumentType" name="imageFile" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required />
+                                                </div>
+                                                <button type="submit" class="btn btn-primary account-primary-btn w-100">
+                                                    @(document.IsUploaded ? "Gửi kiểm tra lại" : "Tải lên và gửi kiểm tra")
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    </section>
+                }
+                else if (Model.ActiveSection == "bookings")
+                {
+                    <section class="account-panel">
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Đơn thuê của tôi</h2>
+                                <p>Theo dõi trạng thái, thanh toán và các bước giao nhận của từng đơn thuê.</p>
+                            </div>
+                            <a class="account-outline-btn text-decoration-none" asp-controller="Home" asp-action="Index" asp-fragment="featuredCars">Tìm xe mới</a>
+                        </div>
+                        <div class="account-panel__body">
+                            @if (Model.Bookings.Count > 0)
+                            {
+                                <div class="booking-toolbar" role="tablist" aria-label="Lọc đơn thuê">
+                                    <button type="button" class="booking-filter is-active" data-booking-filter="all">Tất cả (@Model.Bookings.Count)</button>
+                                    <button type="button" class="booking-filter" data-booking-filter="pending">Đang xử lý</button>
+                                    <button type="button" class="booking-filter" data-booking-filter="renting">Đang thuê</button>
+                                    <button type="button" class="booking-filter" data-booking-filter="completed">Hoàn thành</button>
+                                    <button type="button" class="booking-filter" data-booking-filter="cancelled">Đã hủy/Từ chối</button>
+                                </div>
+
+                                <div class="booking-list">
+                                    @foreach (var booking in Model.Bookings)
+                                    {
+                                        var bookingGroup = booking.StatusText == "Hoàn thành"
+                                            ? "completed"
+                                            : booking.StatusText == "Đang thuê"
+                                                ? "renting"
+                                                : booking.StatusText.Contains("hủy", StringComparison.OrdinalIgnoreCase)
+                                                  || booking.StatusText.Contains("từ chối", StringComparison.OrdinalIgnoreCase)
+                                                    ? "cancelled"
+                                                    : "pending";
+
+                                        <article class="booking-card" data-booking-group="@bookingGroup">
+                                            <div class="booking-card__image">
+                                                @if (!string.IsNullOrWhiteSpace(booking.ImagePath))
+                                                {
+                                                    <img src="@booking.ImagePath" alt="@booking.VehicleName" />
+                                                }
+                                                else
+                                                {
+                                                    <svg viewBox="0 0 90 54" fill="none" aria-hidden="true"><path d="M12 34h66l-6-15a8 8 0 0 0-7.5-5H29a9 9 0 0 0-7.8 4.5L12 34Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><path d="M8 34h74v9H8z" fill="currentColor" opacity=".13"/><circle cx="25" cy="42" r="8" fill="#fff" stroke="currentColor" stroke-width="3"/><circle cx="66" cy="42" r="8" fill="#fff" stroke="currentColor" stroke-width="3"/></svg>
+                                                }
+                                            </div>
+                                            <div class="booking-card__content">
+                                                <div class="booking-card__top">
+                                                    <div>
+                                                        <span class="booking-code">Mã đơn @booking.BookingCode</span>
+                                                        <h3>@booking.VehicleName</h3>
+                                                        <span class="booking-license">Biển số @booking.LicensePlate</span>
+                                                    </div>
+                                                    <span class="status-pill status-pill--@booking.StatusClass">@booking.StatusText</span>
+                                                </div>
+
+                                                <div class="booking-details-grid">
+                                                    <div class="booking-detail"><span>Ngày nhận</span><strong>@booking.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                                                    <div class="booking-detail"><span>Ngày trả</span><strong>@booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                                                    <div class="booking-detail"><span>Tổng tiền</span><strong>@booking.TotalAmount.ToString("N0")đ</strong></div>
+                                                    <div class="booking-detail"><span>Thanh toán</span><strong>@booking.PaymentStatusText</strong></div>
+                                                    <div class="booking-detail"><span>Nhận xe</span><strong>SmartCar Cầu Giấy</strong></div>
+                                                    <div class="booking-detail"><span>Hỗ trợ</span><strong>0901 234 567</strong></div>
+                                                </div>
+
+                                                <div class="booking-progress" aria-label="Tiến độ đơn thuê @booking.ProgressPercent%">
+                                                    <div class="booking-progress__track"><div class="booking-progress__bar" style="width:@booking.ProgressPercent%"></div></div>
+                                                </div>
+                                                <p class="booking-next-action"><strong>Bước tiếp theo:</strong> @booking.NextActionText</p>
+
+                                                @if (!string.IsNullOrWhiteSpace(booking.CancelReason))
+                                                {
+                                                    <div class="booking-cancel-reason"><strong>Lý do:</strong> @booking.CancelReason</div>
+                                                }
+                                            </div>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="account-empty-state">
+                                    <div class="account-empty-state__inner">
+                                        <svg viewBox="0 0 90 90" fill="none" aria-hidden="true"><circle cx="45" cy="45" r="40" fill="currentColor" opacity=".12"/><path d="M22 53h46l-5-13a7 7 0 0 0-6.5-4.5h-24A8 8 0 0 0 25.6 40L22 53Z" stroke="currentColor" stroke-width="3"/><circle cx="33" cy="58" r="6" fill="#fff" stroke="currentColor" stroke-width="3"/><circle cx="58" cy="58" r="6" fill="#fff" stroke="currentColor" stroke-width="3"/></svg>
+                                        <h3>Bạn chưa có đơn thuê nào</h3>
+                                        <p>Chọn thời gian và chiếc xe phù hợp để gửi yêu cầu thuê tới SmartCar.</p>
+                                        <a class="btn btn-primary account-primary-btn mt-3" asp-controller="Home" asp-action="Index" asp-fragment="featuredCars">Tìm xe ngay</a>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+                else if (Model.ActiveSection == "address")
+                {
+                    <section class="account-panel">
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Địa chỉ giao nhận</h2>
+                                <p>Lưu địa chỉ mặc định để điền nhanh khi yêu cầu SmartCar giao xe tận nơi.</p>
+                            </div>
+                        </div>
+                        <div class="account-panel__body">
+                            <div class="account-info-banner">
+                                <span class="account-info-banner__icon">i</span>
+                                <div>SmartCar sẽ xác nhận phạm vi phục vụ và phí giao nhận trước khi khách thanh toán tiền cọc.</div>
+                            </div>
+                            <form asp-controller="CustomerAccount" asp-action="UpdateProfile" method="post">
+                                <input type="hidden" name="ReturnSection" value="address" />
+                                <div class="account-form-grid">
+                                    <div class="account-form-field">
+                                        <label for="addressName">Người nhận xe</label>
+                                        <input id="addressName" name="FullName" class="form-control" value="@Model.Profile.FullName" maxlength="100" required />
+                                    </div>
+                                    <div class="account-form-field">
+                                        <label for="addressPhone">Số điện thoại liên hệ</label>
+                                        <input id="addressPhone" name="PhoneNumber" class="form-control" value="@Model.Profile.PhoneNumber" inputmode="tel" placeholder="Nhập số điện thoại" />
+                                    </div>
+                                    <div class="account-form-field account-form-field--full">
+                                        <label for="defaultAddress">Địa chỉ giao nhận mặc định</label>
+                                        <textarea id="defaultAddress" name="Address" class="form-control" rows="4" maxlength="250" placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành phố">@Model.Profile.Address</textarea>
+                                        <small class="account-form-field__note">Nhân viên SmartCar sẽ gọi lại xác nhận vị trí và thời gian giao xe.</small>
+                                    </div>
+                                </div>
+                                <div class="account-form-actions">
+                                    <button type="submit" class="btn btn-primary account-primary-btn">Lưu địa chỉ</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                }
+                else if (Model.ActiveSection == "payments")
+                {
+                    <section class="account-panel">
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Lịch sử thanh toán</h2>
+                                <p>Theo dõi tiền cọc, thanh toán và hoàn tiền của các đơn thuê.</p>
+                            </div>
+                        </div>
+                        <div class="account-panel__body p-0">
+                            @if (Model.Payments.Count > 0)
+                            {
+                                <div class="payment-table-wrap">
+                                    <table class="payment-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Mã giao dịch</th>
+                                                <th>Đơn thuê</th>
+                                                <th>Xe</th>
+                                                <th>Số tiền</th>
+                                                <th>Phương thức</th>
+                                                <th>Trạng thái</th>
+                                                <th>Thời gian</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var payment in Model.Payments)
+                                            {
+                                                <tr>
+                                                    <td><strong>@(payment.TransactionCode ?? $"PAY{payment.PaymentId:000000}")</strong></td>
+                                                    <td>@payment.BookingCode</td>
+                                                    <td>@payment.VehicleName</td>
+                                                    <td><strong>@payment.Amount.ToString("N0")đ</strong></td>
+                                                    <td>@payment.Method</td>
+                                                    <td><span class="status-pill status-pill--@payment.StatusClass">@payment.StatusText</span></td>
+                                                    <td>@(payment.PaidAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa thanh toán")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="account-empty-state">
+                                    <div class="account-empty-state__inner">
+                                        <svg viewBox="0 0 90 90" fill="none" aria-hidden="true"><rect x="16" y="25" width="58" height="40" rx="7" fill="currentColor" opacity=".12"/><rect x="16" y="25" width="58" height="40" rx="7" stroke="currentColor" stroke-width="3"/><path d="M16 37h58M25 54h17" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                                        <h3>Chưa có giao dịch thanh toán</h3>
+                                        <p>Các khoản tiền cọc, thanh toán và hoàn tiền sẽ xuất hiện tại đây.</p>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+                else if (Model.ActiveSection == "notifications")
+                {
+                    <section class="account-panel">
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Thông báo</h2>
+                                <p>Cập nhật xác nhận đơn, thanh toán, giao nhận xe và kết quả kiểm tra giấy tờ.</p>
+                            </div>
+                            @if (Model.UnreadNotificationCount > 0)
+                            {
+                                <form asp-controller="CustomerAccount" asp-action="MarkAllNotificationsRead" method="post">
+                                    <button type="submit" class="account-outline-btn">Đánh dấu tất cả đã đọc</button>
+                                </form>
+                            }
+                        </div>
+                        <div class="account-panel__body">
+                            @if (Model.Notifications.Count > 0)
+                            {
+                                <div class="notification-list">
+                                    @foreach (var notification in Model.Notifications)
+                                    {
+                                        <article class="notification-item @(notification.IsRead ? string.Empty : "is-unread")">
+                                            <span class="notification-item__icon" aria-hidden="true">
+                                                <svg viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3V9Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                            </span>
+                                            <div>
+                                                <h3>@notification.Title</h3>
+                                                <p>@notification.Message</p>
+                                                <time datetime="@notification.CreatedAt.ToString("O")">@notification.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</time>
+                                            </div>
+                                            @if (!notification.IsRead)
+                                            {
+                                                <form asp-controller="CustomerAccount" asp-action="MarkNotificationRead" method="post">
+                                                    <input type="hidden" name="id" value="@notification.NotificationId" />
+                                                    <button type="submit" class="notification-read-button">Đã đọc</button>
+                                                </form>
+                                            }
+                                        </article>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="account-empty-state">
+                                    <div class="account-empty-state__inner">
+                                        <svg viewBox="0 0 90 90" fill="none" aria-hidden="true"><circle cx="45" cy="45" r="40" fill="currentColor" opacity=".12"/><path d="M30 41a15 15 0 0 1 30 0v11l6 8H24l6-8V41Z" stroke="currentColor" stroke-width="3"/><path d="M40 67h10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                                        <h3>Bạn chưa có thông báo nào</h3>
+                                        <p>Khi đơn thuê hoặc giấy tờ có thay đổi, SmartCar sẽ thông báo tại đây.</p>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+                else if (Model.ActiveSection == "support")
+                {
+                    <section class="account-panel">
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Hỗ trợ SmartCar</h2>
+                                <p>Liên hệ trực tiếp với SmartCar khi cần hỗ trợ đặt xe, giao nhận hoặc xử lý sự cố.</p>
+                            </div>
+                        </div>
+                        <div class="account-panel__body">
+                            <div class="support-grid">
+                                <a class="support-card" href="tel:0901234567">
+                                    <span class="support-card__icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h3l2 5-2 2c1.3 2.5 2.8 4 5.3 5.3l2-2 4.7 2V18c0 1.7-1.3 3-3 3C10.2 21 3 13.8 3 5a2 2 0 0 1 2-2h2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                                    </span>
+                                    <h3>Gọi hotline</h3>
+                                    <p>0901 234 567<br />Phục vụ từ 08:00 đến 20:00.</p>
+                                </a>
+                                <a class="support-card" href="mailto:hotro@smartcar.vn">
+                                    <span class="support-card__icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="m4 7 8 6 8-6" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                                    </span>
+                                    <h3>Gửi email</h3>
+                                    <p>hotro@smartcar.vn<br />Đính kèm ảnh khi cần báo sự cố.</p>
+                                </a>
+                                <a class="support-card" asp-controller="Home" asp-action="Index" asp-fragment="faq">
+                                    <span class="support-card__icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M9.7 9a2.5 2.5 0 0 1 4.8 1c0 2-2.5 2.2-2.5 4M12 17.5h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                    </span>
+                                    <h3>Câu hỏi thường gặp</h3>
+                                    <p>Xem hướng dẫn về giấy tờ, tiền cọc, hủy đơn và giao nhận xe.</p>
+                                </a>
+                            </div>
+
+                            <div class="account-info-banner mt-4 mb-0">
+                                <span class="account-info-banner__icon">!</span>
+                                <div><strong>Khi đang thuê xe:</strong> nếu xảy ra va chạm, hư hỏng hoặc cảnh báo trên xe, hãy dừng ở vị trí an toàn và liên hệ SmartCar trước khi tự ý sửa chữa.</div>
+                            </div>
+                        </div>
+                    </section>
+                }
+                else if (Model.ActiveSection == "password")
+                {
+                    <section class="account-panel account-password-card">
+                        <div class="account-panel__header">
+                            <div>
+                                <h2>Đổi mật khẩu</h2>
+                                <p>Sử dụng mật khẩu mạnh và không chia sẻ tài khoản với người khác.</p>
+                            </div>
+                        </div>
+                        <div class="account-panel__body">
+                            <form asp-controller="CustomerAccount" asp-action="ChangePassword" method="post">
+                                <div class="account-form-field">
+                                    <label for="currentPassword">Mật khẩu hiện tại</label>
+                                    <input id="currentPassword" name="CurrentPassword" type="password" class="form-control" autocomplete="current-password" required />
+                                </div>
+                                <div class="account-form-field">
+                                    <label for="newPassword">Mật khẩu mới</label>
+                                    <input id="newPassword" name="NewPassword" type="password" class="form-control" autocomplete="new-password" required />
+                                    <small class="account-form-field__note">Tối thiểu 6 ký tự, có chữ hoa, chữ thường và chữ số.</small>
+                                </div>
+                                <div class="account-form-field">
+                                    <label for="confirmPassword">Xác nhận mật khẩu mới</label>
+                                    <input id="confirmPassword" name="ConfirmPassword" type="password" class="form-control" autocomplete="new-password" required />
+                                </div>
+                                <div class="account-form-actions">
+                                    <button type="submit" class="btn btn-primary account-primary-btn">Đổi mật khẩu</button>
+                                </div>
+                            </form>
+                            <div class="account-security-note">
+                                Sau khi đổi mật khẩu, hệ thống sẽ đăng xuất tài khoản hiện tại để bảo vệ thông tin của bạn.
+                            </div>
+                        </div>
+                    </section>
+                }
+            </main>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const filterButtons = document.querySelectorAll("[data-booking-filter]");
+            const bookingCards = document.querySelectorAll("[data-booking-group]");
+
+            filterButtons.forEach(button => {
+                button.addEventListener("click", () => {
+                    const filter = button.dataset.bookingFilter;
+
+                    filterButtons.forEach(item => item.classList.remove("is-active"));
+                    button.classList.add("is-active");
+
+                    bookingCards.forEach(card => {
+                        const visible = filter === "all" || card.dataset.bookingGroup === filter;
+                        card.hidden = !visible;
+                    });
+                });
+            });
+        });
+    </script>
+}
