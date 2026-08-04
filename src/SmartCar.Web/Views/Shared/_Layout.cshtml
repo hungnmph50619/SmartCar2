@@ -3,41 +3,90 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="SmartCar - Dịch vụ thuê xe tự lái trực tiếp, minh bạch và an toàn." />
     <title>@ViewData["Title"] - SmartCar</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/SmartCar.Web.styles.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-4">
-            <div class="container">
-                <a class="navbar-brand fw-bold" asp-controller="Home" asp-action="Index">SmartCar</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse">
+    <header class="site-header">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white">
+            <div class="container-xl">
+                <a class="navbar-brand smartcar-brand" asp-controller="Home" asp-action="Index" aria-label="SmartCar - Trang chủ">
+                    <svg class="smartcar-brand__icon" viewBox="0 0 64 32" aria-hidden="true">
+                        <path d="M10 21h44l-3.8-9.2A6 6 0 0 0 44.6 8H22.3a7 7 0 0 0-5.8 3.1L10 21Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" />
+                        <path d="M7 21h50v4H7z" fill="currentColor" opacity=".16" />
+                        <circle cx="18" cy="24" r="5" fill="#fff" stroke="currentColor" stroke-width="3" />
+                        <circle cx="47" cy="24" r="5" fill="#fff" stroke="currentColor" stroke-width="3" />
+                    </svg>
+                    <span>SmartCar</span>
+                </a>
+
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#smartcarNavbar" aria-controls="smartcarNavbar" aria-expanded="false" aria-label="Mở menu">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Index">Trang chủ</a></li>
-                        @if (User.IsInRole(RoleNames.Manager))
-                        {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Dashboard" asp-action="Index">Quản lý</a></li>
-                        }
-                    </ul>
-                    <ul class="navbar-nav align-items-sm-center">
+
+                <div class="collapse navbar-collapse" id="smartcarNavbar">
+                    <ul class="navbar-nav mx-auto smartcar-nav">
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index">Trang chủ</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="featuredCars">Thuê xe</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="rentalProcess">Hướng dẫn thuê</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="rentalInfo">Chính sách</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" asp-controller="Home" asp-action="Index" asp-fragment="contact">Liên hệ</a>
+                        </li>
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <li class="nav-item"><span class="nav-link">Xin chào, @User.Identity.Name</span></li>
                             <li class="nav-item">
-                                <form asp-controller="Account" asp-action="Logout" method="post">
-                                    <button type="submit" class="btn btn-outline-secondary btn-sm">Đăng xuất</button>
-                                </form>
+                                <a class="nav-link" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a>
+                            </li>
+                        }
+                        @if (User.IsInRole(RoleNames.Manager))
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Dashboard" asp-action="Index">Quản trị</a>
+                            </li>
+                        }
+                    </ul>
+
+                    <ul class="navbar-nav align-items-lg-center smartcar-auth-nav">
+                        @if (User.Identity?.IsAuthenticated == true)
+                        {
+                            <li class="nav-item dropdown">
+                                <button class="btn btn-link nav-link dropdown-toggle smartcar-user-button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span class="smartcar-user-avatar">@(User.Identity.Name?.Substring(0, 1).ToUpperInvariant() ?? "K")</span>
+                                    <span>@User.Identity.Name</span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                                    <li><a class="dropdown-item" asp-controller="Account" asp-action="Profile">Thông tin cá nhân</a></li>
+                                    <li><a class="dropdown-item" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a></li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <form asp-controller="Account" asp-action="Logout" method="post">
+                                            <button type="submit" class="dropdown-item text-danger">Đăng xuất</button>
+                                        </form>
+                                    </li>
+                                </ul>
                             </li>
                         }
                         else
                         {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Account" asp-action="Login">Đăng nhập</a></li>
-                            <li class="nav-item"><a class="btn btn-primary btn-sm" asp-controller="Account" asp-action="Register">Đăng ký</a></li>
+                            <li class="nav-item">
+                                <a class="btn btn-outline-primary smartcar-login-button" asp-controller="Account" asp-action="Login">Đăng nhập</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="btn btn-primary smartcar-register-button" asp-controller="Account" asp-action="Register">Đăng ký</a>
+                            </li>
                         }
                     </ul>
                 </div>
@@ -45,19 +94,78 @@
         </nav>
     </header>
 
-    <div class="container">
-        @if (TempData["SuccessMessage"] is string successMessage)
-        {
+    @if (TempData["SuccessMessage"] is string successMessage)
+    {
+        <div class="container-xl pt-3">
             <div class="alert alert-success alert-dismissible fade show" role="alert">
                 @successMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
             </div>
-        }
-        <main role="main" class="pb-5">@RenderBody()</main>
-    </div>
+        </div>
+    }
 
-    <footer class="border-top footer text-muted">
-        <div class="container">&copy; 2026 - SmartCar</div>
+    @if ((ViewData["FullWidth"] as bool?) == true)
+    {
+        <main role="main" class="site-main">@RenderBody()</main>
+    }
+    else
+    {
+        <main role="main" class="site-main container-xl py-4">@RenderBody()</main>
+    }
+
+    <footer class="site-footer" id="contact">
+        <div class="container-xl">
+            <div class="row g-4 site-footer__grid">
+                <div class="col-12 col-lg-3">
+                    <a class="smartcar-brand smartcar-brand--footer" asp-controller="Home" asp-action="Index">
+                        <svg class="smartcar-brand__icon" viewBox="0 0 64 32" aria-hidden="true">
+                            <path d="M10 21h44l-3.8-9.2A6 6 0 0 0 44.6 8H22.3a7 7 0 0 0-5.8 3.1L10 21Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" />
+                            <circle cx="18" cy="24" r="5" fill="#082554" stroke="currentColor" stroke-width="3" />
+                            <circle cx="47" cy="24" r="5" fill="#082554" stroke="currentColor" stroke-width="3" />
+                        </svg>
+                        <span>SmartCar</span>
+                    </a>
+                    <p class="site-footer__description">Dịch vụ thuê xe tự lái trực tiếp. Đội xe do SmartCar quản lý, kiểm tra định kỳ và công khai chi phí.</p>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <h2 class="site-footer__title">Thông tin liên hệ</h2>
+                    <ul class="site-footer__list">
+                        <li>SmartCar Cầu Giấy</li>
+                        <li>Số 123 Trần Thái Tông, Hà Nội</li>
+                        <li><a href="tel:0901234567">0901 234 567</a></li>
+                        <li><a href="mailto:hotro@smartcar.vn">hotro@smartcar.vn</a></li>
+                        <li>08:00 – 20:00 (T2 – T7)</li>
+                    </ul>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h2 class="site-footer__title">Hướng dẫn</h2>
+                    <ul class="site-footer__list">
+                        <li><a asp-controller="Home" asp-action="Index" asp-fragment="rentalProcess">Hướng dẫn thuê xe</a></li>
+                        <li><a asp-controller="Home" asp-action="Index" asp-fragment="rentalInfo">Giấy tờ cần chuẩn bị</a></li>
+                        <li><a asp-controller="Home" asp-action="Index" asp-fragment="faq">Câu hỏi thường gặp</a></li>
+                        <li><a asp-controller="Home" asp-action="Index" asp-fragment="contact">Liên hệ hỗ trợ</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h2 class="site-footer__title">Chính sách</h2>
+                    <ul class="site-footer__list">
+                        <li><a href="#">Điều khoản sử dụng</a></li>
+                        <li><a href="#">Chính sách bảo mật</a></li>
+                        <li><a href="#">Chính sách hủy đơn</a></li>
+                        <li><a href="#">Chính sách thanh toán</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h2 class="site-footer__title">Hỗ trợ nhanh</h2>
+                    <p class="site-footer__support">SmartCar hỗ trợ khách hàng trong suốt quá trình đặt, nhận, sử dụng và trả xe.</p>
+                    <a class="btn btn-light btn-sm fw-semibold" href="tel:0901234567">Gọi 0901 234 567</a>
+                </div>
+            </div>
+            <div class="site-footer__bottom">
+                <span>&copy; 2026 SmartCar. All rights reserved.</span>
+                <span>Thuê xe minh bạch · An toàn · Thuận tiện</span>
+            </div>
+        </div>
     </footer>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
