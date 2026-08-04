@@ -129,6 +129,16 @@ public class AccountController : Controller
     }
 
     [HttpGet]
+    [Authorize]
+    public async Task<IActionResult> LogoutAndLogin()
+    {
+        await _accountService.LogoutAsync();
+        TempData["LoginSuccessMessage"] =
+            "Mật khẩu đã được thay đổi. Vui lòng đăng nhập lại bằng mật khẩu mới.";
+        return RedirectToAction(nameof(Login));
+    }
+
+    [HttpGet]
     public IActionResult AccessDenied() => View();
 
     private static string TranslateIdentityError(string error)
