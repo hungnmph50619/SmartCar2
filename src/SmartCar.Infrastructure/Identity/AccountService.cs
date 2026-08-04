@@ -62,7 +62,7 @@ internal sealed class AccountService : IAccountService
             return OperationResult.Failure(roleResult.Errors.Select(error => error.Description));
         }
 
-        await _signInManager.SignInAsync(user, isPersistent: false);
+        // Chỉ tạo tài khoản. Khách hàng phải đăng nhập lại bằng email và mật khẩu.
         return OperationResult.Success();
     }
 
