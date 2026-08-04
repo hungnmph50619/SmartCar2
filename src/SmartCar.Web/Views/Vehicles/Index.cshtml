@@ -1,0 +1,257 @@
+@model SmartCar.Web.ViewModels.VehicleCatalogViewModel
+@{
+    ViewData["Title"] = "Danh sách xe còn trống";
+    ViewData["FullWidth"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/vehicles-catalog.css" asp-append-version="true" />
+}
+
+<div class="vc-page">
+    <section class="vc-searchbar">
+        <div class="vc-container">
+            <a class="vc-back" asp-controller="Home" asp-action="Index" aria-label="Quay về trang chủ">←</a>
+            <button type="button" class="vc-searchbar__summary" id="openQuickSearch">
+                <span class="vc-searchbar__icon">⌖</span>
+                <span>
+                    <strong>@Model.Query.PickupLocation</strong>
+                    <small>@Model.PickupDateTime.ToString("HH:mm dd/MM/yyyy") – @Model.ReturnDateTime.ToString("HH:mm dd/MM/yyyy")</small>
+                </span>
+                <span class="vc-searchbar__edit">Chỉnh sửa</span>
+            </button>
+        </div>
+    </section>
+
+    <section class="vc-filter-strip">
+        <div class="vc-container vc-filter-strip__inner">
+            <button type="button" class="vc-chip" data-open-filter>Loại xe</button>
+            <button type="button" class="vc-chip" data-open-filter>Hãng xe</button>
+            <button type="button" class="vc-chip" data-open-filter>Số chỗ</button>
+            <button type="button" class="vc-chip" data-open-filter>Mức giá</button>
+            <button type="button" class="vc-chip" data-open-filter>Nhiên liệu</button>
+            <a class="vc-chip @(Model.Query.DeliveryAvailable ? "vc-chip--active" : "")"
+               asp-action="Index"
+               asp-route-pickupLocation="@Model.Query.PickupLocation"
+               asp-route-pickupDate="@Model.PickupDateTime.ToString("yyyy-MM-dd")"
+               asp-route-pickupTime="@Model.PickupDateTime.ToString("HH:mm")"
+               asp-route-returnDate="@Model.ReturnDateTime.ToString("yyyy-MM-dd")"
+               asp-route-returnTime="@Model.ReturnDateTime.ToString("HH:mm")"
+               asp-route-deliveryAvailable="@(!Model.Query.DeliveryAvailable)">Giao tận nơi</a>
+            <button type="button" class="vc-chip vc-chip--filter" data-open-filter>☷ Bộ lọc</button>
+        </div>
+    </section>
+
+    <main class="vc-container vc-results">
+        @if (TempData["ErrorMessage"] is string errorMessage)
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        <div class="vc-results__head">
+            <div>
+                <span class="vc-eyebrow">ĐỘI XE SMARTCAR</span>
+                <h1>@Model.TotalCount xe còn trống</h1>
+                <p>@Model.SearchSummary</p>
+            </div>
+            <form method="get" asp-action="Index" class="vc-sort-form">
+                <input type="hidden" name="pickupLocation" value="@Model.Query.PickupLocation" />
+                <input type="hidden" name="pickupDate" value="@Model.PickupDateTime.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="pickupTime" value="@Model.PickupDateTime.ToString("HH:mm")" />
+                <input type="hidden" name="returnDate" value="@Model.ReturnDateTime.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="returnTime" value="@Model.ReturnDateTime.ToString("HH:mm")" />
+                <label for="sort">Sắp xếp</label>
+                <select id="sort" name="sort" class="form-select" onchange="this.form.submit()">
+                    <option value="recommended" selected="@(Model.Query.Sort == "recommended")">Phù hợp nhất</option>
+                    <option value="price-asc" selected="@(Model.Query.Sort == "price-asc")">Giá thấp đến cao</option>
+                    <option value="price-desc" selected="@(Model.Query.Sort == "price-desc")">Giá cao đến thấp</option>
+                    <option value="popular" selected="@(Model.Query.Sort == "popular")">Được thuê nhiều nhất</option>
+                    <option value="rating" selected="@(Model.Query.Sort == "rating")">Đánh giá tốt nhất</option>
+                    <option value="newest" selected="@(Model.Query.Sort == "newest")">Xe mới nhất</option>
+                </select>
+            </form>
+        </div>
+
+        @if (Model.Vehicles.Count == 0)
+        {
+            <section class="vc-empty">
+                <div class="vc-empty__icon">🚗</div>
+                <h2>Không tìm thấy xe phù hợp</h2>
+                <p>Thử thay đổi thời gian thuê hoặc bỏ bớt điều kiện lọc.</p>
+                <button type="button" class="btn btn-primary" data-open-filter>Điều chỉnh bộ lọc</button>
+            </section>
+        }
+        else
+        {
+            <div class="vc-grid">
+                @foreach (var vehicle in Model.Vehicles)
+                {
+                    <article class="vc-card">
+                        <a class="vc-card__image" asp-action="Details" asp-route-id="@vehicle.VehicleId"
+                           asp-route-pickupLocation="@Model.Query.PickupLocation"
+                           asp-route-pickupDate="@Model.PickupDateTime.ToString("yyyy-MM-dd")"
+                           asp-route-pickupTime="@Model.PickupDateTime.ToString("HH:mm")"
+                           asp-route-returnDate="@Model.ReturnDateTime.ToString("yyyy-MM-dd")"
+                           asp-route-returnTime="@Model.ReturnDateTime.ToString("HH:mm")">
+                            <img src="@vehicle.ImageUrl" alt="@vehicle.Name" loading="lazy" />
+                            <span class="vc-card__badge">@vehicle.Badge</span>
+                            <span class="vc-card__favorite" aria-hidden="true">♡</span>
+                        </a>
+                        <div class="vc-card__body">
+                            <div class="vc-card__tags">
+                                <span>✓ Xe SmartCar</span>
+                                @if (vehicle.DeliveryAvailable)
+                                {
+                                    <span>⌖ Giao tận nơi</span>
+                                }
+                            </div>
+                            <h2>@vehicle.Name</h2>
+                            <div class="vc-card__specs">
+                                <span>@vehicle.Transmission</span>
+                                <span>@vehicle.Seats chỗ</span>
+                                <span>@vehicle.FuelType</span>
+                            </div>
+                            <p class="vc-card__location">⌖ Nhận tại @vehicle.PickupLocation</p>
+                            <div class="vc-card__footer">
+                                <span class="vc-card__rating">★ @vehicle.Rating.ToString("0.0") · @vehicle.RentalCount lượt thuê</span>
+                                <span class="vc-card__price"><strong>@vehicle.DailyPrice.ToString("N0")đ</strong>/ngày</span>
+                            </div>
+                            <a class="btn btn-outline-primary vc-card__button" asp-action="Details" asp-route-id="@vehicle.VehicleId"
+                               asp-route-pickupLocation="@Model.Query.PickupLocation"
+                               asp-route-pickupDate="@Model.PickupDateTime.ToString("yyyy-MM-dd")"
+                               asp-route-pickupTime="@Model.PickupDateTime.ToString("HH:mm")"
+                               asp-route-returnDate="@Model.ReturnDateTime.ToString("yyyy-MM-dd")"
+                               asp-route-returnTime="@Model.ReturnDateTime.ToString("HH:mm")">Xem chi tiết</a>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </main>
+</div>
+
+<dialog class="vc-dialog" id="quickSearchDialog">
+    <form method="get" asp-action="Index" class="vc-dialog__form">
+        <div class="vc-dialog__head">
+            <div><span class="vc-eyebrow">TÌM XE CÒN TRỐNG</span><h2>Chỉnh sửa lịch thuê</h2></div>
+            <button type="button" class="vc-dialog__close" data-close-dialog aria-label="Đóng">×</button>
+        </div>
+        <div class="vc-quick-grid">
+            <div class="vc-field vc-field--wide">
+                <label for="quickLocation">Địa điểm nhận xe</label>
+                <select id="quickLocation" name="pickupLocation" class="form-select">
+                    <option value="SmartCar Cầu Giấy" selected="@(Model.Query.PickupLocation == "SmartCar Cầu Giấy")">SmartCar Cầu Giấy</option>
+                    <option value="Nam Từ Liêm" selected="@(Model.Query.PickupLocation == "Nam Từ Liêm")">Giao xe tại Nam Từ Liêm</option>
+                    <option value="Thanh Xuân" selected="@(Model.Query.PickupLocation == "Thanh Xuân")">Giao xe tại Thanh Xuân</option>
+                    <option value="Long Biên" selected="@(Model.Query.PickupLocation == "Long Biên")">Giao xe tại Long Biên</option>
+                </select>
+            </div>
+            <div class="vc-field"><label>Ngày nhận</label><input name="pickupDate" type="date" class="form-control" value="@Model.PickupDateTime.ToString("yyyy-MM-dd")" /></div>
+            <div class="vc-field"><label>Giờ nhận</label><input name="pickupTime" type="time" class="form-control" value="@Model.PickupDateTime.ToString("HH:mm")" /></div>
+            <div class="vc-field"><label>Ngày trả</label><input name="returnDate" type="date" class="form-control" value="@Model.ReturnDateTime.ToString("yyyy-MM-dd")" /></div>
+            <div class="vc-field"><label>Giờ trả</label><input name="returnTime" type="time" class="form-control" value="@Model.ReturnDateTime.ToString("HH:mm")" /></div>
+        </div>
+        <div class="vc-dialog__actions"><button type="submit" class="btn btn-primary">Tìm xe</button></div>
+    </form>
+</dialog>
+
+<dialog class="vc-dialog vc-dialog--filter" id="advancedFilterDialog">
+    <form method="get" asp-action="Index" class="vc-dialog__form">
+        <input type="hidden" name="pickupLocation" value="@Model.Query.PickupLocation" />
+        <input type="hidden" name="pickupDate" value="@Model.PickupDateTime.ToString("yyyy-MM-dd")" />
+        <input type="hidden" name="pickupTime" value="@Model.PickupDateTime.ToString("HH:mm")" />
+        <input type="hidden" name="returnDate" value="@Model.ReturnDateTime.ToString("yyyy-MM-dd")" />
+        <input type="hidden" name="returnTime" value="@Model.ReturnDateTime.ToString("HH:mm")" />
+        <div class="vc-dialog__head">
+            <div><span class="vc-eyebrow">LỌC ĐỘI XE SMARTCAR</span><h2>Bộ lọc nâng cao</h2></div>
+            <button type="button" class="vc-dialog__close" data-close-dialog aria-label="Đóng">×</button>
+        </div>
+        <div class="vc-filter-form">
+            <section>
+                <h3>Sắp xếp</h3>
+                <select name="sort" class="form-select">
+                    <option value="recommended">Phù hợp nhất</option>
+                    <option value="price-asc">Giá thấp đến cao</option>
+                    <option value="price-desc">Giá cao đến thấp</option>
+                    <option value="popular">Được thuê nhiều nhất</option>
+                    <option value="rating">Đánh giá tốt nhất</option>
+                    <option value="newest">Xe mới nhất</option>
+                </select>
+            </section>
+            <section>
+                <h3>Mức giá theo ngày</h3>
+                <div class="vc-inline-fields">
+                    <input name="minPrice" type="number" class="form-control" placeholder="Từ 500.000" value="@Model.Query.MinPrice" />
+                    <input name="maxPrice" type="number" class="form-control" placeholder="Đến 2.000.000" value="@Model.Query.MaxPrice" />
+                </div>
+            </section>
+            <section>
+                <h3>Số chỗ</h3>
+                <div class="vc-radio-row">
+                    <label><input type="radio" name="seats" value="" checked="@(!Model.Query.Seats.HasValue)" /> Tất cả</label>
+                    <label><input type="radio" name="seats" value="5" checked="@(Model.Query.Seats == 5)" /> 4–5 chỗ</label>
+                    <label><input type="radio" name="seats" value="7" checked="@(Model.Query.Seats == 7)" /> 7 chỗ</label>
+                </div>
+            </section>
+            <section>
+                <h3>Truyền động</h3>
+                <div class="vc-radio-row">
+                    <label><input type="radio" name="transmission" value="" checked="@(string.IsNullOrWhiteSpace(Model.Query.Transmission))" /> Tất cả</label>
+                    <label><input type="radio" name="transmission" value="Tự động" checked="@(Model.Query.Transmission == "Tự động")" /> Số tự động</label>
+                    <label><input type="radio" name="transmission" value="Số sàn" checked="@(Model.Query.Transmission == "Số sàn")" /> Số sàn</label>
+                </div>
+            </section>
+            <section>
+                <h3>Hãng xe</h3>
+                <select name="brand" class="form-select">
+                    <option value="">Tất cả hãng xe</option>
+                    @foreach (var brand in Model.Brands)
+                    {
+                        <option value="@brand" selected="@(Model.Query.Brand == brand)">@brand</option>
+                    }
+                </select>
+            </section>
+            <section>
+                <h3>Nhiên liệu</h3>
+                <div class="vc-radio-row">
+                    <label><input type="radio" name="fuelType" value="" checked="@(string.IsNullOrWhiteSpace(Model.Query.FuelType))" /> Tất cả</label>
+                    <label><input type="radio" name="fuelType" value="Xăng" checked="@(Model.Query.FuelType == "Xăng")" /> Xăng</label>
+                    <label><input type="radio" name="fuelType" value="Dầu" checked="@(Model.Query.FuelType == "Dầu")" /> Dầu diesel</label>
+                    <label><input type="radio" name="fuelType" value="Điện" checked="@(Model.Query.FuelType == "Điện")" /> Điện</label>
+                    <label><input type="radio" name="fuelType" value="Hybrid" checked="@(Model.Query.FuelType == "Hybrid")" /> Hybrid</label>
+                </div>
+            </section>
+            <section>
+                <h3>Năm sản xuất</h3>
+                <select name="manufactureYearFrom" class="form-select">
+                    <option value="">Bất kỳ</option>
+                    <option value="2024" selected="@(Model.Query.ManufactureYearFrom == 2024)">Từ 2024</option>
+                    <option value="2022" selected="@(Model.Query.ManufactureYearFrom == 2022)">Từ 2022</option>
+                    <option value="2020" selected="@(Model.Query.ManufactureYearFrom == 2020)">Từ 2020</option>
+                </select>
+            </section>
+            <section>
+                <label class="vc-check"><input type="checkbox" name="deliveryAvailable" value="true" checked="@Model.Query.DeliveryAvailable" /> Chỉ hiển thị xe hỗ trợ giao tận nơi</label>
+            </section>
+        </div>
+        <div class="vc-dialog__actions vc-dialog__actions--split">
+            <a class="btn btn-link" asp-action="Index" asp-route-pickupLocation="@Model.Query.PickupLocation" asp-route-pickupDate="@Model.PickupDateTime.ToString("yyyy-MM-dd")" asp-route-pickupTime="@Model.PickupDateTime.ToString("HH:mm")" asp-route-returnDate="@Model.ReturnDateTime.ToString("yyyy-MM-dd")" asp-route-returnTime="@Model.ReturnDateTime.ToString("HH:mm")">Xóa bộ lọc</a>
+            <button type="submit" class="btn btn-primary">Áp dụng</button>
+        </div>
+    </form>
+</dialog>
+
+@section Scripts {
+    <script>
+        (() => {
+            const quickDialog = document.getElementById("quickSearchDialog");
+            const filterDialog = document.getElementById("advancedFilterDialog");
+            document.getElementById("openQuickSearch")?.addEventListener("click", () => quickDialog?.showModal());
+            document.querySelectorAll("[data-open-filter]").forEach(button => button.addEventListener("click", () => filterDialog?.showModal()));
+            document.querySelectorAll("[data-close-dialog]").forEach(button => button.addEventListener("click", () => button.closest("dialog")?.close()));
+            document.querySelectorAll("dialog").forEach(dialog => dialog.addEventListener("click", event => {
+                if (event.target === dialog) dialog.close();
+            }));
+        })();
+    </script>
+}
