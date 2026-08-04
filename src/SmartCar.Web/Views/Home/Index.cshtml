@@ -4,394 +4,412 @@
 
     var cars = new[]
     {
-        new { Name = "Toyota Vios 2024", Seats = "5 chỗ", Transmission = "Tự động", Fuel = "Xăng", Price = "700.000đ", Rating = "4,9", Trips = "35 lượt thuê", PhotoClass = "vehicle-photo--vios" },
-        new { Name = "Honda City 2024", Seats = "5 chỗ", Transmission = "Tự động", Fuel = "Xăng", Price = "750.000đ", Rating = "4,8", Trips = "28 lượt thuê", PhotoClass = "vehicle-photo--city" },
-        new { Name = "Mazda CX-5 2024", Seats = "5 chỗ", Transmission = "Tự động", Fuel = "Xăng", Price = "900.000đ", Rating = "4,9", Trips = "22 lượt thuê", PhotoClass = "vehicle-photo--cx5" },
-        new { Name = "Toyota Innova 2023", Seats = "7 chỗ", Transmission = "Tự động", Fuel = "Xăng", Price = "900.000đ", Rating = "4,8", Trips = "30 lượt thuê", PhotoClass = "vehicle-photo--innova" }
+        new { Name = "Toyota Vios 2024", Seats = "5 chỗ", Transmission = "Tự động", Fuel = "Xăng", Price = "700.000đ", Rating = "4,9", Trips = "35 lượt thuê", PhotoClass = "" },
+        new { Name = "Honda City 2024", Seats = "5 chỗ", Transmission = "Tự động", Fuel = "Xăng", Price = "750.000đ", Rating = "4,8", Trips = "28 lượt thuê", PhotoClass = "sc-car-card__visual--city" },
+        new { Name = "Mazda CX-5 2024", Seats = "5 chỗ", Transmission = "Tự động", Fuel = "Xăng", Price = "900.000đ", Rating = "4,9", Trips = "22 lượt thuê", PhotoClass = "sc-car-card__visual--cx5" },
+        new { Name = "Toyota Innova 2023", Seats = "7 chỗ", Transmission = "Tự động", Fuel = "Xăng", Price = "900.000đ", Rating = "4,8", Trips = "30 lượt thuê", PhotoClass = "sc-car-card__visual--innova" }
     };
 }
 
 @section Styles {
-    <link rel="stylesheet" href="~/css/home-mioto.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/home-photo-hero.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/home-photo-vios.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/home-business.css" asp-append-version="true" />
 }
 
-<section class="home-hero">
-    <div class="container-xl">
-        <div class="home-hero__panel">
-            <div class="home-hero__content">
-                <span class="home-hero__eyebrow">ĐỘI XE DO SMARTCAR TRỰC TIẾP QUẢN LÝ</span>
-                <h1>Thuê xe tự lái dễ dàng cùng <span>SmartCar</span></h1>
-                <p>Đội xe chất lượng, giá thuê minh bạch, đặt xe nhanh chóng và giao nhận thuận tiện.</p>
-            </div>
-
-            <form class="car-search" method="get" asp-controller="Home" asp-action="Index" aria-label="Tìm xe còn trống">
-                <div class="car-search__field car-search__field--location">
-                    <label for="pickupLocation">Địa điểm nhận xe</label>
-                    <select id="pickupLocation" name="pickupLocation" class="form-select">
-                        <option>SmartCar Cầu Giấy</option>
-                        <option>Giao xe tận nơi</option>
-                    </select>
+<div class="sc-home">
+    <section class="sc-hero">
+        <div class="sc-container">
+            <div class="sc-hero__panel">
+                <div class="sc-hero__content">
+                    <span class="sc-hero__badge">✓ Đội xe do SmartCar trực tiếp quản lý</span>
+                    <h1>Thuê xe tự lái dễ dàng cùng <span>SmartCar</span></h1>
+                    <p class="sc-hero__lead">
+                        Xe được kiểm tra trước chuyến đi, giá thuê minh bạch và SmartCar trực tiếp hỗ trợ từ lúc đặt xe đến khi hoàn tất trả xe.
+                    </p>
                 </div>
-                <div class="car-search__field">
-                    <label for="pickupDate">Ngày nhận</label>
-                    <input id="pickupDate" name="pickupDate" type="date" class="form-control" />
-                </div>
-                <div class="car-search__field">
-                    <label for="pickupTime">Giờ nhận</label>
-                    <input id="pickupTime" name="pickupTime" type="time" class="form-control" value="08:00" />
-                </div>
-                <div class="car-search__field">
-                    <label for="returnDate">Ngày trả</label>
-                    <input id="returnDate" name="returnDate" type="date" class="form-control" />
-                </div>
-                <div class="car-search__field">
-                    <label for="returnTime">Giờ trả</label>
-                    <input id="returnTime" name="returnTime" type="time" class="form-control" value="18:00" />
-                </div>
-                <button type="submit" class="btn btn-primary car-search__submit">
-                    <span aria-hidden="true">⌕</span>&nbsp; Tìm xe
-                </button>
-            </form>
-        </div>
 
-        <div class="trust-strip" aria-label="Cam kết dịch vụ">
-            <div><span>✓</span> Xe được kiểm tra định kỳ</div>
-            <div><span>₫</span> Giá và phụ phí minh bạch</div>
-            <div><span>↗</span> Hỗ trợ giao nhận tận nơi</div>
-            <div><span>24</span> Hỗ trợ trong suốt chuyến đi</div>
-        </div>
-    </div>
-</section>
-
-<section class="home-section home-section--compact">
-    <div class="container-xl">
-        <div class="section-heading">
-            <div>
-                <span class="section-heading__eyebrow">LỰA CHỌN NHANH</span>
-                <h2>Danh mục xe</h2>
-            </div>
-            <a href="#featuredCars" class="section-link">Xem tất cả <span>→</span></a>
-        </div>
-
-        <div class="category-grid">
-            <a class="category-card" href="#featuredCars">
-                <div class="category-photo category-photo--sedan" aria-hidden="true"></div>
-                <strong>Xe 4–5 chỗ</strong>
-            </a>
-            <a class="category-card" href="#featuredCars">
-                <div class="category-photo category-photo--seven" aria-hidden="true"></div>
-                <strong>Xe 7 chỗ</strong>
-            </a>
-            <a class="category-card" href="#featuredCars">
-                <div class="category-photo category-photo--automatic" aria-hidden="true"></div>
-                <strong>Xe số tự động</strong>
-            </a>
-            <a class="category-card" href="#featuredCars">
-                <div class="category-photo category-photo--economy" aria-hidden="true"></div>
-                <strong>Xe tiết kiệm</strong>
-            </a>
-            <a class="category-card" href="#featuredCars">
-                <div class="category-photo category-photo--premium" aria-hidden="true"></div>
-                <strong>Xe cao cấp</strong>
-            </a>
-        </div>
-    </div>
-</section>
-
-<section class="home-section home-section--muted" id="featuredCars">
-    <div class="container-xl">
-        <div class="section-heading">
-            <div>
-                <span class="section-heading__eyebrow">ĐƯỢC KHÁCH HÀNG LỰA CHỌN</span>
-                <h2>Xe nổi bật</h2>
-            </div>
-            <a href="#featuredCars" class="section-link">Xem tất cả xe <span>→</span></a>
-        </div>
-
-        <div class="featured-car-grid">
-            @foreach (var car in cars)
-            {
-                <article class="vehicle-card">
-                    <div class="vehicle-card__visual @car.PhotoClass">
-                        <span class="availability-badge">Còn trống</span>
+                <form class="sc-search" method="get" asp-controller="Home" asp-action="Index" aria-label="Tìm xe còn trống">
+                    <div class="sc-search__field">
+                        <label for="pickupLocation">Địa điểm nhận xe</label>
+                        <select id="pickupLocation" name="pickupLocation" class="form-select">
+                            <option value="SmartCar Cầu Giấy">Nhận tại SmartCar Cầu Giấy</option>
+                            <option value="Nam Từ Liêm">Giao xe tại Nam Từ Liêm</option>
+                            <option value="Thanh Xuân">Giao xe tại Thanh Xuân</option>
+                            <option value="Long Biên">Giao xe tại Long Biên</option>
+                        </select>
                     </div>
-                    <div class="vehicle-card__body">
-                        <h3>@car.Name</h3>
-                        <p class="vehicle-card__specs">@car.Seats <span>•</span> @car.Transmission <span>•</span> @car.Fuel</p>
-                        <ul class="vehicle-card__features">
-                            <li><span>⌖</span> Nhận xe tại SmartCar Cầu Giấy</li>
-                            <li><span>↗</span> Có hỗ trợ giao xe tận nơi</li>
-                        </ul>
-                        <div class="vehicle-card__rating"><span>★</span> @car.Rating <small>(@car.Trips)</small></div>
-                        <div class="vehicle-card__footer">
-                            <div class="vehicle-card__price"><strong>@car.Price</strong><span>/ngày</span></div>
-                            <a href="#rentalProcess" class="btn btn-outline-primary">Xem chi tiết</a>
+                    <div class="sc-search__field">
+                        <label for="pickupDate">Ngày nhận</label>
+                        <input id="pickupDate" name="pickupDate" type="date" class="form-control" />
+                    </div>
+                    <div class="sc-search__field">
+                        <label for="pickupTime">Giờ nhận</label>
+                        <input id="pickupTime" name="pickupTime" type="time" class="form-control" value="08:00" />
+                    </div>
+                    <div class="sc-search__field">
+                        <label for="returnDate">Ngày trả</label>
+                        <input id="returnDate" name="returnDate" type="date" class="form-control" />
+                    </div>
+                    <div class="sc-search__field">
+                        <label for="returnTime">Giờ trả</label>
+                        <input id="returnTime" name="returnTime" type="time" class="form-control" value="18:00" />
+                    </div>
+                    <button type="submit" class="btn btn-primary sc-search__button">⌕ Tìm xe</button>
+                </form>
+            </div>
+
+            <div class="sc-trust" aria-label="Cam kết nhanh của SmartCar">
+                <div class="sc-trust__item"><span class="sc-trust__icon">✓</span><span>Kiểm tra xe trước chuyến</span></div>
+                <div class="sc-trust__item"><span class="sc-trust__icon">₫</span><span>Giá và phụ phí minh bạch</span></div>
+                <div class="sc-trust__item"><span class="sc-trust__icon">↗</span><span>Giao nhận trong khu vực hỗ trợ</span></div>
+                <div class="sc-trust__item"><span class="sc-trust__icon">24</span><span>Hỗ trợ trong suốt chuyến đi</span></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="sc-section sc-section--compact">
+        <div class="sc-container">
+            <div class="sc-section-head sc-section-head--center">
+                <span class="sc-eyebrow">Ưu đãi từ SmartCar</span>
+                <h2>Chương trình khuyến mãi</h2>
+                <p>Ưu đãi áp dụng thống nhất cho đội xe do SmartCar trực tiếp quản lý.</p>
+            </div>
+
+            <div class="sc-promo-grid">
+                <a class="sc-promo" href="#featuredCars">
+                    <div class="sc-promo__content">
+                        <span class="sc-promo__tag">KHÁCH HÀNG MỚI</span>
+                        <h3>Giảm 10% lần thuê đầu tiên</h3>
+                        <p>Trải nghiệm dịch vụ SmartCar với mức giá tiết kiệm hơn.</p>
+                        <span class="sc-promo__link">Xem xe phù hợp →</span>
+                    </div>
+                </a>
+                <a class="sc-promo sc-promo--long" href="#featuredCars">
+                    <div class="sc-promo__content">
+                        <span class="sc-promo__tag">THUÊ DÀI NGÀY</span>
+                        <h3>Thuê từ 3 ngày, giá càng tốt</h3>
+                        <p>Mức ưu đãi được hiển thị rõ trước khi khách gửi yêu cầu.</p>
+                        <span class="sc-promo__link">Kiểm tra giá thuê →</span>
+                    </div>
+                </a>
+                <a class="sc-promo sc-promo--delivery" href="#pickupLocations">
+                    <div class="sc-promo__content">
+                        <span class="sc-promo__tag">GIAO XE TẬN NƠI</span>
+                        <h3>Nhận xe thuận tiện hơn</h3>
+                        <p>SmartCar hỗ trợ giao nhận tại các khu vực đang phục vụ.</p>
+                        <span class="sc-promo__link">Xem khu vực giao xe →</span>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="sc-section sc-section--soft" id="featuredCars">
+        <div class="sc-container">
+            <div class="sc-section-head">
+                <div>
+                    <span class="sc-eyebrow">Được khách hàng lựa chọn</span>
+                    <h2>Xe nổi bật</h2>
+                    <p>Chỉ hiển thị xe còn hoạt động và có thể nhận yêu cầu thuê.</p>
+                </div>
+                <a href="#featuredCars" class="sc-link">Xem tất cả xe →</a>
+            </div>
+
+            <div class="sc-car-grid">
+                @foreach (var car in cars)
+                {
+                    <article class="sc-car-card">
+                        <div class="sc-car-card__visual @car.PhotoClass">
+                            <span class="sc-car-card__badge">Còn trống</span>
                         </div>
+                        <div class="sc-car-card__body">
+                            <h3>@car.Name</h3>
+                            <p class="sc-car-card__specs">@car.Seats · @car.Transmission · @car.Fuel</p>
+                            <ul class="sc-car-card__features">
+                                <li><span>⌖</span> Nhận tại SmartCar Cầu Giấy</li>
+                                <li><span>↗</span> Có hỗ trợ giao xe tận nơi</li>
+                            </ul>
+                            <div class="sc-car-card__rating"><strong>★</strong> @car.Rating <small>(@car.Trips)</small></div>
+                            <div class="sc-car-card__price"><strong>@car.Price</strong><span>/ngày</span></div>
+                            <a href="#rentalProcess" class="btn btn-outline-primary sc-car-card__button">Xem chi tiết</a>
+                        </div>
+                    </article>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="sc-section">
+        <div class="sc-container">
+            <div class="sc-assurance">
+                <div class="sc-assurance__content">
+                    <span class="sc-eyebrow">Hành trình luôn được bảo đảm</span>
+                    <h2>SmartCar trực tiếp chịu trách nhiệm với khách hàng</h2>
+                    <p>
+                        Không cần liên hệ chủ xe bên ngoài. SmartCar kiểm tra xe, xác nhận đơn, thực hiện bàn giao và tiếp nhận mọi yêu cầu hỗ trợ.
+                    </p>
+                    <ul class="sc-assurance__list">
+                        <li><span class="sc-check">✓</span><span>Xe được kiểm tra ngoại thất, nội thất, nhiên liệu và kilomet trước khi giao.</span></li>
+                        <li><span class="sc-check">✓</span><span>Có biên bản bàn giao và hình ảnh tình trạng xe rõ ràng.</span></li>
+                        <li><span class="sc-check">✓</span><span>Chi phí phát sinh chỉ được ghi nhận khi có căn cứ và xác nhận.</span></li>
+                        <li><span class="sc-check">✓</span><span>SmartCar hỗ trợ trực tiếp khi xe gặp sự cố trong thời gian thuê.</span></li>
+                    </ul>
+                </div>
+                <div class="sc-assurance__photo" role="img" aria-label="Xe SmartCar trên hành trình"></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="sc-section sc-section--soft">
+        <div class="sc-container">
+            <div class="sc-section-head sc-section-head--center">
+                <span class="sc-eyebrow">Dịch vụ trực tiếp</span>
+                <h2>Vì sao chọn SmartCar?</h2>
+                <p>Những lợi ích phù hợp với mô hình SmartCar sở hữu và trực tiếp quản lý đội xe.</p>
+            </div>
+
+            <div class="sc-benefit-grid">
+                <article class="sc-benefit">
+                    <div class="sc-benefit__icon">01</div>
+                    <h3>Đội xe trực tiếp quản lý</h3>
+                    <p>Một đơn vị thống nhất chịu trách nhiệm về xe, giá thuê và chất lượng dịch vụ.</p>
+                </article>
+                <article class="sc-benefit">
+                    <div class="sc-benefit__icon">02</div>
+                    <h3>Kiểm tra trước mỗi chuyến</h3>
+                    <p>Tình trạng xe được ghi nhận đầy đủ trước khi khách ký biên bản nhận xe.</p>
+                </article>
+                <article class="sc-benefit">
+                    <div class="sc-benefit__icon">03</div>
+                    <h3>Chi phí minh bạch</h3>
+                    <p>Giá thuê, tiền cọc, phí giao nhận và điều kiện phát sinh được công khai trước.</p>
+                </article>
+                <article class="sc-benefit">
+                    <div class="sc-benefit__icon">04</div>
+                    <h3>Theo dõi đơn dễ dàng</h3>
+                    <p>Khách xem được trạng thái xác nhận, thanh toán, giao nhận và hoàn thành đơn.</p>
+                </article>
+                <article class="sc-benefit">
+                    <div class="sc-benefit__icon">05</div>
+                    <h3>Giao nhận linh hoạt</h3>
+                    <p>Nhận tại cửa hàng hoặc yêu cầu giao xe trong khu vực SmartCar hỗ trợ.</p>
+                </article>
+                <article class="sc-benefit">
+                    <div class="sc-benefit__icon">06</div>
+                    <h3>Hỗ trợ xuyên suốt</h3>
+                    <p>SmartCar tiếp nhận trực tiếp vấn đề từ lúc đặt xe đến khi hoàn tất trả xe.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="sc-section" id="aboutSmartCar">
+        <div class="sc-container">
+            <div class="sc-about direct-service-panel">
+                <div class="sc-about__photo" role="img" aria-label="Xe thuộc đội xe SmartCar"></div>
+                <div class="sc-about__content">
+                    <span class="sc-eyebrow">SmartCar không phải nền tảng trung gian</span>
+                    <h2>Một đơn vị trực tiếp chịu trách nhiệm cho toàn bộ chuyến thuê</h2>
+                    <p>
+                        SmartCar sở hữu và quản lý đội xe, đồng thời trực tiếp xử lý đơn thuê, thanh toán, giao nhận, kiểm tra và bảo trì.
+                    </p>
+                    <ul class="sc-about__list">
+                        <li><span class="sc-check">✓</span><span>Một chính sách áp dụng thống nhất cho toàn bộ xe.</span></li>
+                        <li><span class="sc-check">✓</span><span>Không phải chờ xác nhận từ chủ xe bên ngoài.</span></li>
+                        <li><span class="sc-check">✓</span><span>Thông tin giao nhận và trạng thái đơn được theo dõi trực tiếp.</span></li>
+                    </ul>
+                    <a class="btn btn-primary align-self-start px-4" href="#featuredCars">Khám phá đội xe</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="sc-section sc-section--soft" id="pickupLocations">
+        <div class="sc-container">
+            <div class="sc-section-head sc-section-head--center">
+                <span class="sc-eyebrow">Nhận xe thuận tiện</span>
+                <h2>Điểm nhận và khu vực giao xe</h2>
+                <p>Phạm vi giao nhận được SmartCar xác nhận rõ trước khi khách thanh toán.</p>
+            </div>
+
+            <div class="sc-location-grid">
+                <article class="sc-location">
+                    <span class="sc-location__pin">⌖</span>
+                    <div class="sc-location__content">
+                        <span class="sc-location__type">Cửa hàng SmartCar</span>
+                        <h3>Cầu Giấy</h3>
+                        <p>Nhận và trả xe trực tiếp tại cửa hàng, phục vụ 08:00–20:00.</p>
                     </div>
                 </article>
-            }
-        </div>
-    </div>
-</section>
-
-<section class="home-section">
-    <div class="container-xl">
-        <div class="section-heading section-heading--center">
-            <span class="section-heading__eyebrow">ƯU ĐÃI TỪ SMARTCAR</span>
-            <h2>Chương trình khuyến mãi</h2>
-            <p>Ưu đãi được áp dụng thống nhất cho đội xe do SmartCar trực tiếp quản lý.</p>
-        </div>
-
-        <div class="promotion-grid">
-            <a class="promotion-card" href="#featuredCars">
-                <div class="promotion-card__content">
-                    <span class="promotion-card__tag">KHÁCH HÀNG MỚI</span>
-                    <h3>Giảm 10% lần thuê đầu tiên</h3>
-                    <p>Trải nghiệm dịch vụ SmartCar với chi phí tiết kiệm hơn.</p>
-                    <span class="promotion-card__link">Xem xe phù hợp →</span>
-                </div>
-            </a>
-            <a class="promotion-card promotion-card--green" href="#featuredCars">
-                <div class="promotion-card__content">
-                    <span class="promotion-card__tag">THUÊ DÀI NGÀY</span>
-                    <h3>Thuê từ 3 ngày, giá càng tốt</h3>
-                    <p>Mức giá ưu đãi được tính rõ ràng trước khi gửi yêu cầu.</p>
-                    <span class="promotion-card__link">Kiểm tra giá thuê →</span>
-                </div>
-            </a>
-            <a class="promotion-card promotion-card--cyan" href="#pickupLocations">
-                <div class="promotion-card__content">
-                    <span class="promotion-card__tag">GIAO XE TẬN NƠI</span>
-                    <h3>Nhận xe thuận tiện hơn</h3>
-                    <p>SmartCar hỗ trợ giao nhận trong các khu vực đang phục vụ.</p>
-                    <span class="promotion-card__link">Xem khu vực giao xe →</span>
-                </div>
-            </a>
-        </div>
-    </div>
-</section>
-
-<section class="home-section home-section--muted" id="pickupLocations">
-    <div class="container-xl">
-        <div class="section-heading section-heading--center">
-            <span class="section-heading__eyebrow">NHẬN XE THUẬN TIỆN</span>
-            <h2>Điểm nhận và khu vực giao xe</h2>
-            <p>Khách có thể nhận xe tại cửa hàng SmartCar hoặc yêu cầu giao xe trong khu vực hỗ trợ.</p>
-        </div>
-
-        <div class="location-grid">
-            <article class="location-card">
-                <div class="location-card__content">
-                    <span class="location-card__type">Cửa hàng SmartCar</span>
-                    <h3>Cầu Giấy</h3>
-                    <p>Nhận và trả xe trực tiếp tại cửa hàng.</p>
-                </div>
-            </article>
-            <article class="location-card location-card--two">
-                <div class="location-card__content">
-                    <span class="location-card__type">Khu vực giao xe</span>
-                    <h3>Nam Từ Liêm</h3>
-                    <p>Phí giao xe được báo rõ trước khi đặt.</p>
-                </div>
-            </article>
-            <article class="location-card location-card--three">
-                <div class="location-card__content">
-                    <span class="location-card__type">Khu vực giao xe</span>
-                    <h3>Thanh Xuân</h3>
-                    <p>Lựa chọn địa chỉ giao nhận phù hợp.</p>
-                </div>
-            </article>
-            <article class="location-card location-card--four">
-                <div class="location-card__content">
-                    <span class="location-card__type">Khu vực giao xe</span>
-                    <h3>Long Biên</h3>
-                    <p>SmartCar xác nhận phạm vi trước chuyến đi.</p>
-                </div>
-            </article>
-        </div>
-    </div>
-</section>
-
-<section class="home-section" id="rentalProcess">
-    <div class="container-xl">
-        <div class="section-heading section-heading--center">
-            <span class="section-heading__eyebrow">ĐƠN GIẢN VÀ RÕ RÀNG</span>
-            <h2>Hướng dẫn thuê xe</h2>
-            <p>SmartCar trực tiếp kiểm tra xe, xác nhận đơn và hỗ trợ khách hàng trong toàn bộ quá trình thuê.</p>
-        </div>
-
-        <div class="process-grid">
-            <div class="process-item">
-                <div class="process-item__number">1</div>
-                <div class="process-item__icon">01</div>
-                <h3>Chọn thời gian</h3>
-                <p>Chọn ngày, giờ và địa điểm nhận xe phù hợp.</p>
-            </div>
-            <div class="process-item">
-                <div class="process-item__number">2</div>
-                <div class="process-item__icon">02</div>
-                <h3>Chọn xe còn trống</h3>
-                <p>Xem thông tin, giá và lựa chọn chiếc xe phù hợp.</p>
-            </div>
-            <div class="process-item">
-                <div class="process-item__number">3</div>
-                <div class="process-item__icon">03</div>
-                <h3>Gửi yêu cầu thuê</h3>
-                <p>Điền thông tin cần thiết và gửi yêu cầu đặt xe.</p>
-            </div>
-            <div class="process-item">
-                <div class="process-item__number">4</div>
-                <div class="process-item__icon">04</div>
-                <h3>SmartCar xác nhận</h3>
-                <p>Admin kiểm tra lịch và xác nhận tình trạng xe.</p>
-            </div>
-            <div class="process-item">
-                <div class="process-item__number">5</div>
-                <div class="process-item__icon">05</div>
-                <h3>Thanh toán và nhận xe</h3>
-                <p>Thanh toán tiền cọc sau khi đơn đã được xác nhận.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="home-section home-section--blue-soft">
-    <div class="container-xl">
-        <div class="section-heading section-heading--center">
-            <span class="section-heading__eyebrow">DỊCH VỤ TRỰC TIẾP</span>
-            <h2>Vì sao chọn SmartCar?</h2>
-        </div>
-
-        <div class="benefit-grid">
-            <article class="benefit-card">
-                <div class="benefit-card__icon">01</div>
-                <h3>Đội xe trực tiếp quản lý</h3>
-                <p>SmartCar chịu trách nhiệm thống nhất về xe, giá thuê và chất lượng dịch vụ.</p>
-            </article>
-            <article class="benefit-card">
-                <div class="benefit-card__icon">02</div>
-                <h3>Kiểm tra trước mỗi chuyến</h3>
-                <p>Tình trạng ngoại thất, nội thất, nhiên liệu và kilomet được ghi nhận khi giao xe.</p>
-            </article>
-            <article class="benefit-card">
-                <div class="benefit-card__icon">03</div>
-                <h3>Chi phí minh bạch</h3>
-                <p>Giá thuê, tiền cọc, phí giao xe và phụ phí được công khai trước khi xác nhận.</p>
-            </article>
-            <article class="benefit-card">
-                <div class="benefit-card__icon">04</div>
-                <h3>Giao nhận linh hoạt</h3>
-                <p>Nhận xe tại SmartCar hoặc đăng ký giao xe tận nơi trong khu vực hỗ trợ.</p>
-            </article>
-            <article class="benefit-card">
-                <div class="benefit-card__icon">05</div>
-                <h3>Hỗ trợ xuyên suốt</h3>
-                <p>SmartCar hỗ trợ khách hàng từ lúc đặt xe cho đến khi hoàn tất trả xe.</p>
-            </article>
-        </div>
-    </div>
-</section>
-
-<section class="home-section">
-    <div class="container-xl">
-        <div class="direct-service-panel">
-            <div class="direct-service-panel__photo" role="img" aria-label="Xe trong đội xe SmartCar"></div>
-            <div class="direct-service-panel__content">
-                <span class="section-heading__eyebrow">SMARTCAR KHÔNG PHẢI NỀN TẢNG TRUNG GIAN</span>
-                <h2>Một đơn vị trực tiếp chịu trách nhiệm cho toàn bộ chuyến thuê</h2>
-                <p>Khách hàng làm việc trực tiếp với SmartCar. Admin quản lý đơn thuê, thanh toán, giao nhận, kiểm tra và bảo trì toàn bộ đội xe.</p>
-                <ul class="direct-service-list">
-                    <li><span>✓</span><div>Một chính sách áp dụng thống nhất cho toàn bộ xe.</div></li>
-                    <li><span>✓</span><div>Không cần liên hệ hay chờ xác nhận từ chủ xe bên ngoài.</div></li>
-                    <li><span>✓</span><div>Thông tin giao nhận và trạng thái đơn được theo dõi trực tiếp trên hệ thống.</div></li>
-                </ul>
-                <a class="btn btn-primary align-self-start px-4" href="#featuredCars">Khám phá đội xe</a>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="home-section" id="rentalInfo">
-    <div class="container-xl">
-        <div class="section-heading section-heading--center">
-            <span class="section-heading__eyebrow">MINH BẠCH TRƯỚC KHI ĐẶT</span>
-            <h2>Thông tin thuê xe cần biết</h2>
-        </div>
-
-        <div class="policy-grid">
-            <a class="policy-card" href="#faq"><span>01</span><div><strong>Giấy tờ cần chuẩn bị</strong><small>Xem chi tiết →</small></div></a>
-            <a class="policy-card" href="#faq"><span>02</span><div><strong>Tiền cọc và thanh toán</strong><small>Xem chi tiết →</small></div></a>
-            <a class="policy-card" href="#faq"><span>03</span><div><strong>Giới hạn kilomet</strong><small>Xem chi tiết →</small></div></a>
-            <a class="policy-card" href="#faq"><span>04</span><div><strong>Chính sách nhiên liệu</strong><small>Xem chi tiết →</small></div></a>
-            <a class="policy-card" href="#faq"><span>05</span><div><strong>Chính sách hủy đơn</strong><small>Xem chi tiết →</small></div></a>
-            <a class="policy-card" href="#faq"><span>06</span><div><strong>Giao nhận xe</strong><small>Xem chi tiết →</small></div></a>
-        </div>
-
-        <div class="faq-wrap" id="faq">
-            <div class="section-heading section-heading--center section-heading--small">
-                <h2>Câu hỏi thường gặp</h2>
-            </div>
-            <div class="accordion faq-accordion" id="smartcarFaq">
-                <div class="accordion-item">
-                    <h3 class="accordion-header" id="faqHeadingOne">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqOne" aria-expanded="false" aria-controls="faqOne">Tôi cần chuẩn bị giấy tờ gì để thuê xe?</button>
-                    </h3>
-                    <div id="faqOne" class="accordion-collapse collapse" aria-labelledby="faqHeadingOne" data-bs-parent="#smartcarFaq">
-                        <div class="accordion-body">Khách hàng cần CCCD hoặc hộ chiếu còn hiệu lực, giấy phép lái xe phù hợp và các thông tin xác minh theo quy định của SmartCar.</div>
+                <article class="sc-location">
+                    <span class="sc-location__pin">↗</span>
+                    <div class="sc-location__content">
+                        <span class="sc-location__type">Khu vực giao xe</span>
+                        <h3>Nam Từ Liêm</h3>
+                        <p>Phí giao xe được báo rõ theo địa chỉ trước khi đặt.</p>
                     </div>
-                </div>
-                <div class="accordion-item">
-                    <h3 class="accordion-header" id="faqHeadingTwo">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqTwo" aria-expanded="false" aria-controls="faqTwo">SmartCar xác nhận đơn trong bao lâu?</button>
-                    </h3>
-                    <div id="faqTwo" class="accordion-collapse collapse" aria-labelledby="faqHeadingTwo" data-bs-parent="#smartcarFaq">
-                        <div class="accordion-body">Admin kiểm tra lịch xe và phản hồi yêu cầu thuê trong thời gian quy định. Trạng thái mới được hiển thị tại mục Đơn thuê của tôi.</div>
+                </article>
+                <article class="sc-location">
+                    <span class="sc-location__pin">↗</span>
+                    <div class="sc-location__content">
+                        <span class="sc-location__type">Khu vực giao xe</span>
+                        <h3>Thanh Xuân</h3>
+                        <p>Khách lựa chọn địa chỉ nhận và trả xe phù hợp.</p>
                     </div>
-                </div>
-                <div class="accordion-item">
-                    <h3 class="accordion-header" id="faqHeadingThree">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqThree" aria-expanded="false" aria-controls="faqThree">Khi nào tôi cần thanh toán tiền cọc?</button>
-                    </h3>
-                    <div id="faqThree" class="accordion-collapse collapse" aria-labelledby="faqHeadingThree" data-bs-parent="#smartcarFaq">
-                        <div class="accordion-body">Khách chỉ thanh toán tiền cọc sau khi SmartCar xác nhận đơn và thông báo xe đã sẵn sàng giữ lịch.</div>
+                </article>
+                <article class="sc-location">
+                    <span class="sc-location__pin">↗</span>
+                    <div class="sc-location__content">
+                        <span class="sc-location__type">Khu vực giao xe</span>
+                        <h3>Long Biên</h3>
+                        <p>SmartCar kiểm tra phạm vi và thời gian trước chuyến đi.</p>
                     </div>
-                </div>
-                <div class="accordion-item">
-                    <h3 class="accordion-header" id="faqHeadingFour">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFour" aria-expanded="false" aria-controls="faqFour">Tôi có thể nhận xe ở đâu?</button>
-                    </h3>
-                    <div id="faqFour" class="accordion-collapse collapse" aria-labelledby="faqHeadingFour" data-bs-parent="#smartcarFaq">
-                        <div class="accordion-body">Bạn có thể nhận xe tại cửa hàng SmartCar hoặc đăng ký giao xe tận nơi nếu địa chỉ nằm trong khu vực hỗ trợ.</div>
-                    </div>
-                </div>
-                <div class="accordion-item">
-                    <h3 class="accordion-header" id="faqHeadingFive">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqFive" aria-expanded="false" aria-controls="faqFive">Hủy đơn có được hoàn tiền không?</button>
-                    </h3>
-                    <div id="faqFive" class="accordion-collapse collapse" aria-labelledby="faqHeadingFive" data-bs-parent="#smartcarFaq">
-                        <div class="accordion-body">Việc hoàn tiền phụ thuộc vào thời điểm hủy và trạng thái thanh toán. Chính sách cụ thể được hiển thị trước khi khách xác nhận đặt xe.</div>
-                    </div>
-                </div>
-                <div class="accordion-item">
-                    <h3 class="accordion-header" id="faqHeadingSix">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faqSix" aria-expanded="false" aria-controls="faqSix">SmartCar có hỗ trợ giao xe tận nơi không?</button>
-                    </h3>
-                    <div id="faqSix" class="accordion-collapse collapse" aria-labelledby="faqHeadingSix" data-bs-parent="#smartcarFaq">
-                        <div class="accordion-body">Có. Phí giao xe và phạm vi hỗ trợ được tính rõ ràng theo địa chỉ nhận xe của khách hàng.</div>
-                    </div>
-                </div>
+                </article>
             </div>
         </div>
-    </div>
-</section>
+    </section>
+
+    <section class="sc-section" id="rentalProcess">
+        <div class="sc-container">
+            <div class="sc-section-head sc-section-head--center">
+                <span class="sc-eyebrow">Đơn giản và rõ ràng</span>
+                <h2>Hướng dẫn thuê xe</h2>
+                <p>Chỉ với 5 bước để hoàn tất một chuyến thuê xe trực tiếp từ SmartCar.</p>
+            </div>
+
+            <div class="sc-process">
+                <article class="sc-process__item">
+                    <div class="sc-process__number">01</div>
+                    <h3>Chọn thời gian</h3>
+                    <p>Chọn ngày, giờ và địa điểm nhận xe phù hợp.</p>
+                </article>
+                <article class="sc-process__item">
+                    <div class="sc-process__number">02</div>
+                    <h3>Chọn xe còn trống</h3>
+                    <p>Xem thông tin, giá và lựa chọn chiếc xe phù hợp.</p>
+                </article>
+                <article class="sc-process__item">
+                    <div class="sc-process__number">03</div>
+                    <h3>Gửi yêu cầu thuê</h3>
+                    <p>Điền thông tin cần thiết và gửi yêu cầu đặt xe.</p>
+                </article>
+                <article class="sc-process__item">
+                    <div class="sc-process__number">04</div>
+                    <h3>Xác nhận và đặt cọc</h3>
+                    <p>SmartCar kiểm tra lịch; khách thanh toán cọc sau khi được xác nhận.</p>
+                </article>
+                <article class="sc-process__item">
+                    <div class="sc-process__number">05</div>
+                    <h3>Nhận và trả xe</h3>
+                    <p>Ký biên bản nhận xe, sử dụng và hoàn tất trả xe đúng quy trình.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="sc-section sc-section--soft" id="rentalInfo">
+        <div class="sc-container">
+            <div class="sc-section-head sc-section-head--center">
+                <span class="sc-eyebrow">Minh bạch trước khi đặt</span>
+                <h2>Thông tin thuê xe cần biết</h2>
+                <p>Khách nên kiểm tra giấy tờ, tiền cọc và các chính sách trước khi gửi yêu cầu.</p>
+            </div>
+
+            <div class="sc-policy-grid">
+                <a class="sc-policy" href="#faq">
+                    <span class="sc-policy__icon">01</span>
+                    <span><strong>Giấy tờ cần chuẩn bị</strong><small>CCCD và giấy phép lái xe →</small></span>
+                </a>
+                <a class="sc-policy" href="#faq">
+                    <span class="sc-policy__icon">02</span>
+                    <span><strong>Tiền cọc và thanh toán</strong><small>Thời điểm và phương thức →</small></span>
+                </a>
+                <a class="sc-policy" href="#faq">
+                    <span class="sc-policy__icon">03</span>
+                    <span><strong>Giới hạn kilomet</strong><small>Cách tính kilomet vượt →</small></span>
+                </a>
+                <a class="sc-policy" href="#faq">
+                    <span class="sc-policy__icon">04</span>
+                    <span><strong>Chính sách nhiên liệu</strong><small>Mức nhiên liệu khi giao trả →</small></span>
+                </a>
+                <a class="sc-policy" href="#faq">
+                    <span class="sc-policy__icon">05</span>
+                    <span><strong>Chính sách hủy đơn</strong><small>Điều kiện hoàn tiền →</small></span>
+                </a>
+                <a class="sc-policy" href="#faq">
+                    <span class="sc-policy__icon">06</span>
+                    <span><strong>Giao nhận và sự cố</strong><small>Biên bản và cách liên hệ →</small></span>
+                </a>
+            </div>
+
+            <div class="sc-faq" id="faq">
+                <details>
+                    <summary>Tôi cần chuẩn bị giấy tờ gì để thuê xe?</summary>
+                    <p>Khách cần CCCD hoặc hộ chiếu còn hiệu lực và giấy phép lái xe phù hợp. Bản gốc phải được xuất trình khi nhận xe.</p>
+                </details>
+                <details>
+                    <summary>SmartCar xác nhận đơn trong bao lâu?</summary>
+                    <p>Admin kiểm tra lịch và tình trạng xe, sau đó cập nhật kết quả tại mục Đơn thuê của tôi.</p>
+                </details>
+                <details>
+                    <summary>Khi nào tôi cần thanh toán tiền cọc?</summary>
+                    <p>Khách chỉ thanh toán tiền cọc sau khi SmartCar xác nhận xe có thể giữ lịch.</p>
+                </details>
+                <details>
+                    <summary>Tôi có thể nhận xe ở đâu?</summary>
+                    <p>Bạn có thể nhận tại SmartCar Cầu Giấy hoặc yêu cầu giao xe trong khu vực đang hỗ trợ.</p>
+                </details>
+                <details>
+                    <summary>Hủy đơn có được hoàn tiền không?</summary>
+                    <p>Việc hoàn tiền phụ thuộc vào bên hủy và trạng thái thanh toán; điều kiện được hiển thị trước khi đặt.</p>
+                </details>
+                <details>
+                    <summary>Khi xe gặp sự cố tôi liên hệ ai?</summary>
+                    <p>Khách liên hệ trực tiếp bộ phận hỗ trợ SmartCar và thực hiện theo hướng dẫn, không tự ý sửa chữa xe.</p>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <section class="sc-section">
+        <div class="sc-container">
+            <div class="sc-section-head">
+                <div>
+                    <span class="sc-eyebrow">Kinh nghiệm hữu ích</span>
+                    <h2>SmartCar Blog</h2>
+                    <p>Nội dung giúp khách chuẩn bị và sử dụng xe an toàn hơn.</p>
+                </div>
+                <a class="sc-link" href="#">Xem tất cả bài viết →</a>
+            </div>
+
+            <div class="sc-blog-grid">
+                <a class="sc-blog-card" href="#rentalInfo">
+                    <div class="sc-blog-card__content">
+                        <time>Hướng dẫn thuê xe</time>
+                        <h3>Giấy tờ cần chuẩn bị trước khi nhận xe tự lái</h3>
+                    </div>
+                </a>
+                <a class="sc-blog-card sc-blog-card--main" href="#rentalProcess">
+                    <div class="sc-blog-card__content">
+                        <time>Kinh nghiệm lái xe</time>
+                        <h3>7 bước kiểm tra xe trước chuyến đi để bảo đảm an toàn</h3>
+                    </div>
+                </a>
+                <a class="sc-blog-card sc-blog-card--last" href="#faq">
+                    <div class="sc-blog-card__content">
+                        <time>Chính sách SmartCar</time>
+                        <h3>Cách xử lý và liên hệ hỗ trợ khi xe gặp sự cố</h3>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+</div>
 
 @section Scripts {
     <script>
         window.addEventListener("DOMContentLoaded", () => {
-            const today = new Date();
-            const tomorrow = new Date(today);
-            tomorrow.setDate(today.getDate() + 1);
-            const format = date => date.toISOString().split("T")[0];
             const pickupDate = document.getElementById("pickupDate");
             const returnDate = document.getElementById("returnDate");
 
@@ -399,18 +417,30 @@
                 return;
             }
 
-            pickupDate.min = format(today);
-            pickupDate.value = format(today);
-            returnDate.min = format(tomorrow);
-            returnDate.value = format(tomorrow);
+            const formatDate = date => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, "0");
+                const day = String(date.getDate()).padStart(2, "0");
+                return `${year}-${month}-${day}`;
+            };
+
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+
+            pickupDate.min = formatDate(today);
+            pickupDate.value = formatDate(today);
+            returnDate.min = formatDate(tomorrow);
+            returnDate.value = formatDate(tomorrow);
 
             pickupDate.addEventListener("change", () => {
-                const nextDate = new Date(pickupDate.value);
+                const nextDate = new Date(`${pickupDate.value}T00:00:00`);
                 nextDate.setDate(nextDate.getDate() + 1);
-                returnDate.min = format(nextDate);
+                const nextValue = formatDate(nextDate);
+                returnDate.min = nextValue;
 
                 if (!returnDate.value || returnDate.value <= pickupDate.value) {
-                    returnDate.value = format(nextDate);
+                    returnDate.value = nextValue;
                 }
             });
         });
