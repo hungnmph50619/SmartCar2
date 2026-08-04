@@ -38,7 +38,7 @@
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item">
-                                <a class="nav-link" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a>
+                                <a class="nav-link" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="bookings">Đơn thuê của tôi</a>
                             </li>
                         }
 
@@ -53,14 +53,26 @@
                     <ul class="navbar-nav align-items-lg-center smartcar-auth-nav">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
+                            <li class="nav-item">
+                                <a class="smartcar-notification-link" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="notifications" aria-label="Xem thông báo">
+                                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M6 9a6 6 0 0 1 12 0v5l2 3H4l2-3V9Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+                                        <path d="M10 20h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                                    </svg>
+                                </a>
+                            </li>
                             <li class="nav-item dropdown">
                                 <button class="btn btn-link nav-link dropdown-toggle smartcar-user-button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <span class="smartcar-user-avatar">@(User.Identity.Name?.Substring(0, 1).ToUpperInvariant() ?? "K")</span>
-                                    <span>@User.Identity.Name</span>
+                                    <span class="smartcar-user-name">@User.Identity.Name</span>
                                 </button>
-                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
-                                    <li><a class="dropdown-item" asp-controller="Account" asp-action="Profile">Thông tin cá nhân</a></li>
-                                    <li><a class="dropdown-item" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a></li>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 smartcar-account-dropdown">
+                                    <li class="smartcar-account-dropdown__heading">Tài khoản SmartCar</li>
+                                    <li><a class="dropdown-item" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="profile">Tài khoản của tôi</a></li>
+                                    <li><a class="dropdown-item" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="documents">Xác minh giấy tờ</a></li>
+                                    <li><a class="dropdown-item" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="address">Địa chỉ giao nhận</a></li>
+                                    <li><a class="dropdown-item" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="payments">Lịch sử thanh toán</a></li>
+                                    <li><a class="dropdown-item" asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="support">Hỗ trợ SmartCar</a></li>
                                     <li><hr class="dropdown-divider" /></li>
                                     <li>
                                         <form asp-controller="Account" asp-action="Logout" method="post">
@@ -134,7 +146,7 @@
                         <li><a asp-controller="Home" asp-action="Index" asp-fragment="rentalProcess">Hướng dẫn thuê xe</a></li>
                         <li><a asp-controller="Home" asp-action="Index" asp-fragment="rentalInfo">Giấy tờ cần chuẩn bị</a></li>
                         <li><a asp-controller="Home" asp-action="Index" asp-fragment="faq">Câu hỏi thường gặp</a></li>
-                        <li><a asp-controller="Home" asp-action="Index" asp-fragment="contact">Liên hệ hỗ trợ</a></li>
+                        <li><a asp-controller="CustomerAccount" asp-action="Profile" asp-route-section="support">Liên hệ hỗ trợ</a></li>
                     </ul>
                 </div>
                 <div class="col-6 col-lg-2">
