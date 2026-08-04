@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
+using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Identity;
 
 namespace SmartCar.Infrastructure.Persistence;
@@ -78,5 +79,61 @@ public static class DatabaseSeeder
 
             await dbContext.SaveChangesAsync();
         }
+
+        if (!await dbContext.Vehicles.AnyAsync())
+        {
+            var brands = await dbContext.Brands
+                .ToDictionaryAsync(brand => brand.BrandName, StringComparer.OrdinalIgnoreCase);
+
+            dbContext.Vehicles.AddRange(
+                CreateVehicle(brands["Toyota"].BrandId, "Toyota Vios 2024", "Vios", "30A-123.45", 2024, 5, "Tự động", "Xăng", "Trắng", 700_000m, 18_250,
+                    "Sedan 5 chỗ dễ điều khiển, tiết kiệm nhiên liệu, phù hợp đi nội thành và các chuyến công tác ngắn ngày."),
+                CreateVehicle(brands["Honda"].BrandId, "Honda City 2024", "City", "30A-234.56", 2024, 5, "Tự động", "Xăng", "Đen", 750_000m, 15_800,
+                    "Không gian rộng, vận hành ổn định và phù hợp cho gia đình nhỏ hoặc nhu cầu đi công việc."),
+                CreateVehicle(brands["Mazda"].BrandId, "Mazda CX-5 2024", "CX-5", "30A-345.67", 2024, 5, "Tự động", "Xăng", "Trắng", 900_000m, 12_600,
+                    "SUV 5 chỗ có khoang hành lý rộng, nội thất tiện nghi và phù hợp cho chuyến đi gia đình."),
+                CreateVehicle(brands["Toyota"].BrandId, "Toyota Innova 2023", "Innova", "30A-456.78", 2023, 7, "Tự động", "Xăng", "Bạc", 900_000m, 32_100,
+                    "Xe 7 chỗ rộng rãi, phù hợp nhóm đông người, chuyến đi đường dài và nhiều hành lý."),
+                CreateVehicle(brands["Kia"].BrandId, "Kia Carens 2025", "Carens", "30A-567.89", 2025, 7, "Tự động", "Xăng", "Đỏ", 980_000m, 6_500,
+                    "MPV 7 chỗ đời mới, thiết kế hiện đại, phù hợp gia đình và chuyến du lịch dài ngày."),
+                CreateVehicle(brands["Hyundai"].BrandId, "Hyundai Accent 2024", "Accent", "30A-678.90", 2024, 5, "Tự động", "Xăng", "Trắng", 720_000m, 14_300,
+                    "Sedan nhỏ gọn, tiết kiệm chi phí và thuận tiện khi di chuyển trong thành phố."),
+                CreateVehicle(brands["Ford"].BrandId, "Ford Everest 2023", "Everest", "30A-789.01", 2023, 7, "Tự động", "Dầu", "Xanh đậm", 1_350_000m, 28_400,
+                    "SUV 7 chỗ mạnh mẽ, khoang hành lý lớn và phù hợp các chuyến đi dài hoặc địa hình đa dạng."),
+                CreateVehicle(brands["Toyota"].BrandId, "Toyota Corolla Cross 2024", "Corolla Cross", "30A-890.12", 2024, 5, "Tự động", "Hybrid", "Xanh", 1_050_000m, 9_700,
+                    "Crossover 5 chỗ tiết kiệm nhiên liệu, vận hành êm và có nhiều trang bị hỗ trợ an toàn."));
+
+            await dbContext.SaveChangesAsync();
+        }
     }
+
+    private static Vehicle CreateVehicle(
+        int brandId,
+        string name,
+        string model,
+        string licensePlate,
+        int year,
+        int seats,
+        string transmission,
+        string fuelType,
+        string color,
+        decimal dailyPrice,
+        int mileage,
+        string description) => new()
+        {
+            BrandId = brandId,
+            VehicleName = name,
+            Model = model,
+            LicensePlate = licensePlate,
+            ManufactureYear = year,
+            Seats = seats,
+            Transmission = transmission,
+            FuelType = fuelType,
+            Color = color,
+            DailyPrice = dailyPrice,
+            CurrentMileage = mileage,
+            Status = VehicleStatus.Available,
+            Description = description,
+            CreatedAt = DateTime.UtcNow
+        };
 }
