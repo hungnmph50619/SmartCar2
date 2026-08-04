@@ -1,5 +1,6 @@
 /* Trang tài khoản dạng hộp thoại toàn màn hình, lấy cảm hứng từ UI thuê xe hiện đại. */
-.account-body {
+.account-body,
+body:has(.account-modal-page) {
     overflow: hidden;
 }
 
