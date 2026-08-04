@@ -13,7 +13,27 @@ public class HomeController : Controller
         _logger = logger;
     }
 
-    public IActionResult Index() => View();
+    public IActionResult Index(
+        string? pickupLocation,
+        DateTime? pickupDate,
+        string? pickupTime,
+        DateTime? returnDate,
+        string? returnTime)
+    {
+        if (pickupDate.HasValue || returnDate.HasValue)
+        {
+            return RedirectToAction("Index", "Vehicles", new
+            {
+                pickupLocation,
+                pickupDate,
+                pickupTime,
+                returnDate,
+                returnTime
+            });
+        }
+
+        return View();
+    }
 
     public IActionResult Privacy() => View();
 
