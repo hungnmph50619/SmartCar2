@@ -33,6 +33,13 @@ public class AccountController : Controller
         RegisterViewModel model,
         CancellationToken cancellationToken)
     {
+        if (!model.AcceptTerms)
+        {
+            ModelState.AddModelError(
+                nameof(model.AcceptTerms),
+                "Bạn cần đồng ý với điều khoản sử dụng và chính sách bảo mật.");
+        }
+
         if (!ModelState.IsValid)
         {
             return View(model);
