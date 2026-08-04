@@ -30,7 +30,6 @@ public class RegisterViewModel
     [Display(Name = "Xác nhận mật khẩu")]
     public string ConfirmPassword { get; set; } = string.Empty;
 
-    [Range(typeof(bool), "true", "true", ErrorMessage = "Bạn cần đồng ý với điều khoản sử dụng và chính sách bảo mật.")]
     [Display(Name = "Đồng ý điều khoản")]
     public bool AcceptTerms { get; set; }
 }
