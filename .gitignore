@@ -1,0 +1,14 @@
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+*.cache
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
+
+# User uploads (keep folders only)
+src/SmartCar.Web/wwwroot/uploads/**/*
+!src/SmartCar.Web/wwwroot/uploads/**/.gitkeep

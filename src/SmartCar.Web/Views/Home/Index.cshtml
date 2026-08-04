@@ -1,0 +1,22 @@
+@{
+    ViewData["Title"] = "Trang chủ";
+}
+
+<section class="py-5 text-center">
+    <div class="mx-auto" style="max-width: 760px;">
+        <span class="badge text-bg-primary mb-3">SMARTCAR</span>
+        <h1 class="display-5 fw-bold">Quản lý và cho thuê xe tự lái</h1>
+        <p class="lead text-muted">Nền tảng MVC đã được cấu hình SQL Server, Entity Framework Core, Identity và hai vai trò Customer/Manager.</p>
+        <div class="d-flex justify-content-center gap-2">
+            @if (User.Identity?.IsAuthenticated != true)
+            {
+                <a asp-controller="Account" asp-action="Register" class="btn btn-primary btn-lg">Đăng ký thuê xe</a>
+                <a asp-controller="Account" asp-action="Login" class="btn btn-outline-secondary btn-lg">Đăng nhập</a>
+            }
+            else if (User.IsInRole("Manager"))
+            {
+                <a asp-controller="Dashboard" asp-action="Index" class="btn btn-primary btn-lg">Mở Dashboard</a>
+            }
+        </div>
+    </div>
+</section>
