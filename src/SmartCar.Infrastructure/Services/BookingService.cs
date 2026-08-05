@@ -98,12 +98,10 @@ internal sealed class BookingService : IBookingService
         string customerId,
         CancellationToken cancellationToken = default)
     {
-        var bookings = await ListQuery()
+        return await ListQuery()
             .Where(booking => booking.CustomerId == customerId)
             .OrderByDescending(booking => booking.CreatedAt)
             .ToListAsync(cancellationToken);
-
-        return bookings;
     }
 
     public Task<BookingDetailsDto?> GetCustomerBookingAsync(
@@ -267,6 +265,7 @@ internal sealed class BookingService : IBookingService
             .Select(booking => new BookingListItemDto
             {
                 BookingId = booking.BookingId,
+                CustomerId = booking.CustomerId,
                 CustomerName = _dbContext.Users
                     .Where(user => user.Id == booking.CustomerId)
                     .Select(user => user.FullName)
