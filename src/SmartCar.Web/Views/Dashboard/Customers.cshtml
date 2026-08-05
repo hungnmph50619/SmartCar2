@@ -1,0 +1,73 @@
+@model AdminCustomerListViewModel
+@{
+    ViewData["Title"] = "Quản lý khách hàng";
+}
+
+<div class="admin-page-head">
+    <div>
+        <h1>Khách hàng</h1>
+        <p>Theo dõi tài khoản, lịch sử thuê, trạng thái giấy tờ và quyền truy cập hệ thống.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn admin-btn--primary" asp-action="Documents" asp-route-status="@DocumentStatus.Pending">✓ Xác minh giấy tờ</a>
+    </div>
+</div>
+
+<form class="admin-filters" method="get" asp-action="Customers">
+    <div class="admin-search">
+        <input type="search" name="search" value="@Model.Search" placeholder="Tìm theo họ tên, email hoặc số điện thoại..." />
+    </div>
+    <button class="admin-btn admin-btn--primary" type="submit">Tìm kiếm</button>
+    <a class="admin-btn" asp-action="Customers">Đặt lại</a>
+</form>
+
+@if (Model.Customers.Count == 0)
+{
+    <section class="admin-panel"><div class="admin-empty"><span class="admin-empty__icon">♙</span>Không tìm thấy khách hàng phù hợp.</div></section>
+}
+else
+{
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Khách hàng</th>
+                    <th>Liên hệ</th>
+                    <th>Ngày tham gia</th>
+                    <th>Đơn thuê</th>
+                    <th>Giấy tờ</th>
+                    <th>Trạng thái tài khoản</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var customer in Model.Customers)
+                {
+                    <tr>
+                        <td><span class="admin-table__primary">@customer.FullName</span><span class="admin-table__secondary">ID: @customer.CustomerId[..Math.Min(8, customer.CustomerId.Length)]</span></td>
+                        <td><span class="admin-table__primary">@customer.Email</span><span class="admin-table__secondary">@(string.IsNullOrWhiteSpace(customer.PhoneNumber) ? "Chưa cập nhật SĐT" : customer.PhoneNumber)</span></td>
+                        <td>@customer.CreatedAt.ToString("dd/MM/yyyy")</td>
+                        <td><span class="admin-table__primary">@customer.TotalBookings đơn</span><span class="admin-table__secondary">@customer.CompletedBookings đã hoàn thành</span></td>
+                        <td>
+                            <span class="admin-table__primary">@customer.VerifiedDocuments đã xác minh</span>
+                            <span class="admin-table__secondary">@customer.PendingDocuments đang chờ</span>
+                        </td>
+                        <td>
+                            <span class="admin-status admin-status--@(customer.IsActive ? "available" : "inactive")">@(customer.IsActive ? "Đang hoạt động" : "Đã tạm khóa")</span>
+                        </td>
+                        <td>
+                            <div class="admin-row-actions">
+                                <a class="admin-row-action" asp-action="Bookings" asp-route-search="@customer.Email">Xem đơn</a>
+                                <a class="admin-row-action" asp-action="Documents">Giấy tờ</a>
+                                <form asp-action="ToggleCustomerStatus" method="post" onsubmit="return confirm('@(customer.IsActive ? "Tạm khóa tài khoản khách hàng này?" : "Mở lại tài khoản khách hàng này?")');">
+                                    <input type="hidden" name="id" value="@customer.CustomerId" />
+                                    <button class="admin-row-action" type="submit">@(customer.IsActive ? "Tạm khóa" : "Mở lại")</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
