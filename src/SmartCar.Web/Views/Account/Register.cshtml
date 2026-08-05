@@ -3,40 +3,115 @@
     ViewData["Title"] = "Đăng ký";
 }
 
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-5">
+<div class="row justify-content-center py-3">
+    <div class="col-md-7 col-lg-5">
         <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
-                <h1 class="h3 mb-4">Đăng ký khách hàng</h1>
-                <form asp-action="Register" method="post">
-                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+            <div class="card-body p-4 p-lg-5">
+                <div class="text-center mb-4">
+                    <h1 class="h3 mb-2">Tạo tài khoản SmartCar</h1>
+                    <p class="text-muted mb-0">
+                        Đăng ký để tìm xe, gửi yêu cầu thuê và quản lý chuyến đi của bạn.
+                    </p>
+                </div>
+
+                <form asp-action="Register" method="post" novalidate>
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3" role="alert"></div>
+
                     <div class="mb-3">
-                        <label asp-for="FullName" class="form-label"></label>
-                        <input asp-for="FullName" class="form-control" />
-                        <span asp-validation-for="FullName" class="text-danger"></span>
+                        <label asp-for="FullName" class="form-label fw-semibold">
+                            Họ và tên <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="FullName"
+                               class="form-control"
+                               placeholder="Nguyễn Văn An"
+                               autocomplete="name" />
+                        <span asp-validation-for="FullName" class="text-danger small"></span>
                     </div>
+
                     <div class="mb-3">
-                        <label asp-for="PhoneNumber" class="form-label"></label>
-                        <input asp-for="PhoneNumber" class="form-control" />
-                        <span asp-validation-for="PhoneNumber" class="text-danger"></span>
+                        <label asp-for="PhoneNumber" class="form-label fw-semibold">
+                            Số điện thoại <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="PhoneNumber"
+                               class="form-control"
+                               placeholder="0912345678"
+                               inputmode="tel"
+                               autocomplete="tel" />
+                        <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                     </div>
+
                     <div class="mb-3">
-                        <label asp-for="Email" class="form-label"></label>
-                        <input asp-for="Email" class="form-control" />
-                        <span asp-validation-for="Email" class="text-danger"></span>
+                        <label asp-for="Email" class="form-label fw-semibold">
+                            Email <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="Email"
+                               class="form-control"
+                               placeholder="nguyenvanan@gmail.com"
+                               autocomplete="email" />
+                        <span asp-validation-for="Email" class="text-danger small"></span>
                     </div>
+
                     <div class="mb-3">
-                        <label asp-for="Password" class="form-label"></label>
-                        <input asp-for="Password" class="form-control" />
-                        <span asp-validation-for="Password" class="text-danger"></span>
+                        <label asp-for="Password" class="form-label fw-semibold">
+                            Mật khẩu <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input asp-for="Password"
+                                   class="form-control"
+                                   placeholder="Nhập mật khẩu"
+                                   autocomplete="new-password"
+                                   data-password-input />
+                            <button type="button"
+                                    class="btn btn-outline-secondary password-toggle"
+                                    data-password-toggle
+                                    aria-label="Hiện mật khẩu">
+                                Hiện
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.
+                        </div>
+                        <span asp-validation-for="Password" class="text-danger small d-block"></span>
                     </div>
+
                     <div class="mb-3">
-                        <label asp-for="ConfirmPassword" class="form-label"></label>
-                        <input asp-for="ConfirmPassword" class="form-control" />
-                        <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
+                        <label asp-for="ConfirmPassword" class="form-label fw-semibold">
+                            Xác nhận mật khẩu <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input asp-for="ConfirmPassword"
+                                   class="form-control"
+                                   placeholder="Nhập lại mật khẩu"
+                                   autocomplete="new-password"
+                                   data-password-input />
+                            <button type="button"
+                                    class="btn btn-outline-secondary password-toggle"
+                                    data-password-toggle
+                                    aria-label="Hiện mật khẩu xác nhận">
+                                Hiện
+                            </button>
+                        </div>
+                        <span asp-validation-for="ConfirmPassword" class="text-danger small d-block"></span>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Tạo tài khoản</button>
+
+                    <div class="mb-4">
+                        <div class="form-check">
+                            <input asp-for="AcceptTerms" class="form-check-input" />
+                            <label asp-for="AcceptTerms" class="form-check-label">
+                                Tôi đồng ý với
+                                <a asp-controller="Home" asp-action="Terms" target="_blank">Điều khoản sử dụng</a>
+                                và
+                                <a asp-controller="Home" asp-action="Privacy" target="_blank">Chính sách bảo mật</a>.
+                            </label>
+                        </div>
+                        <span asp-validation-for="AcceptTerms" class="text-danger small d-block"></span>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                        Tạo tài khoản
+                    </button>
                 </form>
+
                 <p class="text-center mt-3 mb-0">
                     Đã có tài khoản? <a asp-action="Login">Đăng nhập</a>
                 </p>
@@ -47,4 +122,19 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        document.querySelectorAll('[data-password-toggle]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const input = button.parentElement.querySelector('[data-password-input]');
+                if (!input) {
+                    return;
+                }
+
+                const isHidden = input.type === 'password';
+                input.type = isHidden ? 'text' : 'password';
+                button.textContent = isHidden ? 'Ẩn' : 'Hiện';
+                button.setAttribute('aria-label', isHidden ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+            });
+        });
+    </script>
 }
