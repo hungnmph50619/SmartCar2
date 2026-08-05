@@ -1,0 +1,77 @@
+@model AdminPaymentListViewModel
+@{
+    ViewData["Title"] = "Thanh toán và hoàn tiền";
+}
+
+<div class="admin-page-head">
+    <div>
+        <h1>Thanh toán và hoàn tiền</h1>
+        <p>Theo dõi tiền cọc, giao dịch đã thanh toán, giao dịch thất bại và các khoản hoàn trả.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-action="Bookings">▣ Đơn thuê</a>
+    </div>
+</div>
+
+<section class="admin-kpi-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <article class="admin-kpi admin-kpi--green"><span class="admin-kpi__icon">₫</span><span class="admin-kpi__label">Đã thanh toán</span><strong class="admin-kpi__value">@Model.TotalPaid.ToString("N0")đ</strong></article>
+    <article class="admin-kpi admin-kpi--orange"><span class="admin-kpi__icon">…</span><span class="admin-kpi__label">Đang chờ</span><strong class="admin-kpi__value">@Model.TotalPending.ToString("N0")đ</strong></article>
+    <article class="admin-kpi admin-kpi--purple"><span class="admin-kpi__icon">↶</span><span class="admin-kpi__label">Đã hoàn tiền</span><strong class="admin-kpi__value">@Model.TotalRefunded.ToString("N0")đ</strong></article>
+</section>
+
+<div class="admin-tabs">
+    <a class="admin-tab @(!Model.Status.HasValue ? "is-active" : "")" asp-action="Payments">Tất cả</a>
+    @foreach (var status in Enum.GetValues<PaymentStatus>())
+    {
+        <a class="admin-tab @(Model.Status == status ? "is-active" : "")" asp-action="Payments" asp-route-status="@status">@AdminDisplayHelper.PaymentLabel(status)</a>
+    }
+</div>
+
+@if (Model.Payments.Count == 0)
+{
+    <section class="admin-panel"><div class="admin-empty"><span class="admin-empty__icon">₫</span>Không có giao dịch phù hợp.</div></section>
+}
+else
+{
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Mã giao dịch</th>
+                    <th>Đơn thuê</th>
+                    <th>Khách hàng</th>
+                    <th>Xe</th>
+                    <th>Số tiền</th>
+                    <th>Phương thức</th>
+                    <th>Trạng thái</th>
+                    <th>Thời gian</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var payment in Model.Payments)
+                {
+                    <tr>
+                        <td><span class="admin-table__primary">@(payment.TransactionCode ?? $"PAY-{payment.PaymentId}")</span><span class="admin-table__secondary">ID: @payment.PaymentId</span></td>
+                        <td><a class="admin-row-action" asp-action="BookingDetails" asp-route-id="@payment.BookingId">#@payment.BookingId</a></td>
+                        <td class="admin-table__primary">@payment.CustomerName</td>
+                        <td>@payment.VehicleName</td>
+                        <td class="admin-table__primary">@payment.Amount.ToString("N0")đ</td>
+                        <td>@payment.Method</td>
+                        <td><span class="admin-status admin-status--@AdminDisplayHelper.PaymentCss(payment.Status)">@AdminDisplayHelper.PaymentLabel(payment.Status)</span></td>
+                        <td>@(payment.PaidAt?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa thanh toán")</td>
+                        <td>
+                            @if (payment.Status == PaymentStatus.Paid)
+                            {
+                                <form asp-action="RefundPayment" method="post" onsubmit="return confirm('Xác nhận chuyển giao dịch này sang trạng thái hoàn tiền?');">
+                                    <input type="hidden" name="id" value="@payment.PaymentId" />
+                                    <button class="admin-row-action" type="submit">Hoàn tiền</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
