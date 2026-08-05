@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartCar.Application.Common;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
 using SmartCar.Web.ViewModels;
@@ -74,7 +75,7 @@ public sealed class ReturnsController : Controller
                     model.Description,
                     model.Amount),
                 cancellationToken)
-            : Application.Common.OperationResult.Failure("Thông tin phụ phí không hợp lệ.");
+            : OperationResult.Failure("Thông tin phụ phí không hợp lệ.");
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã thêm phụ phí và cập nhật tổng tiền."
