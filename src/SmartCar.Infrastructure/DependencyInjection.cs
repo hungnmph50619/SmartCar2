@@ -3,8 +3,16 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SmartCar.Application.Features.Accounts;
+using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Brands;
+using SmartCar.Application.Features.Dashboard;
+using SmartCar.Application.Features.Handovers;
+using SmartCar.Application.Features.Payments;
+using SmartCar.Application.Features.Returns;
+using SmartCar.Application.Features.Vehicles;
 using SmartCar.Infrastructure.Identity;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Infrastructure.Services;
 
 namespace SmartCar.Infrastructure;
 
@@ -48,6 +56,14 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<IBrandService, BrandService>();
+        services.AddScoped<IVehicleService, VehicleService>();
+        services.AddScoped<IBookingService, BookingService>();
+        services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IHandoverService, HandoverService>();
+        services.AddScoped<IReturnService, ReturnService>();
+        services.AddScoped<IDashboardService, DashboardService>();
+
         return services;
     }
 }
