@@ -1,0 +1,60 @@
+@model SmartCar.Application.Features.Vehicles.VehicleDto
+@{
+    ViewData["Title"] = Model.VehicleName;
+    var pickupDate = (DateTime)ViewBag.PickupDate;
+    var returnDate = (DateTime)ViewBag.ReturnDate;
+    var numberOfDays = Math.Max(1, (int)Math.Ceiling((returnDate - pickupDate).TotalHours / 24d));
+    var estimatedAmount = numberOfDays * Model.DailyPrice;
+}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        @if (Model.Images.Count > 0)
+        {
+            <div class="row g-2">
+            @foreach (var image in Model.Images)
+            {
+                <div class="col-6">
+                    <img src="@image.ImagePath" class="img-fluid rounded w-100" style="height:240px;object-fit:cover" alt="@Model.VehicleName" />
+                </div>
+            }
+            </div>
+        }
+        else
+        {
+            <div class="bg-light rounded d-flex align-items-center justify-content-center" style="height:360px">Xe chưa có ảnh</div>
+        }
+    </div>
+    <div class="col-lg-5">
+        <div class="card card-body shadow-sm sticky-top" style="top:1rem">
+            <h1 class="h3">@Model.VehicleName</h1>
+            <p class="text-muted">@Model.BrandName · @Model.Model · @Model.LicensePlate</p>
+            <dl class="row mb-3">
+                <dt class="col-5">Số chỗ</dt><dd class="col-7">@Model.Seats</dd>
+                <dt class="col-5">Hộp số</dt><dd class="col-7">@Model.Transmission</dd>
+                <dt class="col-5">Nhiên liệu</dt><dd class="col-7">@Model.FuelType</dd>
+                <dt class="col-5">Năm sản xuất</dt><dd class="col-7">@Model.ManufactureYear</dd>
+            </dl>
+            <p>@Model.Description</p>
+            <hr />
+            <div class="mb-2"><strong>Nhận xe:</strong> @pickupDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div class="mb-2"><strong>Trả xe:</strong> @returnDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div class="mb-2"><strong>Số ngày tính phí:</strong> @numberOfDays</div>
+            <div class="fs-4 fw-bold text-primary mb-3">Dự kiến: @estimatedAmount.ToString("N0") đ</div>
+
+            @if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
+            {
+                <form asp-controller="Bookings" asp-action="Create" method="post">
+                    <input type="hidden" name="VehicleId" value="@Model.VehicleId" />
+                    <input type="hidden" name="PickupDate" value="@pickupDate.ToString("O")" />
+                    <input type="hidden" name="ReturnDate" value="@returnDate.ToString("O")" />
+                    <button class="btn btn-primary btn-lg w-100" type="submit">Gửi yêu cầu thuê xe</button>
+                </form>
+            }
+            else if (User.Identity?.IsAuthenticated != true)
+            {
+                <a class="btn btn-primary btn-lg w-100" asp-controller="Account" asp-action="Login">Đăng nhập để thuê xe</a>
+            }
+        </div>
+    </div>
+</div>
