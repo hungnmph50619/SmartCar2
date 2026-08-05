@@ -17,18 +17,33 @@ internal sealed class MaintenanceService : IMaintenanceService
     }
 
     public async Task<IReadOnlyList<MaintenanceDto>> GetAllAsync(
-        CancellationToken cancellationToken = default) =>
-        await Query()
+        CancellationToken cancellationToken = default)
+    {
+        var records = await _dbContext.MaintenanceRecords
+            .AsNoTracking()
+            .Include(record => record.Vehicle)
             .OrderBy(record => record.Status)
             .ThenByDescending(record => record.StartDate)
             .ToListAsync(cancellationToken);
 
-    public Task<MaintenanceDto?> GetByIdAsync(
+        return records
+            .Select(Map)
+            .ToList();
+    }
+
+    public async Task<MaintenanceDto?> GetByIdAsync(
         int maintenanceId,
-        CancellationToken cancellationToken = default) =>
-        Query().FirstOrDefaultAsync(
-            record => record.MaintenanceRecordId == maintenanceId,
-            cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var record = await _dbContext.MaintenanceRecords
+            .AsNoTracking()
+            .Include(item => item.Vehicle)
+            .FirstOrDefaultAsync(
+                item => item.MaintenanceRecordId == maintenanceId,
+                cancellationToken);
+
+        return record is null ? null : Map(record);
+    }
 
     public async Task<OperationResult> CreateAsync(
         CreateMaintenanceRequest request,
@@ -144,21 +159,19 @@ internal sealed class MaintenanceService : IMaintenanceService
         return OperationResult.Success();
     }
 
-    private IQueryable<MaintenanceDto> Query() =>
-        _dbContext.MaintenanceRecords
-            .AsNoTracking()
-            .Select(record => new MaintenanceDto(
-                record.MaintenanceRecordId,
-                record.VehicleId,
-                record.Vehicle.VehicleName,
-                record.Vehicle.LicensePlate,
-                record.StartDate,
-                record.CompletedDate,
-                record.Content,
-                record.Cost,
-                record.ServiceProvider,
-                record.Mileage,
-                record.Status));
+    private static MaintenanceDto Map(MaintenanceRecord record) =>
+        new(
+            record.MaintenanceRecordId,
+            record.VehicleId,
+            record.Vehicle.VehicleName,
+            record.Vehicle.LicensePlate,
+            record.StartDate,
+            record.CompletedDate,
+            record.Content,
+            record.Cost,
+            record.ServiceProvider,
+            record.Mileage,
+            record.Status);
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
