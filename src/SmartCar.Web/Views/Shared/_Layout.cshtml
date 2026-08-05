@@ -117,7 +117,6 @@
                                     @if (User.IsInRole(RoleNames.Customer))
                                     {
                                         <li><a class="dropdown-item" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a></li>
-                                        <li><a class="dropdown-item" asp-controller="Documents" asp-action="Index">CCCD/GPLX</a></li>
                                         <li><a class="dropdown-item" asp-controller="Extensions" asp-action="Index">Gia hạn thuê</a></li>
                                     }
                                     @if (User.IsInRole(RoleNames.Admin))
