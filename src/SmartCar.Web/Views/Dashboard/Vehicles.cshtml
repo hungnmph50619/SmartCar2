@@ -1,0 +1,135 @@
+@model AdminVehicleListViewModel
+@{
+    ViewData["Title"] = "Quản lý đội xe";
+}
+
+<div class="admin-page-head">
+    <div>
+        <h1>Quản lý đội xe</h1>
+        <p>Theo dõi trạng thái, lịch thuê, kilomet, doanh thu và bảo trì của từng xe.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-action="Calendar">▦ Lịch xe</a>
+        <a class="admin-btn admin-btn--primary" asp-action="Maintenance">⚙ Tạo phiếu bảo trì</a>
+    </div>
+</div>
+
+<div class="admin-tabs">
+    <a class="admin-tab @(!Model.Status.HasValue ? "is-active" : "")" asp-action="Vehicles">Tất cả <span class="admin-tab__count">@Model.Vehicles.Count</span></a>
+    @foreach (var status in Enum.GetValues<VehicleStatus>())
+    {
+        <a class="admin-tab @(Model.Status == status ? "is-active" : "")" asp-action="Vehicles" asp-route-status="@status">@AdminDisplayHelper.VehicleLabel(status)</a>
+    }
+</div>
+
+<form class="admin-filters" method="get" asp-action="Vehicles">
+    @if (Model.Status.HasValue)
+    {
+        <input type="hidden" name="status" value="@Model.Status" />
+    }
+    <div class="admin-search">
+        <input type="search" name="search" value="@Model.Search" placeholder="Tìm theo tên xe, hãng hoặc biển số..." />
+    </div>
+    <button class="admin-btn admin-btn--primary" type="submit">Tìm kiếm</button>
+    <a class="admin-btn" asp-action="Vehicles" asp-route-status="@Model.Status">Đặt lại</a>
+</form>
+
+@if (Model.Vehicles.Count == 0)
+{
+    <section class="admin-panel"><div class="admin-empty"><span class="admin-empty__icon">▰</span>Không có xe phù hợp với điều kiện lọc.</div></section>
+}
+else
+{
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Xe</th>
+                    <th>Thông số</th>
+                    <th>Trạng thái</th>
+                    <th>Kilomet</th>
+                    <th>Lịch gần nhất</th>
+                    <th>Lượt thuê</th>
+                    <th>Doanh thu tháng</th>
+                    <th>Bảo trì gần nhất</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var vehicle in Model.Vehicles)
+                {
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="admin-table__image">
+                                    @if (!string.IsNullOrWhiteSpace(vehicle.ImageUrl))
+                                    {
+                                        <img src="@vehicle.ImageUrl" alt="@vehicle.VehicleName" />
+                                    }
+                                    else
+                                    {
+                                        <div class="w-100 h-100 d-flex align-items-center justify-content-center text-muted">Xe</div>
+                                    }
+                                </div>
+                                <div><span class="admin-table__primary">@vehicle.VehicleName</span><span class="admin-table__secondary">@vehicle.BrandName · @vehicle.LicensePlate</span></div>
+                            </div>
+                        </td>
+                        <td><span class="admin-table__primary">@vehicle.Seats chỗ · @vehicle.Transmission</span><span class="admin-table__secondary">@vehicle.FuelType · đời @vehicle.ManufactureYear</span></td>
+                        <td><span class="admin-status admin-status--@AdminDisplayHelper.VehicleCss(vehicle.Status)">@AdminDisplayHelper.VehicleLabel(vehicle.Status)</span></td>
+                        <td><span class="admin-table__primary">@vehicle.CurrentMileage.ToString("N0") km</span><span class="admin-table__secondary">@vehicle.DailyPrice.ToString("N0")đ/ngày</span></td>
+                        <td>
+                            @if (vehicle.NextBookingDate.HasValue)
+                            {
+                                <span class="admin-table__primary">@vehicle.NextBookingDate.Value.ToString("dd/MM/yyyy")</span><span class="admin-table__secondary">@vehicle.NextBookingDate.Value.ToString("HH:mm")</span>
+                            }
+                            else
+                            {
+                                <span class="admin-table__secondary">Chưa có lịch sắp tới</span>
+                            }
+                        </td>
+                        <td><span class="admin-table__primary">@vehicle.CompletedBookings hoàn thành</span><span class="admin-table__secondary">@vehicle.ActiveBookings đang hoạt động</span></td>
+                        <td class="admin-table__primary">@vehicle.MonthlyRevenue.ToString("N0")đ</td>
+                        <td>@(vehicle.LastMaintenanceDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</td>
+                        <td>
+                            <div class="admin-row-actions">
+                                <a class="admin-row-action" asp-controller="Vehicles" asp-action="Details" asp-route-id="@vehicle.VehicleId">Xem xe</a>
+                                <button type="button" class="admin-row-action" data-bs-toggle="modal" data-bs-target="#vehicleStatusModal-@vehicle.VehicleId">Trạng thái</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @foreach (var vehicle in Model.Vehicles)
+    {
+        <div class="modal fade admin-modal-form" id="vehicleStatusModal-@vehicle.VehicleId" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form asp-action="ChangeVehicleStatus" method="post">
+                        <input type="hidden" name="id" value="@vehicle.VehicleId" />
+                        <div class="modal-header">
+                            <div><h2 class="modal-title fs-5">Cập nhật trạng thái xe</h2><small class="text-muted">@vehicle.VehicleName · @vehicle.LicensePlate</small></div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                        </div>
+                        <div class="modal-body">
+                            <label class="form-label fw-semibold">Trạng thái mới</label>
+                            <select class="form-select" name="newStatus">
+                                @foreach (var status in Enum.GetValues<VehicleStatus>())
+                                {
+                                    <option value="@status" selected="@(vehicle.Status == status)">@AdminDisplayHelper.VehicleLabel(status)</option>
+                                }
+                            </select>
+                            <p class="text-muted small mt-2 mb-0">Không thể đưa xe đang trong chuyến thuê sang trạng thái bảo trì hoặc ngừng hoạt động.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="admin-btn" data-bs-dismiss="modal">Đóng</button>
+                            <button type="submit" class="admin-btn admin-btn--primary">Lưu trạng thái</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+}
