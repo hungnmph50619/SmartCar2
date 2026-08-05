@@ -8,7 +8,7 @@ public sealed record CreateBookingRequest(
     DateTime PickupDate,
     DateTime ReturnDate);
 
-public sealed class BookingListItemDto
+public class BookingListItemDto
 {
     public int BookingId { get; init; }
     public string CustomerName { get; init; } = string.Empty;
