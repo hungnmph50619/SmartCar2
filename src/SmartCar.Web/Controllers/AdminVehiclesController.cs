@@ -44,40 +44,40 @@ public sealed class AdminVehiclesController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
-        VehicleFormViewModel model,
+        VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        ValidateImages(model.Images);
+        ValidateImages(viewModel.Images);
         if (!ModelState.IsValid)
         {
-            await LoadBrandsAsync(model.BrandId, cancellationToken);
-            return View(model);
+            await LoadBrandsAsync(viewModel.BrandId, cancellationToken);
+            return View(viewModel);
         }
 
         var result = await _vehicleService.CreateAsync(
             new CreateVehicleRequest(
-                model.BrandId,
-                model.VehicleName,
-                model.Model,
-                model.LicensePlate,
-                model.ManufactureYear,
-                model.Seats,
-                model.Transmission,
-                model.FuelType,
-                model.Color,
-                model.DailyPrice,
-                model.CurrentMileage,
-                model.Description),
+                viewModel.BrandId,
+                viewModel.VehicleName,
+                viewModel.VehicleModel,
+                viewModel.LicensePlate,
+                viewModel.ManufactureYear,
+                viewModel.Seats,
+                viewModel.Transmission,
+                viewModel.FuelType,
+                viewModel.Color,
+                viewModel.DailyPrice,
+                viewModel.CurrentMileage,
+                viewModel.Description),
             cancellationToken);
 
         if (!result.Succeeded || !result.VehicleId.HasValue)
         {
             AddErrors(result.Errors);
-            await LoadBrandsAsync(model.BrandId, cancellationToken);
-            return View(model);
+            await LoadBrandsAsync(viewModel.BrandId, cancellationToken);
+            return View(viewModel);
         }
 
-        await SaveImagesAsync(result.VehicleId.Value, model.Images, cancellationToken);
+        await SaveImagesAsync(result.VehicleId.Value, viewModel.Images, cancellationToken);
         TempData["SuccessMessage"] = "Đã thêm xe mới.";
         return RedirectToAction(nameof(Edit), new { id = result.VehicleId.Value });
     }
@@ -99,7 +99,7 @@ public sealed class AdminVehiclesController : Controller
             VehicleId = vehicle.VehicleId,
             BrandId = vehicle.BrandId,
             VehicleName = vehicle.VehicleName,
-            Model = vehicle.Model,
+            VehicleModel = vehicle.Model,
             LicensePlate = vehicle.LicensePlate,
             ManufactureYear = vehicle.ManufactureYear,
             Seats = vehicle.Seats,
@@ -116,56 +116,56 @@ public sealed class AdminVehiclesController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(
-        VehicleFormViewModel model,
+        VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        ValidateImages(model.Images);
+        ValidateImages(viewModel.Images);
         if (!ModelState.IsValid)
         {
-            await PrepareEditViewAsync(model, cancellationToken);
-            return View(model);
+            await PrepareEditViewAsync(viewModel, cancellationToken);
+            return View(viewModel);
         }
 
         byte[] rowVersion;
         try
         {
-            rowVersion = Convert.FromBase64String(model.RowVersionBase64 ?? string.Empty);
+            rowVersion = Convert.FromBase64String(viewModel.RowVersionBase64 ?? string.Empty);
         }
         catch (FormatException)
         {
             ModelState.AddModelError(string.Empty, "Phiên bản dữ liệu xe không hợp lệ.");
-            await PrepareEditViewAsync(model, cancellationToken);
-            return View(model);
+            await PrepareEditViewAsync(viewModel, cancellationToken);
+            return View(viewModel);
         }
 
         var result = await _vehicleService.UpdateAsync(
             new UpdateVehicleRequest(
-                model.VehicleId,
-                model.BrandId,
-                model.VehicleName,
-                model.Model,
-                model.LicensePlate,
-                model.ManufactureYear,
-                model.Seats,
-                model.Transmission,
-                model.FuelType,
-                model.Color,
-                model.DailyPrice,
-                model.CurrentMileage,
-                model.Description,
+                viewModel.VehicleId,
+                viewModel.BrandId,
+                viewModel.VehicleName,
+                viewModel.VehicleModel,
+                viewModel.LicensePlate,
+                viewModel.ManufactureYear,
+                viewModel.Seats,
+                viewModel.Transmission,
+                viewModel.FuelType,
+                viewModel.Color,
+                viewModel.DailyPrice,
+                viewModel.CurrentMileage,
+                viewModel.Description,
                 rowVersion),
             cancellationToken);
 
         if (!result.Succeeded)
         {
             AddErrors(result.Errors);
-            await PrepareEditViewAsync(model, cancellationToken);
-            return View(model);
+            await PrepareEditViewAsync(viewModel, cancellationToken);
+            return View(viewModel);
         }
 
-        await SaveImagesAsync(model.VehicleId, model.Images, cancellationToken);
+        await SaveImagesAsync(viewModel.VehicleId, viewModel.Images, cancellationToken);
         TempData["SuccessMessage"] = "Đã cập nhật xe.";
-        return RedirectToAction(nameof(Edit), new { id = model.VehicleId });
+        return RedirectToAction(nameof(Edit), new { id = viewModel.VehicleId });
     }
 
     [HttpPost]
@@ -288,11 +288,11 @@ public sealed class AdminVehiclesController : Controller
     }
 
     private async Task PrepareEditViewAsync(
-        VehicleFormViewModel model,
+        VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        await LoadBrandsAsync(model.BrandId, cancellationToken);
-        ViewBag.Vehicle = await _vehicleService.GetByIdAsync(model.VehicleId, cancellationToken);
+        await LoadBrandsAsync(viewModel.BrandId, cancellationToken);
+        ViewBag.Vehicle = await _vehicleService.GetByIdAsync(viewModel.VehicleId, cancellationToken);
     }
 
     private async Task LoadBrandsAsync(int? selectedId, CancellationToken cancellationToken)
