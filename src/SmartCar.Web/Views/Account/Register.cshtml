@@ -4,6 +4,192 @@
 }
 
 <style>
+    .register-page {
+        min-height: calc(100vh - 155px);
+        display: flex;
+        align-items: center;
+        padding: 1.5rem 0;
+    }
+
+    .register-shell {
+        overflow: hidden;
+        max-width: 1120px;
+        margin: 0 auto;
+        border: 1px solid #dfe8f2;
+        border-radius: 24px;
+        background: #fff;
+        box-shadow: 0 22px 55px rgba(15, 49, 84, 0.12);
+    }
+
+    .register-visual {
+        position: relative;
+        display: flex;
+        min-height: 690px;
+        flex-direction: column;
+        justify-content: center;
+        overflow: hidden;
+        padding: 3rem 2.75rem 2.25rem;
+        background:
+            radial-gradient(circle at 82% 15%, rgba(31, 179, 194, 0.22), transparent 32%),
+            radial-gradient(circle at 10% 90%, rgba(37, 99, 235, 0.18), transparent 35%),
+            linear-gradient(145deg, #eff7ff 0%, #e9f4ff 52%, #effcfc 100%);
+    }
+
+    .register-visual::before,
+    .register-visual::after {
+        content: "";
+        position: absolute;
+        border: 1px solid rgba(37, 99, 235, 0.1);
+        border-radius: 50%;
+    }
+
+    .register-visual::before {
+        width: 330px;
+        height: 330px;
+        top: -165px;
+        right: -120px;
+    }
+
+    .register-visual::after {
+        width: 240px;
+        height: 240px;
+        bottom: -145px;
+        left: -100px;
+    }
+
+    .register-visual-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .register-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        width: fit-content;
+        margin-bottom: 1.1rem;
+        padding: 0.48rem 0.8rem;
+        border: 1px solid #c6dcfb;
+        border-radius: 999px;
+        color: #125db8;
+        background: rgba(255, 255, 255, 0.7);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+    }
+
+    .register-eyebrow-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #18aaa8;
+        box-shadow: 0 0 0 4px rgba(24, 170, 168, 0.13);
+    }
+
+    .register-visual h1 {
+        max-width: 500px;
+        margin-bottom: 1rem;
+        color: #0d2945;
+        font-size: clamp(2.15rem, 3vw, 3.25rem);
+        font-weight: 850;
+        line-height: 1.08;
+    }
+
+    .register-visual h1 span {
+        color: #1769d5;
+    }
+
+    .register-visual-description {
+        max-width: 520px;
+        margin-bottom: 1.25rem;
+        color: #5b7085;
+        font-size: 0.98rem;
+        line-height: 1.7;
+    }
+
+    .register-benefits {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-bottom: 1rem;
+    }
+
+    .register-benefit {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.42rem;
+        padding: 0.52rem 0.72rem;
+        border: 1px solid rgba(39, 117, 218, 0.16);
+        border-radius: 12px;
+        color: #344d65;
+        background: rgba(255, 255, 255, 0.8);
+        font-size: 0.82rem;
+        font-weight: 700;
+        box-shadow: 0 7px 18px rgba(28, 78, 130, 0.06);
+    }
+
+    .register-benefit-check {
+        display: grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        color: #fff;
+        background: #18aaa8;
+        font-size: 0.68rem;
+    }
+
+    .register-illustration-wrap {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        min-height: 285px;
+        align-items: center;
+        justify-content: center;
+        margin-top: 0.25rem;
+    }
+
+    .register-illustration {
+        width: 100%;
+        max-width: 570px;
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 19px 23px rgba(17, 72, 132, 0.18));
+    }
+
+    .register-form-panel {
+        display: flex;
+        min-height: 690px;
+        align-items: center;
+        padding: 2.15rem 2.5rem;
+    }
+
+    .register-form-inner {
+        width: 100%;
+        max-width: 455px;
+        margin: 0 auto;
+    }
+
+    .register-heading {
+        margin-bottom: 1.35rem;
+        text-align: center;
+    }
+
+    .register-heading h2 {
+        margin-bottom: 0.45rem;
+        color: #102a43;
+        font-size: 1.78rem;
+        font-weight: 850;
+    }
+
+    .register-heading p {
+        margin-bottom: 0;
+        color: #718096;
+        font-size: 0.92rem;
+        line-height: 1.55;
+    }
+
     .register-form .validation-summary-valid,
     .register-form .field-validation-valid {
         display: none;
@@ -14,123 +200,285 @@
         box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.08);
     }
 
+    .register-form .form-label {
+        margin-bottom: 0.38rem;
+        color: #2d4358;
+        font-size: 0.88rem;
+        font-weight: 750;
+    }
+
+    .register-form .form-control {
+        min-height: 44px;
+        border-color: #d6e1ec;
+        border-radius: 11px;
+        font-size: 0.92rem;
+    }
+
+    .register-form .form-control:focus {
+        border-color: #4b91e8;
+        box-shadow: 0 0 0 0.2rem rgba(37, 109, 218, 0.1);
+    }
+
+    .register-form .input-group .form-control {
+        border-radius: 11px 0 0 11px;
+    }
+
     .register-form .password-toggle {
-        min-width: 72px;
+        min-width: 67px;
+        border-color: #d6e1ec;
+        border-radius: 0 11px 11px 0;
+        color: #35516c;
+        background: #f8fbfe;
+        font-size: 0.84rem;
+        font-weight: 750;
+    }
+
+    .register-form .password-toggle:hover {
+        color: #1769d5;
+        background: #eef5fd;
+    }
+
+    .register-form .form-text {
+        color: #64778b;
+        font-size: 0.76rem;
+        line-height: 1.45;
+    }
+
+    .register-form .form-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.52rem;
+        padding-left: 0;
+    }
+
+    .register-form .form-check-input {
+        flex: 0 0 auto;
+        margin: 0.2rem 0 0;
+    }
+
+    .register-form .form-check-label {
+        color: #536779;
+        font-size: 0.82rem;
+        line-height: 1.5;
+    }
+
+    .register-submit {
+        min-height: 46px;
+        border: none;
+        border-radius: 11px;
+        background: linear-gradient(135deg, #1769d5, #2b82e8);
+        font-weight: 800;
+        box-shadow: 0 10px 21px rgba(23, 105, 213, 0.22);
+    }
+
+    .register-submit:hover {
+        background: linear-gradient(135deg, #125bb9, #1769d5);
+    }
+
+    .register-login-link {
+        color: #687b8d;
+        font-size: 0.86rem;
+    }
+
+    @@media (max-width: 1199.98px) {
+        .register-visual,
+        .register-form-panel {
+            min-height: 650px;
+        }
+
+        .register-visual {
+            padding: 2.4rem 2rem 1.8rem;
+        }
+
+        .register-form-panel {
+            padding: 2rem;
+        }
+    }
+
+    @@media (max-width: 991.98px) {
+        .register-page {
+            min-height: auto;
+            padding: 1.25rem 0;
+        }
+
+        .register-shell {
+            max-width: 570px;
+            border-radius: 20px;
+        }
+
+        .register-form-panel {
+            min-height: auto;
+            padding: 2rem 1.7rem;
+        }
+    }
+
+    @@media (max-width: 575.98px) {
+        .register-form-panel {
+            padding: 1.65rem 1.1rem;
+        }
+
+        .register-heading h2 {
+            font-size: 1.5rem;
+        }
     }
 </style>
 
-<div class="row justify-content-center py-3">
-    <div class="col-md-7 col-lg-5">
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4 p-lg-5">
-                <div class="text-center mb-4">
-                    <h1 class="h3 mb-2">Tạo tài khoản SmartCar</h1>
-                    <p class="text-muted mb-0">
-                        Đăng ký để tìm xe, gửi yêu cầu thuê và quản lý chuyến đi của bạn.
-                    </p>
-                </div>
+<div class="container register-page">
+    <div class="register-shell w-100">
+        <div class="row g-0">
+            <div class="col-lg-6 d-none d-lg-block">
+                <section class="register-visual h-100" aria-label="Giới thiệu SmartCar">
+                    <div class="register-visual-content">
+                        <div class="register-eyebrow">
+                            <span class="register-eyebrow-dot"></span>
+                            Nền tảng thuê xe tự lái minh bạch
+                        </div>
 
-                <form asp-action="Register" method="post" class="register-form" novalidate>
-                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3" role="alert"></div>
+                        <h1>
+                            Thuê xe dễ dàng,
+                            <span>chủ động mọi hành trình</span>
+                        </h1>
 
-                    <div class="mb-3">
-                        <label asp-for="FullName" class="form-label fw-semibold">
-                            Họ và tên <span class="text-danger">*</span>
-                        </label>
-                        <input asp-for="FullName"
-                               class="form-control"
-                               placeholder="Nguyễn Văn An"
-                               autocomplete="name" />
-                        <span asp-validation-for="FullName" class="text-danger small"></span>
+                        <p class="register-visual-description">
+                            Tạo tài khoản để tìm xe phù hợp, gửi yêu cầu thuê và theo dõi toàn bộ hành trình trên một hệ thống duy nhất.
+                        </p>
+
+                        <div class="register-benefits" aria-label="Lợi ích của SmartCar">
+                            <span class="register-benefit">
+                                <span class="register-benefit-check">✓</span>
+                                Tìm xe nhanh
+                            </span>
+                            <span class="register-benefit">
+                                <span class="register-benefit-check">✓</span>
+                                Chi phí minh bạch
+                            </span>
+                            <span class="register-benefit">
+                                <span class="register-benefit-check">✓</span>
+                                Theo dõi đơn thuê
+                            </span>
+                        </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label asp-for="PhoneNumber" class="form-label fw-semibold">
-                            Số điện thoại <span class="text-danger">*</span>
-                        </label>
-                        <input asp-for="PhoneNumber"
-                               class="form-control"
-                               placeholder="0912345678"
-                               inputmode="tel"
-                               autocomplete="tel" />
-                        <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                    <div class="register-illustration-wrap">
+                        <img src="~/images/auth/register-hero.png"
+                             asp-append-version="true"
+                             class="register-illustration"
+                             alt="Minh họa thuê xe và theo dõi hành trình trên SmartCar" />
                     </div>
+                </section>
+            </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Email" class="form-label fw-semibold">
-                            Email <span class="text-danger">*</span>
-                        </label>
-                        <input asp-for="Email"
-                               class="form-control"
-                               placeholder="nguyenvanan@gmail.com"
-                               autocomplete="email" />
-                        <span asp-validation-for="Email" class="text-danger small"></span>
-                    </div>
+            <div class="col-12 col-lg-6">
+                <section class="register-form-panel">
+                    <div class="register-form-inner">
+                        <div class="register-heading">
+                            <h2>Tạo tài khoản SmartCar</h2>
+                            <p>Đăng ký để tìm xe, gửi yêu cầu thuê và quản lý chuyến đi của bạn.</p>
+                        </div>
 
-                    <div class="mb-3">
-                        <label asp-for="Password" class="form-label fw-semibold">
-                            Mật khẩu <span class="text-danger">*</span>
-                        </label>
-                        <div class="input-group">
-                            <input asp-for="Password"
-                                   class="form-control"
-                                   placeholder="Nhập mật khẩu"
-                                   autocomplete="new-password"
-                                   data-password-input />
-                            <button type="button"
-                                    class="btn btn-outline-secondary password-toggle"
-                                    data-password-toggle
-                                    aria-label="Hiện mật khẩu">
-                                Hiện
+                        <form asp-action="Register" method="post" class="register-form" novalidate>
+                            <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3" role="alert"></div>
+
+                            <div class="mb-2">
+                                <label asp-for="FullName" class="form-label">
+                                    Họ và tên <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="FullName"
+                                       class="form-control"
+                                       placeholder="Nguyễn Văn An"
+                                       autocomplete="name" />
+                                <span asp-validation-for="FullName" class="text-danger small"></span>
+                            </div>
+
+                            <div class="mb-2">
+                                <label asp-for="PhoneNumber" class="form-label">
+                                    Số điện thoại <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="PhoneNumber"
+                                       class="form-control"
+                                       placeholder="0912345678"
+                                       inputmode="tel"
+                                       autocomplete="tel" />
+                                <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                            </div>
+
+                            <div class="mb-2">
+                                <label asp-for="Email" class="form-label">
+                                    Email <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="Email"
+                                       class="form-control"
+                                       placeholder="nguyenvanan@gmail.com"
+                                       autocomplete="email" />
+                                <span asp-validation-for="Email" class="text-danger small"></span>
+                            </div>
+
+                            <div class="mb-2">
+                                <label asp-for="Password" class="form-label">
+                                    Mật khẩu <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input asp-for="Password"
+                                           class="form-control"
+                                           placeholder="Nhập mật khẩu"
+                                           autocomplete="new-password"
+                                           data-password-input />
+                                    <button type="button"
+                                            class="btn password-toggle"
+                                            data-password-toggle
+                                            aria-label="Hiện mật khẩu">
+                                        Hiện
+                                    </button>
+                                </div>
+                                <div class="form-text">
+                                    Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.
+                                </div>
+                                <span asp-validation-for="Password" class="text-danger small d-block"></span>
+                            </div>
+
+                            <div class="mb-2">
+                                <label asp-for="ConfirmPassword" class="form-label">
+                                    Xác nhận mật khẩu <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input asp-for="ConfirmPassword"
+                                           class="form-control"
+                                           placeholder="Nhập lại mật khẩu"
+                                           autocomplete="new-password"
+                                           data-password-input />
+                                    <button type="button"
+                                            class="btn password-toggle"
+                                            data-password-toggle
+                                            aria-label="Hiện mật khẩu xác nhận">
+                                        Hiện
+                                    </button>
+                                </div>
+                                <span asp-validation-for="ConfirmPassword" class="text-danger small d-block"></span>
+                            </div>
+
+                            <div class="mb-3 mt-3">
+                                <div class="form-check">
+                                    <input asp-for="AcceptTerms" class="form-check-input" />
+                                    <label asp-for="AcceptTerms" class="form-check-label">
+                                        Tôi đồng ý với
+                                        <a asp-controller="Home" asp-action="Terms" target="_blank">Điều khoản sử dụng</a>
+                                        và
+                                        <a asp-controller="Home" asp-action="Privacy" target="_blank">Chính sách bảo mật</a>.
+                                    </label>
+                                </div>
+                                <span asp-validation-for="AcceptTerms" class="text-danger small d-block"></span>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary register-submit w-100">
+                                Tạo tài khoản
                             </button>
-                        </div>
-                        <div class="form-text">
-                            Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.
-                        </div>
-                        <span asp-validation-for="Password" class="text-danger small d-block"></span>
+                        </form>
+
+                        <p class="register-login-link text-center mt-3 mb-0">
+                            Đã có tài khoản? <a asp-action="Login" class="fw-semibold">Đăng nhập</a>
+                        </p>
                     </div>
-
-                    <div class="mb-3">
-                        <label asp-for="ConfirmPassword" class="form-label fw-semibold">
-                            Xác nhận mật khẩu <span class="text-danger">*</span>
-                        </label>
-                        <div class="input-group">
-                            <input asp-for="ConfirmPassword"
-                                   class="form-control"
-                                   placeholder="Nhập lại mật khẩu"
-                                   autocomplete="new-password"
-                                   data-password-input />
-                            <button type="button"
-                                    class="btn btn-outline-secondary password-toggle"
-                                    data-password-toggle
-                                    aria-label="Hiện mật khẩu xác nhận">
-                                Hiện
-                            </button>
-                        </div>
-                        <span asp-validation-for="ConfirmPassword" class="text-danger small d-block"></span>
-                    </div>
-
-                    <div class="mb-4">
-                        <div class="form-check">
-                            <input asp-for="AcceptTerms" class="form-check-input" />
-                            <label asp-for="AcceptTerms" class="form-check-label">
-                                Tôi đồng ý với
-                                <a asp-controller="Home" asp-action="Terms" target="_blank">Điều khoản sử dụng</a>
-                                và
-                                <a asp-controller="Home" asp-action="Privacy" target="_blank">Chính sách bảo mật</a>.
-                            </label>
-                        </div>
-                        <span asp-validation-for="AcceptTerms" class="text-danger small d-block"></span>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
-                        Tạo tài khoản
-                    </button>
-                </form>
-
-                <p class="text-center mt-3 mb-0">
-                    Đã có tài khoản? <a asp-action="Login">Đăng nhập</a>
-                </p>
+                </section>
             </div>
         </div>
     </div>
