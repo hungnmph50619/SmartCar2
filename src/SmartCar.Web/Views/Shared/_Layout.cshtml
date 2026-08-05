@@ -13,7 +13,7 @@
         <nav class="navbar navbar-expand-xl navbar-light bg-white border-bottom box-shadow mb-4">
             <div class="container">
                 <a class="navbar-brand fw-bold" asp-controller="Home" asp-action="Index">SmartCar</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-label="Mở hoặc đóng trình đơn">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="navbar-collapse collapse d-xl-inline-flex justify-content-between">
@@ -28,7 +28,7 @@
                         }
                         @if (User.IsInRole(RoleNames.Admin))
                         {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Dashboard" asp-action="Index">Dashboard</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Dashboard" asp-action="Index">Tổng quan</a></li>
                             <li class="nav-item"><a class="nav-link" asp-controller="AdminBookings" asp-action="Index">Đơn thuê</a></li>
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Vận hành</a>
@@ -79,14 +79,14 @@
         {
             <div class="alert alert-success alert-dismissible fade show" role="alert">
                 @successMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button>
             </div>
         }
         @if (TempData["ErrorMessage"] is string errorMessage)
         {
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 @errorMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button>
             </div>
         }
         <main role="main" class="pb-5">@RenderBody()</main>
