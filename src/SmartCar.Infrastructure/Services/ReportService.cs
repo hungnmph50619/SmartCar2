@@ -7,6 +7,13 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class ReportService : IReportService
 {
+    private static readonly BookingStatus[] UtilizedStatuses =
+    {
+        BookingStatus.Rented,
+        BookingStatus.PendingInspection,
+        BookingStatus.Completed
+    };
+
     private readonly ApplicationDbContext _dbContext;
 
     public ReportService(ApplicationDbContext dbContext)
@@ -31,7 +38,6 @@ internal sealed class ReportService : IReportService
 
         var vehicles = await _dbContext.Vehicles
             .AsNoTracking()
-            .Where(item => item.Status != VehicleStatus.Inactive)
             .Select(item => new
             {
                 item.VehicleId,
@@ -45,9 +51,7 @@ internal sealed class ReportService : IReportService
             .Where(item =>
                 item.PickupDate < endExclusive &&
                 item.ReturnDate > from &&
-                item.Status != BookingStatus.Rejected &&
-                item.Status != BookingStatus.Cancelled &&
-                item.Status != BookingStatus.NoShow)
+                UtilizedStatuses.Contains(item.Status))
             .Select(item => new
             {
                 item.BookingId,
@@ -77,7 +81,8 @@ internal sealed class ReportService : IReportService
             .AsNoTracking()
             .Where(item =>
                 item.StartDate < endExclusive &&
-                (!item.CompletedDate.HasValue || item.CompletedDate.Value >= from))
+                (!item.CompletedDate.HasValue || item.CompletedDate.Value >= from) &&
+                item.Status != MaintenanceStatus.Cancelled)
             .GroupBy(item => item.VehicleId)
             .Select(group => new
             {
@@ -88,7 +93,10 @@ internal sealed class ReportService : IReportService
 
         var incidentCosts = await _dbContext.VehicleIncidents
             .AsNoTracking()
-            .Where(item => item.OccurredAt >= from && item.OccurredAt < endExclusive)
+            .Where(item =>
+                item.OccurredAt >= from &&
+                item.OccurredAt < endExclusive &&
+                item.Status != IncidentStatus.Cancelled)
             .GroupBy(item => item.VehicleId)
             .Select(group => new
             {
