@@ -1,0 +1,50 @@
+@model IReadOnlyList<SmartCar.Application.Features.Extensions.ExtensionDto>
+@{
+    ViewData["Title"] = "Duyệt gia hạn";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Yêu cầu gia hạn chờ duyệt</h1>
+        <p class="text-muted mb-0">Hệ thống kiểm tra lịch xe khi Admin duyệt yêu cầu.</p>
+    </div>
+    <span class="badge bg-warning text-dark fs-6">@Model.Count yêu cầu</span>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-success">Không có yêu cầu gia hạn chờ xử lý.</div>
+}
+else
+{
+    <div class="row g-4">
+    @foreach (var item in Model)
+    {
+        <div class="col-lg-6">
+            <div class="card card-body shadow-sm h-100">
+                <h2 class="h5">Đơn #@item.BookingId - @item.VehicleName</h2>
+                <div><strong>Khách:</strong> @item.CustomerName</div>
+                <div><strong>Trả hiện tại:</strong> @item.OriginalReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+                <div><strong>Thời gian mới:</strong> @item.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+                <div><strong>Số ngày thêm:</strong> @item.AdditionalDays</div>
+                <div class="fs-5 text-primary mt-2"><strong>Phí:</strong> @item.AdditionalAmount.ToString("N0") đ</div>
+                @if (!string.IsNullOrWhiteSpace(item.CustomerNote))
+                {
+                    <div class="alert alert-light mt-3">@item.CustomerNote</div>
+                }
+                <div class="mt-auto pt-3">
+                    <form asp-action="Approve" method="post" class="mb-3">
+                        <input type="hidden" name="id" value="@item.BookingExtensionId" />
+                        <button class="btn btn-success w-100" type="submit">Kiểm tra lịch và duyệt</button>
+                    </form>
+                    <form asp-action="Reject" method="post">
+                        <input type="hidden" name="ExtensionId" value="@item.BookingExtensionId" />
+                        <textarea name="Reason" class="form-control mb-2" required placeholder="Lý do không duyệt"></textarea>
+                        <button class="btn btn-outline-danger w-100" type="submit">Không duyệt</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+    </div>
+}
