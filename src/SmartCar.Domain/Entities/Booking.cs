@@ -17,9 +17,10 @@ public class Booking
     public BookingStatus Status { get; set; } = BookingStatus.PendingConfirmation;
     public string? CancelReason { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 
     public Vehicle Vehicle { get; set; } = null!;
-    public Payment? Payment { get; set; }
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
     public VehicleHandover? Handover { get; set; }
     public VehicleReturn? VehicleReturn { get; set; }
     public Review? Review { get; set; }
