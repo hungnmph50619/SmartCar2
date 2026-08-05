@@ -97,6 +97,21 @@ public static class VietnameseDisplayExtensions
             DocumentStatus.Rejected => "Đã từ chối",
             _ => status.ToString()
         },
+        VehicleDocumentType type => type switch
+        {
+            VehicleDocumentType.Registration => "Đăng ký xe",
+            VehicleDocumentType.Inspection => "Đăng kiểm",
+            VehicleDocumentType.Insurance => "Bảo hiểm",
+            VehicleDocumentType.RoadFee => "Phí sử dụng đường bộ",
+            VehicleDocumentType.Other => "Khác",
+            _ => type.ToString()
+        },
+        PromotionType type => type switch
+        {
+            PromotionType.Percentage => "Giảm theo phần trăm",
+            PromotionType.FixedAmount => "Giảm số tiền cố định",
+            _ => type.ToString()
+        },
         _ => value.ToString()
     };
 
