@@ -17,22 +17,28 @@ internal sealed class DocumentService : IDocumentService
         _dbContext = dbContext;
     }
 
-    public Task<IReadOnlyList<DocumentDto>> GetCustomerDocumentsAsync(
+    public async Task<IReadOnlyList<DocumentDto>> GetCustomerDocumentsAsync(
         string customerId,
-        CancellationToken cancellationToken = default) =>
-        QueryDocuments()
+        CancellationToken cancellationToken = default)
+    {
+        var documents = await QueryDocuments()
             .Where(document => document.CustomerId == customerId)
             .OrderBy(document => document.DocumentType)
-            .ToListAsync(cancellationToken)
-            .ContinueWith<IReadOnlyList<DocumentDto>>(task => task.Result, cancellationToken);
+            .ToListAsync(cancellationToken);
 
-    public Task<IReadOnlyList<DocumentDto>> GetPendingDocumentsAsync(
-        CancellationToken cancellationToken = default) =>
-        QueryDocuments()
+        return documents;
+    }
+
+    public async Task<IReadOnlyList<DocumentDto>> GetPendingDocumentsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var documents = await QueryDocuments()
             .Where(document => document.Status == DocumentStatus.Pending)
             .OrderBy(document => document.UpdatedAt)
-            .ToListAsync(cancellationToken)
-            .ContinueWith<IReadOnlyList<DocumentDto>>(task => task.Result, cancellationToken);
+            .ToListAsync(cancellationToken);
+
+        return documents;
+    }
 
     public async Task<OperationResult> SubmitAsync(
         string customerId,
@@ -162,28 +168,24 @@ internal sealed class DocumentService : IDocumentService
     }
 
     private IQueryable<DocumentDto> QueryDocuments() =>
-        _dbContext.CustomerDocuments
-            .AsNoTracking()
-            .Select(document => new DocumentDto(
-                document.CustomerDocumentId,
-                document.CustomerId,
-                _dbContext.Users
-                    .Where(user => user.Id == document.CustomerId)
-                    .Select(user => user.FullName)
-                    .FirstOrDefault() ?? string.Empty,
-                _dbContext.Users
-                    .Where(user => user.Id == document.CustomerId)
-                    .Select(user => user.PhoneNumber)
-                    .FirstOrDefault(),
-                document.DocumentType,
-                document.DocumentNumber,
-                document.ExpiryDate,
-                document.ImagePath,
-                document.Status,
-                document.RejectionReason,
-                document.VerifiedBy,
-                document.VerifiedAt,
-                document.UpdatedAt));
+        from document in _dbContext.CustomerDocuments.AsNoTracking()
+        join user in _dbContext.Users.AsNoTracking()
+            on document.CustomerId equals user.Id into userGroup
+        from user in userGroup.DefaultIfEmpty()
+        select new DocumentDto(
+            document.CustomerDocumentId,
+            document.CustomerId,
+            user == null ? string.Empty : user.FullName,
+            user == null ? null : user.PhoneNumber,
+            document.DocumentType,
+            document.DocumentNumber,
+            document.ExpiryDate,
+            document.ImagePath,
+            document.Status,
+            document.RejectionReason,
+            document.VerifiedBy,
+            document.VerifiedAt,
+            document.UpdatedAt);
 
     private async Task NotifyAdminsAsync(
         string title,
