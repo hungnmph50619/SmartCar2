@@ -26,6 +26,7 @@ internal sealed class ReturnService : IReturnService
             .Include(item => item.Vehicle)
             .Include(item => item.Handover)
             .Include(item => item.VehicleReturn)
+            .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == request.BookingId, cancellationToken);
 
         if (booking is null)
@@ -58,7 +59,15 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Vui lòng ghi nhận mức nhiên liệu khi trả xe.");
         }
 
-        booking.VehicleReturn = new VehicleReturn
+        var lateMinutes = request.ReturnedAt > booking.ReturnDate
+            ? (int)Math.Ceiling((request.ReturnedAt - booking.ReturnDate).TotalMinutes)
+            : 0;
+        var lateDays = lateMinutes > 0
+            ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
+            : 0;
+        var lateFee = lateDays * booking.DailyPrice * 1.5m;
+
+        var vehicleReturn = new VehicleReturn
         {
             ReturnedAt = request.ReturnedAt,
             Mileage = request.Mileage,
@@ -66,15 +75,40 @@ internal sealed class ReturnService : IReturnService
             ExteriorCondition = Normalize(request.ExteriorCondition),
             InteriorCondition = Normalize(request.InteriorCondition),
             HasDamage = request.HasDamage,
+            IsLateReturn = lateMinutes > 0,
+            LateMinutes = lateMinutes,
+            LateFee = lateFee,
             ImagePaths = Normalize(request.ImagePaths),
             Notes = Normalize(request.Notes)
         };
 
+        if (lateFee > 0)
+        {
+            vehicleReturn.AdditionalCharges.Add(new AdditionalCharge
+            {
+                ChargeType = AdditionalChargeType.LateReturn,
+                Description = $"Phí trả xe muộn {lateMinutes} phút ({lateDays} ngày tính phí x 150%).",
+                Amount = lateFee
+            });
+        }
+
+        booking.VehicleReturn = vehicleReturn;
         booking.Status = BookingStatus.PendingInspection;
         booking.Vehicle.Status = VehicleStatus.Inspection;
         booking.Vehicle.CurrentMileage = request.Mileage;
 
+        if (lateFee > 0)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = "Xe được ghi nhận trả muộn",
+                Message = $"Đơn #{booking.BookingId} trả muộn {lateMinutes} phút. Phí trả muộn tạm tính: {lateFee:N0} đồng."
+            });
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await RecalculateChargesAsync(booking, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
@@ -167,6 +201,7 @@ internal sealed class ReturnService : IReturnService
             .Include(item => item.Vehicle)
             .Include(item => item.VehicleReturn)
             .Include(item => item.Payments)
+            .Include(item => item.Extensions)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (booking is null || booking.VehicleReturn is null)
@@ -181,12 +216,14 @@ internal sealed class ReturnService : IReturnService
 
         var rentalPaid = booking.Payments.Any(payment =>
             payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
+        var extensionPaid = booking.Extensions.All(extension =>
+            extension.Status != BookingExtensionStatus.Approved);
         var additionalPaid = booking.AdditionalAmount <= 0 || booking.Payments.Any(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
             payment.Status == PaymentStatus.Paid &&
             payment.Amount >= booking.AdditionalAmount);
 
-        if (!rentalPaid || !additionalPaid)
+        if (!rentalPaid || !extensionPaid || !additionalPaid)
         {
             return OperationResult.Failure("Đơn vẫn còn khoản tiền chưa được thanh toán.");
         }
@@ -215,7 +252,7 @@ internal sealed class ReturnService : IReturnService
         {
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã hoàn tất",
-            Message = $"Đơn #{booking.BookingId} đã được hoàn tất. Cảm ơn bạn đã sử dụng SmartCar."
+            Message = $"Đơn #{booking.BookingId} đã hoàn tất. Bạn có thể đánh giá trải nghiệm thuê xe."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
