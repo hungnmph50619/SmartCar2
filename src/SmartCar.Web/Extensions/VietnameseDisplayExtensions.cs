@@ -122,4 +122,30 @@ public static class VietnameseDisplayExtensions
         null or "" => "Không xác định",
         _ => value
     };
+
+    public static string ToVietnameseAuditAction(this string? value) => value switch
+    {
+        "Create" => "Tạo mới",
+        "Update" => "Cập nhật",
+        "Delete" => "Xóa",
+        "ChangeStatus" => "Đổi trạng thái",
+        "ApplyPromotion" => "Áp dụng khuyến mãi",
+        "RemovePromotion" => "Gỡ khuyến mãi",
+        "StartInvestigation" => "Bắt đầu xử lý",
+        "Resolve" => "Hoàn tất xử lý",
+        null or "" => "Không xác định",
+        _ => value
+    };
+
+    public static string ToVietnameseEntity(this string? value) => value switch
+    {
+        "Booking" => "Đơn thuê",
+        "Promotion" => "Khuyến mãi",
+        "VehicleDocument" => "Giấy tờ xe",
+        "VehicleIncident" => "Sự cố xe",
+        "Vehicle" => "Xe",
+        "MaintenanceRecord" => "Phiếu bảo trì",
+        null or "" => "Không xác định",
+        _ => value
+    };
 }
