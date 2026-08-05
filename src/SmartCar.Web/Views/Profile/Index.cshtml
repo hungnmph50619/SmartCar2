@@ -1,7 +1,12 @@
 @model SmartCar.Web.ViewModels.ProfileViewModel
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Hồ sơ cá nhân";
     var avatarInitial = Model.FullName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
+    var isCustomer = User.IsInRole(RoleNames.Customer);
+    var showDocuments = isCustomer && Model.ActiveTab == "documents";
+    var verifiedCount = Model.Documents.Count(item => item.Status == DocumentStatus.Verified);
 }
 
 <div class="profile-shell py-3">
@@ -9,9 +14,9 @@
         <div>
             <span class="section-eyebrow">TÀI KHOẢN SMARTCAR</span>
             <h1 class="h2 fw-bold mb-1">Hồ sơ cá nhân</h1>
-            <p class="text-muted mb-0">Thông tin này được sử dụng khi tạo và xử lý đơn thuê xe.</p>
+            <p class="text-muted mb-0">Quản lý thông tin liên hệ và hồ sơ giấy tờ dùng khi thuê xe.</p>
         </div>
-        @if (User.IsInRole(RoleNames.Customer))
+        @if (isCustomer)
         {
             <a asp-controller="Bookings" asp-action="MyBookings" class="btn btn-outline-primary">
                 Xem đơn thuê của tôi
@@ -19,70 +24,118 @@
         }
     </div>
 
-    <div class="row g-4">
-        <div class="col-lg-4">
-            <section class="profile-card h-100">
-                <div class="profile-header flex-column text-center">
-                    <div class="profile-avatar mb-3" aria-hidden="true">@avatarInitial</div>
-                    <div>
-                        <h2 class="h4 fw-bold mb-1">@Model.FullName</h2>
-                        <p class="text-muted mb-0">@Model.Email</p>
+    @if (isCustomer)
+    {
+        <nav class="nav nav-pills gap-2 mb-4" aria-label="Các phần của hồ sơ cá nhân">
+            <a class="nav-link @(!showDocuments ? "active" : string.Empty)"
+               asp-action="Index"
+               asp-route-tab="profile">
+                Thông tin cá nhân
+            </a>
+            <a class="nav-link @(showDocuments ? "active" : string.Empty)"
+               asp-action="Index"
+               asp-route-tab="documents">
+                CCCD/GPLX
+                <span class="badge rounded-pill @(verifiedCount == DocumentTypes.RequiredForRental.Count ? "bg-success" : "bg-secondary") ms-1">
+                    @verifiedCount/@DocumentTypes.RequiredForRental.Count
+                </span>
+            </a>
+        </nav>
+    }
+
+    @if (showDocuments)
+    {
+        <partial name="_DocumentsTab" model="Model" />
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <section class="profile-card h-100">
+                    <div class="profile-header flex-column text-center">
+                        <div class="profile-avatar mb-3" aria-hidden="true">@avatarInitial</div>
+                        <div>
+                            <h2 class="h4 fw-bold mb-1">@Model.FullName</h2>
+                            <p class="text-muted mb-0">@Model.Email</p>
+                        </div>
                     </div>
-                </div>
-                <div class="profile-body">
-                    <div class="profile-detail">
-                        <span>Ngày tạo tài khoản</span>
-                        <strong>@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                    <div class="profile-body">
+                        <div class="profile-detail">
+                            <span>Ngày tạo tài khoản</span>
+                            <strong>@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                        </div>
+
+                        @if (isCustomer)
+                        {
+                            <div class="profile-detail mt-3">
+                                <span>Hồ sơ thuê xe</span>
+                                <strong>
+                                    @(verifiedCount == DocumentTypes.RequiredForRental.Count
+                                        ? "Đã xác minh đầy đủ"
+                                        : $"Đã xác minh {verifiedCount}/{DocumentTypes.RequiredForRental.Count} giấy tờ")
+                                </strong>
+                            </div>
+
+                            @if (verifiedCount < DocumentTypes.RequiredForRental.Count)
+                            {
+                                <a class="btn btn-sm btn-outline-primary mt-3"
+                                   asp-action="Index"
+                                   asp-route-tab="documents">
+                                    Hoàn thiện CCCD/GPLX
+                                </a>
+                            }
+                        }
+
+                        <p class="small text-muted mt-3 mb-0">
+                            Email đăng nhập không thể thay đổi tại trang này. Liên hệ Quản trị viên nếu cần hỗ trợ.
+                        </p>
                     </div>
-                    <p class="small text-muted mt-3 mb-0">
-                        Email đăng nhập không thể thay đổi tại trang này. Liên hệ Quản trị viên nếu cần hỗ trợ.
-                    </p>
-                </div>
-            </section>
+                </section>
+            </div>
+
+            <div class="col-lg-8">
+                <form asp-action="Update"
+                      method="post"
+                      class="card card-body shadow-sm border-0 h-100"
+                      data-loading-form>
+                    <div class="mb-4">
+                        <h2 class="h5 mb-1">Cập nhật thông tin</h2>
+                        <p class="text-muted mb-0">Giữ thông tin liên hệ chính xác để SmartCar có thể hỗ trợ giao nhận xe.</p>
+                    </div>
+
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="FullName" class="form-label fw-semibold"></label>
+                            <input asp-for="FullName" class="form-control" autocomplete="name" />
+                            <span asp-validation-for="FullName" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Email" class="form-label fw-semibold"></label>
+                            <input asp-for="Email" class="form-control" readonly aria-readonly="true" />
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
+                            <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" placeholder="Ví dụ: 0982223792" />
+                            <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12">
+                            <label asp-for="Address" class="form-label fw-semibold"></label>
+                            <textarea asp-for="Address" class="form-control" rows="3" autocomplete="street-address" placeholder="Địa chỉ liên hệ hoặc địa chỉ giao nhận thường dùng"></textarea>
+                            <span asp-validation-for="Address" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu hồ sơ...">
+                            Lưu thay đổi
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-
-        <div class="col-lg-8">
-            <form asp-action="Update"
-                  method="post"
-                  class="card card-body shadow-sm border-0 h-100"
-                  data-loading-form>
-                <div class="mb-4">
-                    <h2 class="h5 mb-1">Cập nhật thông tin</h2>
-                    <p class="text-muted mb-0">Giữ thông tin liên hệ chính xác để SmartCar có thể hỗ trợ giao nhận xe.</p>
-                </div>
-
-                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
-
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label asp-for="FullName" class="form-label fw-semibold"></label>
-                        <input asp-for="FullName" class="form-control" autocomplete="name" />
-                        <span asp-validation-for="FullName" class="text-danger small"></span>
-                    </div>
-                    <div class="col-md-6">
-                        <label asp-for="Email" class="form-label fw-semibold"></label>
-                        <input asp-for="Email" class="form-control" readonly aria-readonly="true" />
-                    </div>
-                    <div class="col-md-6">
-                        <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
-                        <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" placeholder="Ví dụ: 0982223792" />
-                        <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
-                    </div>
-                    <div class="col-12">
-                        <label asp-for="Address" class="form-label fw-semibold"></label>
-                        <textarea asp-for="Address" class="form-control" rows="3" autocomplete="street-address" placeholder="Địa chỉ liên hệ hoặc địa chỉ giao nhận thường dùng"></textarea>
-                        <span asp-validation-for="Address" class="text-danger small"></span>
-                    </div>
-                </div>
-
-                <div class="mt-4">
-                    <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu hồ sơ...">
-                        Lưu thay đổi
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+    }
 </div>
 
 @section Scripts {
