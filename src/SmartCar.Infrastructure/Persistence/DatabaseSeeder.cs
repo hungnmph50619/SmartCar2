@@ -15,7 +15,7 @@ public static class DatabaseSeeder
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var dbContext = services.GetRequiredService<ApplicationDbContext>();
 
-        foreach (var roleName in new[] { RoleNames.Customer, RoleNames.Manager })
+        foreach (var roleName in new[] { RoleNames.Customer, RoleNames.Admin })
         {
             if (!await roleManager.RoleExistsAsync(roleName))
             {
@@ -29,39 +29,39 @@ public static class DatabaseSeeder
             }
         }
 
-        const string managerEmail = "manager@smartcar.vn";
-        const string managerPassword = "SmartCar@123";
+        const string adminEmail = "admin@smartcar.vn";
+        const string adminPassword = "SmartCar@123";
 
-        var manager = await userManager.FindByEmailAsync(managerEmail);
-        if (manager is null)
+        var admin = await userManager.FindByEmailAsync(adminEmail);
+        if (admin is null)
         {
-            manager = new ApplicationUser
+            admin = new ApplicationUser
             {
-                FullName = "Quản lý SmartCar",
-                UserName = managerEmail,
-                Email = managerEmail,
+                FullName = "Quản trị SmartCar",
+                UserName = adminEmail,
+                Email = adminEmail,
                 EmailConfirmed = true,
                 PhoneNumber = "0900000000",
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
 
-            var createResult = await userManager.CreateAsync(manager, managerPassword);
+            var createResult = await userManager.CreateAsync(admin, adminPassword);
             if (!createResult.Succeeded)
             {
                 throw new InvalidOperationException(
-                    "Không thể tạo tài khoản quản lý: " +
+                    "Không thể tạo tài khoản Admin: " +
                     string.Join("; ", createResult.Errors.Select(error => error.Description)));
             }
         }
 
-        if (!await userManager.IsInRoleAsync(manager, RoleNames.Manager))
+        if (!await userManager.IsInRoleAsync(admin, RoleNames.Admin))
         {
-            var addRoleResult = await userManager.AddToRoleAsync(manager, RoleNames.Manager);
+            var addRoleResult = await userManager.AddToRoleAsync(admin, RoleNames.Admin);
             if (!addRoleResult.Succeeded)
             {
                 throw new InvalidOperationException(
-                    "Không thể gán vai trò Manager: " +
+                    "Không thể gán vai trò Admin: " +
                     string.Join("; ", addRoleResult.Errors.Select(error => error.Description)));
             }
         }
