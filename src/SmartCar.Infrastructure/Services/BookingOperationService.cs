@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
+using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -10,10 +11,14 @@ namespace SmartCar.Infrastructure.Services;
 internal sealed class BookingOperationService : IBookingOperationService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IAuditService _auditService;
 
-    public BookingOperationService(ApplicationDbContext dbContext)
+    public BookingOperationService(
+        ApplicationDbContext dbContext,
+        IAuditService auditService)
     {
         _dbContext = dbContext;
+        _auditService = auditService;
     }
 
     public Task<RefundResult> CancelByCustomerAsync(
@@ -72,6 +77,15 @@ internal sealed class BookingOperationService : IBookingOperationService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.WriteAsync(
+            adminId,
+            "MarkNoShow",
+            nameof(Booking),
+            booking.BookingId.ToString(),
+            $"Ghi nhận khách hàng {booking.CustomerId} không đến nhận xe; không hoàn tiền.",
+            cancellationToken: cancellationToken);
+
         return OperationResult.Success();
     }
 
@@ -171,6 +185,15 @@ internal sealed class BookingOperationService : IBookingOperationService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        await _auditService.WriteAsync(
+            actorId,
+            isAdmin ? "AdminCancel" : "CustomerCancel",
+            nameof(Booking),
+            booking.BookingId.ToString(),
+            $"{(isAdmin ? "Quản trị viên" : "Khách hàng")} hủy đơn. Lý do: {booking.CancelReason}. Hoàn tiền: {refundAmount:N0} đồng.",
+            cancellationToken: cancellationToken);
+
         return RefundResult.Success(refundAmount);
     }
 }

@@ -3,11 +3,23 @@
     ViewData["Title"] = "Thêm xe";
 }
 
-<h1 class="h3 mb-3">Thêm xe mới</h1>
-<form asp-action="Create" method="post" enctype="multipart/form-data" class="card card-body shadow-sm">
+<div class="mb-3">
+    <h1 class="h3 mb-1">Thêm xe mới</h1>
+    <p class="text-muted mb-0">Nhập thông tin vận hành và tải ảnh thật của xe trước khi đưa vào danh sách cho thuê.</p>
+</div>
+
+<form asp-action="Create"
+      method="post"
+      enctype="multipart/form-data"
+      class="card card-body shadow-sm"
+      data-loading-form>
     <partial name="_VehicleForm" model="Model" />
-    <div class="mt-4">
-        <button class="btn btn-primary" type="submit">Lưu xe</button>
+    <div class="mt-4 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu xe...">Lưu xe</button>
         <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
     </div>
 </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

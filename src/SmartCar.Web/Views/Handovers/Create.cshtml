@@ -3,22 +3,85 @@
     ViewData["Title"] = "Biên bản giao xe";
 }
 
-<h1 class="h3 mb-3">Lập biên bản giao xe - Đơn #@Model.BookingId</h1>
-<form asp-action="Create" method="post" class="card card-body shadow-sm">
-    <input asp-for="BookingId" type="hidden" />
-    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-    <div class="row g-3">
-        <div class="col-md-6"><label asp-for="HandoverAt" class="form-label">Thời gian giao</label><input asp-for="HandoverAt" type="datetime-local" class="form-control" /></div>
-        <div class="col-md-6"><label asp-for="Mileage" class="form-label">Số km khi giao</label><input asp-for="Mileage" class="form-control" /></div>
-        <div class="col-md-6"><label asp-for="FuelLevel" class="form-label">Mức nhiên liệu</label><input asp-for="FuelLevel" class="form-control" placeholder="Ví dụ: 100% hoặc 8/8" /></div>
-        <div class="col-md-6"><label asp-for="Accessories" class="form-label">Phụ kiện bàn giao</label><input asp-for="Accessories" class="form-control" /></div>
-        <div class="col-md-6"><label asp-for="ExteriorCondition" class="form-label">Ngoại thất</label><textarea asp-for="ExteriorCondition" class="form-control"></textarea></div>
-        <div class="col-md-6"><label asp-for="InteriorCondition" class="form-label">Nội thất</label><textarea asp-for="InteriorCondition" class="form-control"></textarea></div>
-        <div class="col-12"><label asp-for="ImagePaths" class="form-label">Đường dẫn ảnh biên bản</label><input asp-for="ImagePaths" class="form-control" placeholder="Giai đoạn mô phỏng: nhập các đường dẫn ảnh, phân cách bằng dấu ;" /></div>
-        <div class="col-12"><label asp-for="Notes" class="form-label">Ghi chú</label><textarea asp-for="Notes" class="form-control"></textarea></div>
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
+    <div>
+        <h1 class="h3 mb-1">Lập biên bản giao xe - Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Ghi nhận tình trạng thực tế trước khi bàn giao xe cho khách hàng.</p>
     </div>
-    <div class="mt-4">
-        <button class="btn btn-primary" type="submit">Xác nhận giao xe</button>
-        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại</a>
+    <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại đơn</a>
+</div>
+
+<div class="alert alert-info">
+    <strong>Kiểm tra trước khi xác nhận:</strong> đúng khách hàng, đúng xe và biển số; số km; mức nhiên liệu; ngoại thất; nội thất; phụ kiện; ảnh đủ các góc.
+</div>
+
+<form asp-action="Create"
+      method="post"
+      enctype="multipart/form-data"
+      class="card card-body shadow-sm"
+      data-loading-form
+      data-confirm="Xác nhận bàn giao xe? Sau thao tác này đơn sẽ chuyển sang trạng thái đang thuê.">
+    <input asp-for="BookingId" type="hidden" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label asp-for="HandoverAt" class="form-label fw-semibold">Thời gian giao</label>
+            <input asp-for="HandoverAt" type="datetime-local" class="form-control" required />
+            <span asp-validation-for="HandoverAt" class="text-danger small"></span>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Mileage" class="form-label fw-semibold">Số km khi giao</label>
+            <input asp-for="Mileage" type="number" min="0" class="form-control" required />
+            <span asp-validation-for="Mileage" class="text-danger small"></span>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="FuelLevel" class="form-label fw-semibold">Mức nhiên liệu</label>
+            <input asp-for="FuelLevel" class="form-control" placeholder="Ví dụ: 100% hoặc 8/8" required />
+            <span asp-validation-for="FuelLevel" class="text-danger small"></span>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện bàn giao</label>
+            <input asp-for="Accessories" class="form-control" placeholder="Chìa khóa, đăng ký xe, lốp dự phòng..." />
+        </div>
+        <div class="col-md-6">
+            <label asp-for="ExteriorCondition" class="form-label fw-semibold">Ngoại thất</label>
+            <textarea asp-for="ExteriorCondition" class="form-control" rows="3" placeholder="Mô tả vết xước, móp hoặc tình trạng bình thường"></textarea>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="InteriorCondition" class="form-label fw-semibold">Nội thất</label>
+            <textarea asp-for="InteriorCondition" class="form-control" rows="3" placeholder="Ghế, màn hình, điều hòa, vệ sinh nội thất..."></textarea>
+        </div>
+        <div class="col-12">
+            <label asp-for="Images" class="form-label fw-semibold">Ảnh tình trạng xe khi giao</label>
+            <input asp-for="Images"
+                   type="file"
+                   multiple
+                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                   class="form-control"
+                   data-image-input
+                   data-preview-target="#handover-image-preview"
+                   data-file-info-target="#handover-file-info" />
+            <span asp-validation-for="Images" class="text-danger small"></span>
+            <div class="form-text">Tải từ 1 đến 10 ảnh, mỗi ảnh tối đa 5 MB. Nên có ảnh bốn góc xe, nội thất, đồng hồ km và mức nhiên liệu.</div>
+            <div id="handover-file-info" class="small text-muted mt-2 d-none"></div>
+            <div id="handover-image-preview" class="mt-3 d-none">
+                <div class="row g-2" data-preview-list></div>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn lại ảnh</button>
+            </div>
+        </div>
+        <div class="col-12">
+            <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
+            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Thông tin bổ sung đã thống nhất với khách hàng"></textarea>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu biên bản...">Xác nhận giao xe</button>
+        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy thao tác</a>
     </div>
 </form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

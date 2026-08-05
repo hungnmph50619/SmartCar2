@@ -5,6 +5,7 @@ using SmartCar.Application.Features.Brands;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -12,8 +13,8 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminVehiclesController : Controller
 {
-    private static readonly HashSet<string> AllowedExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
+    private const int MaximumImagesPerVehicle = 10;
+    private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IVehicleService _vehicleService;
     private readonly IBrandService _brandService;
@@ -47,7 +48,7 @@ public sealed class AdminVehiclesController : Controller
         VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        ValidateImages(viewModel.Images);
+        await ValidateImagesAsync(viewModel.Images, 0, cancellationToken);
         if (!ModelState.IsValid)
         {
             await LoadBrandsAsync(viewModel.BrandId, cancellationToken);
@@ -119,7 +120,18 @@ public sealed class AdminVehiclesController : Controller
         VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        ValidateImages(viewModel.Images);
+        var currentVehicle = await _vehicleService.GetByIdAsync(
+            viewModel.VehicleId,
+            cancellationToken);
+        if (currentVehicle is null)
+        {
+            return NotFound();
+        }
+
+        await ValidateImagesAsync(
+            viewModel.Images,
+            currentVehicle.Images.Count,
+            cancellationToken);
         if (!ModelState.IsValid)
         {
             await PrepareEditViewAsync(viewModel, cancellationToken);
@@ -237,7 +249,8 @@ public sealed class AdminVehiclesController : Controller
         IReadOnlyCollection<IFormFile> images,
         CancellationToken cancellationToken)
     {
-        if (images.Count == 0)
+        var validImages = images.Where(file => file.Length > 0).ToList();
+        if (validImages.Count == 0)
         {
             return;
         }
@@ -249,7 +262,7 @@ public sealed class AdminVehiclesController : Controller
         var vehicle = await _vehicleService.GetByIdAsync(vehicleId, cancellationToken);
         var firstImageIsPrimary = vehicle?.Images.Count == 0;
 
-        foreach (var image in images.Where(file => file.Length > 0))
+        foreach (var image in validImages)
         {
             var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
             var fileName = $"{Guid.NewGuid():N}{extension}";
@@ -268,21 +281,30 @@ public sealed class AdminVehiclesController : Controller
         }
     }
 
-    private void ValidateImages(IEnumerable<IFormFile> images)
+    private async Task ValidateImagesAsync(
+        IReadOnlyCollection<IFormFile> images,
+        int existingImageCount,
+        CancellationToken cancellationToken)
     {
-        foreach (var image in images.Where(file => file.Length > 0))
+        var selectedImages = images.Where(file => file.Length > 0).ToList();
+        if (existingImageCount + selectedImages.Count > MaximumImagesPerVehicle)
         {
-            var extension = Path.GetExtension(image.FileName);
-            if (!AllowedExtensions.Contains(extension))
-            {
-                ModelState.AddModelError(nameof(VehicleFormViewModel.Images),
-                    "Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.");
-            }
+            ModelState.AddModelError(
+                nameof(VehicleFormViewModel.Images),
+                $"Mỗi xe chỉ được có tối đa {MaximumImagesPerVehicle} ảnh. Xe hiện có {existingImageCount} ảnh.");
+        }
 
-            if (image.Length > 5 * 1024 * 1024)
+        foreach (var image in selectedImages)
+        {
+            var error = await ImageFileValidator.ValidateAsync(
+                image,
+                MaximumImageBytes,
+                cancellationToken);
+            if (error is not null)
             {
-                ModelState.AddModelError(nameof(VehicleFormViewModel.Images),
-                    "Mỗi ảnh không được vượt quá 5 MB.");
+                ModelState.AddModelError(
+                    nameof(VehicleFormViewModel.Images),
+                    $"{image.FileName}: {error}");
             }
         }
     }

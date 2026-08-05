@@ -9,7 +9,7 @@
         <div>
             <span class="section-eyebrow">TÀI KHOẢN SMARTCAR</span>
             <h1 class="h2 fw-bold mb-1">Hồ sơ cá nhân</h1>
-            <p class="text-muted mb-0">Thông tin đang được sử dụng cho các đơn thuê xe của bạn.</p>
+            <p class="text-muted mb-0">Thông tin này được sử dụng khi tạo và xử lý đơn thuê xe.</p>
         </div>
         @if (User.IsInRole(RoleNames.Customer))
         {
@@ -19,48 +19,72 @@
         }
     </div>
 
-    <section class="profile-card">
-        <div class="profile-header">
-            <div class="profile-avatar" aria-hidden="true">@avatarInitial</div>
-            <div>
-                <h2 class="h4 fw-bold mb-1">@Model.FullName</h2>
-                <p class="text-muted mb-0">@Model.Email</p>
-            </div>
-        </div>
-
-        <div class="profile-body">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <div class="profile-detail">
-                        <span>Họ và tên</span>
-                        <strong>@Model.FullName</strong>
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <section class="profile-card h-100">
+                <div class="profile-header flex-column text-center">
+                    <div class="profile-avatar mb-3" aria-hidden="true">@avatarInitial</div>
+                    <div>
+                        <h2 class="h4 fw-bold mb-1">@Model.FullName</h2>
+                        <p class="text-muted mb-0">@Model.Email</p>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="profile-detail">
-                        <span>Email</span>
-                        <strong>@Model.Email</strong>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="profile-detail">
-                        <span>Số điện thoại</span>
-                        <strong>@(string.IsNullOrWhiteSpace(Model.PhoneNumber) ? "Chưa cập nhật" : Model.PhoneNumber)</strong>
-                    </div>
-                </div>
-                <div class="col-md-6">
+                <div class="profile-body">
                     <div class="profile-detail">
                         <span>Ngày tạo tài khoản</span>
                         <strong>@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</strong>
                     </div>
+                    <p class="small text-muted mt-3 mb-0">
+                        Email đăng nhập không thể thay đổi tại trang này. Liên hệ Quản trị viên nếu cần hỗ trợ.
+                    </p>
                 </div>
-                <div class="col-12">
-                    <div class="profile-detail">
-                        <span>Địa chỉ</span>
-                        <strong>@(string.IsNullOrWhiteSpace(Model.Address) ? "Chưa cập nhật" : Model.Address)</strong>
+            </section>
+        </div>
+
+        <div class="col-lg-8">
+            <form asp-action="Update"
+                  method="post"
+                  class="card card-body shadow-sm border-0 h-100"
+                  data-loading-form>
+                <div class="mb-4">
+                    <h2 class="h5 mb-1">Cập nhật thông tin</h2>
+                    <p class="text-muted mb-0">Giữ thông tin liên hệ chính xác để SmartCar có thể hỗ trợ giao nhận xe.</p>
+                </div>
+
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="FullName" class="form-label fw-semibold"></label>
+                        <input asp-for="FullName" class="form-control" autocomplete="name" />
+                        <span asp-validation-for="FullName" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="Email" class="form-label fw-semibold"></label>
+                        <input asp-for="Email" class="form-control" readonly aria-readonly="true" />
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
+                        <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" placeholder="Ví dụ: 0982223792" />
+                        <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="Address" class="form-label fw-semibold"></label>
+                        <textarea asp-for="Address" class="form-control" rows="3" autocomplete="street-address" placeholder="Địa chỉ liên hệ hoặc địa chỉ giao nhận thường dùng"></textarea>
+                        <span asp-validation-for="Address" class="text-danger small"></span>
                     </div>
                 </div>
-            </div>
+
+                <div class="mt-4">
+                    <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu hồ sơ...">
+                        Lưu thay đổi
+                    </button>
+                </div>
+            </form>
         </div>
-    </section>
+    </div>
 </div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

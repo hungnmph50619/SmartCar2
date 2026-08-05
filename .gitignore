@@ -12,3 +12,6 @@
 # User uploads (keep folders only)
 src/SmartCar.Web/wwwroot/uploads/**/*
 !src/SmartCar.Web/wwwroot/uploads/**/.gitkeep
+
+# Protected customer documents are runtime data and must never be committed.
+src/SmartCar.Web/App_Data/SecureDocuments/**/*

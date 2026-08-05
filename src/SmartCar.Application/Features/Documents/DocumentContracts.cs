@@ -29,6 +29,9 @@ public interface IDocumentService
     Task<IReadOnlyList<DocumentDto>> GetCustomerDocumentsAsync(
         string customerId,
         CancellationToken cancellationToken = default);
+    Task<DocumentDto?> GetDocumentAsync(
+        int documentId,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DocumentDto>> GetPendingDocumentsAsync(
         CancellationToken cancellationToken = default);
     Task<OperationResult> SubmitAsync(

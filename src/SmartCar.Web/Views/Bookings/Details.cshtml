@@ -5,21 +5,107 @@
     var hasOpenExtension = Model.Extensions.Any(item =>
         item.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.Approved);
     var canCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
-    var canApplyPromotion = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment && !Model.RentalPaid;
+    var canApplyPromotion =
+        (Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment) &&
+        !Model.RentalPaid;
+
+    var statusInfo = Model.Status switch
+    {
+        BookingStatus.PendingConfirmation => (
+            "SmartCar đang kiểm tra yêu cầu",
+            "Quản trị viên đang kiểm tra giấy tờ, lịch xe và thông tin đơn thuê.",
+            "Bạn chưa cần thanh toán. Hãy chờ thông báo xác nhận hoặc từ chối.",
+            "warning"),
+        BookingStatus.PendingPayment => (
+            "Đơn đã được xác nhận",
+            "Xe đã được giữ tạm thời cho khoảng thời gian bạn chọn.",
+            "Thanh toán tiền thuê để hoàn tất giữ xe.",
+            "primary"),
+        BookingStatus.Paid => (
+            "Đã thanh toán tiền thuê",
+            "SmartCar đang kiểm tra và chuẩn bị xe trước thời gian nhận.",
+            "Theo dõi thông báo. Bạn chưa cần thực hiện thêm thao tác.",
+            "success"),
+        BookingStatus.ReadyForPickup => (
+            "Xe đã sẵn sàng giao",
+            "Xe đã được kiểm tra và có thể lập biên bản bàn giao.",
+            $"Đến nhận xe lúc {Model.PickupDate:dd/MM/yyyy HH:mm} và mang theo CCCD, GPLX bản gốc.",
+            "success"),
+        BookingStatus.Rented => (
+            "Bạn đang trong thời gian thuê xe",
+            "Xe đã được bàn giao thành công.",
+            $"Trả xe trước {Model.ReturnDate:dd/MM/yyyy HH:mm}. Gửi yêu cầu gia hạn sớm nếu cần.",
+            "primary"),
+        BookingStatus.PendingInspection => (
+            "Xe đang được kiểm tra sau khi trả",
+            "SmartCar đang đối chiếu tình trạng xe, nhiên liệu và phụ kiện.",
+            Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid
+                ? "Kiểm tra và thanh toán phụ phí được ghi nhận để hoàn tất đơn."
+                : "Vui lòng chờ kết quả kiểm tra và thông báo hoàn tất.",
+            "warning"),
+        BookingStatus.Completed => (
+            "Chuyến thuê đã hoàn tất",
+            "Mọi khoản thanh toán và kiểm tra xe đã hoàn thành.",
+            Model.HasReview ? "Cảm ơn bạn đã sử dụng SmartCar." : "Hãy đánh giá chuyến thuê để giúp SmartCar cải thiện dịch vụ.",
+            "success"),
+        BookingStatus.Rejected => (
+            "Yêu cầu thuê xe bị từ chối",
+            "Đơn không thể tiếp tục xử lý.",
+            "Xem lý do bên dưới và chọn một xe hoặc thời gian thuê khác.",
+            "danger"),
+        BookingStatus.Cancelled => (
+            "Đơn thuê đã được hủy",
+            "Quy trình thuê xe của đơn này đã kết thúc.",
+            Model.RefundAmount > 0 ? "Kiểm tra khoản hoàn tiền bên dưới." : "Bạn có thể quay lại danh sách xe để tạo đơn mới.",
+            "danger"),
+        BookingStatus.NoShow => (
+            "Đã ghi nhận không đến nhận xe",
+            "Đơn bị kết thúc do quá thời gian nhận xe theo quy định.",
+            "Xem lý do và chính sách hoàn tiền bên dưới.",
+            "danger"),
+        _ => (
+            Model.Status.ToVietnamese(),
+            "Thông tin đơn thuê đang được cập nhật.",
+            "Theo dõi thông báo để biết bước tiếp theo.",
+            "secondary")
+    };
+
+    var cancellationConfirmation = Model.RentalPaid
+        ? "Bạn chắc chắn muốn hủy đơn? Đơn đã thanh toán nên khách hàng chủ động hủy sẽ không được hoàn tiền."
+        : "Bạn chắc chắn muốn hủy yêu cầu thuê xe này?";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
     <div>
         <h1 class="h3 mb-1">Đơn thuê #@Model.BookingId</h1>
-        <span class="badge bg-primary">@Model.Status.ToVietnamese()</span>
+        <span class="badge bg-@statusInfo.Item4">@Model.Status.ToVietnamese()</span>
     </div>
     <a class="btn btn-outline-secondary" asp-action="MyBookings">Danh sách đơn</a>
+</div>
+
+<div class="alert alert-@statusInfo.Item4 shadow-sm mb-4" role="status">
+    <div class="text-uppercase small fw-semibold mb-1">Trạng thái hiện tại</div>
+    <h2 class="h5 mb-2">@statusInfo.Item1</h2>
+    <p class="mb-2">@statusInfo.Item2</p>
+    <div><strong>Việc cần làm tiếp theo:</strong> @statusInfo.Item3</div>
+    @if (Model.Status == BookingStatus.PendingPayment && !Model.RentalPaid)
+    {
+        <a class="btn btn-primary btn-sm mt-3" href="#payment-panel">Đi đến thanh toán</a>
+    }
+    else if (Model.Status == BookingStatus.Rented && !hasOpenExtension)
+    {
+        <a class="btn btn-outline-primary btn-sm mt-3" href="#extension-panel">Yêu cầu gia hạn</a>
+    }
+    else if (Model.Status == BookingStatus.Completed && !Model.HasReview)
+    {
+        <a class="btn btn-outline-success btn-sm mt-3" href="#review-panel">Đánh giá chuyến thuê</a>
+    }
 </div>
 
 <div class="row g-4">
     <div class="col-lg-8">
         <div class="card card-body shadow-sm mb-4">
-            <div class="d-flex gap-3">
+            <div class="d-flex gap-3 flex-wrap">
                 @if (!string.IsNullOrWhiteSpace(Model.PrimaryImagePath))
                 {
                     <img src="@Model.PrimaryImagePath" style="width:180px;height:120px;object-fit:cover" class="rounded" alt="Ảnh @Model.VehicleName" />
@@ -34,14 +120,13 @@
         </div>
 
         <div class="card card-body shadow-sm mb-4">
-            <h2 class="h5">Tiến trình đơn thuê</h2>
+            <h2 class="h5">Quy trình thuê xe</h2>
             <ol class="mb-0">
                 <li>Gửi yêu cầu và kiểm tra giấy tờ</li>
-                <li>Áp dụng mã khuyến mãi trước khi thanh toán</li>
                 <li>Quản trị viên xác nhận hoặc từ chối</li>
-                <li>Khách hàng thanh toán tiền thuê</li>
-                <li>Quản trị viên bàn giao xe</li>
-                <li>Gia hạn nếu cần và được quản trị viên duyệt</li>
+                <li>Thanh toán tiền thuê</li>
+                <li>Kiểm tra và bàn giao xe</li>
+                <li>Gia hạn nếu cần và được duyệt</li>
                 <li>Trả xe, xử lý phụ phí và hoàn tất</li>
             </ol>
             @if (!string.IsNullOrWhiteSpace(Model.CancelReason))
@@ -53,13 +138,17 @@
                         <div><strong>Tiền hoàn:</strong> @Model.RefundAmount.ToString("N0") đ</div>
                         <div>@Model.RefundReason</div>
                     }
+                    else if (!string.IsNullOrWhiteSpace(Model.RefundReason))
+                    {
+                        <div>@Model.RefundReason</div>
+                    }
                 </div>
             }
         </div>
 
         @if (Model.Status == BookingStatus.Rented)
         {
-            <div class="card card-body shadow-sm mb-4">
+            <div class="card card-body shadow-sm mb-4" id="extension-panel">
                 <h2 class="h5">Gia hạn thuê xe</h2>
                 @if (hasOpenExtension)
                 {
@@ -67,7 +156,7 @@
                 }
                 else
                 {
-                    <form asp-controller="Extensions" asp-action="SubmitRequest" method="post" class="row g-2">
+                    <form asp-controller="Extensions" asp-action="SubmitRequest" method="post" class="row g-2" data-loading-form>
                         <input type="hidden" name="BookingId" value="@Model.BookingId" />
                         <div class="col-md-5">
                             <label class="form-label">Thời gian trả mới</label>
@@ -75,10 +164,10 @@
                         </div>
                         <div class="col-md-5">
                             <label class="form-label">Ghi chú</label>
-                            <input name="CustomerNote" class="form-control" placeholder="Lý do gia hạn" />
+                            <input name="CustomerNote" class="form-control" maxlength="500" placeholder="Lý do gia hạn" />
                         </div>
                         <div class="col-md-2 d-flex align-items-end">
-                            <button class="btn btn-outline-primary w-100" type="submit">Gửi yêu cầu</button>
+                            <button class="btn btn-outline-primary w-100" type="submit" data-loading-text="Đang gửi...">Gửi yêu cầu</button>
                         </div>
                     </form>
                 }
@@ -109,20 +198,22 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Phụ phí</h2>
-                <table class="table mb-0">
-                @foreach (var charge in Model.AdditionalCharges)
-                {
-                    <tr><td>@charge.ChargeType.ToVietnamese()</td><td>@charge.Description</td><td class="text-end">@charge.Amount.ToString("N0") đ</td></tr>
-                }
-                </table>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                    @foreach (var charge in Model.AdditionalCharges)
+                    {
+                        <tr><td>@charge.ChargeType.ToVietnamese()</td><td>@charge.Description</td><td class="text-end">@charge.Amount.ToString("N0") đ</td></tr>
+                    }
+                    </table>
+                </div>
             </div>
         }
 
         @if (Model.Status == BookingStatus.Completed && !Model.HasReview)
         {
-            <div class="card card-body shadow-sm mb-4">
+            <div class="card card-body shadow-sm mb-4" id="review-panel">
                 <h2 class="h5">Đánh giá chuyến thuê</h2>
-                <form asp-controller="Reviews" asp-action="Create" method="post" class="row g-2">
+                <form asp-controller="Reviews" asp-action="Create" method="post" class="row g-2" data-loading-form>
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-3">
                         <select name="Rating" class="form-select" aria-label="Số sao đánh giá">
@@ -133,8 +224,8 @@
                             <option value="1">1 sao</option>
                         </select>
                     </div>
-                    <div class="col-md-7"><input name="Comment" class="form-control" placeholder="Chia sẻ trải nghiệm của bạn" /></div>
-                    <div class="col-md-2"><button class="btn btn-success w-100" type="submit">Gửi đánh giá</button></div>
+                    <div class="col-md-7"><input name="Comment" maxlength="1000" class="form-control" placeholder="Chia sẻ trải nghiệm của bạn" /></div>
+                    <div class="col-md-2"><button class="btn btn-success w-100" type="submit" data-loading-text="Đang gửi...">Gửi đánh giá</button></div>
                 </form>
             </div>
         }
@@ -144,17 +235,22 @@
             <div class="card card-body border-danger shadow-sm">
                 <h2 class="h5 text-danger">Hủy đơn thuê</h2>
                 <p class="text-muted">Khách hàng chủ động hủy sau khi đã thanh toán sẽ không được hoàn tiền. Quản trị viên hủy trước khi giao xe sẽ hoàn 100%.</p>
-                <form asp-controller="BookingOperations" asp-action="Cancel" method="post" class="row g-2">
+                <form asp-controller="BookingOperations"
+                      asp-action="Cancel"
+                      method="post"
+                      class="row g-2"
+                      data-loading-form
+                      data-confirm="@cancellationConfirmation">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                    <div class="col-md-9"><input name="Reason" class="form-control" required placeholder="Lý do hủy đơn" /></div>
-                    <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit">Hủy đơn</button></div>
+                    <div class="col-md-9"><input name="Reason" maxlength="500" class="form-control" required placeholder="Lý do hủy đơn" /></div>
+                    <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit" data-loading-text="Đang hủy...">Hủy đơn</button></div>
                 </form>
             </div>
         }
     </div>
 
     <div class="col-lg-4">
-        <div class="card card-body shadow-sm sticky-top" style="top:1rem">
+        <div class="card card-body shadow-sm sticky-top" style="top:1rem" id="payment-panel">
             <h2 class="h5">Thanh toán</h2>
             <div class="d-flex justify-content-between"><span>Tiền thuê và gia hạn</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
             @if (Model.DiscountAmount > 0)
@@ -172,48 +268,63 @@
             {
                 @if (string.IsNullOrWhiteSpace(Model.PromotionCode))
                 {
-                    <form asp-controller="Promotions" asp-action="Apply" method="post" class="mt-3">
+                    <form asp-controller="Promotions" asp-action="Apply" method="post" class="mt-3" data-loading-form>
                         <input type="hidden" name="BookingId" value="@Model.BookingId" />
                         <label class="form-label">Mã khuyến mãi</label>
                         <div class="input-group">
-                            <input name="Code" class="form-control text-uppercase" required placeholder="Nhập mã" />
-                            <button class="btn btn-outline-success" type="submit">Áp dụng</button>
+                            <input name="Code" maxlength="50" class="form-control text-uppercase" required placeholder="Nhập mã" />
+                            <button class="btn btn-outline-primary" type="submit" data-loading-text="Đang áp dụng...">Áp dụng</button>
                         </div>
                     </form>
                 }
                 else
                 {
-                    <form asp-controller="Promotions" asp-action="Remove" method="post" class="mt-3">
+                    <form asp-controller="Promotions" asp-action="Remove" method="post" class="mt-3" data-loading-form data-confirm="Gỡ mã khuyến mãi khỏi đơn này?">
                         <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                        <button class="btn btn-sm btn-outline-danger w-100" type="submit">Gỡ mã @Model.PromotionCode</button>
+                        <button class="btn btn-sm btn-outline-danger w-100" type="submit" data-loading-text="Đang gỡ...">Gỡ mã @Model.PromotionCode</button>
                     </form>
                 }
             }
 
             @if (Model.Status == BookingStatus.PendingPayment && !Model.RentalPaid)
             {
-                <form asp-controller="Payments" asp-action="Pay" method="post" class="mt-3">
+                <form asp-controller="Payments"
+                      asp-action="Pay"
+                      method="post"
+                      class="mt-3"
+                      data-loading-form
+                      data-confirm="Xác nhận thanh toán tiền thuê cho đơn này?">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <input type="hidden" name="type" value="@PaymentType.Rental" />
-                    <button class="btn btn-primary w-100" type="submit">Thanh toán tiền thuê mô phỏng</button>
+                    <button class="btn btn-primary w-100" type="submit" data-loading-text="Đang thanh toán...">Thanh toán tiền thuê mô phỏng</button>
                 </form>
             }
 
             @if (Model.Status == BookingStatus.Rented && !Model.ExtensionPaid)
             {
-                <form asp-controller="Payments" asp-action="Pay" method="post" class="mt-3">
+                <form asp-controller="Payments"
+                      asp-action="Pay"
+                      method="post"
+                      class="mt-3"
+                      data-loading-form
+                      data-confirm="Xác nhận thanh toán tiền gia hạn?">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <input type="hidden" name="type" value="@PaymentType.Extension" />
-                    <button class="btn btn-info w-100" type="submit">Thanh toán tiền gia hạn</button>
+                    <button class="btn btn-primary w-100" type="submit" data-loading-text="Đang thanh toán...">Thanh toán tiền gia hạn</button>
                 </form>
             }
 
             @if (Model.Status == BookingStatus.PendingInspection && Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid)
             {
-                <form asp-controller="Payments" asp-action="Pay" method="post" class="mt-3">
+                <form asp-controller="Payments"
+                      asp-action="Pay"
+                      method="post"
+                      class="mt-3"
+                      data-loading-form
+                      data-confirm="Xác nhận thanh toán khoản phụ phí được ghi nhận?">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <input type="hidden" name="type" value="@PaymentType.AdditionalCharge" />
-                    <button class="btn btn-warning w-100" type="submit">Thanh toán phụ phí mô phỏng</button>
+                    <button class="btn btn-warning w-100" type="submit" data-loading-text="Đang thanh toán...">Thanh toán phụ phí mô phỏng</button>
                 </form>
             }
 

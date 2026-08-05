@@ -1,74 +1,100 @@
 @model SmartCar.Web.ViewModels.VehicleFormViewModel
 
-<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+<div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3"></div>
 <input asp-for="VehicleId" type="hidden" />
 <input asp-for="RowVersionBase64" type="hidden" />
 
 <div class="row g-3">
     <div class="col-md-6">
-        <label asp-for="BrandId" class="form-label"></label>
+        <label asp-for="BrandId" class="form-label fw-semibold"></label>
         <select asp-for="BrandId" asp-items="ViewBag.Brands" class="form-select"></select>
-        <span asp-validation-for="BrandId" class="text-danger"></span>
+        <span asp-validation-for="BrandId" class="text-danger small"></span>
     </div>
     <div class="col-md-6">
-        <label asp-for="VehicleName" class="form-label"></label>
+        <label asp-for="VehicleName" class="form-label fw-semibold"></label>
         <input asp-for="VehicleName" class="form-control" />
-        <span asp-validation-for="VehicleName" class="text-danger"></span>
+        <span asp-validation-for="VehicleName" class="text-danger small"></span>
     </div>
     <div class="col-md-6">
-        <label asp-for="VehicleModel" class="form-label"></label>
+        <label asp-for="VehicleModel" class="form-label fw-semibold"></label>
         <input asp-for="VehicleModel" class="form-control" />
+        <span asp-validation-for="VehicleModel" class="text-danger small"></span>
     </div>
     <div class="col-md-6">
-        <label asp-for="LicensePlate" class="form-label"></label>
-        <input asp-for="LicensePlate" class="form-control" />
-        <span asp-validation-for="LicensePlate" class="text-danger"></span>
+        <label asp-for="LicensePlate" class="form-label fw-semibold"></label>
+        <input asp-for="LicensePlate" class="form-control text-uppercase" />
+        <span asp-validation-for="LicensePlate" class="text-danger small"></span>
     </div>
     <div class="col-md-4">
-        <label asp-for="ManufactureYear" class="form-label"></label>
-        <input asp-for="ManufactureYear" class="form-control" />
+        <label asp-for="ManufactureYear" class="form-label fw-semibold"></label>
+        <input asp-for="ManufactureYear" type="number" min="1980" max="2100" class="form-control" />
+        <span asp-validation-for="ManufactureYear" class="text-danger small"></span>
     </div>
     <div class="col-md-4">
-        <label asp-for="Seats" class="form-label"></label>
-        <input asp-for="Seats" class="form-control" />
+        <label asp-for="Seats" class="form-label fw-semibold"></label>
+        <input asp-for="Seats" type="number" min="1" max="100" class="form-control" />
+        <span asp-validation-for="Seats" class="text-danger small"></span>
     </div>
     <div class="col-md-4">
-        <label asp-for="Color" class="form-label"></label>
+        <label asp-for="Color" class="form-label fw-semibold"></label>
         <input asp-for="Color" class="form-control" />
+        <span asp-validation-for="Color" class="text-danger small"></span>
     </div>
     <div class="col-md-6">
-        <label asp-for="Transmission" class="form-label"></label>
+        <label asp-for="Transmission" class="form-label fw-semibold"></label>
         <select asp-for="Transmission" class="form-select">
             <option>Tự động</option>
             <option>Số sàn</option>
         </select>
+        <span asp-validation-for="Transmission" class="text-danger small"></span>
     </div>
     <div class="col-md-6">
-        <label asp-for="FuelType" class="form-label"></label>
+        <label asp-for="FuelType" class="form-label fw-semibold"></label>
         <select asp-for="FuelType" class="form-select">
             <option>Xăng</option>
             <option>Dầu</option>
             <option>Điện</option>
             <option>Hybrid</option>
         </select>
+        <span asp-validation-for="FuelType" class="text-danger small"></span>
     </div>
     <div class="col-md-6">
-        <label asp-for="DailyPrice" class="form-label"></label>
-        <input asp-for="DailyPrice" class="form-control" />
-        <span asp-validation-for="DailyPrice" class="text-danger"></span>
+        <label asp-for="DailyPrice" class="form-label fw-semibold"></label>
+        <div class="input-group">
+            <input asp-for="DailyPrice" type="number" min="1" class="form-control" />
+            <span class="input-group-text">đ/ngày</span>
+        </div>
+        <span asp-validation-for="DailyPrice" class="text-danger small"></span>
     </div>
     <div class="col-md-6">
-        <label asp-for="CurrentMileage" class="form-label"></label>
-        <input asp-for="CurrentMileage" class="form-control" />
+        <label asp-for="CurrentMileage" class="form-label fw-semibold"></label>
+        <div class="input-group">
+            <input asp-for="CurrentMileage" type="number" min="0" class="form-control" />
+            <span class="input-group-text">km</span>
+        </div>
+        <span asp-validation-for="CurrentMileage" class="text-danger small"></span>
     </div>
     <div class="col-12">
-        <label asp-for="Description" class="form-label"></label>
-        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+        <label asp-for="Description" class="form-label fw-semibold"></label>
+        <textarea asp-for="Description" class="form-control" rows="4" placeholder="Mô tả tình trạng, trang bị và lưu ý khi thuê xe"></textarea>
+        <span asp-validation-for="Description" class="text-danger small"></span>
     </div>
     <div class="col-12">
-        <label asp-for="Images" class="form-label"></label>
-        <input asp-for="Images" type="file" multiple accept=".jpg,.jpeg,.png,.webp" class="form-control" />
-        <div class="form-text">Tối đa 10 ảnh, mỗi ảnh không quá 5 MB.</div>
-        <span asp-validation-for="Images" class="text-danger"></span>
+        <label asp-for="Images" class="form-label fw-semibold"></label>
+        <input asp-for="Images"
+               type="file"
+               multiple
+               accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+               class="form-control"
+               data-image-input
+               data-preview-target="#vehicle-image-preview"
+               data-file-info-target="#vehicle-file-info" />
+        <div class="form-text">Tối đa 10 ảnh cho mỗi xe, mỗi ảnh không quá 5 MB. Chấp nhận JPG, PNG hoặc WEBP.</div>
+        <span asp-validation-for="Images" class="text-danger small"></span>
+        <div id="vehicle-file-info" class="small text-muted mt-2 d-none"></div>
+        <div id="vehicle-image-preview" class="mt-3 d-none">
+            <div class="row g-2" data-preview-list></div>
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn lại ảnh</button>
+        </div>
     </div>
 </div>

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -10,18 +11,17 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Customer)]
 public sealed class DocumentsController : Controller
 {
-    private static readonly HashSet<string> AllowedExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp" };
+    private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IDocumentService _documentService;
-    private readonly IWebHostEnvironment _environment;
+    private readonly ISecureDocumentStorage _storage;
 
     public DocumentsController(
         IDocumentService documentService,
-        IWebHostEnvironment environment)
+        ISecureDocumentStorage storage)
     {
         _documentService = documentService;
-        _environment = environment;
+        _storage = storage;
     }
 
     [HttpGet]
@@ -39,6 +39,33 @@ public sealed class DocumentsController : Controller
         return View(new DocumentUploadViewModel());
     }
 
+    [HttpGet]
+    public async Task<IActionResult> ViewImage(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return Challenge();
+        }
+
+        var document = await _documentService.GetDocumentAsync(id, cancellationToken);
+        if (document is null || document.CustomerId != customerId)
+        {
+            return NotFound();
+        }
+
+        if (!_storage.TryResolve(document.ImagePath, out var fullPath, out var contentType))
+        {
+            return NotFound();
+        }
+
+        Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        Response.Headers.Pragma = "no-cache";
+        return PhysicalFile(fullPath, contentType, enableRangeProcessing: false);
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Submit(
@@ -51,26 +78,31 @@ public sealed class DocumentsController : Controller
             return Challenge();
         }
 
-        ValidateImage(model.Image);
+        var imageError = await ImageFileValidator.ValidateAsync(
+            model.Image,
+            MaximumImageBytes,
+            cancellationToken);
+        if (imageError is not null)
+        {
+            ModelState.AddModelError(nameof(DocumentUploadViewModel.Image), imageError);
+        }
+
         if (!ModelState.IsValid || model.Image is null)
         {
-            ViewBag.Documents = await _documentService.GetCustomerDocumentsAsync(
-                customerId,
-                cancellationToken);
+            await LoadDocumentsAsync(customerId, cancellationToken);
             return View("Index", model);
         }
 
-        var extension = Path.GetExtension(model.Image.FileName).ToLowerInvariant();
-        var relativeFolder = $"uploads/documents/{customerId}";
-        var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
-        Directory.CreateDirectory(folder);
-        var fileName = $"{model.DocumentType.ToLowerInvariant()}-{Guid.NewGuid():N}{extension}";
-        var fullPath = Path.Combine(folder, fileName);
+        var existingDocuments = await _documentService.GetCustomerDocumentsAsync(
+            customerId,
+            cancellationToken);
+        var existingDocument = existingDocuments.FirstOrDefault(item =>
+            item.DocumentType == model.DocumentType);
 
-        await using (var stream = System.IO.File.Create(fullPath))
-        {
-            await model.Image.CopyToAsync(stream, cancellationToken);
-        }
+        var newStoredPath = await _storage.SaveAsync(
+            model.Image,
+            customerId,
+            cancellationToken);
 
         var result = await _documentService.SubmitAsync(
             customerId,
@@ -78,40 +110,38 @@ public sealed class DocumentsController : Controller
                 model.DocumentType,
                 model.DocumentNumber,
                 model.ExpiryDate,
-                $"/{relativeFolder}/{fileName}"),
+                newStoredPath),
             cancellationToken);
 
         if (!result.Succeeded)
         {
-            System.IO.File.Delete(fullPath);
+            _storage.Delete(newStoredPath);
             TempData["ErrorMessage"] = string.Join("; ", result.Errors);
         }
         else
         {
-            TempData["SuccessMessage"] = "Đã gửi giấy tờ. Vui lòng chờ Admin xác minh.";
+            if (existingDocument is not null &&
+                !string.Equals(
+                    existingDocument.ImagePath,
+                    newStoredPath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _storage.Delete(existingDocument.ImagePath);
+            }
+
+            TempData["SuccessMessage"] =
+                "Đã gửi giấy tờ thành công. Hồ sơ đang chờ Quản trị viên xác minh.";
         }
 
         return RedirectToAction(nameof(Index));
     }
 
-    private void ValidateImage(IFormFile? image)
+    private async Task LoadDocumentsAsync(
+        string customerId,
+        CancellationToken cancellationToken)
     {
-        if (image is null || image.Length == 0)
-        {
-            ModelState.AddModelError(nameof(DocumentUploadViewModel.Image), "Vui lòng chọn ảnh giấy tờ.");
-            return;
-        }
-
-        if (!AllowedExtensions.Contains(Path.GetExtension(image.FileName)))
-        {
-            ModelState.AddModelError(nameof(DocumentUploadViewModel.Image),
-                "Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.");
-        }
-
-        if (image.Length > 5 * 1024 * 1024)
-        {
-            ModelState.AddModelError(nameof(DocumentUploadViewModel.Image),
-                "Ảnh giấy tờ không được vượt quá 5 MB.");
-        }
+        ViewBag.Documents = await _documentService.GetCustomerDocumentsAsync(
+            customerId,
+            cancellationToken);
     }
 }
