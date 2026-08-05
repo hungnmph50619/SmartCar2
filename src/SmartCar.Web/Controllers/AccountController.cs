@@ -101,7 +101,7 @@ public class AccountController : Controller
             return LocalRedirect(model.ReturnUrl);
         }
 
-        return result.IsManager
+        return result.IsAdmin
             ? RedirectToAction("Index", "Dashboard")
             : RedirectToAction("Index", "Home");
     }
