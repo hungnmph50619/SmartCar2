@@ -1,11 +1,11 @@
 @model SmartCar.Application.Features.Dashboard.DashboardDto
 @{
-    ViewData["Title"] = "Dashboard quản lý";
+    ViewData["Title"] = "Tổng quan quản lý";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h1 class="h2 mb-1">Dashboard quản lý</h1>
+        <h1 class="h2 mb-1">Tổng quan quản lý</h1>
         <p class="text-muted mb-0">Theo dõi đội xe, đơn thuê và doanh thu SmartCar.</p>
     </div>
     <div>
@@ -25,7 +25,7 @@
     <div class="col-md-3"><div class="card card-body"><div class="text-muted">Đơn chờ xác nhận</div><div class="h2">@Model.PendingBookings</div></div></div>
     <div class="col-md-3"><div class="card card-body"><div class="text-muted">Giao xe hôm nay</div><div class="h2">@Model.TodayPickups</div></div></div>
     <div class="col-md-3"><div class="card card-body"><div class="text-muted">Trả xe hôm nay</div><div class="h2">@Model.TodayReturns</div></div></div>
-    <div class="col-md-3"><div class="card card-body"><div class="text-muted">Chờ kiểm tra/Bảo trì</div><div class="h2">@(Model.InspectionVehicles + Model.MaintenanceVehicles)</div></div></div>
+    <div class="col-md-3"><div class="card card-body"><div class="text-muted">Chờ kiểm tra hoặc bảo trì</div><div class="h2">@(Model.InspectionVehicles + Model.MaintenanceVehicles)</div></div></div>
 </div>
 
 <div class="card card-body shadow-sm">
@@ -44,7 +44,7 @@
                     <td>@booking.CustomerName</td>
                     <td>@booking.VehicleName<br /><small>@booking.LicensePlate</small></td>
                     <td>@booking.PickupDate.ToString("dd/MM HH:mm") → @booking.ReturnDate.ToString("dd/MM HH:mm")</td>
-                    <td><span class="badge bg-secondary">@booking.Status</span></td>
+                    <td><span class="badge bg-secondary">@booking.Status.ToVietnamese()</span></td>
                     <td><a class="btn btn-sm btn-outline-primary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.BookingId">Xử lý</a></td>
                 </tr>
             }
