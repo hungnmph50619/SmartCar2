@@ -21,8 +21,13 @@
                     <span asp-validation-for="Name" class="text-danger"></span>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Loại giảm</label>
-                    <select asp-for="PromotionType" asp-items="Html.GetEnumSelectList<PromotionType>()" class="form-select"></select>
+                    <label class="form-label">Loại giảm giá</label>
+                    <select asp-for="PromotionType" class="form-select">
+                        @foreach (var type in Enum.GetValues<PromotionType>())
+                        {
+                            <option value="@type">@type.ToVietnamese()</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Giá trị</label>
