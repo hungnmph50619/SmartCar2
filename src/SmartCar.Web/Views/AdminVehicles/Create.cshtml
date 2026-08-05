@@ -1,0 +1,27 @@
+@model AdminVehicleFormViewModel
+@{
+    ViewData["Title"] = "Thêm xe mới";
+}
+
+<div class="admin-page-head">
+    <div>
+        <a class="admin-panel__link" asp-controller="Dashboard" asp-action="Vehicles">← Quay lại đội xe</a>
+        <h1 class="mt-2">Thêm xe mới</h1>
+        <p>Khai báo thông tin, giá thuê và hình ảnh để đưa xe vào đội xe SmartCar.</p>
+    </div>
+</div>
+
+<form asp-controller="AdminVehicles" asp-action="Create" method="post" enctype="multipart/form-data">
+    <partial name="_VehicleFormFields" model="Model" />
+
+    <section class="admin-panel mt-3">
+        <div class="admin-panel__body d-flex flex-wrap justify-content-end gap-2">
+            <a class="admin-btn" asp-controller="Dashboard" asp-action="Vehicles">Hủy</a>
+            <button class="admin-btn admin-btn--primary" type="submit">＋ Thêm xe vào hệ thống</button>
+        </div>
+    </section>
+</form>
+
+@section Scripts {
+    <partial name="_VehicleFormScripts" />
+}
