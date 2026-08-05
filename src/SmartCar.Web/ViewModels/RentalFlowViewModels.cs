@@ -29,7 +29,7 @@ public sealed class VehicleFormViewModel
 
     [StringLength(100)]
     [Display(Name = "Dòng xe")]
-    public string? Model { get; set; }
+    public string? VehicleModel { get; set; }
 
     [Required]
     [StringLength(20)]
