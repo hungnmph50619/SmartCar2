@@ -1,0 +1,113 @@
+@model AdminDocumentListViewModel
+@{
+    ViewData["Title"] = "Xác minh giấy tờ";
+}
+
+<div class="admin-page-head">
+    <div>
+        <h1>Xác minh giấy tờ</h1>
+        <p>Duyệt CCCD và giấy phép lái xe trước khi khách nhận xe.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-action="Customers">♙ Danh sách khách hàng</a>
+    </div>
+</div>
+
+<div class="admin-tabs">
+    <a class="admin-tab @(!Model.Status.HasValue ? "is-active" : "")" asp-action="Documents">Tất cả</a>
+    @foreach (var status in Enum.GetValues<DocumentStatus>())
+    {
+        <a class="admin-tab @(Model.Status == status ? "is-active" : "")" asp-action="Documents" asp-route-status="@status">@AdminDisplayHelper.DocumentLabel(status)</a>
+    }
+</div>
+
+@if (Model.Documents.Count == 0)
+{
+    <section class="admin-panel"><div class="admin-empty"><span class="admin-empty__icon">✓</span>Không có giấy tờ phù hợp với trạng thái đã chọn.</div></section>
+}
+else
+{
+    <div class="admin-document-grid">
+        @foreach (var document in Model.Documents)
+        {
+            <article class="admin-document-card">
+                <a class="admin-document-card__image" href="@document.ImagePath" target="_blank" rel="noopener">
+                    @if (!string.IsNullOrWhiteSpace(document.ImagePath))
+                    {
+                        <img src="@document.ImagePath" alt="@AdminDisplayHelper.DocumentTypeLabel(document.DocumentType) của @document.CustomerName" />
+                    }
+                    else
+                    {
+                        <span>▤</span>
+                    }
+                </a>
+                <div class="admin-document-card__body">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <h3>@AdminDisplayHelper.DocumentTypeLabel(document.DocumentType)</h3>
+                            <p>@document.CustomerName · @document.CustomerEmail</p>
+                        </div>
+                        <span class="admin-status admin-status--@AdminDisplayHelper.DocumentCss(document.Status)">@AdminDisplayHelper.DocumentLabel(document.Status)</span>
+                    </div>
+
+                    <div class="admin-document-card__meta">
+                        <div><small>Số giấy tờ</small><strong>@(string.IsNullOrWhiteSpace(document.DocumentNumber) ? "Chưa nhập" : document.DocumentNumber)</strong></div>
+                        <div><small>Hết hạn</small><strong>@(document.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Không có")</strong></div>
+                        <div><small>Ngày tải lên</small><strong>@document.CreatedAt.ToString("dd/MM/yyyy")</strong></div>
+                        <div><small>Khách hàng</small><strong>@document.CustomerName</strong></div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(document.RejectionReason))
+                    {
+                        <div class="admin-alert admin-alert--danger py-2 mb-2">@document.RejectionReason</div>
+                    }
+
+                    @if (document.Status == DocumentStatus.Pending)
+                    {
+                        <div class="admin-document-card__actions">
+                            <form asp-action="ReviewDocument" method="post">
+                                <input type="hidden" name="id" value="@document.CustomerDocumentId" />
+                                <input type="hidden" name="newStatus" value="@DocumentStatus.Verified" />
+                                <button class="admin-btn admin-btn--success" type="submit">✓ Duyệt</button>
+                            </form>
+                            <button class="admin-btn admin-btn--danger" type="button" data-bs-toggle="modal" data-bs-target="#rejectDocument-@document.CustomerDocumentId">Yêu cầu bổ sung</button>
+                        </div>
+                    }
+                    else if (document.Status == DocumentStatus.Rejected)
+                    {
+                        <div class="admin-document-card__actions">
+                            <form asp-action="ReviewDocument" method="post">
+                                <input type="hidden" name="id" value="@document.CustomerDocumentId" />
+                                <input type="hidden" name="newStatus" value="@DocumentStatus.Verified" />
+                                <button class="admin-btn admin-btn--success" type="submit">Duyệt lại</button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </article>
+
+            <div class="modal fade admin-modal-form" id="rejectDocument-@document.CustomerDocumentId" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <form asp-action="ReviewDocument" method="post">
+                            <input type="hidden" name="id" value="@document.CustomerDocumentId" />
+                            <input type="hidden" name="newStatus" value="@DocumentStatus.Rejected" />
+                            <div class="modal-header">
+                                <div><h2 class="modal-title fs-5">Yêu cầu khách bổ sung</h2><small class="text-muted">@AdminDisplayHelper.DocumentTypeLabel(document.DocumentType) · @document.CustomerName</small></div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                            </div>
+                            <div class="modal-body">
+                                <label class="form-label fw-semibold" for="reason-@document.CustomerDocumentId">Lý do</label>
+                                <textarea id="reason-@document.CustomerDocumentId" class="form-control" name="rejectionReason" rows="4" required placeholder="Ví dụ: ảnh bị mờ, thiếu góc, thông tin không trùng khớp..."></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="admin-btn" data-bs-dismiss="modal">Đóng</button>
+                                <button type="submit" class="admin-btn admin-btn--danger">Gửi yêu cầu bổ sung</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
