@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Identity;
 
 namespace SmartCar.Infrastructure.Identity;
 
-internal sealed class VietnameseIdentityErrorDescriber : IdentityErrorDescriber
+public sealed class VietnameseIdentityErrorDescriber : IdentityErrorDescriber
 {
     public override IdentityError DefaultError() =>
         Error(nameof(DefaultError), "Đã xảy ra lỗi. Vui lòng thử lại.");
