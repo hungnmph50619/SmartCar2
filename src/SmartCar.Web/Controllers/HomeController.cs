@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Identity;
 using SmartCar.Web.Models;
 
 namespace SmartCar.Web.Controllers;
@@ -10,13 +12,16 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly IVehicleService _vehicleService;
+    private readonly UserManager<ApplicationUser> _userManager;
 
     public HomeController(
         ILogger<HomeController> logger,
-        IVehicleService vehicleService)
+        IVehicleService vehicleService,
+        UserManager<ApplicationUser> userManager)
     {
         _logger = logger;
         _vehicleService = vehicleService;
+        _userManager = userManager;
     }
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
@@ -27,6 +32,12 @@ public class HomeController : Controller
             .OrderBy(vehicle => vehicle.DailyPrice)
             .Take(3)
             .ToArray();
+
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var currentUser = await _userManager.GetUserAsync(User);
+            ViewBag.GreetingName = GetFriendlyName(currentUser?.FullName);
+        }
 
         return View(featuredVehicles);
     }
@@ -42,5 +53,17 @@ public class HomeController : Controller
         {
             RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier
         });
+    }
+
+    private static string? GetFriendlyName(string? fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return null;
+        }
+
+        return fullName
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault();
     }
 }

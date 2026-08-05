@@ -34,10 +34,37 @@ public sealed class VehiclesController : Controller
         await LoadBrandsAsync(model.BrandId, cancellationToken);
         ViewBag.Search = model;
 
-        if (model.PickupDate >= model.ReturnDate)
+        var now = DateTime.Now;
+        if (model.PickupDate <= now)
         {
-            ModelState.AddModelError(string.Empty,
-                "Ngày giờ nhận xe phải trước ngày giờ trả xe.");
+            ModelState.AddModelError(
+                nameof(model.PickupDate),
+                "Ngày giờ nhận xe phải sau thời điểm hiện tại.");
+        }
+
+        if (model.ReturnDate <= model.PickupDate)
+        {
+            ModelState.AddModelError(
+                nameof(model.ReturnDate),
+                "Ngày giờ trả xe phải sau ngày giờ nhận xe.");
+        }
+
+        if (model.Seats is <= 0)
+        {
+            ModelState.AddModelError(
+                nameof(model.Seats),
+                "Số chỗ tối thiểu phải lớn hơn 0.");
+        }
+
+        if (model.MaxDailyPrice is <= 0)
+        {
+            ModelState.AddModelError(
+                nameof(model.MaxDailyPrice),
+                "Giá thuê tối đa phải lớn hơn 0.");
+        }
+
+        if (!ModelState.IsValid)
+        {
             return View(Array.Empty<VehicleDto>());
         }
 

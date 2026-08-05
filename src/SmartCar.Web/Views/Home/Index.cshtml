@@ -5,9 +5,18 @@
     var pickupDate = DateTime.Today.AddDays(1).AddHours(9);
     var returnDate = pickupDate.AddDays(1);
     var heroVehicle = Model.FirstOrDefault();
+    var greetingName = ViewBag.GreetingName as string;
+    var isCustomer = User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer);
+    var isAdmin = User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Admin);
+    var quickSearchHeading = isCustomer && !string.IsNullOrWhiteSpace(greetingName)
+        ? $"Chào {greetingName}, bạn muốn nhận xe khi nào?"
+        : "Bạn muốn nhận xe khi nào?";
+    var heroDescription = isCustomer
+        ? "Chọn thời gian, tìm xe còn trống và theo dõi toàn bộ chuyến thuê trên một hệ thống duy nhất."
+        : "Tìm xe phù hợp, gửi yêu cầu thuê, thanh toán và theo dõi toàn bộ hành trình trên một hệ thống duy nhất.";
 }
 
-<section class="home-hero mb-5">
+<section class="home-hero">
     <div class="row align-items-center g-5">
         <div class="col-lg-6">
             <div class="hero-kicker mb-3">
@@ -18,23 +27,20 @@
                 Thuê xe dễ dàng,
                 <span>chủ động mọi hành trình</span>
             </h1>
-            <p class="hero-description mb-4">
-                Tìm xe phù hợp, gửi yêu cầu thuê, thanh toán và theo dõi toàn bộ hành trình
-                ngay trên một hệ thống duy nhất.
-            </p>
+            <p class="hero-description mb-4">@heroDescription</p>
 
             <div class="d-flex flex-wrap gap-3 mb-4">
-                <a asp-controller="Vehicles" asp-action="Index" class="btn btn-primary btn-lg px-4">
-                    Tìm xe ngay
-                    <span aria-hidden="true">→</span>
+                <a href="#quick-search" class="btn btn-primary btn-lg px-4">
+                    Tìm xe theo thời gian
+                    <span aria-hidden="true">↓</span>
                 </a>
-                @if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Admin))
+                @if (isAdmin)
                 {
                     <a asp-controller="Dashboard" asp-action="Index" class="btn btn-light btn-lg px-4 hero-secondary-button">
                         Mở trang tổng quan
                     </a>
                 }
-                else if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
+                else if (isCustomer)
                 {
                     <a asp-controller="Bookings" asp-action="MyBookings" class="btn btn-light btn-lg px-4 hero-secondary-button">
                         Xem đơn của tôi
@@ -111,16 +117,21 @@
     </div>
 </section>
 
-<section class="home-search-card mb-5" aria-labelledby="quick-search-title">
+<section id="quick-search" class="home-search-card" aria-labelledby="quick-search-title">
     <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
         <div>
             <span class="section-eyebrow">TÌM XE NHANH</span>
-            <h2 id="quick-search-title" class="h3 mb-1">Bạn muốn nhận xe khi nào?</h2>
+            <h2 id="quick-search-title" class="h3 mb-1">@quickSearchHeading</h2>
         </div>
-        <span class="text-muted">Nhập theo giờ Việt Nam để xem đúng xe còn trống</span>
+        <span class="text-muted">Định dạng ngày/tháng/năm, sử dụng giờ 24 giờ</span>
     </div>
 
-    <form asp-controller="Vehicles" asp-action="Index" method="get" class="row g-3 align-items-end" id="homeVehicleSearchForm" novalidate>
+    <form asp-controller="Vehicles"
+          asp-action="Index"
+          method="get"
+          class="row g-3 align-items-start"
+          data-vehicle-search-form
+          novalidate>
         <div class="col-lg-4 col-md-6">
             <label for="homePickupDisplay" class="form-label fw-semibold">Ngày giờ nhận xe</label>
             <div class="vn-datetime-control">
@@ -131,14 +142,19 @@
                        inputmode="numeric"
                        autocomplete="off"
                        class="form-control form-control-lg vn-datetime-input"
-                       aria-describedby="homePickupHint" />
+                       aria-describedby="homePickupHint homePickupError"
+                       data-vn-datetime="pickup" />
                 <svg class="vn-datetime-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <rect x="3" y="5" width="18" height="16" rx="2"></rect>
                     <path d="M16 3v4M8 3v4M3 10h18"></path>
                 </svg>
             </div>
             <small id="homePickupHint" class="vn-datetime-hint">Ví dụ: 06/08/2026 09:00</small>
-            <input id="homePickupDate" type="hidden" name="PickupDate" value="@pickupDate.ToString("yyyy-MM-ddTHH:mm")" />
+            <span id="homePickupError" class="search-field-error" data-vn-datetime-error="pickup" role="alert"></span>
+            <input type="hidden"
+                   name="PickupDate"
+                   value="@pickupDate.ToString("yyyy-MM-ddTHH:mm")"
+                   data-vn-datetime-hidden="pickup" />
         </div>
         <div class="col-lg-4 col-md-6">
             <label for="homeReturnDisplay" class="form-label fw-semibold">Ngày giờ trả xe</label>
@@ -150,14 +166,19 @@
                        inputmode="numeric"
                        autocomplete="off"
                        class="form-control form-control-lg vn-datetime-input"
-                       aria-describedby="homeReturnHint" />
+                       aria-describedby="homeReturnHint homeReturnError"
+                       data-vn-datetime="return" />
                 <svg class="vn-datetime-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <rect x="3" y="5" width="18" height="16" rx="2"></rect>
                     <path d="M16 3v4M8 3v4M3 10h18"></path>
                 </svg>
             </div>
             <small id="homeReturnHint" class="vn-datetime-hint">Ngày trả xe phải sau ngày nhận xe</small>
-            <input id="homeReturnDate" type="hidden" name="ReturnDate" value="@returnDate.ToString("yyyy-MM-ddTHH:mm")" />
+            <span id="homeReturnError" class="search-field-error" data-vn-datetime-error="return" role="alert"></span>
+            <input type="hidden"
+                   name="ReturnDate"
+                   value="@returnDate.ToString("yyyy-MM-ddTHH:mm")"
+                   data-vn-datetime-hidden="return" />
         </div>
         <div class="col-lg-2 col-md-6">
             <label for="homeSeats" class="form-label fw-semibold">Số chỗ tối thiểu</label>
@@ -168,18 +189,24 @@
                 <option value="7">7 chỗ</option>
             </select>
         </div>
-        <div class="col-lg-2 col-md-6">
-            <button type="submit" class="btn btn-primary btn-lg w-100 home-search-button">
-                Tìm xe
+        <div class="col-lg-2 col-md-6 search-submit-column">
+            <button type="submit"
+                    class="btn btn-primary btn-lg w-100 home-search-button"
+                    data-search-submit>
+                <span data-search-submit-label>Tìm xe</span>
+                <span class="d-none search-button-loading" data-search-submit-loading>
+                    <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                    Đang tìm...
+                </span>
             </button>
         </div>
         <div class="col-12">
-            <div id="homeSearchError" class="home-search-error" role="alert" aria-live="polite"></div>
+            <div class="home-search-error" data-search-error role="alert" aria-live="polite"></div>
         </div>
     </form>
 </section>
 
-<section class="mb-5" aria-labelledby="featured-title">
+<section class="home-featured-section" aria-labelledby="featured-title">
     <div class="section-heading d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
         <div>
             <span class="section-eyebrow">LỰA CHỌN NỔI BẬT</span>
@@ -194,8 +221,12 @@
     {
         <div class="empty-featured-state">
             <div class="empty-featured-icon">🚗</div>
-            <h3 class="h5">Chưa có xe sẵn sàng</h3>
-            <p class="text-muted mb-0">Danh sách xe nổi bật sẽ xuất hiện khi có xe ở trạng thái sẵn sàng.</p>
+            <h3 class="h5">Hiện chưa có xe sẵn sàng</h3>
+            <p class="text-muted">Bạn có thể thay đổi thời gian tìm kiếm hoặc xem lại danh sách xe sau.</p>
+            <div class="empty-featured-actions">
+                <a href="#quick-search" class="btn btn-primary">Thay đổi thời gian</a>
+                <a asp-controller="Vehicles" asp-action="Index" class="btn btn-outline-primary">Xem tất cả xe</a>
+            </div>
         </div>
     }
     else
@@ -251,8 +282,8 @@
     }
 </section>
 
-<section class="home-benefits mb-5" aria-labelledby="benefits-title">
-    <div class="text-center mb-5">
+<section class="home-benefits" aria-labelledby="benefits-title">
+    <div class="text-center">
         <span class="section-eyebrow">VÌ SAO CHỌN SMARTCAR?</span>
         <h2 id="benefits-title" class="display-6 fw-bold">An tâm từ lúc đặt đến lúc trả xe</h2>
         <p class="text-muted mx-auto section-subtitle">
@@ -292,17 +323,14 @@
     </div>
 </section>
 
-<section class="rental-process mb-5" aria-labelledby="process-title">
+<section class="rental-process" aria-labelledby="process-title">
     <div class="row align-items-center g-5">
         <div class="col-lg-4">
             <span class="section-eyebrow section-eyebrow-light">QUY TRÌNH THUÊ XE</span>
             <h2 id="process-title" class="display-6 fw-bold text-white">Bốn bước để bắt đầu hành trình</h2>
-            <p class="process-intro">
+            <p class="process-intro mb-0">
                 SmartCar giúp bạn hoàn tất các bước thuê xe theo một quy trình rõ ràng và dễ theo dõi.
             </p>
-            <a asp-controller="Vehicles" asp-action="Index" class="btn btn-light btn-lg px-4">
-                Chọn xe ngay
-            </a>
         </div>
         <div class="col-lg-8">
             <div class="row g-3">
@@ -339,126 +367,17 @@
     </div>
 </section>
 
-<section class="home-cta mb-4">
+<section class="home-cta">
     <div>
         <span class="section-eyebrow">SẴN SÀNG KHỞI HÀNH?</span>
         <h2 class="h2 fw-bold mb-2">Tìm chiếc xe phù hợp cho hành trình tiếp theo</h2>
-        <p class="text-muted mb-0">Chọn thời gian, xem xe còn trống và gửi yêu cầu thuê ngay hôm nay.</p>
+        <p class="text-muted mb-0">Chọn thời gian nhận và trả xe để xem đúng xe còn trống.</p>
     </div>
-    <a asp-controller="Vehicles" asp-action="Index" class="btn btn-primary btn-lg px-4">
-        Khám phá đội xe
+    <a href="#quick-search" class="btn btn-primary btn-lg px-4">
+        Tìm xe theo thời gian
     </a>
 </section>
 
 @section Scripts {
-    <script>
-        (function () {
-            const form = document.getElementById('homeVehicleSearchForm');
-            const pickupDisplay = document.getElementById('homePickupDisplay');
-            const returnDisplay = document.getElementById('homeReturnDisplay');
-            const pickupHidden = document.getElementById('homePickupDate');
-            const returnHidden = document.getElementById('homeReturnDate');
-            const errorBox = document.getElementById('homeSearchError');
-
-            if (!form || !pickupDisplay || !returnDisplay || !pickupHidden || !returnHidden || !errorBox) {
-                return;
-            }
-
-            function parseVietnameseDateTime(value) {
-                const match = /^\s*(\d{2})\/(\d{2})\/(\d{4})\s+([01]\d|2[0-3]):([0-5]\d)\s*$/.exec(value);
-                if (!match) {
-                    return null;
-                }
-
-                const day = Number(match[1]);
-                const month = Number(match[2]);
-                const year = Number(match[3]);
-                const hour = Number(match[4]);
-                const minute = Number(match[5]);
-                const result = new Date(year, month - 1, day, hour, minute, 0, 0);
-
-                if (result.getFullYear() !== year ||
-                    result.getMonth() !== month - 1 ||
-                    result.getDate() !== day ||
-                    result.getHours() !== hour ||
-                    result.getMinutes() !== minute) {
-                    return null;
-                }
-
-                return result;
-            }
-
-            function toLocalIso(date) {
-                const pad = value => String(value).padStart(2, '0');
-                return date.getFullYear() + '-' +
-                    pad(date.getMonth() + 1) + '-' +
-                    pad(date.getDate()) + 'T' +
-                    pad(date.getHours()) + ':' +
-                    pad(date.getMinutes());
-            }
-
-            function setInvalid(input, invalid) {
-                input.classList.toggle('is-invalid', invalid);
-                input.setAttribute('aria-invalid', invalid ? 'true' : 'false');
-            }
-
-            function showError(message) {
-                errorBox.textContent = message;
-                errorBox.classList.add('is-visible');
-            }
-
-            function clearError() {
-                errorBox.textContent = '';
-                errorBox.classList.remove('is-visible');
-                setInvalid(pickupDisplay, false);
-                setInvalid(returnDisplay, false);
-            }
-
-            form.addEventListener('submit', function (event) {
-                clearError();
-
-                const pickup = parseVietnameseDateTime(pickupDisplay.value);
-                const returnDateValue = parseVietnameseDateTime(returnDisplay.value);
-
-                if (!pickup) {
-                    event.preventDefault();
-                    setInvalid(pickupDisplay, true);
-                    showError('Ngày giờ nhận xe chưa đúng. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.');
-                    pickupDisplay.focus();
-                    return;
-                }
-
-                if (!returnDateValue) {
-                    event.preventDefault();
-                    setInvalid(returnDisplay, true);
-                    showError('Ngày giờ trả xe chưa đúng. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.');
-                    returnDisplay.focus();
-                    return;
-                }
-
-                if (pickup.getTime() <= Date.now()) {
-                    event.preventDefault();
-                    setInvalid(pickupDisplay, true);
-                    showError('Ngày giờ nhận xe phải lớn hơn thời điểm hiện tại.');
-                    pickupDisplay.focus();
-                    return;
-                }
-
-                if (returnDateValue.getTime() <= pickup.getTime()) {
-                    event.preventDefault();
-                    setInvalid(returnDisplay, true);
-                    showError('Ngày giờ trả xe phải sau ngày giờ nhận xe.');
-                    returnDisplay.focus();
-                    return;
-                }
-
-                pickupHidden.value = toLocalIso(pickup);
-                returnHidden.value = toLocalIso(returnDateValue);
-            });
-
-            [pickupDisplay, returnDisplay].forEach(function (input) {
-                input.addEventListener('input', clearError);
-            });
-        })();
-    </script>
+    <script src="~/js/vehicle-search.js" asp-append-version="true"></script>
 }
