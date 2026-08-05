@@ -57,6 +57,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(vehicle => vehicle.Color).HasMaxLength(50);
             entity.Property(vehicle => vehicle.DailyPrice).HasPrecision(18, 2);
             entity.Property(vehicle => vehicle.Status).HasConversion<string>().HasMaxLength(30);
+            entity.Property(vehicle => vehicle.RowVersion).IsRowVersion();
             entity.HasIndex(vehicle => vehicle.LicensePlate).IsUnique();
             entity.HasOne(vehicle => vehicle.Brand)
                 .WithMany(brand => brand.Vehicles)
@@ -99,6 +100,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.TotalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.Status).HasConversion<string>().HasMaxLength(40);
             entity.Property(booking => booking.CancelReason).HasMaxLength(500);
+            entity.Property(booking => booking.RowVersion).IsRowVersion();
             entity.HasIndex(booking => new
             {
                 booking.VehicleId,
@@ -119,14 +121,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Payment>(entity =>
         {
             entity.HasKey(payment => payment.PaymentId);
+            entity.Property(payment => payment.Type).HasConversion<string>().HasMaxLength(30);
             entity.Property(payment => payment.Amount).HasPrecision(18, 2);
             entity.Property(payment => payment.Method).HasMaxLength(50).IsRequired();
             entity.Property(payment => payment.Status).HasConversion<string>().HasMaxLength(30);
             entity.Property(payment => payment.TransactionCode).HasMaxLength(100);
-            entity.HasIndex(payment => payment.BookingId).IsUnique();
+            entity.HasIndex(payment => new { payment.BookingId, payment.Type, payment.Status });
             entity.HasOne(payment => payment.Booking)
-                .WithOne(booking => booking.Payment)
-                .HasForeignKey<Payment>(payment => payment.BookingId)
+                .WithMany(booking => booking.Payments)
+                .HasForeignKey(payment => payment.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -155,6 +158,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<AdditionalCharge>(entity =>
         {
             entity.HasKey(charge => charge.AdditionalChargeId);
+            entity.Property(charge => charge.ChargeType).HasConversion<string>().HasMaxLength(30);
             entity.Property(charge => charge.Description).HasMaxLength(250).IsRequired();
             entity.Property(charge => charge.Amount).HasPrecision(18, 2);
             entity.HasOne(charge => charge.VehicleReturn)
