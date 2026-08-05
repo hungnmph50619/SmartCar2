@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
@@ -71,7 +72,7 @@ public sealed class AdminBookingsController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    private void SetMessage(Application.Common.OperationResult result, string successMessage)
+    private void SetMessage(OperationResult result, string successMessage)
     {
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? successMessage
