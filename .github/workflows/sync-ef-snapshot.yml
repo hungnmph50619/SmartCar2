@@ -47,7 +47,6 @@ jobs:
           path = Path(sys.argv[1])
           text = path.read_text(encoding="utf-8")
           up_start = text.index("    protected override void Up")
-          class_end = text.rfind("}")
           text = text[:up_start] + '''    protected override void Up(MigrationBuilder migrationBuilder)
               {
               }
