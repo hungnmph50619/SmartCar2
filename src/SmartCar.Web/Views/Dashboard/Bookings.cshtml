@@ -1,0 +1,118 @@
+@model AdminBookingListViewModel
+@{
+    ViewData["Title"] = "Quản lý đơn thuê";
+    var statuses = new[]
+    {
+        BookingStatus.PendingConfirmation,
+        BookingStatus.PendingPayment,
+        BookingStatus.Paid,
+        BookingStatus.ReadyForPickup,
+        BookingStatus.Rented,
+        BookingStatus.PendingInspection,
+        BookingStatus.Completed,
+        BookingStatus.Rejected,
+        BookingStatus.Cancelled
+    };
+}
+
+<div class="admin-page-head">
+    <div>
+        <h1>Quản lý đơn thuê</h1>
+        <p>Xác nhận xe, theo dõi thanh toán, giao nhận, kiểm tra trả xe và hoàn tất đơn.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-action="Calendar">▦ Lịch xe</a>
+        <a class="admin-btn" asp-action="Operations">⇄ Giao và trả xe</a>
+    </div>
+</div>
+
+<div class="admin-tabs">
+    <a class="admin-tab @(!Model.Status.HasValue ? "is-active" : "")" asp-action="Bookings">
+        Tất cả <span class="admin-tab__count">@Model.StatusCounts.Values.Sum()</span>
+    </a>
+    @foreach (var status in statuses)
+    {
+        Model.StatusCounts.TryGetValue(status, out var count);
+        <a class="admin-tab @(Model.Status == status ? "is-active" : "")" asp-action="Bookings" asp-route-status="@status">
+            @AdminDisplayHelper.BookingLabel(status) <span class="admin-tab__count">@count</span>
+        </a>
+    }
+</div>
+
+<form class="admin-filters" method="get" asp-action="Bookings">
+    @if (Model.Status.HasValue)
+    {
+        <input type="hidden" name="status" value="@Model.Status" />
+    }
+    <div class="admin-search">
+        <input type="search" name="search" value="@Model.Search" placeholder="Tìm theo mã đơn, khách hàng, SĐT, xe hoặc biển số..." />
+    </div>
+    <button class="admin-btn admin-btn--primary" type="submit">Tìm kiếm</button>
+    <a class="admin-btn" asp-action="Bookings" asp-route-status="@Model.Status">Đặt lại</a>
+</form>
+
+@if (Model.Bookings.Count == 0)
+{
+    <section class="admin-panel">
+        <div class="admin-empty"><span class="admin-empty__icon">▣</span>Không có đơn thuê phù hợp với điều kiện lọc.</div>
+    </section>
+}
+else
+{
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Mã đơn</th>
+                    <th>Khách hàng</th>
+                    <th>Xe</th>
+                    <th>Nhận xe</th>
+                    <th>Trả xe</th>
+                    <th>Tổng tiền</th>
+                    <th>Trạng thái</th>
+                    <th>Thanh toán</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var booking in Model.Bookings)
+                {
+                    <tr>
+                        <td>
+                            <span class="admin-table__primary">#@booking.BookingId</span>
+                            <span class="admin-table__secondary">Tạo @booking.CreatedAt.ToString("dd/MM/yyyy HH:mm")</span>
+                            @if (booking.IsUrgent)
+                            {
+                                <span class="admin-status admin-status--rejected mt-1">Sắp/quá hạn phản hồi</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="admin-table__primary">@booking.CustomerName</span>
+                            <span class="admin-table__secondary">@booking.CustomerPhone</span>
+                            <span class="admin-table__secondary">@booking.CustomerEmail</span>
+                        </td>
+                        <td>
+                            <span class="admin-table__primary">@booking.VehicleName</span>
+                            <span class="admin-table__secondary">@booking.LicensePlate</span>
+                        </td>
+                        <td><span class="admin-table__primary">@booking.PickupDate.ToString("dd/MM/yyyy")</span><span class="admin-table__secondary">@booking.PickupDate.ToString("HH:mm")</span></td>
+                        <td><span class="admin-table__primary">@booking.ReturnDate.ToString("dd/MM/yyyy")</span><span class="admin-table__secondary">@booking.ReturnDate.ToString("HH:mm")</span></td>
+                        <td class="admin-table__primary">@booking.TotalAmount.ToString("N0")đ</td>
+                        <td><span class="admin-status admin-status--@AdminDisplayHelper.BookingCss(booking.Status)">@AdminDisplayHelper.BookingLabel(booking.Status)</span></td>
+                        <td>
+                            @if (booking.PaymentStatus.HasValue)
+                            {
+                                <span class="admin-status admin-status--@AdminDisplayHelper.PaymentCss(booking.PaymentStatus.Value)">@AdminDisplayHelper.PaymentLabel(booking.PaymentStatus.Value)</span>
+                            }
+                            else
+                            {
+                                <span class="admin-status admin-status--info">Chưa phát sinh</span>
+                            }
+                        </td>
+                        <td><a class="admin-row-action" asp-action="BookingDetails" asp-route-id="@booking.BookingId">Xem và xử lý</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
