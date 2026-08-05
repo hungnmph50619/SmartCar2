@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using SmartCar.Application.Features.Brands;
 using SmartCar.Application.Features.Vehicles;
+using SmartCar.Domain.Enums;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -55,7 +56,7 @@ public sealed class VehiclesController : Controller
         CancellationToken cancellationToken)
     {
         var vehicle = await _vehicleService.GetByIdAsync(id, cancellationToken);
-        if (vehicle is null || vehicle.Status == Domain.Enums.VehicleStatus.Inactive)
+        if (vehicle is null || vehicle.Status == VehicleStatus.Inactive)
         {
             return NotFound();
         }
