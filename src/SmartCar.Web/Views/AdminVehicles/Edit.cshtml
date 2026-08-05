@@ -1,0 +1,59 @@
+@model AdminVehicleFormViewModel
+@{
+    ViewData["Title"] = "Sửa thông tin xe";
+}
+
+<div class="admin-page-head">
+    <div>
+        <a class="admin-panel__link" asp-controller="Dashboard" asp-action="Vehicles">← Quay lại đội xe</a>
+        <h1 class="mt-2">Sửa thông tin xe</h1>
+        <p>@Model.VehicleName · @Model.LicensePlate</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-controller="Vehicles" asp-action="Details" asp-route-id="@Model.VehicleId" target="_blank">↗ Xem trang khách</a>
+    </div>
+</div>
+
+<form asp-controller="AdminVehicles" asp-action="Edit" asp-route-id="@Model.VehicleId" method="post" enctype="multipart/form-data">
+    <input type="hidden" asp-for="VehicleId" />
+    <partial name="_VehicleFormFields" model="Model" />
+
+    <section class="admin-panel mt-3">
+        <div class="admin-panel__body d-flex flex-wrap justify-content-between gap-2">
+            <button class="admin-btn admin-btn--danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteVehicleModal">Xóa xe</button>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="admin-btn" asp-controller="Dashboard" asp-action="Vehicles">Hủy thay đổi</a>
+                <button class="admin-btn admin-btn--primary" type="submit">✓ Lưu thông tin xe</button>
+            </div>
+        </div>
+    </section>
+</form>
+
+<div class="modal fade admin-modal-form" id="deleteVehicleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-controller="AdminVehicles" asp-action="Delete" asp-route-id="@Model.VehicleId" method="post">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title fs-5">Xóa xe khỏi hệ thống?</h2>
+                        <small class="text-muted">@Model.VehicleName · @Model.LicensePlate</small>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="admin-alert admin-alert--danger mb-0">
+                        Chỉ xóa được xe chưa từng phát sinh đơn thuê hoặc phiếu bảo trì. Xe đã có lịch sử phải chuyển sang trạng thái <strong>Ngừng hoạt động</strong> để bảo toàn dữ liệu.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="admin-btn" data-bs-dismiss="modal">Không xóa</button>
+                    <button type="submit" class="admin-btn admin-btn--danger">Xác nhận xóa xe</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_VehicleFormScripts" />
+}
