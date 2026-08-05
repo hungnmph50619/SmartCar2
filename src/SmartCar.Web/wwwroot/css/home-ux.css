@@ -1,0 +1,371 @@
+/* Navigation after login */
+.account-navigation {
+  gap: 0.35rem;
+}
+
+.notification-navigation-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  white-space: nowrap;
+}
+
+.notification-navigation-link svg {
+  width: 18px;
+  height: 18px;
+}
+
+.notification-count {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--smartcar-blue);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.user-navigation-toggle {
+  display: inline-flex;
+  max-width: 245px;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.user-avatar {
+  display: inline-grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--smartcar-blue), #3b8cf0);
+  font-size: 0.82rem;
+  font-weight: 850;
+  box-shadow: 0 7px 16px rgba(22, 103, 217, 0.22);
+}
+
+.user-display-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-navigation-menu {
+  min-width: 255px;
+}
+
+.user-menu-heading {
+  display: grid;
+  padding: 0.55rem 0.8rem 0.35rem;
+}
+
+.user-menu-heading strong,
+.user-menu-heading small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-heading strong {
+  color: var(--smartcar-navy);
+}
+
+.user-menu-heading small {
+  color: var(--smartcar-muted);
+  font-size: 0.78rem;
+}
+
+.user-navigation-menu form {
+  margin: 0;
+}
+
+.user-navigation-menu form .dropdown-item:hover {
+  color: #b42318 !important;
+  background: #fff3f2;
+}
+
+/* Compact home page */
+.home-hero {
+  padding: 3.4rem 3.25rem;
+  margin-bottom: 2.25rem !important;
+}
+
+.home-hero .row {
+  --bs-gutter-x: 3rem;
+}
+
+.hero-title {
+  max-width: 650px;
+  font-size: clamp(2.4rem, 4.3vw, 4.15rem);
+  line-height: 1.02;
+}
+
+.hero-title span {
+  display: block;
+}
+
+.hero-description {
+  margin-bottom: 1.25rem !important;
+}
+
+.hero-visual {
+  min-height: 360px;
+}
+
+.hero-car-image,
+.hero-car-placeholder {
+  max-height: 305px;
+}
+
+.hero-car-card {
+  bottom: 0.7rem;
+}
+
+.hero-badge-top {
+  top: 0.35rem;
+}
+
+.hero-badge-bottom {
+  bottom: 4.15rem;
+}
+
+.home-search-card {
+  margin-top: 0;
+  margin-bottom: 2.75rem !important;
+  padding: 1.55rem 1.7rem;
+}
+
+.home-search-card > .d-flex {
+  margin-bottom: 1rem !important;
+}
+
+.vn-datetime-control {
+  position: relative;
+}
+
+.vn-datetime-control .form-control {
+  padding-right: 2.8rem;
+}
+
+.vn-datetime-icon {
+  position: absolute;
+  right: 0.9rem;
+  bottom: 0.82rem;
+  width: 18px;
+  height: 18px;
+  color: var(--smartcar-muted);
+  pointer-events: none;
+}
+
+.vn-datetime-hint {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--smartcar-muted);
+  font-size: 0.72rem;
+}
+
+.home-search-error {
+  display: none;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 10px;
+  color: #b42318;
+  background: #fff2f0;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.home-search-error.is-visible {
+  display: block;
+}
+
+.featured-card-link {
+  display: block;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+}
+
+.featured-card-link:hover,
+.featured-card-link:focus {
+  color: inherit;
+}
+
+.featured-card-link:focus-visible {
+  outline: 3px solid rgba(22, 103, 217, 0.24);
+  outline-offset: 4px;
+  border-radius: var(--smartcar-radius);
+}
+
+.featured-car-card {
+  height: 100%;
+}
+
+.featured-card-link:hover .featured-car-card,
+.featured-card-link:focus-visible .featured-car-card {
+  transform: translateY(-7px);
+  border-color: #b8d4f6;
+  box-shadow: var(--smartcar-shadow);
+}
+
+.featured-card-link:hover .featured-car-image,
+.featured-card-link:focus-visible .featured-car-image {
+  transform: scale(1.035);
+}
+
+.home-benefits {
+  margin-bottom: 2.8rem !important;
+}
+
+.home-benefits > .text-center {
+  margin-bottom: 2rem !important;
+}
+
+.benefit-card {
+  padding: 1.35rem !important;
+}
+
+.rental-process {
+  margin-bottom: 2.2rem !important;
+  padding: 2.65rem 3rem !important;
+}
+
+.rental-process .row {
+  --bs-gutter-x: 2rem;
+}
+
+.process-step {
+  padding: 1.25rem !important;
+}
+
+.home-cta {
+  margin-bottom: 1rem !important;
+  padding-top: 0.6rem;
+}
+
+/* Profile */
+.profile-shell {
+  max-width: 840px;
+  margin: 0 auto;
+}
+
+.profile-card {
+  overflow: hidden;
+  border: 1px solid var(--smartcar-border);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: var(--smartcar-shadow-sm);
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.6rem;
+  background: linear-gradient(135deg, #edf5ff, #f8fbff);
+}
+
+.profile-avatar {
+  display: grid;
+  flex: 0 0 58px;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border-radius: 18px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--smartcar-blue), #3c8df1);
+  font-size: 1.35rem;
+  font-weight: 850;
+}
+
+.profile-body {
+  padding: 1.6rem;
+}
+
+.profile-detail {
+  height: 100%;
+  padding: 1rem;
+  border: 1px solid var(--smartcar-border);
+  border-radius: 14px;
+  background: #f9fbfd;
+}
+
+.profile-detail span,
+.profile-detail strong {
+  display: block;
+}
+
+.profile-detail span {
+  margin-bottom: 0.25rem;
+  color: var(--smartcar-muted);
+  font-size: 0.78rem;
+}
+
+.profile-detail strong {
+  color: var(--smartcar-navy);
+}
+
+@media (max-width: 1199.98px) {
+  .user-navigation-toggle {
+    max-width: 100%;
+  }
+
+  .account-navigation {
+    align-items: stretch !important;
+    padding-top: 0.55rem;
+  }
+
+  .notification-navigation-link,
+  .user-navigation-toggle {
+    width: 100%;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .home-hero {
+    padding: 2.4rem 2rem;
+  }
+
+  .hero-title {
+    font-size: clamp(2.25rem, 8vw, 3.65rem);
+  }
+
+  .home-search-card {
+    padding: 1.35rem;
+  }
+
+  .rental-process {
+    padding: 2rem !important;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .home-hero {
+    padding: 2rem 1.25rem;
+    border-radius: 20px;
+  }
+
+  .hero-title {
+    font-size: 2.45rem;
+  }
+
+  .home-search-card {
+    padding: 1.15rem;
+  }
+
+  .rental-process {
+    padding: 1.5rem !important;
+  }
+
+  .profile-header,
+  .profile-body {
+    padding: 1.2rem;
+  }
+}
