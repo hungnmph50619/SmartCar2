@@ -19,29 +19,28 @@ internal sealed class VehicleDocumentService : IVehicleDocumentService
         _auditService = auditService;
     }
 
-    public Task<IReadOnlyList<VehicleDocumentDto>> GetAllAsync(
-        CancellationToken cancellationToken = default) =>
-        Query().OrderBy(item => item.DaysUntilExpiry ?? int.MaxValue)
-            .ThenBy(item => item.VehicleName)
-            .ToListAsync(cancellationToken)
-            .ContinueWith<IReadOnlyList<VehicleDocumentDto>>(
-                task => task.Result,
-                cancellationToken,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+    public async Task<IReadOnlyList<VehicleDocumentDto>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var documents = await Query()
+            .ToListAsync(cancellationToken);
 
-    public Task<IReadOnlyList<VehicleDocumentDto>> GetByVehicleAsync(
+        return documents
+            .OrderBy(item => item.DaysUntilExpiry ?? int.MaxValue)
+            .ThenBy(item => item.VehicleName)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<VehicleDocumentDto>> GetByVehicleAsync(
         int vehicleId,
-        CancellationToken cancellationToken = default) =>
-        Query().Where(item => item.VehicleId == vehicleId)
+        CancellationToken cancellationToken = default)
+    {
+        return await Query()
+            .Where(item => item.VehicleId == vehicleId)
             .OrderBy(item => item.DocumentType)
             .ThenByDescending(item => item.IssuedDate)
-            .ToListAsync(cancellationToken)
-            .ContinueWith<IReadOnlyList<VehicleDocumentDto>>(
-                task => task.Result,
-                cancellationToken,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+            .ToListAsync(cancellationToken);
+    }
 
     public async Task<OperationResult> CreateAsync(
         SaveVehicleDocumentRequest request,
