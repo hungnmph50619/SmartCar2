@@ -1,17 +1,215 @@
+@model AdminDashboardViewModel
 @{
-    ViewData["Title"] = "Dashboard quản lý";
+    ViewData["Title"] = "Tổng quan vận hành";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="admin-page-head">
     <div>
-        <h1 class="h2 mb-1">Dashboard quản lý</h1>
-        <p class="text-muted mb-0">Nền tảng quản trị SmartCar đã sẵn sàng.</p>
+        <h1>Trung tâm vận hành SmartCar</h1>
+        <p>Theo dõi đội xe, đơn thuê, giao nhận, giấy tờ và dòng tiền trong một màn hình.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-action="Calendar">▦ Xem lịch xe</a>
+        <a class="admin-btn admin-btn--primary" asp-action="Bookings" asp-route-status="@BookingStatus.PendingConfirmation">▣ Xử lý đơn mới</a>
     </div>
 </div>
 
-<div class="row g-3">
-    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Tổng số xe</div><div class="display-6">0</div></div></div></div>
-    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Xe sẵn sàng</div><div class="display-6">0</div></div></div></div>
-    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Đơn chờ xử lý</div><div class="display-6">0</div></div></div></div>
-    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Doanh thu</div><div class="display-6">0 ₫</div></div></div></div>
+<section class="admin-kpi-grid" aria-label="Chỉ số vận hành">
+    <article class="admin-kpi">
+        <span class="admin-kpi__icon">▰</span>
+        <span class="admin-kpi__label">Tổng số xe</span>
+        <strong class="admin-kpi__value">@Model.TotalVehicles</strong>
+    </article>
+    <article class="admin-kpi admin-kpi--green">
+        <span class="admin-kpi__icon">✓</span>
+        <span class="admin-kpi__label">Xe sẵn sàng</span>
+        <strong class="admin-kpi__value">@Model.AvailableVehicles</strong>
+    </article>
+    <article class="admin-kpi admin-kpi--purple">
+        <span class="admin-kpi__icon">⇄</span>
+        <span class="admin-kpi__label">Xe đang được thuê</span>
+        <strong class="admin-kpi__value">@Model.RentedVehicles</strong>
+    </article>
+    <article class="admin-kpi admin-kpi--orange">
+        <span class="admin-kpi__icon">⚙</span>
+        <span class="admin-kpi__label">Xe đang bảo trì</span>
+        <strong class="admin-kpi__value">@Model.MaintenanceVehicles</strong>
+    </article>
+    <article class="admin-kpi admin-kpi--red">
+        <span class="admin-kpi__icon">!</span>
+        <span class="admin-kpi__label">Đơn chờ xác nhận</span>
+        <strong class="admin-kpi__value">@Model.PendingBookings</strong>
+    </article>
+    <article class="admin-kpi admin-kpi--green">
+        <span class="admin-kpi__icon">₫</span>
+        <span class="admin-kpi__label">Doanh thu tháng</span>
+        <strong class="admin-kpi__value">@Model.MonthlyRevenue.ToString("N0")đ</strong>
+    </article>
+</section>
+
+<div class="admin-grid-2">
+    <section class="admin-panel">
+        <div class="admin-panel__head">
+            <div>
+                <h2>Doanh thu 7 ngày gần nhất</h2>
+                <p>Chỉ tính các giao dịch đã thanh toán.</p>
+            </div>
+            <a class="admin-panel__link" asp-action="Payments">Xem giao dịch →</a>
+        </div>
+        <div class="admin-panel__body">
+            <div class="admin-revenue-chart">
+                @foreach (var point in Model.RevenuePoints)
+                {
+                    <div class="admin-revenue-bar">
+                        <span class="admin-revenue-bar__value">@point.Amount.ToString("N0")</span>
+                        <div class="admin-revenue-bar__track">
+                            <span class="admin-revenue-bar__fill" style="height:@point.Percentage%"></span>
+                        </div>
+                        <span class="admin-revenue-bar__day">@point.Date.ToString("dd/MM")</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="admin-panel">
+        <div class="admin-panel__head">
+            <div>
+                <h2>Việc cần xử lý</h2>
+                <p>Các đầu việc cần admin ưu tiên.</p>
+            </div>
+        </div>
+        <div class="admin-panel__body">
+            <div class="admin-alert-list">
+                @foreach (var alert in Model.Alerts)
+                {
+                    <a class="admin-alert-card admin-alert-card--@alert.Severity" href="@alert.ActionUrl">
+                        <span class="admin-alert-card__dot">@(alert.Severity == "success" ? "✓" : "!")</span>
+                        <span><strong>@alert.Title</strong><p>@alert.Description</p></span>
+                    </a>
+                }
+            </div>
+        </div>
+    </section>
 </div>
+
+<div class="admin-grid-2">
+    <section class="admin-panel">
+        <div class="admin-panel__head">
+            <div>
+                <h2>Lịch giao và nhận xe hôm nay</h2>
+                <p>@Model.TodayPickups lượt giao · @Model.TodayReturns lượt nhận</p>
+            </div>
+            <a class="admin-panel__link" asp-action="Operations">Xem 7 ngày tới →</a>
+        </div>
+        <div class="admin-panel__body">
+            @if (Model.TodayOperations.Count == 0)
+            {
+                <div class="admin-empty"><span class="admin-empty__icon">▦</span>Hôm nay chưa có lịch giao hoặc nhận xe.</div>
+            }
+            else
+            {
+                <div class="admin-operation-list">
+                    @foreach (var operation in Model.TodayOperations)
+                    {
+                        <div class="admin-operation">
+                            <time>@operation.Time.ToString("HH:mm")</time>
+                            <span class="admin-operation__type">@operation.OperationType</span>
+                            <div class="admin-operation__info">
+                                <strong>@operation.VehicleName · @operation.LicensePlate</strong>
+                                <span>@operation.CustomerName · @operation.CustomerPhone</span>
+                            </div>
+                            <a class="admin-status admin-status--@AdminDisplayHelper.BookingCss(operation.Status)" asp-action="BookingDetails" asp-route-id="@operation.BookingId">@AdminDisplayHelper.BookingLabel(operation.Status)</a>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="admin-panel">
+        <div class="admin-panel__head">
+            <div>
+                <h2>Tình trạng hồ sơ và xe trả</h2>
+                <p>Các rủi ro cần theo dõi trong vận hành.</p>
+            </div>
+        </div>
+        <div class="admin-panel__body">
+            <div class="admin-info-grid">
+                <a class="admin-info-item text-decoration-none" asp-action="Documents" asp-route-status="@DocumentStatus.Pending">
+                    <small>Giấy tờ chờ xác minh</small>
+                    <strong>@Model.PendingDocuments hồ sơ</strong>
+                </a>
+                <a class="admin-info-item text-decoration-none" asp-action="Bookings" asp-route-status="@BookingStatus.PendingInspection">
+                    <small>Xe trả có hư hỏng</small>
+                    <strong>@Model.DamagedReturns trường hợp</strong>
+                </a>
+                <a class="admin-info-item text-decoration-none" asp-action="Vehicles" asp-route-status="@VehicleStatus.Maintenance">
+                    <small>Xe đang bảo trì</small>
+                    <strong>@Model.MaintenanceVehicles xe</strong>
+                </a>
+                <a class="admin-info-item text-decoration-none" asp-action="Calendar">
+                    <small>Lịch xe hôm nay</small>
+                    <strong>@(Model.TodayPickups + Model.TodayReturns) lượt giao nhận</strong>
+                </a>
+            </div>
+        </div>
+    </section>
+</div>
+
+<section class="admin-panel">
+    <div class="admin-panel__head">
+        <div>
+            <h2>Đơn thuê mới nhất</h2>
+            <p>Theo dõi nhanh trạng thái và thanh toán.</p>
+        </div>
+        <a class="admin-panel__link" asp-action="Bookings">Xem tất cả →</a>
+    </div>
+    @if (Model.RecentBookings.Count == 0)
+    {
+        <div class="admin-empty"><span class="admin-empty__icon">▣</span>Chưa có đơn thuê nào.</div>
+    }
+    else
+    {
+        <div class="admin-table-wrap border-0 rounded-0 shadow-none">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Mã đơn</th>
+                        <th>Khách hàng</th>
+                        <th>Xe</th>
+                        <th>Thời gian thuê</th>
+                        <th>Tổng tiền</th>
+                        <th>Trạng thái</th>
+                        <th>Thanh toán</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var booking in Model.RecentBookings)
+                    {
+                        <tr>
+                            <td><span class="admin-table__primary">#@booking.BookingId</span><span class="admin-table__secondary">@booking.CreatedAt.ToString("dd/MM HH:mm")</span></td>
+                            <td><span class="admin-table__primary">@booking.CustomerName</span><span class="admin-table__secondary">@booking.CustomerPhone</span></td>
+                            <td><span class="admin-table__primary">@booking.VehicleName</span><span class="admin-table__secondary">@booking.LicensePlate</span></td>
+                            <td><span class="admin-table__primary">@booking.PickupDate.ToString("dd/MM HH:mm")</span><span class="admin-table__secondary">đến @booking.ReturnDate.ToString("dd/MM HH:mm")</span></td>
+                            <td class="admin-table__primary">@booking.TotalAmount.ToString("N0")đ</td>
+                            <td><span class="admin-status admin-status--@AdminDisplayHelper.BookingCss(booking.Status)">@AdminDisplayHelper.BookingLabel(booking.Status)</span></td>
+                            <td>
+                                @if (booking.PaymentStatus.HasValue)
+                                {
+                                    <span class="admin-status admin-status--@AdminDisplayHelper.PaymentCss(booking.PaymentStatus.Value)">@AdminDisplayHelper.PaymentLabel(booking.PaymentStatus.Value)</span>
+                                }
+                                else
+                                {
+                                    <span class="admin-status admin-status--info">Chưa phát sinh</span>
+                                }
+                            </td>
+                            <td><a class="admin-row-action" asp-action="BookingDetails" asp-route-id="@booking.BookingId">Xử lý</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
