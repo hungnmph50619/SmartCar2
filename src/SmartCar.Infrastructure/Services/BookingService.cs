@@ -44,18 +44,19 @@ internal sealed class BookingService : IBookingService
 
         if (!BookingDateRules.IsValidRange(request.PickupDate, request.ReturnDate))
         {
-            return BookingMutationResult.Failure("Thời gian nhận xe phải trước thời gian trả xe.");
+            return BookingMutationResult.Failure(
+                "Thời gian nhận xe phải ở tương lai và trước thời gian trả xe.");
         }
 
         var documentsValid = await _documentService.HasValidRentalDocumentsAsync(
             customerId,
-            request.PickupDate,
+            request.ReturnDate,
             cancellationToken);
 
         if (!documentsValid)
         {
             return BookingMutationResult.Failure(
-                "Bạn cần xác minh CCCD và GPLX còn hiệu lực trước khi đặt xe.");
+                "Bạn cần xác minh CCCD và GPLX còn hiệu lực đến ngày trả xe.");
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -203,6 +204,21 @@ internal sealed class BookingService : IBookingService
         if (booking.Status != BookingStatus.PendingConfirmation)
         {
             return OperationResult.Failure("Chỉ đơn đang chờ xác nhận mới có thể được duyệt.");
+        }
+
+        if (booking.PickupDate <= DateTime.Now)
+        {
+            return OperationResult.Failure("Đã quá thời gian nhận xe, không thể xác nhận đơn.");
+        }
+
+        var documentsValid = await _documentService.HasValidRentalDocumentsAsync(
+            booking.CustomerId,
+            booking.ReturnDate,
+            cancellationToken);
+        if (!documentsValid)
+        {
+            return OperationResult.Failure(
+                "CCCD hoặc GPLX của khách không còn hiệu lực đến ngày trả xe.");
         }
 
         var hasConflict = await HasConflictAsync(
