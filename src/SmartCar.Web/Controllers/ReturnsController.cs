@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Common;
+using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Enums;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -11,19 +13,40 @@ namespace SmartCar.Web.Controllers;
 public sealed class ReturnsController : Controller
 {
     private readonly IReturnService _returnService;
+    private readonly IBookingService _bookingService;
 
-    public ReturnsController(IReturnService returnService)
+    public ReturnsController(
+        IReturnService returnService,
+        IBookingService bookingService)
     {
         _returnService = returnService;
+        _bookingService = bookingService;
     }
 
     [HttpGet]
-    public IActionResult Create(int bookingId)
+    public async Task<IActionResult> Create(
+        int bookingId,
+        CancellationToken cancellationToken)
     {
+        var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        if (booking.Status != BookingStatus.Rented)
+        {
+            TempData["ErrorMessage"] =
+                "Chỉ đơn đang thuê và đã bàn giao xe mới được lập biên bản trả xe.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
         return View(new ReturnViewModel
         {
             BookingId = bookingId,
-            ReturnedAt = DateTime.Now
+            ReturnedAt = DateTime.Now > booking.ReturnDate
+                ? DateTime.Now
+                : booking.ReturnDate
         });
     }
 
