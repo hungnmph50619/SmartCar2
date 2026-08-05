@@ -25,18 +25,12 @@ public sealed class DocumentsController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public IActionResult Index()
     {
-        var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrWhiteSpace(customerId))
-        {
-            return Challenge();
-        }
-
-        ViewBag.Documents = await _documentService.GetCustomerDocumentsAsync(
-            customerId,
-            cancellationToken);
-        return View(new DocumentUploadViewModel());
+        return RedirectToAction(
+            "Index",
+            "Profile",
+            new { tab = "documents" });
     }
 
     [HttpGet]
@@ -89,8 +83,11 @@ public sealed class DocumentsController : Controller
 
         if (!ModelState.IsValid || model.Image is null)
         {
-            await LoadDocumentsAsync(customerId, cancellationToken);
-            return View("Index", model);
+            TempData["ErrorMessage"] = "Thông tin giấy tờ chưa hợp lệ. Vui lòng gửi lại trong Hồ sơ cá nhân.";
+            return RedirectToAction(
+                "Index",
+                "Profile",
+                new { tab = "documents" });
         }
 
         var existingDocuments = await _documentService.GetCustomerDocumentsAsync(
@@ -133,15 +130,9 @@ public sealed class DocumentsController : Controller
                 "Đã gửi giấy tờ thành công. Hồ sơ đang chờ Quản trị viên xác minh.";
         }
 
-        return RedirectToAction(nameof(Index));
-    }
-
-    private async Task LoadDocumentsAsync(
-        string customerId,
-        CancellationToken cancellationToken)
-    {
-        ViewBag.Documents = await _documentService.GetCustomerDocumentsAsync(
-            customerId,
-            cancellationToken);
+        return RedirectToAction(
+            "Index",
+            "Profile",
+            new { tab = "documents" });
     }
 }
