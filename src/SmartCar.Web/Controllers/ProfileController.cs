@@ -3,7 +3,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Audits;
+using SmartCar.Application.Features.Documents;
+using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure.Identity;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -11,19 +14,29 @@ namespace SmartCar.Web.Controllers;
 [Authorize]
 public sealed class ProfileController : Controller
 {
+    private const long MaximumDocumentImageBytes = 5 * 1024 * 1024;
+
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IAuditService _auditService;
+    private readonly IDocumentService _documentService;
+    private readonly ISecureDocumentStorage _documentStorage;
 
     public ProfileController(
         UserManager<ApplicationUser> userManager,
-        IAuditService auditService)
+        IAuditService auditService,
+        IDocumentService documentService,
+        ISecureDocumentStorage documentStorage)
     {
         _userManager = userManager;
         _auditService = auditService;
+        _documentService = documentService;
+        _documentStorage = documentStorage;
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(
+        string? tab,
+        CancellationToken cancellationToken)
     {
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
@@ -31,7 +44,12 @@ public sealed class ProfileController : Controller
             return Challenge();
         }
 
-        return View(ToViewModel(user));
+        var activeTab = User.IsInRole(RoleNames.Customer) &&
+                        string.Equals(tab, "documents", StringComparison.OrdinalIgnoreCase)
+            ? "documents"
+            : "profile";
+
+        return View(await BuildViewModelAsync(user, activeTab, cancellationToken));
     }
 
     [HttpPost]
@@ -48,6 +66,10 @@ public sealed class ProfileController : Controller
 
         model.Email = user.Email ?? string.Empty;
         model.CreatedAt = user.CreatedAt;
+        model.ActiveTab = "profile";
+        model.Documents = await LoadDocumentsForCurrentRoleAsync(
+            user.Id,
+            cancellationToken);
 
         if (!ModelState.IsValid)
         {
@@ -87,12 +109,106 @@ public sealed class ProfileController : Controller
         return RedirectToAction(nameof(Index));
     }
 
-    private static ProfileViewModel ToViewModel(ApplicationUser user) => new()
+    [Authorize(Roles = RoleNames.Customer)]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SubmitDocument(
+        [Bind(Prefix = "DocumentUpload")] DocumentUploadViewModel model,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return Challenge();
+        }
+
+        var imageError = await ImageFileValidator.ValidateAsync(
+            model.Image,
+            MaximumDocumentImageBytes,
+            cancellationToken);
+        if (imageError is not null)
+        {
+            ModelState.AddModelError("DocumentUpload.Image", imageError);
+        }
+
+        if (!ModelState.IsValid || model.Image is null)
+        {
+            var pageModel = await BuildViewModelAsync(
+                user,
+                "documents",
+                cancellationToken);
+            pageModel.DocumentUpload = model;
+            return View("Index", pageModel);
+        }
+
+        var existingDocuments = await _documentService.GetCustomerDocumentsAsync(
+            user.Id,
+            cancellationToken);
+        var existingDocument = existingDocuments.FirstOrDefault(item =>
+            item.DocumentType == model.DocumentType);
+
+        var newStoredPath = await _documentStorage.SaveAsync(
+            model.Image,
+            user.Id,
+            cancellationToken);
+
+        var result = await _documentService.SubmitAsync(
+            user.Id,
+            new SubmitDocumentRequest(
+                model.DocumentType,
+                model.DocumentNumber,
+                model.ExpiryDate,
+                newStoredPath),
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            _documentStorage.Delete(newStoredPath);
+            TempData["ErrorMessage"] = string.Join("; ", result.Errors);
+        }
+        else
+        {
+            if (existingDocument is not null &&
+                !string.Equals(
+                    existingDocument.ImagePath,
+                    newStoredPath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _documentStorage.Delete(existingDocument.ImagePath);
+            }
+
+            TempData["SuccessMessage"] =
+                "Đã gửi giấy tờ thành công. Hồ sơ đang chờ Quản trị viên xác minh.";
+        }
+
+        return RedirectToAction(nameof(Index), new { tab = "documents" });
+    }
+
+    private async Task<ProfileViewModel> BuildViewModelAsync(
+        ApplicationUser user,
+        string activeTab,
+        CancellationToken cancellationToken) => new()
     {
         FullName = user.FullName,
         Email = user.Email ?? string.Empty,
         PhoneNumber = user.PhoneNumber ?? string.Empty,
         Address = user.Address ?? string.Empty,
-        CreatedAt = user.CreatedAt
+        CreatedAt = user.CreatedAt,
+        ActiveTab = activeTab,
+        Documents = await LoadDocumentsForCurrentRoleAsync(user.Id, cancellationToken)
     };
+
+    private async Task<IReadOnlyList<DocumentDto>> LoadDocumentsForCurrentRoleAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole(RoleNames.Customer))
+        {
+            return Array.Empty<DocumentDto>();
+        }
+
+        return await _documentService.GetCustomerDocumentsAsync(
+            userId,
+            cancellationToken);
+    }
 }
