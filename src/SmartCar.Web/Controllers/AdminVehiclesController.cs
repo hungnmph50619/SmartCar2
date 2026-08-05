@@ -21,6 +21,16 @@ public class AdminVehiclesController : Controller
         ".jpg", ".jpeg", ".png", ".webp"
     };
 
+    private static readonly BookingStatus[] BlockingVehicleStatusChangeStatuses =
+    {
+        BookingStatus.PendingConfirmation,
+        BookingStatus.PendingPayment,
+        BookingStatus.Paid,
+        BookingStatus.ReadyForPickup,
+        BookingStatus.Rented,
+        BookingStatus.PendingInspection
+    };
+
     private readonly ApplicationDbContext _dbContext;
     private readonly IWebHostEnvironment _environment;
 
@@ -79,7 +89,7 @@ public class AdminVehiclesController : Controller
 
         var vehicle = new Vehicle
         {
-            BrandId = brand.BrandId,
+            Brand = brand,
             VehicleName = model.VehicleName,
             Model = model.Model,
             LicensePlate = model.LicensePlate,
@@ -190,7 +200,7 @@ public class AdminVehiclesController : Controller
         }
 
         NormalizeModel(model);
-        ValidateVehicleModel(model, isCreate: false, vehicle.Images.Count);
+        ValidateVehicleModel(model, isCreate: false);
 
         var licensePlateExists = await _dbContext.Vehicles.AnyAsync(
             item => item.VehicleId != id && item.LicensePlate == model.LicensePlate,
@@ -233,7 +243,7 @@ public class AdminVehiclesController : Controller
             return View(model);
         }
 
-        vehicle.BrandId = brand.BrandId;
+        vehicle.Brand = brand;
         vehicle.VehicleName = model.VehicleName;
         vehicle.Model = model.Model;
         vehicle.LicensePlate = model.LicensePlate;
@@ -318,6 +328,54 @@ public class AdminVehiclesController : Controller
             await PopulateFormDataAsync(model, cancellationToken, includeImages: false);
             return View(model);
         }
+    }
+
+    [HttpPost("{id:int}/Status")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangeStatus(
+        int id,
+        VehicleStatus newStatus,
+        CancellationToken cancellationToken)
+    {
+        var vehicle = await _dbContext.Vehicles
+            .Include(item => item.Bookings)
+            .FirstOrDefaultAsync(item => item.VehicleId == id, cancellationToken);
+
+        if (vehicle is null)
+        {
+            return NotFound();
+        }
+
+        var hasCurrentRental = vehicle.Bookings.Any(booking =>
+            booking.Status is BookingStatus.Rented or BookingStatus.PendingInspection);
+        if (hasCurrentRental && newStatus != VehicleStatus.Rented)
+        {
+            TempData["AdminError"] = "Xe đang trong chuyến thuê. Trạng thái chỉ được thay đổi sau khi nhận xe và hoàn tất kiểm tra.";
+            return RedirectToAction("Vehicles", "Dashboard");
+        }
+
+        if (!hasCurrentRental && newStatus == VehicleStatus.Rented)
+        {
+            TempData["AdminError"] = "Không thể chuyển xe sang Đang được thuê bằng tay. Trạng thái này được tạo khi lập biên bản giao xe.";
+            return RedirectToAction("Vehicles", "Dashboard");
+        }
+
+        if (newStatus is VehicleStatus.Maintenance or VehicleStatus.Inactive)
+        {
+            var hasUpcomingBooking = vehicle.Bookings.Any(booking =>
+                BlockingVehicleStatusChangeStatuses.Contains(booking.Status)
+                && booking.ReturnDate >= DateTime.Now);
+            if (hasUpcomingBooking)
+            {
+                TempData["AdminError"] = "Xe đang có đơn thuê hoạt động hoặc lịch sắp tới. Cần xử lý các đơn liên quan trước khi khóa xe.";
+                return RedirectToAction("Vehicles", "Dashboard");
+            }
+        }
+
+        vehicle.Status = newStatus;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        TempData["AdminSuccess"] = $"Đã chuyển xe {vehicle.VehicleName} sang trạng thái {AdminDisplayHelper.VehicleLabel(newStatus)}.";
+        return RedirectToAction("Vehicles", "Dashboard");
     }
 
     [HttpPost("{id:int}/Delete")]
@@ -448,8 +506,7 @@ public class AdminVehiclesController : Controller
 
     private void ValidateVehicleModel(
         AdminVehicleFormViewModel model,
-        bool isCreate,
-        int existingImageCount = 0)
+        bool isCreate)
     {
         if (model.ManufactureYear > DateTime.Today.Year + 1)
         {
@@ -461,7 +518,7 @@ public class AdminVehiclesController : Controller
             ModelState.AddModelError(nameof(model.NewImages), "Vui lòng tải lên ít nhất một ảnh xe.");
         }
 
-        if (existingImageCount + model.NewImages.Count > MaximumImageCount)
+        if (isCreate && model.NewImages.Count > MaximumImageCount)
         {
             ModelState.AddModelError(nameof(model.NewImages), $"Mỗi xe chỉ được lưu tối đa {MaximumImageCount} ảnh.");
         }
