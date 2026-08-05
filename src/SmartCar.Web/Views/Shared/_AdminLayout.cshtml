@@ -1,0 +1,128 @@
+@{
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "Index";
+    string Active(params string[] actions) => actions.Contains(action, StringComparer.OrdinalIgnoreCase) ? "is-active" : string.Empty;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - SmartCar Admin</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/admin-dashboard.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="admin-body">
+    <div class="admin-shell">
+        <aside class="admin-sidebar" id="adminSidebar">
+            <a class="admin-brand" asp-controller="Dashboard" asp-action="Index">
+                <span class="admin-brand__mark">SC</span>
+                <span><strong>SmartCar</strong><small>Trung tâm vận hành</small></span>
+            </a>
+
+            <nav class="admin-nav" aria-label="Menu quản trị">
+                <div class="admin-nav__group">
+                    <span class="admin-nav__label">TỔNG QUAN</span>
+                    <a class="admin-nav__item @Active("Index")" asp-controller="Dashboard" asp-action="Index">
+                        <span class="admin-nav__icon">⌂</span><span>Dashboard</span>
+                    </a>
+                </div>
+
+                <div class="admin-nav__group">
+                    <span class="admin-nav__label">VẬN HÀNH</span>
+                    <a class="admin-nav__item @Active("Bookings", "BookingDetails")" asp-controller="Dashboard" asp-action="Bookings">
+                        <span class="admin-nav__icon">▣</span><span>Đơn thuê</span>
+                    </a>
+                    <a class="admin-nav__item @Active("Calendar")" asp-controller="Dashboard" asp-action="Calendar">
+                        <span class="admin-nav__icon">▦</span><span>Lịch xe</span>
+                    </a>
+                    <a class="admin-nav__item @Active("Operations")" asp-controller="Dashboard" asp-action="Operations">
+                        <span class="admin-nav__icon">⇄</span><span>Giao và trả xe</span>
+                    </a>
+                </div>
+
+                <div class="admin-nav__group">
+                    <span class="admin-nav__label">ĐỘI XE</span>
+                    <a class="admin-nav__item @Active("Vehicles")" asp-controller="Dashboard" asp-action="Vehicles">
+                        <span class="admin-nav__icon">▰</span><span>Danh sách xe</span>
+                    </a>
+                    <a class="admin-nav__item @Active("Maintenance")" asp-controller="Dashboard" asp-action="Maintenance">
+                        <span class="admin-nav__icon">⚙</span><span>Bảo trì và sửa chữa</span>
+                    </a>
+                </div>
+
+                <div class="admin-nav__group">
+                    <span class="admin-nav__label">KHÁCH HÀNG</span>
+                    <a class="admin-nav__item @Active("Customers")" asp-controller="Dashboard" asp-action="Customers">
+                        <span class="admin-nav__icon">♙</span><span>Khách hàng</span>
+                    </a>
+                    <a class="admin-nav__item @Active("Documents")" asp-controller="Dashboard" asp-action="Documents">
+                        <span class="admin-nav__icon">✓</span><span>Xác minh giấy tờ</span>
+                    </a>
+                </div>
+
+                <div class="admin-nav__group">
+                    <span class="admin-nav__label">TÀI CHÍNH</span>
+                    <a class="admin-nav__item @Active("Payments")" asp-controller="Dashboard" asp-action="Payments">
+                        <span class="admin-nav__icon">₫</span><span>Thanh toán và hoàn tiền</span>
+                    </a>
+                </div>
+            </nav>
+
+            <div class="admin-sidebar__footer">
+                <a asp-controller="Home" asp-action="Index"><span>↗</span> Xem trang khách hàng</a>
+                <form asp-controller="Account" asp-action="Logout" method="post">
+                    <button type="submit"><span>⇥</span> Đăng xuất</button>
+                </form>
+            </div>
+        </aside>
+
+        <div class="admin-main">
+            <header class="admin-topbar">
+                <button type="button" class="admin-menu-toggle" id="adminMenuToggle" aria-label="Mở menu">☰</button>
+                <div class="admin-topbar__title">
+                    <strong>@ViewData["Title"]</strong>
+                    <small>@DateTime.Now.ToString("dddd, dd/MM/yyyy", new System.Globalization.CultureInfo("vi-VN"))</small>
+                </div>
+                <div class="admin-topbar__actions">
+                    <a class="admin-topbar__notification" asp-controller="Dashboard" asp-action="Bookings" asp-route-status="PendingConfirmation" aria-label="Đơn chờ xử lý">♢</a>
+                    <div class="admin-user">
+                        <span class="admin-user__avatar">A</span>
+                        <span><strong>Quản lý SmartCar</strong><small>@User.Identity?.Name</small></span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="admin-content">
+                @if (TempData["AdminSuccess"] is string successMessage)
+                {
+                    <div class="admin-alert admin-alert--success" role="status">✓ @successMessage</div>
+                }
+                @if (TempData["AdminError"] is string errorMessage)
+                {
+                    <div class="admin-alert admin-alert--danger" role="alert">! @errorMessage</div>
+                }
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    <div class="admin-sidebar-backdrop" id="adminSidebarBackdrop"></div>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (() => {
+            const sidebar = document.getElementById("adminSidebar");
+            const backdrop = document.getElementById("adminSidebarBackdrop");
+            const toggle = document.getElementById("adminMenuToggle");
+            const setOpen = open => {
+                sidebar?.classList.toggle("is-open", open);
+                backdrop?.classList.toggle("is-open", open);
+                document.body.classList.toggle("admin-menu-open", open);
+            };
+            toggle?.addEventListener("click", () => setOpen(!sidebar?.classList.contains("is-open")));
+            backdrop?.addEventListener("click", () => setOpen(false));
+        })();
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
