@@ -44,7 +44,7 @@
                             <strong>@item.VehicleName</strong>
                             <div class="text-muted small">@item.LicensePlate</div>
                         </td>
-                        <td>@item.DocumentType</td>
+                        <td>@item.DocumentType.ToVietnamese()</td>
                         <td>@item.DocumentNumber</td>
                         <td>@item.IssuedDate.ToString("dd/MM/yyyy")</td>
                         <td>@(item.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Không thời hạn")</td>
