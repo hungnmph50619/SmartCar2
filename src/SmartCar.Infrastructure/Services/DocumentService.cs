@@ -21,23 +21,25 @@ internal sealed class DocumentService : IDocumentService
         string customerId,
         CancellationToken cancellationToken = default)
     {
-        var documents = await QueryDocuments()
+        var documents = await _dbContext.CustomerDocuments
+            .AsNoTracking()
             .Where(document => document.CustomerId == customerId)
             .OrderBy(document => document.DocumentType)
             .ToListAsync(cancellationToken);
 
-        return documents;
+        return await MapDocumentsAsync(documents, cancellationToken);
     }
 
     public async Task<IReadOnlyList<DocumentDto>> GetPendingDocumentsAsync(
         CancellationToken cancellationToken = default)
     {
-        var documents = await QueryDocuments()
+        var documents = await _dbContext.CustomerDocuments
+            .AsNoTracking()
             .Where(document => document.Status == DocumentStatus.Pending)
             .OrderBy(document => document.UpdatedAt)
             .ToListAsync(cancellationToken);
 
-        return documents;
+        return await MapDocumentsAsync(documents, cancellationToken);
     }
 
     public async Task<OperationResult> SubmitAsync(
@@ -159,7 +161,7 @@ internal sealed class DocumentService : IDocumentService
             UserId = document.CustomerId,
             Title = verified ? "Giấy tờ đã được xác minh" : "Giấy tờ bị từ chối",
             Message = verified
-                ? $"{document.DocumentType} của bạn đã được Admin xác minh."
+                ? $"{document.DocumentType} của bạn đã được Quản trị viên xác minh."
                 : $"{document.DocumentType} bị từ chối. Lý do: {document.RejectionReason}"
         });
 
@@ -167,25 +169,53 @@ internal sealed class DocumentService : IDocumentService
         return OperationResult.Success();
     }
 
-    private IQueryable<DocumentDto> QueryDocuments() =>
-        from document in _dbContext.CustomerDocuments.AsNoTracking()
-        join user in _dbContext.Users.AsNoTracking()
-            on document.CustomerId equals user.Id into userGroup
-        from user in userGroup.DefaultIfEmpty()
-        select new DocumentDto(
-            document.CustomerDocumentId,
-            document.CustomerId,
-            user == null ? string.Empty : user.FullName,
-            user == null ? null : user.PhoneNumber,
-            document.DocumentType,
-            document.DocumentNumber,
-            document.ExpiryDate,
-            document.ImagePath,
-            document.Status,
-            document.RejectionReason,
-            document.VerifiedBy,
-            document.VerifiedAt,
-            document.UpdatedAt);
+    private async Task<IReadOnlyList<DocumentDto>> MapDocumentsAsync(
+        IReadOnlyCollection<CustomerDocument> documents,
+        CancellationToken cancellationToken)
+    {
+        if (documents.Count == 0)
+        {
+            return Array.Empty<DocumentDto>();
+        }
+
+        var customerIds = documents
+            .Select(document => document.CustomerId)
+            .Distinct()
+            .ToList();
+
+        var users = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => customerIds.Contains(user.Id))
+            .Select(user => new
+            {
+                user.Id,
+                user.FullName,
+                user.PhoneNumber
+            })
+            .ToDictionaryAsync(user => user.Id, cancellationToken);
+
+        return documents
+            .Select(document =>
+            {
+                users.TryGetValue(document.CustomerId, out var user);
+
+                return new DocumentDto(
+                    document.CustomerDocumentId,
+                    document.CustomerId,
+                    user?.FullName ?? string.Empty,
+                    user?.PhoneNumber,
+                    document.DocumentType,
+                    document.DocumentNumber,
+                    document.ExpiryDate,
+                    document.ImagePath,
+                    document.Status,
+                    document.RejectionReason,
+                    document.VerifiedBy,
+                    document.VerifiedAt,
+                    document.UpdatedAt);
+            })
+            .ToList();
+    }
 
     private async Task NotifyAdminsAsync(
         string title,
