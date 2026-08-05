@@ -1,0 +1,115 @@
+@model AdminMaintenanceListViewModel
+@{
+    ViewData["Title"] = "Bảo trì và sửa chữa";
+}
+
+<div class="admin-page-head">
+    <div>
+        <h1>Bảo trì và sửa chữa</h1>
+        <p>Tạo phiếu bảo trì, khóa xe khỏi lịch cho thuê, theo dõi chi phí và mở lại xe sau khi hoàn tất.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-action="Vehicles">▰ Đội xe</a>
+        <button class="admin-btn admin-btn--primary" type="button" data-bs-toggle="modal" data-bs-target="#createMaintenanceModal">＋ Tạo phiếu bảo trì</button>
+    </div>
+</div>
+
+@if (Model.Records.Count == 0)
+{
+    <section class="admin-panel"><div class="admin-empty"><span class="admin-empty__icon">⚙</span>Chưa có phiếu bảo trì nào.</div></section>
+}
+else
+{
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Xe</th>
+                    <th>Nội dung</th>
+                    <th>Ngày bắt đầu</th>
+                    <th>Hoàn thành</th>
+                    <th>Kilomet</th>
+                    <th>Nhà cung cấp</th>
+                    <th>Chi phí</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var record in Model.Records)
+                {
+                    <tr>
+                        <td><span class="admin-table__primary">@record.VehicleName</span><span class="admin-table__secondary">@record.LicensePlate</span></td>
+                        <td><span class="admin-table__primary">@record.Content</span></td>
+                        <td>@record.StartDate.ToString("dd/MM/yyyy")</td>
+                        <td>@(record.CompletedDate?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa hoàn tất")</td>
+                        <td>@record.Mileage.ToString("N0") km</td>
+                        <td>@(record.ServiceProvider ?? "Chưa cập nhật")</td>
+                        <td class="admin-table__primary">@record.Cost.ToString("N0")đ</td>
+                        <td><span class="admin-status admin-status--@AdminDisplayHelper.MaintenanceCss(record.Status)">@AdminDisplayHelper.MaintenanceLabel(record.Status)</span></td>
+                        <td>
+                            @if (record.Status == MaintenanceStatus.InProgress)
+                            {
+                                <form asp-action="CompleteMaintenance" method="post" onsubmit="return confirm('Xác nhận bảo trì đã hoàn tất và mở lại xe cho thuê?');">
+                                    <input type="hidden" name="id" value="@record.MaintenanceRecordId" />
+                                    <button class="admin-row-action" type="submit">Hoàn tất</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<div class="modal fade admin-modal-form" id="createMaintenanceModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="CreateMaintenance" method="post">
+                <div class="modal-header">
+                    <div><h2 class="modal-title fs-5">Tạo phiếu bảo trì</h2><small class="text-muted">Xe sẽ được khóa khỏi danh sách cho thuê ngay sau khi lưu.</small></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="admin-form-grid">
+                        <div class="admin-form-field admin-form-field--wide">
+                            <label for="maintenanceVehicle">Xe</label>
+                            <select id="maintenanceVehicle" class="admin-form-control" name="vehicleId" required>
+                                <option value="">Chọn xe cần bảo trì</option>
+                                @foreach (var vehicle in Model.VehicleOptions)
+                                {
+                                    <option value="@vehicle.VehicleId">@vehicle.DisplayName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="admin-form-field">
+                            <label for="maintenanceStart">Ngày bắt đầu</label>
+                            <input id="maintenanceStart" class="admin-form-control" type="date" name="startDate" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="admin-form-field">
+                            <label for="maintenanceMileage">Số kilomet</label>
+                            <input id="maintenanceMileage" class="admin-form-control" type="number" min="0" name="mileage" value="0" required />
+                        </div>
+                        <div class="admin-form-field">
+                            <label for="maintenanceProvider">Nhà cung cấp/xưởng</label>
+                            <input id="maintenanceProvider" class="admin-form-control" type="text" name="serviceProvider" placeholder="Tên garage hoặc nhà cung cấp" />
+                        </div>
+                        <div class="admin-form-field">
+                            <label for="maintenanceCost">Chi phí dự kiến</label>
+                            <input id="maintenanceCost" class="admin-form-control" type="number" min="0" step="1000" name="cost" value="0" />
+                        </div>
+                        <div class="admin-form-field admin-form-field--wide">
+                            <label for="maintenanceContent">Nội dung bảo trì</label>
+                            <textarea id="maintenanceContent" class="admin-form-control" name="content" required placeholder="Ví dụ: thay dầu, kiểm tra phanh, lốp và hệ thống điện..."></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="admin-btn" data-bs-dismiss="modal">Đóng</button>
+                    <button type="submit" class="admin-btn admin-btn--primary">Tạo phiếu và khóa xe</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
