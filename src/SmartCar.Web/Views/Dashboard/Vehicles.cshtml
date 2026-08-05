@@ -10,7 +10,8 @@
     </div>
     <div class="admin-page-actions">
         <a class="admin-btn" asp-action="Calendar">▦ Lịch xe</a>
-        <a class="admin-btn admin-btn--primary" asp-action="Maintenance">⚙ Tạo phiếu bảo trì</a>
+        <a class="admin-btn" asp-action="Maintenance">⚙ Bảo trì</a>
+        <a class="admin-btn admin-btn--primary" asp-controller="AdminVehicles" asp-action="Create">＋ Thêm xe mới</a>
     </div>
 </div>
 
@@ -36,7 +37,13 @@
 
 @if (Model.Vehicles.Count == 0)
 {
-    <section class="admin-panel"><div class="admin-empty"><span class="admin-empty__icon">▰</span>Không có xe phù hợp với điều kiện lọc.</div></section>
+    <section class="admin-panel">
+        <div class="admin-empty">
+            <span class="admin-empty__icon">▰</span>
+            Không có xe phù hợp với điều kiện lọc.
+            <div class="mt-3"><a class="admin-btn admin-btn--primary" asp-controller="AdminVehicles" asp-action="Create">Thêm xe đầu tiên</a></div>
+        </div>
+    </section>
 }
 else
 {
@@ -92,8 +99,13 @@ else
                         <td>@(vehicle.LastMaintenanceDate?.ToString("dd/MM/yyyy") ?? "Chưa có")</td>
                         <td>
                             <div class="admin-row-actions">
-                                <a class="admin-row-action" asp-controller="Vehicles" asp-action="Details" asp-route-id="@vehicle.VehicleId">Xem xe</a>
+                                <a class="admin-row-action" asp-controller="AdminVehicles" asp-action="Edit" asp-route-id="@vehicle.VehicleId">Sửa</a>
+                                @if (vehicle.Status == VehicleStatus.Available)
+                                {
+                                    <a class="admin-row-action" asp-controller="Vehicles" asp-action="Details" asp-route-id="@vehicle.VehicleId" target="_blank">Xem</a>
+                                }
                                 <button type="button" class="admin-row-action" data-bs-toggle="modal" data-bs-target="#vehicleStatusModal-@vehicle.VehicleId">Trạng thái</button>
+                                <button type="button" class="admin-row-action text-danger" data-bs-toggle="modal" data-bs-target="#deleteVehicleModal-@vehicle.VehicleId">Xóa</button>
                             </div>
                         </td>
                     </tr>
@@ -115,17 +127,52 @@ else
                         </div>
                         <div class="modal-body">
                             <label class="form-label fw-semibold">Trạng thái mới</label>
-                            <select class="form-select" name="newStatus">
-                                @foreach (var status in Enum.GetValues<VehicleStatus>())
-                                {
-                                    <option value="@status" selected="@(vehicle.Status == status)">@AdminDisplayHelper.VehicleLabel(status)</option>
-                                }
-                            </select>
-                            <p class="text-muted small mt-2 mb-0">Không thể đưa xe đang trong chuyến thuê sang trạng thái bảo trì hoặc ngừng hoạt động.</p>
+                            @if (vehicle.Status == VehicleStatus.Rented)
+                            {
+                                <input type="hidden" name="newStatus" value="@VehicleStatus.Rented" />
+                                <input class="form-control" value="Đang được thuê" readonly />
+                                <p class="text-muted small mt-2 mb-0">Trạng thái này chỉ thay đổi sau khi admin lập biên bản trả xe và hoàn tất kiểm tra.</p>
+                            }
+                            else
+                            {
+                                <select class="form-select" name="newStatus">
+                                    <option value="@VehicleStatus.Available" selected="@(vehicle.Status == VehicleStatus.Available)">Sẵn sàng cho thuê</option>
+                                    <option value="@VehicleStatus.Maintenance" selected="@(vehicle.Status == VehicleStatus.Maintenance)">Đang bảo trì</option>
+                                    <option value="@VehicleStatus.Inactive" selected="@(vehicle.Status == VehicleStatus.Inactive)">Ngừng hoạt động</option>
+                                </select>
+                                <p class="text-muted small mt-2 mb-0">Xe bảo trì hoặc ngừng hoạt động sẽ không hiển thị cho khách thuê.</p>
+                            }
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="admin-btn" data-bs-dismiss="modal">Đóng</button>
                             <button type="submit" class="admin-btn admin-btn--primary">Lưu trạng thái</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade admin-modal-form" id="deleteVehicleModal-@vehicle.VehicleId" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form asp-controller="AdminVehicles" asp-action="Delete" asp-route-id="@vehicle.VehicleId" method="post">
+                        <div class="modal-header">
+                            <div><h2 class="modal-title fs-5">Xóa xe khỏi hệ thống?</h2><small class="text-muted">@vehicle.VehicleName · @vehicle.LicensePlate</small></div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                        </div>
+                        <div class="modal-body">
+                            @if (vehicle.CompletedBookings > 0 || vehicle.ActiveBookings > 0 || vehicle.LastMaintenanceDate.HasValue)
+                            {
+                                <div class="admin-alert admin-alert--danger mb-0">Xe đã có lịch sử thuê hoặc bảo trì nên không thể xóa vĩnh viễn. Hãy dùng trạng thái <strong>Ngừng hoạt động</strong>.</div>
+                            }
+                            else
+                            {
+                                <div class="admin-alert admin-alert--danger mb-0">Thao tác này xóa thông tin và ảnh đã tải lên của xe. Dữ liệu không thể khôi phục.</div>
+                            }
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="admin-btn" data-bs-dismiss="modal">Không xóa</button>
+                            <button type="submit" class="admin-btn admin-btn--danger">Xác nhận xóa xe</button>
                         </div>
                     </form>
                 </div>
