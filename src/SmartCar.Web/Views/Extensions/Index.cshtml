@@ -29,11 +29,11 @@ else
                     <td>@item.OriginalReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
                     <td>@item.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
                     <td>@item.AdditionalAmount.ToString("N0") đ</td>
-                    <td><span class="badge bg-secondary">@item.Status</span></td>
+                    <td><span class="badge bg-secondary">@item.Status.ToVietnamese()</span></td>
                 </tr>
                 @if (!string.IsNullOrWhiteSpace(item.AdminNote))
                 {
-                    <tr><td colspan="6"><strong>Phản hồi Admin:</strong> @item.AdminNote</td></tr>
+                    <tr><td colspan="6"><strong>Phản hồi của quản trị viên:</strong> @item.AdminNote</td></tr>
                 }
             }
             </tbody>
