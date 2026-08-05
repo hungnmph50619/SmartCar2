@@ -20,7 +20,12 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Loại sự cố</label>
-                    <select asp-for="IncidentType" asp-items="Html.GetEnumSelectList<IncidentType>()" class="form-select"></select>
+                    <select asp-for="IncidentType" class="form-select">
+                        @foreach (var type in Enum.GetValues<IncidentType>())
+                        {
+                            <option value="@type">@type.ToVietnamese()</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Thời điểm xảy ra</label>
