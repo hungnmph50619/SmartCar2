@@ -3,6 +3,22 @@
     ViewData["Title"] = "Đăng ký";
 }
 
+<style>
+    .register-form .validation-summary-valid,
+    .register-form .field-validation-valid {
+        display: none;
+    }
+
+    .register-form .input-validation-error {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.08);
+    }
+
+    .register-form .password-toggle {
+        min-width: 72px;
+    }
+</style>
+
 <div class="row justify-content-center py-3">
     <div class="col-md-7 col-lg-5">
         <div class="card shadow-sm border-0">
@@ -14,7 +30,7 @@
                     </p>
                 </div>
 
-                <form asp-action="Register" method="post" novalidate>
+                <form asp-action="Register" method="post" class="register-form" novalidate>
                     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3" role="alert"></div>
 
                     <div class="mb-3">
