@@ -8,17 +8,17 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h1 class="h3 mb-1">Quản lý đơn thuê</h1>
-        <p class="text-muted mb-0">Xử lý đơn từ lúc khách yêu cầu đến khi hoàn tất.</p>
+        <p class="text-muted mb-0">Xử lý đơn từ lúc khách hàng gửi yêu cầu đến khi hoàn tất.</p>
     </div>
 </div>
 
 <form method="get" class="row g-2 mb-3">
     <div class="col-md-4">
-        <select name="status" class="form-select">
+        <select name="status" class="form-select" aria-label="Lọc theo trạng thái đơn">
             <option value="">Tất cả trạng thái</option>
             @foreach (var status in Enum.GetValues<BookingStatus>())
             {
-                <option value="@status" selected="@(selectedStatus == status)">@status</option>
+                <option value="@status" selected="@(selectedStatus == status)">@status.ToVietnamese()</option>
             }
         </select>
     </div>
@@ -39,7 +39,7 @@
             <td>@booking.VehicleName<br /><small>@booking.LicensePlate</small></td>
             <td>@booking.PickupDate.ToString("dd/MM HH:mm")<br />→ @booking.ReturnDate.ToString("dd/MM HH:mm")</td>
             <td>@booking.TotalAmount.ToString("N0") đ</td>
-            <td><span class="badge bg-secondary">@booking.Status</span></td>
+            <td><span class="badge bg-secondary">@booking.Status.ToVietnamese()</span></td>
             <td><a class="btn btn-sm btn-primary" asp-action="Details" asp-route-id="@booking.BookingId">Xử lý</a></td>
         </tr>
     }
