@@ -1,0 +1,42 @@
+@model IReadOnlyList<SmartCar.Application.Features.Extensions.ExtensionDto>
+@{
+    ViewData["Title"] = "Lịch sử gia hạn";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Lịch sử gia hạn</h1>
+        <p class="text-muted mb-0">Theo dõi yêu cầu, kết quả duyệt và số tiền gia hạn.</p>
+    </div>
+    <a class="btn btn-outline-primary" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">Bạn chưa có yêu cầu gia hạn nào.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+            <thead><tr><th>Đơn</th><th>Xe</th><th>Thời gian cũ</th><th>Thời gian mới</th><th>Phí</th><th>Trạng thái</th></tr></thead>
+            <tbody>
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td><a asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">#@item.BookingId</a></td>
+                    <td>@item.VehicleName</td>
+                    <td>@item.OriginalReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td>@item.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td>@item.AdditionalAmount.ToString("N0") đ</td>
+                    <td><span class="badge bg-secondary">@item.Status</span></td>
+                </tr>
+                @if (!string.IsNullOrWhiteSpace(item.AdminNote))
+                {
+                    <tr><td colspan="6"><strong>Phản hồi Admin:</strong> @item.AdminNote</td></tr>
+                }
+            }
+            </tbody>
+        </table>
+    </div>
+}
