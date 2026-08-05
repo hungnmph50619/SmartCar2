@@ -1,0 +1,194 @@
+@model AdminVehicleFormViewModel
+
+<div asp-validation-summary="ModelOnly" class="admin-alert admin-alert--danger"></div>
+
+<div class="admin-detail-grid">
+    <div class="admin-detail-stack">
+        <section class="admin-panel">
+            <div class="admin-panel__head">
+                <div>
+                    <h2>Thông tin nhận diện xe</h2>
+                    <p>Tên xe, hãng, phiên bản, biển số và năm sản xuất.</p>
+                </div>
+            </div>
+            <div class="admin-panel__body">
+                <div class="admin-form-grid">
+                    <div class="admin-form-field">
+                        <label asp-for="BrandId"></label>
+                        <select asp-for="BrandId" class="admin-form-control" id="brandSelect">
+                            <option value="">Chọn hãng xe</option>
+                            @foreach (var brand in Model.BrandOptions)
+                            {
+                                <option value="@brand.BrandId">@brand.BrandName</option>
+                            }
+                        </select>
+                        <span asp-validation-for="BrandId" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="NewBrandName"></label>
+                        <input asp-for="NewBrandName" class="admin-form-control" id="newBrandInput" placeholder="Nhập khi hãng chưa có trong danh sách" />
+                        <span asp-validation-for="NewBrandName" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field admin-form-field--wide">
+                        <label asp-for="VehicleName"></label>
+                        <input asp-for="VehicleName" class="admin-form-control" placeholder="Ví dụ: Toyota Vios 2024" />
+                        <span asp-validation-for="VehicleName" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="Model"></label>
+                        <input asp-for="Model" class="admin-form-control" placeholder="Ví dụ: G, Luxury, Premium..." />
+                        <span asp-validation-for="Model" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="LicensePlate"></label>
+                        <input asp-for="LicensePlate" class="admin-form-control text-uppercase" placeholder="30A-123.45" />
+                        <span asp-validation-for="LicensePlate" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="ManufactureYear"></label>
+                        <input asp-for="ManufactureYear" class="admin-form-control" type="number" min="1990" max="@(DateTime.Today.Year + 1)" />
+                        <span asp-validation-for="ManufactureYear" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="Color"></label>
+                        <input asp-for="Color" class="admin-form-control" placeholder="Trắng, đen, đỏ..." />
+                        <span asp-validation-for="Color" class="text-danger small"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="admin-panel">
+            <div class="admin-panel__head">
+                <div>
+                    <h2>Thông số và giá thuê</h2>
+                    <p>Các thông tin dùng để lọc xe và tính tiền thuê.</p>
+                </div>
+            </div>
+            <div class="admin-panel__body">
+                <div class="admin-form-grid">
+                    <div class="admin-form-field">
+                        <label asp-for="Seats"></label>
+                        <input asp-for="Seats" class="admin-form-control" type="number" min="2" max="50" />
+                        <span asp-validation-for="Seats" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="Transmission"></label>
+                        <select asp-for="Transmission" class="admin-form-control">
+                            <option value="Số tự động">Số tự động</option>
+                            <option value="Số sàn">Số sàn</option>
+                        </select>
+                        <span asp-validation-for="Transmission" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="FuelType"></label>
+                        <select asp-for="FuelType" class="admin-form-control">
+                            <option value="Xăng">Xăng</option>
+                            <option value="Dầu diesel">Dầu diesel</option>
+                            <option value="Điện">Điện</option>
+                            <option value="Hybrid">Hybrid</option>
+                        </select>
+                        <span asp-validation-for="FuelType" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="DailyPrice"></label>
+                        <input asp-for="DailyPrice" class="admin-form-control" type="number" min="1" step="1000" placeholder="700000" />
+                        <span asp-validation-for="DailyPrice" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="CurrentMileage"></label>
+                        <input asp-for="CurrentMileage" class="admin-form-control" type="number" min="0" step="1" />
+                        <span asp-validation-for="CurrentMileage" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field">
+                        <label asp-for="Status"></label>
+                        @if (Model.Status == VehicleStatus.Rented)
+                        {
+                            <input type="hidden" asp-for="Status" />
+                            <input class="admin-form-control" value="Đang được thuê" readonly />
+                            <small class="text-muted">Trạng thái này được điều khiển bởi quy trình bàn giao và trả xe.</small>
+                        }
+                        else
+                        {
+                            <select asp-for="Status" class="admin-form-control">
+                                <option value="@VehicleStatus.Available">Sẵn sàng cho thuê</option>
+                                <option value="@VehicleStatus.Maintenance">Đang bảo trì</option>
+                                <option value="@VehicleStatus.Inactive">Ngừng hoạt động</option>
+                            </select>
+                        }
+                        <span asp-validation-for="Status" class="text-danger small"></span>
+                    </div>
+                    <div class="admin-form-field admin-form-field--wide">
+                        <label asp-for="Description"></label>
+                        <textarea asp-for="Description" class="admin-form-control" rows="7" placeholder="Mô tả tình trạng xe, tiện nghi, ưu điểm, quy định sử dụng..."></textarea>
+                        <span asp-validation-for="Description" class="text-danger small"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <aside class="admin-detail-stack">
+        <section class="admin-panel">
+            <div class="admin-panel__head">
+                <div>
+                    <h2>Hình ảnh xe</h2>
+                    <p>Tối đa 12 ảnh, mỗi ảnh không quá 5 MB.</p>
+                </div>
+            </div>
+            <div class="admin-panel__body">
+                @if (Model.ExistingImages.Count > 0)
+                {
+                    <div class="admin-vehicle-image-grid">
+                        @foreach (var image in Model.ExistingImages)
+                        {
+                            <article class="admin-vehicle-image-card">
+                                <img src="@image.ImagePath" alt="Ảnh xe" />
+                                <div class="admin-vehicle-image-card__controls">
+                                    <label>
+                                        <input type="radio" name="PrimaryImageId" value="@image.VehicleImageId" checked="@image.IsPrimary" />
+                                        Ảnh đại diện
+                                    </label>
+                                    <label class="text-danger">
+                                        <input type="checkbox" name="DeleteImageIds" value="@image.VehicleImageId" />
+                                        Xóa ảnh
+                                    </label>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                    <hr class="my-3" />
+                }
+
+                <div class="admin-form-field">
+                    <label asp-for="NewImages">@(Model.VehicleId > 0 ? "Thêm ảnh mới" : "Tải ảnh xe")</label>
+                    <input asp-for="NewImages" class="admin-form-control" type="file" accept=".jpg,.jpeg,.png,.webp,image/*" multiple id="vehicleImagesInput" />
+                    <span asp-validation-for="NewImages" class="text-danger small"></span>
+                    <small class="text-muted d-block mt-2">Ảnh đầu tiên sẽ được dùng làm ảnh đại diện khi thêm xe mới. Có thể đổi ảnh đại diện trong màn hình sửa xe.</small>
+                </div>
+
+                <div id="vehicleImagePreview" class="admin-vehicle-image-grid mt-3"></div>
+            </div>
+        </section>
+
+        <section class="admin-panel">
+            <div class="admin-panel__head"><div><h2>Lưu ý nghiệp vụ</h2></div></div>
+            <div class="admin-panel__body">
+                <div class="admin-alert-list">
+                    <div class="admin-alert-card admin-alert-card--warning">
+                        <span class="admin-alert-card__dot">!</span>
+                        <span><strong>Biển số phải duy nhất</strong><p>Không thể tạo hai xe có cùng biển số trong hệ thống.</p></span>
+                    </div>
+                    <div class="admin-alert-card admin-alert-card--success">
+                        <span class="admin-alert-card__dot">✓</span>
+                        <span><strong>Xe sẵn sàng sẽ hiện cho khách</strong><p>Xe bảo trì hoặc ngừng hoạt động không xuất hiện trong danh sách thuê.</p></span>
+                    </div>
+                    <div class="admin-alert-card admin-alert-card--danger">
+                        <span class="admin-alert-card__dot">!</span>
+                        <span><strong>Không xóa xe có lịch sử</strong><p>Xe đã từng có đơn thuê hoặc bảo trì chỉ được chuyển sang Ngừng hoạt động.</p></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </aside>
+</div>
