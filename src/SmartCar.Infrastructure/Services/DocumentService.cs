@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
+using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
@@ -11,10 +12,14 @@ namespace SmartCar.Infrastructure.Services;
 internal sealed class DocumentService : IDocumentService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IAuditService _auditService;
 
-    public DocumentService(ApplicationDbContext dbContext)
+    public DocumentService(
+        ApplicationDbContext dbContext,
+        IAuditService auditService)
     {
         _dbContext = dbContext;
+        _auditService = auditService;
     }
 
     public async Task<IReadOnlyList<DocumentDto>> GetCustomerDocumentsAsync(
@@ -28,6 +33,19 @@ internal sealed class DocumentService : IDocumentService
             .ToListAsync(cancellationToken);
 
         return await MapDocumentsAsync(documents, cancellationToken);
+    }
+
+    public async Task<DocumentDto?> GetDocumentAsync(
+        int documentId,
+        CancellationToken cancellationToken = default)
+    {
+        var documents = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document => document.CustomerDocumentId == documentId)
+            .ToListAsync(cancellationToken);
+
+        var mapped = await MapDocumentsAsync(documents, cancellationToken);
+        return mapped.SingleOrDefault();
     }
 
     public async Task<IReadOnlyList<DocumentDto>> GetPendingDocumentsAsync(
@@ -64,6 +82,20 @@ internal sealed class DocumentService : IDocumentService
             return OperationResult.Failure("GPLX phải còn thời hạn sử dụng.");
         }
 
+        var normalizedNumber = request.DocumentNumber.Trim().ToUpperInvariant();
+        var duplicate = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .AnyAsync(item =>
+                item.CustomerId != customerId &&
+                item.DocumentType == request.DocumentType &&
+                item.DocumentNumber == normalizedNumber,
+                cancellationToken);
+
+        if (duplicate)
+        {
+            return OperationResult.Failure("Số giấy tờ đã được sử dụng bởi tài khoản khác.");
+        }
+
         var document = await _dbContext.CustomerDocuments
             .FirstOrDefaultAsync(item =>
                 item.CustomerId == customerId &&
@@ -81,7 +113,7 @@ internal sealed class DocumentService : IDocumentService
             _dbContext.CustomerDocuments.Add(document);
         }
 
-        document.DocumentNumber = request.DocumentNumber.Trim().ToUpperInvariant();
+        document.DocumentNumber = normalizedNumber;
         document.ExpiryDate = request.ExpiryDate;
         document.ImagePath = request.ImagePath;
         document.Status = DocumentStatus.Pending;
@@ -96,6 +128,15 @@ internal sealed class DocumentService : IDocumentService
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.WriteAsync(
+            customerId,
+            "Submit",
+            nameof(CustomerDocument),
+            document.CustomerDocumentId.ToString(),
+            $"Gửi {document.DocumentType} để xác minh.",
+            cancellationToken: cancellationToken);
+
         return OperationResult.Success();
     }
 
@@ -145,6 +186,11 @@ internal sealed class DocumentService : IDocumentService
             return OperationResult.Failure("Không tìm thấy giấy tờ.");
         }
 
+        if (document.Status != DocumentStatus.Pending)
+        {
+            return OperationResult.Failure("Chỉ giấy tờ đang chờ xác minh mới được xử lý.");
+        }
+
         if (!verified && string.IsNullOrWhiteSpace(reason))
         {
             return OperationResult.Failure("Vui lòng nhập lý do từ chối.");
@@ -166,6 +212,17 @@ internal sealed class DocumentService : IDocumentService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.WriteAsync(
+            adminId,
+            verified ? "Verify" : "Reject",
+            nameof(CustomerDocument),
+            document.CustomerDocumentId.ToString(),
+            verified
+                ? $"Xác minh {document.DocumentType} của khách hàng {document.CustomerId}."
+                : $"Từ chối {document.DocumentType} của khách hàng {document.CustomerId}: {document.RejectionReason}",
+            cancellationToken: cancellationToken);
+
         return OperationResult.Success();
     }
 
