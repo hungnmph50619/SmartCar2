@@ -40,16 +40,16 @@
             <td>@vehicle.LicensePlate</td>
             <td>@vehicle.DailyPrice.ToString("N0") đ</td>
             <td>@vehicle.CurrentMileage.ToString("N0") km</td>
-            <td><span class="badge bg-secondary">@vehicle.Status</span></td>
+            <td><span class="badge bg-secondary">@vehicle.Status.ToVietnamese()</span></td>
             <td class="text-end">
-                <a class="btn btn-sm btn-outline-primary" asp-action="Edit" asp-route-id="@vehicle.VehicleId">Sửa/Ảnh</a>
+                <a class="btn btn-sm btn-outline-primary" asp-action="Edit" asp-route-id="@vehicle.VehicleId">Sửa và quản lý ảnh</a>
                 @if (vehicle.Status != VehicleStatus.Rented)
                 {
                     <form class="d-inline" asp-action="ChangeStatus" method="post">
                         <input type="hidden" name="id" value="@vehicle.VehicleId" />
                         <input type="hidden" name="status" value="@(vehicle.Status == VehicleStatus.Inactive ? VehicleStatus.Available : VehicleStatus.Inactive)" />
                         <button class="btn btn-sm @(vehicle.Status == VehicleStatus.Inactive ? "btn-outline-success" : "btn-outline-danger")" type="submit">
-                            @(vehicle.Status == VehicleStatus.Inactive ? "Mở lại" : "Ngừng thuê")
+                            @(vehicle.Status == VehicleStatus.Inactive ? "Mở lại" : "Ngừng cho thuê")
                         </button>
                     </form>
                 }
