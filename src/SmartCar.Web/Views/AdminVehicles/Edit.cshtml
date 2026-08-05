@@ -1,0 +1,56 @@
+@model SmartCar.Web.ViewModels.VehicleFormViewModel
+@using SmartCar.Application.Features.Vehicles
+@{
+    ViewData["Title"] = "Sửa xe";
+    var vehicle = ViewBag.Vehicle as VehicleDto;
+}
+
+<h1 class="h3 mb-3">Sửa xe</h1>
+<form asp-action="Edit" method="post" enctype="multipart/form-data" class="card card-body shadow-sm mb-4">
+    <partial name="_VehicleForm" model="Model" />
+    <div class="mt-4">
+        <button class="btn btn-primary" type="submit">Lưu thay đổi</button>
+        <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
+    </div>
+</form>
+
+@if (vehicle is not null)
+{
+    <div class="card card-body shadow-sm">
+        <h2 class="h5">Ảnh xe (@vehicle.Images.Count/10)</h2>
+        @if (vehicle.Images.Count == 0)
+        {
+            <p class="text-muted mb-0">Xe chưa có ảnh.</p>
+        }
+        else
+        {
+            <div class="row g-3">
+            @foreach (var image in vehicle.Images)
+            {
+                <div class="col-md-3">
+                    <div class="border rounded p-2 h-100">
+                        <img src="@image.ImagePath" class="img-fluid rounded mb-2" style="height:140px;width:100%;object-fit:cover" />
+                        @if (image.IsPrimary)
+                        {
+                            <span class="badge bg-success mb-2">Ảnh đại diện</span>
+                        }
+                        else
+                        {
+                            <form asp-action="SetPrimaryImage" method="post" class="mb-2">
+                                <input type="hidden" name="vehicleId" value="@vehicle.VehicleId" />
+                                <input type="hidden" name="imageId" value="@image.VehicleImageId" />
+                                <button type="submit" class="btn btn-sm btn-outline-primary w-100">Chọn làm ảnh chính</button>
+                            </form>
+                        }
+                        <form asp-action="DeleteImage" method="post">
+                            <input type="hidden" name="vehicleId" value="@vehicle.VehicleId" />
+                            <input type="hidden" name="imageId" value="@image.VehicleImageId" />
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Xóa ảnh</button>
+                        </form>
+                    </div>
+                </div>
+            }
+            </div>
+        }
+    </div>
+}
