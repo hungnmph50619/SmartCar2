@@ -5,21 +5,28 @@
     var vehicle = ViewBag.Vehicle as VehicleDto;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="h3 mb-0">Sửa xe</h1>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
+    <div>
+        <h1 class="h3 mb-1">Sửa thông tin xe</h1>
+        <p class="text-muted mb-0">Cập nhật dữ liệu vận hành, giá thuê và bộ ảnh của xe.</p>
+    </div>
     @if (vehicle is not null)
     {
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <a class="btn btn-outline-primary" asp-controller="VehicleDocuments" asp-action="Index" asp-route-vehicleId="@vehicle.VehicleId">Giấy tờ xe</a>
             <a class="btn btn-outline-danger" asp-controller="Incidents" asp-action="Create" asp-route-vehicleId="@vehicle.VehicleId">Ghi nhận sự cố</a>
         </div>
     }
 </div>
 
-<form asp-action="Edit" method="post" enctype="multipart/form-data" class="card card-body shadow-sm mb-4">
+<form asp-action="Edit"
+      method="post"
+      enctype="multipart/form-data"
+      class="card card-body shadow-sm mb-4"
+      data-loading-form>
     <partial name="_VehicleForm" model="Model" />
-    <div class="mt-4">
-        <button class="btn btn-primary" type="submit">Lưu thay đổi</button>
+    <div class="mt-4 d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu thay đổi...">Lưu thay đổi</button>
         <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
     </div>
 </form>
@@ -27,10 +34,16 @@
 @if (vehicle is not null)
 {
     <div class="card card-body shadow-sm">
-        <h2 class="h5">Ảnh xe (@vehicle.Images.Count/10)</h2>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h2 class="h5 mb-1">Ảnh xe (@vehicle.Images.Count/10)</h2>
+                <p class="text-muted small mb-0">Ảnh đại diện xuất hiện đầu tiên trên trang chủ và danh sách xe.</p>
+            </div>
+        </div>
+
         @if (vehicle.Images.Count == 0)
         {
-            <p class="text-muted mb-0">Xe chưa có ảnh.</p>
+            <p class="text-muted mb-0">Xe chưa có ảnh. Hãy tải ảnh bằng biểu mẫu phía trên.</p>
         }
         else
         {
@@ -39,23 +52,33 @@
             {
                 <div class="col-md-3">
                     <div class="border rounded p-2 h-100">
-                        <img src="@image.ImagePath" class="img-fluid rounded mb-2" style="height:140px;width:100%;object-fit:cover" />
+                        <img src="@image.ImagePath"
+                             class="img-fluid rounded mb-2"
+                             style="height:140px;width:100%;object-fit:cover"
+                             alt="Ảnh xe @vehicle.VehicleName" />
                         @if (image.IsPrimary)
                         {
                             <span class="badge bg-success mb-2">Ảnh đại diện</span>
                         }
                         else
                         {
-                            <form asp-action="SetPrimaryImage" method="post" class="mb-2">
+                            <form asp-action="SetPrimaryImage"
+                                  method="post"
+                                  class="mb-2"
+                                  data-loading-form
+                                  data-confirm="Chọn ảnh này làm ảnh đại diện của xe?">
                                 <input type="hidden" name="vehicleId" value="@vehicle.VehicleId" />
                                 <input type="hidden" name="imageId" value="@image.VehicleImageId" />
-                                <button type="submit" class="btn btn-sm btn-outline-primary w-100">Chọn làm ảnh chính</button>
+                                <button type="submit" class="btn btn-sm btn-outline-primary w-100" data-loading-text="Đang chọn...">Chọn làm ảnh chính</button>
                             </form>
                         }
-                        <form asp-action="DeleteImage" method="post">
+                        <form asp-action="DeleteImage"
+                              method="post"
+                              data-loading-form
+                              data-confirm="Xóa ảnh xe này? Hành động không thể hoàn tác.">
                             <input type="hidden" name="vehicleId" value="@vehicle.VehicleId" />
                             <input type="hidden" name="imageId" value="@image.VehicleImageId" />
-                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Xóa ảnh</button>
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100" data-loading-text="Đang xóa...">Xóa ảnh</button>
                         </form>
                     </div>
                 </div>
@@ -63,4 +86,8 @@
             </div>
         }
     </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
 }
