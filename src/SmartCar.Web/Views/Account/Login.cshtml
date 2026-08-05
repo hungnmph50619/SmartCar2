@@ -4,6 +4,159 @@
 }
 
 <style>
+    .login-page {
+        min-height: calc(100vh - 235px);
+        display: flex;
+        align-items: center;
+    }
+
+    .login-shell {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(390px, 0.8fr);
+        overflow: hidden;
+        border: 1px solid rgba(13, 110, 253, 0.08);
+        border-radius: 28px;
+        background: #fff;
+        box-shadow: 0 24px 70px rgba(31, 77, 120, 0.12);
+    }
+
+    .login-visual {
+        position: relative;
+        min-height: 590px;
+        padding: 48px 52px 34px;
+        overflow: hidden;
+        flex-direction: column;
+        justify-content: space-between;
+        background:
+            radial-gradient(circle at 18% 15%, rgba(65, 196, 255, 0.22), transparent 32%),
+            radial-gradient(circle at 92% 88%, rgba(24, 119, 242, 0.20), transparent 34%),
+            linear-gradient(145deg, #eef8ff 0%, #e4f3ff 52%, #f7fbff 100%);
+        animation: loginFadeLeft 0.55s ease-out both;
+    }
+
+    .login-visual::before,
+    .login-visual::after {
+        content: "";
+        position: absolute;
+        border-radius: 50%;
+        pointer-events: none;
+    }
+
+    .login-visual::before {
+        width: 260px;
+        height: 260px;
+        top: -120px;
+        right: -80px;
+        border: 42px solid rgba(255, 255, 255, 0.42);
+    }
+
+    .login-visual::after {
+        width: 180px;
+        height: 180px;
+        left: -75px;
+        bottom: -95px;
+        background: rgba(62, 177, 255, 0.12);
+    }
+
+    .login-visual-copy,
+    .login-illustration,
+    .login-benefits {
+        position: relative;
+        z-index: 1;
+    }
+
+    .login-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 12px;
+        border: 1px solid rgba(13, 110, 253, 0.14);
+        border-radius: 999px;
+        color: #0b5ed7;
+        background: rgba(255, 255, 255, 0.72);
+        font-size: 0.84rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+
+    .login-kicker-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #20c997;
+        box-shadow: 0 0 0 5px rgba(32, 201, 151, 0.12);
+    }
+
+    .login-visual h2 {
+        max-width: 560px;
+        margin: 18px 0 10px;
+        color: #12304f;
+        font-size: clamp(2rem, 3vw, 3rem);
+        font-weight: 800;
+        line-height: 1.13;
+    }
+
+    .login-visual-copy p {
+        max-width: 520px;
+        margin: 0;
+        color: #58728b;
+        font-size: 1.02rem;
+        line-height: 1.7;
+    }
+
+    .login-illustration {
+        width: min(100%, 660px);
+        margin: -4px auto -4px;
+        filter: drop-shadow(0 22px 24px rgba(8, 70, 135, 0.16));
+    }
+
+    .login-illustration svg {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+
+    .login-benefits {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .login-benefit {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        border: 1px solid rgba(13, 110, 253, 0.10);
+        border-radius: 12px;
+        color: #355b7c;
+        background: rgba(255, 255, 255, 0.72);
+        font-size: 0.86rem;
+        font-weight: 600;
+        backdrop-filter: blur(6px);
+    }
+
+    .login-benefit svg {
+        width: 17px;
+        height: 17px;
+        color: #0d6efd;
+        flex: 0 0 auto;
+    }
+
+    .login-panel {
+        display: flex;
+        align-items: center;
+        padding: 42px;
+        background: #fff;
+    }
+
+    .login-card {
+        width: 100%;
+        border: 0;
+        animation: loginFadeUp 0.45s ease-out both;
+    }
+
     .login-form .validation-summary-valid,
     .login-form .field-validation-valid {
         display: none;
@@ -14,25 +167,243 @@
         box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.08);
     }
 
+    .login-form .form-control {
+        min-height: 46px;
+        border-radius: 10px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .login-form .form-control:focus {
+        border-color: #67a8ff;
+        box-shadow: 0 0 0 0.22rem rgba(13, 110, 253, 0.12);
+    }
+
+    .login-form .input-group > .form-control {
+        border-radius: 10px 0 0 10px;
+    }
+
     .login-form .password-toggle {
-        width: 46px;
+        width: 48px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        border-radius: 0 10px 10px 0;
     }
 
     .login-form .password-toggle svg {
         width: 19px;
         height: 19px;
     }
+
+    .login-submit {
+        min-height: 46px;
+        border-radius: 10px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+    }
+
+    .login-submit:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px rgba(13, 110, 253, 0.24);
+    }
+
+    @@keyframes loginFadeLeft {
+        from {
+            opacity: 0;
+            transform: translateX(-18px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    @@keyframes loginFadeUp {
+        from {
+            opacity: 0;
+            transform: translateY(14px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @@media (max-width: 1199.98px) {
+        .login-shell {
+            grid-template-columns: minmax(0, 1fr) minmax(370px, 0.85fr);
+        }
+
+        .login-visual {
+            padding: 42px 36px 30px;
+        }
+
+        .login-panel {
+            padding: 36px;
+        }
+    }
+
+    @@media (max-width: 991.98px) {
+        .login-page {
+            min-height: auto;
+            padding-top: 12px;
+            padding-bottom: 24px;
+        }
+
+        .login-shell {
+            display: block;
+            max-width: 560px;
+            margin: 0 auto;
+            border-radius: 20px;
+        }
+
+        .login-panel {
+            padding: 32px;
+        }
+    }
+
+    @@media (max-width: 575.98px) {
+        .login-shell {
+            border-radius: 16px;
+        }
+
+        .login-panel {
+            padding: 26px 20px;
+        }
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .login-visual,
+        .login-card,
+        .login-submit {
+            animation: none;
+            transition: none;
+        }
+    }
 </style>
 
-<div class="row justify-content-center py-3">
-    <div class="col-md-7 col-lg-5">
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4 p-lg-5">
+<div class="login-page py-3">
+    <div class="login-shell">
+        <section class="login-visual d-none d-lg-flex" aria-label="Giới thiệu SmartCar">
+            <div class="login-visual-copy">
+                <span class="login-kicker">
+                    <span class="login-kicker-dot" aria-hidden="true"></span>
+                    Thuê xe thông minh
+                </span>
+                <h2>Chủ động mọi hành trình cùng SmartCar</h2>
+                <p>
+                    Tìm xe phù hợp, gửi yêu cầu thuê và quản lý chuyến đi trên một nền tảng đơn giản, rõ ràng.
+                </p>
+            </div>
+
+            <div class="login-illustration" aria-hidden="true">
+                <svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="phoneGradient" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#0c4f9f" />
+                            <stop offset="1" stop-color="#1177da" />
+                        </linearGradient>
+                        <linearGradient id="carGradient" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#0754a5" />
+                            <stop offset="0.55" stop-color="#0874d1" />
+                            <stop offset="1" stop-color="#0b3e7f" />
+                        </linearGradient>
+                        <linearGradient id="glassGradient" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#dff5ff" />
+                            <stop offset="1" stop-color="#70b9e7" />
+                        </linearGradient>
+                        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="160%">
+                            <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#0b4f91" flood-opacity="0.20" />
+                        </filter>
+                    </defs>
+
+                    <g opacity="0.58">
+                        <path d="M260 108h76v215h-76z" fill="#a7ddfb" />
+                        <path d="M345 76h62v247h-62z" fill="#bce8ff" />
+                        <path d="M417 132h72v191h-72z" fill="#9ed8f8" />
+                        <path d="M500 96h54v227h-54z" fill="#bce8ff" />
+                        <path d="M565 142h84v181h-84z" fill="#a7ddfb" />
+                        <path d="M372 44h8v34h-8z" fill="#6ebce8" />
+                        <path d="M358 50h36l-18-28z" fill="#6ebce8" />
+                    </g>
+
+                    <g filter="url(#softShadow)">
+                        <rect x="54" y="83" width="180" height="310" rx="30" fill="url(#phoneGradient)" />
+                        <rect x="67" y="104" width="154" height="264" rx="20" fill="#eaf8ff" />
+                        <rect x="118" y="92" width="52" height="7" rx="3.5" fill="#82c9f3" opacity="0.65" />
+                        <path d="M87 163c34 16 51 0 74 21 19 18 24 44 48 58" fill="none" stroke="#1680d9" stroke-width="6" stroke-linecap="round" stroke-dasharray="10 10" />
+                        <path d="M104 143c-15 0-26 11-26 25 0 23 26 49 26 49s26-26 26-49c0-14-11-25-26-25z" fill="#0870c9" />
+                        <circle cx="104" cy="168" r="9" fill="#dff5ff" />
+                        <path d="M196 214c-14 0-25 11-25 25 0 22 25 47 25 47s25-25 25-47c0-14-11-25-25-25z" fill="#0758ad" />
+                        <circle cx="196" cy="239" r="8" fill="#e8f8ff" />
+                        <rect x="85" y="296" width="117" height="14" rx="7" fill="#b7e2fa" />
+                        <rect x="85" y="319" width="86" height="10" rx="5" fill="#ccecff" />
+                    </g>
+
+                    <g filter="url(#softShadow)">
+                        <path d="M474 105c0-13 11-24 24-24h186c13 0 24 11 24 24v132c0 13-11 24-24 24H498c-13 0-24-11-24-24z" fill="#edf9ff" />
+                        <path d="M492 134l48-25 38 22 54-31 58 27v111H492z" fill="#d8f0fc" />
+                        <path d="M502 208c32-2 43-39 74-35 33 4 39 34 71 31 20-2 31-14 42-27" fill="none" stroke="#107bd0" stroke-width="6" stroke-linecap="round" stroke-dasharray="9 10" />
+                        <path d="M655 127c-18 0-32 14-32 31 0 29 32 62 32 62s32-33 32-62c0-17-14-31-32-31z" fill="#0870c9" />
+                        <circle cx="655" cy="158" r="11" fill="#e9f8ff" />
+                    </g>
+
+                    <ellipse cx="420" cy="421" rx="260" ry="26" fill="#77bfe9" opacity="0.28" />
+
+                    <g filter="url(#softShadow)">
+                        <path d="M236 335c17-51 60-87 120-95l121-4c54 2 98 28 126 72l43 13c22 7 36 23 36 43v22H205v-18c0-15 11-28 31-33z" fill="url(#carGradient)" />
+                        <path d="M331 254c19-9 39-13 61-14l70-2c36 2 66 16 89 44l15 19H288l19-26c7-9 15-16 24-21z" fill="#0b3f7c" />
+                        <path d="M344 258c16-7 33-10 51-11h26v52h-110l22-29c3-5 7-9 11-12z" fill="url(#glassGradient)" />
+                        <path d="M435 247h25c29 2 54 13 74 34l15 18H435z" fill="url(#glassGradient)" />
+                        <path d="M220 344h442c12 0 22 9 22 20v22H204v-19c0-13 7-21 16-23z" fill="#07376f" opacity="0.54" />
+                        <path d="M255 332h62" stroke="#9edbff" stroke-width="7" stroke-linecap="round" />
+                        <path d="M576 326h55" stroke="#9edbff" stroke-width="7" stroke-linecap="round" />
+                        <path d="M392 313h86" stroke="#5eb5ea" stroke-width="4" stroke-linecap="round" opacity="0.75" />
+                        <path d="M604 310l38 12-9 24-42-11z" fill="#f5fbff" />
+                        <path d="M220 340l35-11 10 22-48 10z" fill="#f5fbff" />
+                        <circle cx="298" cy="385" r="49" fill="#12314e" />
+                        <circle cx="298" cy="385" r="29" fill="#d8e8f2" />
+                        <circle cx="298" cy="385" r="13" fill="#6287a2" />
+                        <circle cx="584" cy="385" r="49" fill="#12314e" />
+                        <circle cx="584" cy="385" r="29" fill="#d8e8f2" />
+                        <circle cx="584" cy="385" r="13" fill="#6287a2" />
+                    </g>
+                </svg>
+            </div>
+
+            <div class="login-benefits" aria-label="Lợi ích của SmartCar">
+                <span class="login-benefit">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <path d="m9 12 2 2 4-4" />
+                    </svg>
+                    Xác minh rõ ràng
+                </span>
+                <span class="login-benefit">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 7v5l3 2" />
+                    </svg>
+                    Đặt xe nhanh chóng
+                </span>
+                <span class="login-benefit">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path d="M3 11h18" />
+                        <path d="M5 11l2-5h10l2 5" />
+                        <path d="M5 11v7h2v-2h10v2h2v-7" />
+                        <circle cx="8" cy="14" r="1" />
+                        <circle cx="16" cy="14" r="1" />
+                    </svg>
+                    Quản lý thuận tiện
+                </span>
+            </div>
+        </section>
+
+        <section class="login-panel">
+            <div class="login-card">
                 <div class="text-center mb-4">
-                    <h1 class="h3 mb-2">Đăng nhập SmartCar</h1>
+                    <h1 class="h3 mb-2 fw-bold">Đăng nhập SmartCar</h1>
                     <p class="text-muted mb-0">
                         Đăng nhập để đặt xe và quản lý các đơn thuê của bạn.
                     </p>
@@ -92,7 +463,7 @@
                         <a asp-action="ForgotPassword" class="text-decoration-none">Quên mật khẩu?</a>
                     </div>
 
-                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold" id="loginSubmitButton">
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold login-submit" id="loginSubmitButton">
                         <span data-login-text>Đăng nhập</span>
                         <span data-login-loading class="d-none">
                             <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -105,7 +476,7 @@
                     Chưa có tài khoản? <a asp-action="Register">Đăng ký ngay</a>
                 </p>
             </div>
-        </div>
+        </section>
     </div>
 </div>
 
