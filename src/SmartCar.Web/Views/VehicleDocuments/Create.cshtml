@@ -17,7 +17,12 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Loại giấy tờ</label>
-                    <select asp-for="DocumentType" asp-items="Html.GetEnumSelectList<VehicleDocumentType>()" class="form-select"></select>
+                    <select asp-for="DocumentType" class="form-select">
+                        @foreach (var type in Enum.GetValues<VehicleDocumentType>())
+                        {
+                            <option value="@type">@type.ToVietnamese()</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Số giấy tờ</label>
@@ -33,8 +38,8 @@
                     <input asp-for="ExpiryDate" type="date" class="form-control" />
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Đường dẫn ảnh/tệp</label>
-                    <input asp-for="ImagePath" class="form-control" placeholder="/uploads/documents/... hoặc URL lưu trữ" />
+                    <label class="form-label">Đường dẫn ảnh hoặc tệp</label>
+                    <input asp-for="ImagePath" class="form-control" placeholder="/uploads/documents/... hoặc địa chỉ lưu trữ" />
                 </div>
                 <div class="col-12">
                     <label class="form-label">Ghi chú</label>
