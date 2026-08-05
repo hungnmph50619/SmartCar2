@@ -10,21 +10,29 @@
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-4">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom box-shadow mb-4">
             <div class="container">
                 <a class="navbar-brand fw-bold" asp-controller="Home" asp-action="Index">SmartCar</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                <div class="navbar-collapse collapse d-lg-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
                         <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Index">Trang chủ</a></li>
-                        @if (User.IsInRole(RoleNames.Manager))
+                        <li class="nav-item"><a class="nav-link" asp-controller="Vehicles" asp-action="Index">Danh sách xe</a></li>
+                        @if (User.IsInRole(RoleNames.Customer))
                         {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Dashboard" asp-action="Index">Quản lý</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a></li>
+                        }
+                        @if (User.IsInRole(RoleNames.Admin))
+                        {
+                            <li class="nav-item"><a class="nav-link" asp-controller="Dashboard" asp-action="Index">Dashboard</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="AdminBookings" asp-action="Index">Đơn thuê</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="AdminVehicles" asp-action="Index">Xe</a></li>
+                            <li class="nav-item"><a class="nav-link" asp-controller="Brands" asp-action="Index">Hãng xe</a></li>
                         }
                     </ul>
-                    <ul class="navbar-nav align-items-sm-center">
+                    <ul class="navbar-nav align-items-lg-center">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
                             <li class="nav-item"><span class="nav-link">Xin chào, @User.Identity.Name</span></li>
@@ -50,6 +58,13 @@
         {
             <div class="alert alert-success alert-dismissible fade show" role="alert">
                 @successMessage
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        }
+        @if (TempData["ErrorMessage"] is string errorMessage)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @errorMessage
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         }
