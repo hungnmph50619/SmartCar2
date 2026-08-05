@@ -1,9 +1,12 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Common;
+using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
@@ -18,15 +21,18 @@ public sealed class ReturnsController : Controller
 
     private readonly IReturnService _returnService;
     private readonly IBookingService _bookingService;
+    private readonly IAuditService _auditService;
     private readonly IWebHostEnvironment _environment;
 
     public ReturnsController(
         IReturnService returnService,
         IBookingService bookingService,
+        IAuditService auditService,
         IWebHostEnvironment environment)
     {
         _returnService = returnService;
         _bookingService = bookingService;
+        _auditService = auditService;
         _environment = environment;
     }
 
@@ -94,6 +100,13 @@ public sealed class ReturnsController : Controller
             return View(model);
         }
 
+        await WriteAuditAsync(
+            "CreateReturn",
+            nameof(VehicleReturn),
+            model.BookingId,
+            $"Lập biên bản trả xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh, có hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
+            cancellationToken);
+
         TempData["SuccessMessage"] = "Đã lập biên bản trả xe và lưu ảnh tình trạng xe. Xe chuyển sang chờ kiểm tra.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
@@ -117,6 +130,17 @@ public sealed class ReturnsController : Controller
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã thêm phụ phí và cập nhật tổng tiền."
             : string.Join("; ", result.Errors);
+
+        if (result.Succeeded)
+        {
+            await WriteAuditAsync(
+                "AddCharge",
+                nameof(AdditionalCharge),
+                model.BookingId,
+                $"Thêm phụ phí {model.ChargeType} cho đơn #{model.BookingId}: {model.Amount:N0} đồng. {model.Description}",
+                cancellationToken);
+        }
+
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
@@ -134,6 +158,17 @@ public sealed class ReturnsController : Controller
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã xóa phụ phí."
             : string.Join("; ", result.Errors);
+
+        if (result.Succeeded)
+        {
+            await WriteAuditAsync(
+                "RemoveCharge",
+                nameof(AdditionalCharge),
+                additionalChargeId,
+                $"Xóa phụ phí #{additionalChargeId} khỏi đơn #{bookingId}.",
+                cancellationToken);
+        }
+
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
     }
 
@@ -151,6 +186,17 @@ public sealed class ReturnsController : Controller
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã hoàn tất đơn và cập nhật trạng thái xe."
             : string.Join("; ", result.Errors);
+
+        if (result.Succeeded)
+        {
+            await WriteAuditAsync(
+                "CompleteBooking",
+                nameof(Booking),
+                model.BookingId,
+                $"Hoàn tất đơn #{model.BookingId}. Yêu cầu bảo trì: {(model.RequiresMaintenance ? "Có" : "Không")}.",
+                cancellationToken);
+        }
+
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
@@ -222,6 +268,24 @@ public sealed class ReturnsController : Controller
                 System.IO.File.Delete(fullPath);
             }
         }
+    }
+
+    private Task WriteAuditAsync(
+        string action,
+        string entityName,
+        int entityId,
+        string description,
+        CancellationToken cancellationToken)
+    {
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return _auditService.WriteAsync(
+            adminId,
+            action,
+            entityName,
+            entityId.ToString(),
+            description,
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
     }
 
     private void AddErrors(IEnumerable<string> errors)
