@@ -2,6 +2,9 @@
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = $"Đơn thuê #{Model.BookingId}";
+    var hasOpenExtension = Model.Extensions.Any(item =>
+        item.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.Approved);
+    var canCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -32,22 +35,77 @@
         <div class="card card-body shadow-sm mb-4">
             <h2 class="h5">Tiến trình đơn thuê</h2>
             <ol class="mb-0">
-                <li>Đã gửi yêu cầu thuê xe</li>
+                <li>Gửi yêu cầu và kiểm tra giấy tờ</li>
                 <li>Admin xác nhận hoặc từ chối</li>
                 <li>Khách thanh toán tiền thuê</li>
-                <li>Admin chuẩn bị và bàn giao xe</li>
-                <li>Khách sử dụng và trả xe</li>
-                <li>Admin kiểm tra, xử lý phụ phí và hoàn tất</li>
+                <li>Admin bàn giao xe</li>
+                <li>Gia hạn nếu cần và được Admin duyệt</li>
+                <li>Trả xe, xử lý phụ phí và hoàn tất</li>
             </ol>
             @if (!string.IsNullOrWhiteSpace(Model.CancelReason))
             {
-                <div class="alert alert-danger mt-3 mb-0"><strong>Lý do:</strong> @Model.CancelReason</div>
+                <div class="alert alert-danger mt-3 mb-0">
+                    <strong>Lý do:</strong> @Model.CancelReason
+                    @if (Model.RefundAmount > 0)
+                    {
+                        <div><strong>Tiền hoàn:</strong> @Model.RefundAmount.ToString("N0") đ</div>
+                        <div>@Model.RefundReason</div>
+                    }
+                </div>
             }
         </div>
 
+        @if (Model.Status == BookingStatus.Rented)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Gia hạn thuê xe</h2>
+                @if (hasOpenExtension)
+                {
+                    <div class="alert alert-info mb-0">Đơn đang có yêu cầu gia hạn chờ xử lý hoặc chờ thanh toán.</div>
+                }
+                else
+                {
+                    <form asp-controller="Extensions" asp-action="Request" method="post" class="row g-2">
+                        <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                        <div class="col-md-5">
+                            <label class="form-label">Thời gian trả mới</label>
+                            <input name="RequestedReturnDate" type="datetime-local" min="@Model.ReturnDate.ToString("yyyy-MM-ddTHH:mm")" class="form-control" required />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Ghi chú</label>
+                            <input name="CustomerNote" class="form-control" placeholder="Lý do gia hạn" />
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-outline-primary w-100" type="submit">Gửi yêu cầu</button>
+                        </div>
+                    </form>
+                }
+            </div>
+        }
+
+        @if (Model.Extensions.Count > 0)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Lịch sử gia hạn</h2>
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                    @foreach (var extension in Model.Extensions)
+                    {
+                        <tr>
+                            <td>@extension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@extension.AdditionalDays ngày</td>
+                            <td>@extension.AdditionalAmount.ToString("N0") đ</td>
+                            <td><span class="badge bg-secondary">@extension.Status</span></td>
+                        </tr>
+                    }
+                    </table>
+                </div>
+            </div>
+        }
+
         @if (Model.AdditionalCharges.Count > 0)
         {
-            <div class="card card-body shadow-sm">
+            <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Phụ phí</h2>
                 <table class="table mb-0">
                 @foreach (var charge in Model.AdditionalCharges)
@@ -57,12 +115,46 @@
                 </table>
             </div>
         }
+
+        @if (Model.Status == BookingStatus.Completed && !Model.HasReview)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Đánh giá chuyến thuê</h2>
+                <form asp-controller="Reviews" asp-action="Create" method="post" class="row g-2">
+                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                    <div class="col-md-3">
+                        <select name="Rating" class="form-select">
+                            <option value="5">5 sao</option>
+                            <option value="4">4 sao</option>
+                            <option value="3">3 sao</option>
+                            <option value="2">2 sao</option>
+                            <option value="1">1 sao</option>
+                        </select>
+                    </div>
+                    <div class="col-md-7"><input name="Comment" class="form-control" placeholder="Chia sẻ trải nghiệm" /></div>
+                    <div class="col-md-2"><button class="btn btn-success w-100" type="submit">Gửi đánh giá</button></div>
+                </form>
+            </div>
+        }
+
+        @if (canCancel)
+        {
+            <div class="card card-body border-danger shadow-sm">
+                <h2 class="h5 text-danger">Hủy đơn thuê</h2>
+                <p class="text-muted">Trước 24 giờ hoàn 100%; trong 24 giờ hoàn 50% số tiền đã thanh toán.</p>
+                <form asp-controller="BookingOperations" asp-action="Cancel" method="post" class="row g-2">
+                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                    <div class="col-md-9"><input name="Reason" class="form-control" required placeholder="Lý do hủy đơn" /></div>
+                    <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit">Hủy đơn</button></div>
+                </form>
+            </div>
+        }
     </div>
 
     <div class="col-lg-4">
-        <div class="card card-body shadow-sm">
+        <div class="card card-body shadow-sm sticky-top" style="top:1rem">
             <h2 class="h5">Thanh toán</h2>
-            <div class="d-flex justify-content-between"><span>Tiền thuê</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
+            <div class="d-flex justify-content-between"><span>Tiền thuê và gia hạn</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
             <div class="d-flex justify-content-between"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
             <hr />
             <div class="d-flex justify-content-between fs-5"><span>Tổng cộng</span><strong>@Model.TotalAmount.ToString("N0") đ</strong></div>
@@ -73,6 +165,15 @@
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <input type="hidden" name="type" value="@PaymentType.Rental" />
                     <button class="btn btn-primary w-100" type="submit">Thanh toán tiền thuê mô phỏng</button>
+                </form>
+            }
+
+            @if (Model.Status == BookingStatus.Rented && !Model.ExtensionPaid)
+            {
+                <form asp-controller="Payments" asp-action="Pay" method="post" class="mt-3">
+                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                    <input type="hidden" name="type" value="@PaymentType.Extension" />
+                    <button class="btn btn-info w-100" type="submit">Thanh toán tiền gia hạn</button>
                 </form>
             }
 
