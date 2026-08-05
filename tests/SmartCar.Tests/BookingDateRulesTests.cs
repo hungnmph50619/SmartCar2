@@ -1,4 +1,5 @@
 using SmartCar.Application.Features.Bookings;
+using Xunit;
 
 namespace SmartCar.Tests;
 
