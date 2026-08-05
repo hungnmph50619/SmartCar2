@@ -1,0 +1,92 @@
+@model SmartCar.Application.Features.Reports.FleetReportDto
+@{
+    ViewData["Title"] = "Hiệu suất và lợi nhuận đội xe";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Hiệu suất và lợi nhuận đội xe</h1>
+        <p class="text-muted mb-0">Doanh thu thực thu trừ hoàn tiền, bảo trì và chi phí sự cố.</p>
+    </div>
+</div>
+
+<form method="get" class="card card-body shadow-sm mb-4">
+    <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label">Từ ngày</label>
+            <input name="fromDate" type="date" value="@Model.FromDate.ToString("yyyy-MM-dd")" class="form-control" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Đến ngày</label>
+            <input name="toDate" type="date" value="@Model.ToDate.ToString("yyyy-MM-dd")" class="form-control" />
+        </div>
+        <div class="col-md-4">
+            <button class="btn btn-primary w-100" type="submit">Cập nhật báo cáo</button>
+        </div>
+    </div>
+</form>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card card-body shadow-sm"><span class="text-muted">Doanh thu</span><strong class="fs-4">@Model.TotalRevenue.ToString("N0") đ</strong></div></div>
+    <div class="col-md-3"><div class="card card-body shadow-sm"><span class="text-muted">Hoàn tiền</span><strong class="fs-4 text-warning">@Model.TotalRefunds.ToString("N0") đ</strong></div></div>
+    <div class="col-md-3"><div class="card card-body shadow-sm"><span class="text-muted">Chi phí vận hành</span><strong class="fs-4 text-danger">@Model.TotalOperatingCost.ToString("N0") đ</strong></div></div>
+    <div class="col-md-3"><div class="card card-body shadow-sm"><span class="text-muted">Lợi nhuận ước tính</span><strong class="fs-4 @(Model.TotalNetProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetProfit.ToString("N0") đ</strong></div></div>
+</div>
+
+<div class="card card-body shadow-sm mb-4">
+    <div class="d-flex justify-content-between mb-2">
+        <strong>Tỷ lệ khai thác trung bình</strong>
+        <span>@Model.AverageUtilizationRate.ToString("0.##")%</span>
+    </div>
+    <div class="progress" style="height:24px">
+        <div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100, Model.AverageUtilizationRate):0.##}%")">
+            @Model.AverageUtilizationRate.ToString("0.##")%
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Xe</th>
+                    <th>Doanh thu</th>
+                    <th>Hoàn tiền</th>
+                    <th>Bảo trì</th>
+                    <th>Sự cố/phạt</th>
+                    <th>Lợi nhuận</th>
+                    <th style="min-width:180px">Khai thác</th>
+                    <th>Đơn hoàn tất</th>
+                </tr>
+            </thead>
+            <tbody>
+            @if (Model.Vehicles.Count == 0)
+            {
+                <tr><td colspan="8" class="text-center text-muted py-4">Chưa có dữ liệu xe.</td></tr>
+            }
+            else
+            {
+                @foreach (var item in Model.Vehicles)
+                {
+                    <tr>
+                        <td><strong>@item.VehicleName</strong><div class="small text-muted">@item.LicensePlate</div></td>
+                        <td>@item.Revenue.ToString("N0") đ</td>
+                        <td>@item.Refunds.ToString("N0") đ</td>
+                        <td>@item.MaintenanceCost.ToString("N0") đ</td>
+                        <td>@item.IncidentCost.ToString("N0") đ<div class="small text-muted">@item.IncidentCount sự cố</div></td>
+                        <td class="fw-bold @(item.NetProfit >= 0 ? "text-success" : "text-danger")">@item.NetProfit.ToString("N0") đ</td>
+                        <td>
+                            <div class="d-flex justify-content-between small"><span>@item.RentalDays ngày</span><span>@item.UtilizationRate.ToString("0.##")%</span></div>
+                            <div class="progress" style="height:10px">
+                                <div class="progress-bar" style="width:@($"{Math.Min(100, item.UtilizationRate):0.##}%")"></div>
+                            </div>
+                        </td>
+                        <td>@item.CompletedBookings</td>
+                    </tr>
+                }
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
