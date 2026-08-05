@@ -1,0 +1,43 @@
+<partial name="_ValidationScriptsPartial" />
+<script>
+    (() => {
+        const brandSelect = document.getElementById("brandSelect");
+        const newBrandInput = document.getElementById("newBrandInput");
+        const imageInput = document.getElementById("vehicleImagesInput");
+        const preview = document.getElementById("vehicleImagePreview");
+
+        brandSelect?.addEventListener("change", () => {
+            if (brandSelect.value && newBrandInput) {
+                newBrandInput.value = "";
+            }
+        });
+
+        newBrandInput?.addEventListener("input", () => {
+            if (newBrandInput.value.trim() && brandSelect) {
+                brandSelect.value = "";
+            }
+        });
+
+        imageInput?.addEventListener("change", () => {
+            if (!preview) return;
+            preview.innerHTML = "";
+            const files = Array.from(imageInput.files || []);
+            files.slice(0, 12).forEach((file, index) => {
+                const card = document.createElement("article");
+                card.className = "admin-vehicle-image-card";
+
+                const image = document.createElement("img");
+                image.src = URL.createObjectURL(file);
+                image.alt = `Ảnh xe mới ${index + 1}`;
+                image.onload = () => URL.revokeObjectURL(image.src);
+
+                const label = document.createElement("div");
+                label.className = "admin-vehicle-image-card__controls";
+                label.textContent = index === 0 ? "Ảnh mới đầu tiên" : `Ảnh mới ${index + 1}`;
+
+                card.append(image, label);
+                preview.append(card);
+            });
+        });
+    })();
+</script>
