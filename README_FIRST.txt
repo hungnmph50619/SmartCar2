@@ -11,6 +11,7 @@ SMARTCAR - CLEAN ARCHITECTURE 4 PROJECT
 - SmartCar.Application: Interface, DTO, Request và quy tắc nghiệp vụ.
 - SmartCar.Infrastructure: EF Core, SQL Server, Identity, Service, Migration, SeedData.
 - SmartCar.Web: MVC Controller, ViewModel, Razor View và wwwroot.
+- SmartCar.Tests: Unit test cho các quy tắc nghiệp vụ quan trọng.
 
 3. CHUỖI KẾT NỐI
 Mặc định dùng LocalDB:
@@ -30,7 +31,8 @@ xóa database cũ rồi chạy lại lệnh Update-Database.
 5. CHẠY PHẦN MỀM
 - Build -> Rebuild Solution.
 - Nhấn Ctrl + F5.
-- Seeder tự tạo role, tài khoản demo, 6 xe, ảnh xe, giấy tờ xe và mã khuyến mãi.
+- Seeder tự tạo role, tài khoản demo, 6 xe demo, ảnh xe, giấy tờ xe và mã khuyến mãi.
+- Dữ liệu demo chỉ được tạo khi database chưa có xe nên không ghi đè dữ liệu đã nhập.
 
 6. TÀI KHOẢN DEMO
 Admin:
