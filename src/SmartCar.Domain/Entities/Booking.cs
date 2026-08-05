@@ -16,11 +16,17 @@ public class Booking
     public decimal TotalAmount { get; set; }
     public BookingStatus Status { get; set; } = BookingStatus.PendingConfirmation;
     public string? CancelReason { get; set; }
+    public string? CancelledBy { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public decimal RefundAmount { get; set; }
+    public string? RefundReason { get; set; }
+    public DateTime? NoShowMarkedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 
     public Vehicle Vehicle { get; set; } = null!;
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
+    public ICollection<BookingExtension> Extensions { get; set; } = new List<BookingExtension>();
     public VehicleHandover? Handover { get; set; }
     public VehicleReturn? VehicleReturn { get; set; }
     public Review? Review { get; set; }
