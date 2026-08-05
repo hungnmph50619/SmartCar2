@@ -1,0 +1,153 @@
+@model SmartCar.Web.ViewModels.ProfileViewModel
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
+@{
+    static string MaskDocumentNumber(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Chưa có";
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= 4
+            ? new string('*', trimmed.Length)
+            : new string('*', trimmed.Length - 4) + trimmed[^4..];
+    }
+}
+
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+    <div>
+        <h2 class="h4 mb-1">CCCD và GPLX</h2>
+        <p class="text-muted mb-0">Cả hai giấy tờ phải được xác minh và còn hiệu lực đến ngày trả xe.</p>
+    </div>
+    <a class="btn btn-outline-primary" asp-controller="Vehicles" asp-action="Index">Tiếp tục tìm xe</a>
+</div>
+
+<div class="alert alert-info" role="alert">
+    <strong>Bước tiếp theo:</strong> Gửi đủ CCCD và GPLX. Khi cả hai chuyển sang
+    <strong>Đã xác minh</strong>, bạn có thể gửi yêu cầu thuê xe.
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="row g-3">
+            @foreach (var type in DocumentTypes.RequiredForRental)
+            {
+                var document = Model.Documents.FirstOrDefault(item => item.DocumentType == type);
+                <div class="col-md-6">
+                    <div class="card card-body h-100 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
+                            <h3 class="h5 mb-0">@type</h3>
+                            @if (document is null)
+                            {
+                                <span class="badge bg-secondary">Chưa gửi</span>
+                            }
+                            else
+                            {
+                                <span class="badge @(document.Status == DocumentStatus.Verified ? "bg-success" : document.Status == DocumentStatus.Rejected ? "bg-danger" : "bg-warning text-dark")">
+                                    @document.Status.ToVietnamese()
+                                </span>
+                            }
+                        </div>
+
+                        @if (document is null)
+                        {
+                            <p class="text-muted mb-0">Chọn loại giấy tờ này trong biểu mẫu bên cạnh và tải ảnh lên.</p>
+                        }
+                        else
+                        {
+                            <div><strong>Số:</strong> @MaskDocumentNumber(document.DocumentNumber)</div>
+                            @if (document.ExpiryDate.HasValue)
+                            {
+                                <div><strong>Hết hạn:</strong> @document.ExpiryDate.Value.ToString("dd/MM/yyyy")</div>
+                            }
+
+                            <img src="@Url.Action("ViewImage", "Documents", new { id = document.CustomerDocumentId })"
+                                 class="img-fluid rounded mt-3"
+                                 style="height:180px;width:100%;object-fit:cover"
+                                 alt="Ảnh @type" />
+
+                            @if (document.Status == DocumentStatus.Pending)
+                            {
+                                <div class="alert alert-warning mt-3 mb-0 py-2">
+                                    Hồ sơ đang chờ Quản trị viên kiểm tra. Bạn chưa cần gửi lại.
+                                </div>
+                            }
+                            else if (document.Status == DocumentStatus.Verified)
+                            {
+                                <div class="alert alert-success mt-3 mb-0 py-2">
+                                    Giấy tờ đã hợp lệ và có thể dùng để thuê xe.
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(document.RejectionReason))
+                            {
+                                <div class="alert alert-danger mt-3 mb-0">
+                                    <strong>Lý do từ chối:</strong> @document.RejectionReason
+                                    <div class="mt-1">Hãy sửa thông tin và gửi lại ảnh rõ hơn.</div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <form asp-action="SubmitDocument"
+              method="post"
+              enctype="multipart/form-data"
+              class="card card-body shadow-sm"
+              data-loading-form>
+            <h2 class="h5 mb-1">Gửi hoặc cập nhật giấy tờ</h2>
+            <p class="text-muted small">Ảnh mới sẽ thay thế ảnh cũ của cùng loại giấy tờ.</p>
+
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
+
+            <div class="mb-3">
+                <label asp-for="DocumentUpload.DocumentType" class="form-label fw-semibold">Loại giấy tờ</label>
+                <select asp-for="DocumentUpload.DocumentType" class="form-select">
+                    <option value="@DocumentTypes.CitizenId">CCCD</option>
+                    <option value="@DocumentTypes.DrivingLicense">GPLX</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="DocumentUpload.DocumentNumber" class="form-label fw-semibold">Số giấy tờ</label>
+                <input asp-for="DocumentUpload.DocumentNumber" class="form-control" autocomplete="off" />
+                <span asp-validation-for="DocumentUpload.DocumentNumber" class="text-danger small"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="DocumentUpload.ExpiryDate" class="form-label fw-semibold">Ngày hết hạn</label>
+                <input asp-for="DocumentUpload.ExpiryDate" type="date" class="form-control" />
+                <div class="form-text">Bắt buộc với GPLX và phải còn hạn đến ngày trả xe.</div>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="DocumentUpload.Image" class="form-label fw-semibold">Ảnh giấy tờ</label>
+                <input asp-for="DocumentUpload.Image"
+                       type="file"
+                       accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                       class="form-control"
+                       data-image-input
+                       data-preview-target="#profile-document-image-preview"
+                       data-file-info-target="#profile-document-file-info" />
+                <span asp-validation-for="DocumentUpload.Image" class="text-danger small"></span>
+                <div class="form-text">
+                    JPG, PNG hoặc WEBP; tối đa 5 MB. Ảnh phải rõ chữ, đủ bốn góc và không bị lóa.
+                </div>
+                <div id="profile-document-file-info" class="small text-muted mt-2 d-none"></div>
+                <div id="profile-document-image-preview" class="mt-3 d-none">
+                    <img class="img-fluid rounded border" style="max-height:240px;width:100%;object-fit:contain" alt="Xem trước ảnh đã chọn" />
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn ảnh khác</button>
+                </div>
+            </div>
+
+            <button class="btn btn-primary" type="submit" data-loading-text="Đang gửi giấy tờ...">
+                Gửi xác minh
+            </button>
+        </form>
+    </div>
+</div>
