@@ -1,80 +1,18 @@
 :root {
-  /* SmartCar dùng một bảng màu xanh nước biển thống nhất. */
+  /* Xanh nước biển dùng cho thương hiệu và hành động chính. */
+  --smartcar-primary: #1667d9;
+  --smartcar-primary-dark: #0f4fae;
+  --smartcar-primary-soft: #eaf3ff;
   --smartcar-teal: #1667d9;
   --smartcar-teal-soft: #eaf3ff;
-  --smartcar-success: #1667d9;
-  --bs-success: #0d6efd;
-  --bs-success-rgb: 13, 110, 253;
+
+  /* Giữ màu ngữ nghĩa để người dùng nhận biết trạng thái nhanh. */
+  --smartcar-success: #198754;
+  --smartcar-warning: #f59e0b;
+  --smartcar-danger: #dc3545;
 }
 
-/* Thay toàn bộ màu success mặc định của Bootstrap từ xanh lá sang xanh nước biển. */
-.text-success {
-  color: #0d6efd !important;
-}
-
-.bg-success,
-.badge.bg-success {
-  background-color: #0d6efd !important;
-}
-
-.border-success {
-  border-color: #0d6efd !important;
-}
-
-.btn-success {
-  color: #fff !important;
-  border-color: #1667d9 !important;
-  background: linear-gradient(135deg, #1667d9, #3182e8) !important;
-  box-shadow: 0 10px 22px rgba(22, 103, 217, 0.22) !important;
-}
-
-.btn-success:hover,
-.btn-success:focus,
-.btn-success:active {
-  color: #fff !important;
-  border-color: #0f4fae !important;
-  background: linear-gradient(135deg, #0f4fae, #1667d9) !important;
-}
-
-.btn-outline-success {
-  color: #1667d9 !important;
-  border-color: #7db2f1 !important;
-  background-color: #fff !important;
-}
-
-.btn-outline-success:hover,
-.btn-outline-success:focus,
-.btn-outline-success:active {
-  color: #fff !important;
-  border-color: #1667d9 !important;
-  background-color: #1667d9 !important;
-}
-
-.alert-success {
-  color: #084298 !important;
-  border-color: #b6d4fe !important;
-  background-color: #e7f1ff !important;
-}
-
-.table-success {
-  --bs-table-color: #102a43;
-  --bs-table-bg: #e7f1ff;
-  --bs-table-border-color: #c5dbf6;
-  --bs-table-striped-bg: #dceaff;
-  --bs-table-active-bg: #d2e4fb;
-  --bs-table-hover-bg: #d7e7fc;
-}
-
-.link-success {
-  color: #1667d9 !important;
-}
-
-.link-success:hover,
-.link-success:focus {
-  color: #0f4fae !important;
-}
-
-/* Các điểm nhấn xanh ngọc cũ trong giao diện chung. */
+/* Điểm nhấn thương hiệu trên trang chủ và trang tài khoản. */
 .home-hero {
   background:
     radial-gradient(circle at 85% 15%, rgba(49, 130, 232, 0.20), transparent 34%),
@@ -117,10 +55,24 @@
   box-shadow: 0 7px 18px rgba(22, 103, 217, 0.23) !important;
 }
 
-/* Trang đăng ký có một số màu xanh ngọc được khai báo trực tiếp trong view. */
 .register-visual {
   background:
     radial-gradient(circle at 82% 15%, rgba(49, 130, 232, 0.22), transparent 32%),
     radial-gradient(circle at 10% 90%, rgba(37, 99, 235, 0.18), transparent 35%),
     linear-gradient(145deg, #eff7ff 0%, #e9f4ff 52%, #eaf3ff 100%) !important;
+}
+
+/* Trạng thái thành công giữ màu xanh lá; hành động chính vẫn dùng btn-primary. */
+.btn-success {
+  box-shadow: 0 8px 18px rgba(25, 135, 84, 0.18);
+}
+
+.alert-success {
+  border-color: rgba(25, 135, 84, 0.28);
+}
+
+/* Hỗ trợ trạng thái đang xử lý trên nút. */
+button[aria-busy="true"],
+input[aria-busy="true"] {
+  cursor: wait;
 }
