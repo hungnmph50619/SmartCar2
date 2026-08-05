@@ -57,7 +57,7 @@ internal sealed class BookingOperationService : IBookingOperationService
         booking.CancelledBy = "Admin";
         booking.CancelReason = "Khách không đến nhận xe đúng thời gian quy định.";
         booking.RefundAmount = 0;
-        booking.RefundReason = "No-show không được hoàn tiền.";
+        booking.RefundReason = "Khách không đến nhận xe nên không được hoàn tiền.";
         booking.Vehicle.Status = VehicleStatus.Available;
 
         _dbContext.Notifications.Add(new Notification
@@ -114,29 +114,12 @@ internal sealed class BookingOperationService : IBookingOperationService
                 payment.Type is PaymentType.Rental or PaymentType.Extension)
             .Sum(payment => payment.Amount);
 
-        decimal refundAmount;
-        string refundReason;
-
-        if (isAdmin)
-        {
-            refundAmount = paidAmount;
-            refundReason = "Admin hủy đơn: hoàn 100% số tiền đã thanh toán.";
-        }
-        else if (paidAmount <= 0)
-        {
-            refundAmount = 0;
-            refundReason = "Đơn chưa phát sinh thanh toán.";
-        }
-        else if (booking.PickupDate - DateTime.Now >= TimeSpan.FromHours(24))
-        {
-            refundAmount = paidAmount;
-            refundReason = "Khách hủy trước giờ nhận xe ít nhất 24 giờ: hoàn 100%.";
-        }
-        else
-        {
-            refundAmount = Math.Round(paidAmount * 0.5m, 0, MidpointRounding.AwayFromZero);
-            refundReason = "Khách hủy trong vòng 24 giờ trước giờ nhận xe: hoàn 50%.";
-        }
+        var refundAmount = isAdmin ? paidAmount : 0m;
+        var refundReason = isAdmin
+            ? "Admin hủy đơn trước khi giao xe: hoàn 100% số tiền khách đã thanh toán."
+            : paidAmount > 0
+                ? "Khách chủ động hủy sau khi thanh toán: không hoàn tiền."
+                : "Đơn chưa phát sinh thanh toán nên không có khoản hoàn tiền.";
 
         booking.Status = BookingStatus.Cancelled;
         booking.CancelReason = request.Reason.Trim();
@@ -165,7 +148,7 @@ internal sealed class BookingOperationService : IBookingOperationService
             Title = "Đơn thuê đã được hủy",
             Message = refundAmount > 0
                 ? $"Đơn #{booking.BookingId} đã hủy. Số tiền hoàn: {refundAmount:N0} đồng."
-                : $"Đơn #{booking.BookingId} đã hủy và không phát sinh hoàn tiền."
+                : $"Đơn #{booking.BookingId} đã hủy và không được hoàn tiền."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
