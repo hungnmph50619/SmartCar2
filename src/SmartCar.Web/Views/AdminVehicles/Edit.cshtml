@@ -5,7 +5,17 @@
     var vehicle = ViewBag.Vehicle as VehicleDto;
 }
 
-<h1 class="h3 mb-3">Sửa xe</h1>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Sửa xe</h1>
+    @if (vehicle is not null)
+    {
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-primary" asp-controller="VehicleDocuments" asp-action="Index" asp-route-vehicleId="@vehicle.VehicleId">Giấy tờ xe</a>
+            <a class="btn btn-outline-danger" asp-controller="Incidents" asp-action="Create" asp-route-vehicleId="@vehicle.VehicleId">Ghi nhận sự cố</a>
+        </div>
+    }
+</div>
+
 <form asp-action="Edit" method="post" enctype="multipart/form-data" class="card card-body shadow-sm mb-4">
     <partial name="_VehicleForm" model="Model" />
     <div class="mt-4">
