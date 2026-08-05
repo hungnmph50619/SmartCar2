@@ -29,18 +29,32 @@ internal sealed class ExtensionService : IExtensionService
 
     public async Task<IReadOnlyList<ExtensionDto>> GetCustomerExtensionsAsync(
         string customerId,
-        CancellationToken cancellationToken = default) =>
-        await ExtensionQuery()
-            .Where(item => item.CustomerId == customerId)
-            .OrderByDescending(item => item.RequestedAt)
+        CancellationToken cancellationToken = default)
+    {
+        var extensions = await _dbContext.BookingExtensions
+            .AsNoTracking()
+            .Include(extension => extension.Booking)
+                .ThenInclude(booking => booking.Vehicle)
+            .Where(extension => extension.Booking.CustomerId == customerId)
+            .OrderByDescending(extension => extension.RequestedAt)
             .ToListAsync(cancellationToken);
 
+        return await MapExtensionsAsync(extensions, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<ExtensionDto>> GetPendingExtensionsAsync(
-        CancellationToken cancellationToken = default) =>
-        await ExtensionQuery()
-            .Where(item => item.Status == BookingExtensionStatus.Pending)
-            .OrderBy(item => item.RequestedAt)
+        CancellationToken cancellationToken = default)
+    {
+        var extensions = await _dbContext.BookingExtensions
+            .AsNoTracking()
+            .Include(extension => extension.Booking)
+                .ThenInclude(booking => booking.Vehicle)
+            .Where(extension => extension.Status == BookingExtensionStatus.Pending)
+            .OrderBy(extension => extension.RequestedAt)
             .ToListAsync(cancellationToken);
+
+        return await MapExtensionsAsync(extensions, cancellationToken);
+    }
 
     public async Task<OperationResult> RequestAsync(
         string customerId,
@@ -143,7 +157,7 @@ internal sealed class ExtensionService : IExtensionService
         }
 
         extension.Status = BookingExtensionStatus.Approved;
-        extension.AdminNote = $"Được duyệt bởi Admin {adminId}.";
+        extension.AdminNote = $"Được duyệt bởi Quản trị viên {adminId}.";
         extension.DecidedAt = DateTime.UtcNow;
 
         extension.Booking.ReturnDate = extension.RequestedReturnDate;
@@ -154,7 +168,7 @@ internal sealed class ExtensionService : IExtensionService
         {
             Type = PaymentType.Extension,
             Amount = extension.AdditionalAmount,
-            Method = "Mo phong",
+            Method = "Mô phỏng",
             Status = PaymentStatus.Pending
         });
 
@@ -227,17 +241,36 @@ internal sealed class ExtensionService : IExtensionService
         return OperationResult.Success();
     }
 
-    private IQueryable<ExtensionDto> ExtensionQuery() =>
-        _dbContext.BookingExtensions
+    private async Task<IReadOnlyList<ExtensionDto>> MapExtensionsAsync(
+        IReadOnlyCollection<BookingExtension> extensions,
+        CancellationToken cancellationToken)
+    {
+        if (extensions.Count == 0)
+        {
+            return Array.Empty<ExtensionDto>();
+        }
+
+        var customerIds = extensions
+            .Select(extension => extension.Booking.CustomerId)
+            .Distinct()
+            .ToList();
+
+        var customerNames = await _dbContext.Users
             .AsNoTracking()
+            .Where(user => customerIds.Contains(user.Id))
+            .Select(user => new
+            {
+                user.Id,
+                user.FullName
+            })
+            .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
+
+        return extensions
             .Select(extension => new ExtensionDto(
                 extension.BookingExtensionId,
                 extension.BookingId,
                 extension.Booking.CustomerId,
-                _dbContext.Users
-                    .Where(user => user.Id == extension.Booking.CustomerId)
-                    .Select(user => user.FullName)
-                    .FirstOrDefault() ?? string.Empty,
+                customerNames.GetValueOrDefault(extension.Booking.CustomerId) ?? string.Empty,
                 extension.Booking.Vehicle.VehicleName,
                 extension.OriginalReturnDate,
                 extension.RequestedReturnDate,
@@ -246,7 +279,9 @@ internal sealed class ExtensionService : IExtensionService
                 extension.Status,
                 extension.CustomerNote,
                 extension.AdminNote,
-                extension.RequestedAt));
+                extension.RequestedAt))
+            .ToList();
+    }
 
     private async Task NotifyAdminsAsync(
         string title,
