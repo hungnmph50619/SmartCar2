@@ -15,6 +15,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Brand> Brands => Set<Brand>();
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
     public DbSet<VehicleImage> VehicleImages => Set<VehicleImage>();
+    public DbSet<VehicleDocument> VehicleDocuments => Set<VehicleDocument>();
+    public DbSet<VehicleIncident> VehicleIncidents => Set<VehicleIncident>();
     public DbSet<CustomerDocument> CustomerDocuments => Set<CustomerDocument>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<BookingExtension> BookingExtensions => Set<BookingExtension>();
@@ -25,6 +27,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Promotion> Promotions => Set<Promotion>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -76,6 +80,44 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        builder.Entity<VehicleDocument>(entity =>
+        {
+            entity.HasKey(document => document.VehicleDocumentId);
+            entity.Property(document => document.DocumentType).HasConversion<string>().HasMaxLength(30);
+            entity.Property(document => document.DocumentNumber).HasMaxLength(100).IsRequired();
+            entity.Property(document => document.ImagePath).HasMaxLength(300);
+            entity.Property(document => document.Notes).HasMaxLength(500);
+            entity.HasIndex(document => new { document.VehicleId, document.DocumentType, document.ExpiryDate });
+            entity.HasOne(document => document.Vehicle)
+                .WithMany(vehicle => vehicle.Documents)
+                .HasForeignKey(document => document.VehicleId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<VehicleIncident>(entity =>
+        {
+            entity.HasKey(incident => incident.VehicleIncidentId);
+            entity.Property(incident => incident.IncidentType).HasConversion<string>().HasMaxLength(30);
+            entity.Property(incident => incident.Status).HasConversion<string>().HasMaxLength(30);
+            entity.Property(incident => incident.Location).HasMaxLength(250);
+            entity.Property(incident => incident.Description).HasMaxLength(1500).IsRequired();
+            entity.Property(incident => incident.EstimatedCost).HasPrecision(18, 2);
+            entity.Property(incident => incident.ActualCost).HasPrecision(18, 2);
+            entity.Property(incident => incident.FineAmount).HasPrecision(18, 2);
+            entity.Property(incident => incident.CustomerLiabilityAmount).HasPrecision(18, 2);
+            entity.Property(incident => incident.EvidencePaths).HasMaxLength(2000);
+            entity.Property(incident => incident.Notes).HasMaxLength(1000);
+            entity.HasIndex(incident => new { incident.VehicleId, incident.Status, incident.OccurredAt });
+            entity.HasOne(incident => incident.Vehicle)
+                .WithMany(vehicle => vehicle.Incidents)
+                .HasForeignKey(incident => incident.VehicleId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(incident => incident.Booking)
+                .WithMany(booking => booking.Incidents)
+                .HasForeignKey(incident => incident.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         builder.Entity<CustomerDocument>(entity =>
         {
             entity.HasKey(document => document.CustomerDocumentId);
@@ -99,6 +141,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.CustomerId).HasMaxLength(450).IsRequired();
             entity.Property(booking => booking.DailyPrice).HasPrecision(18, 2);
             entity.Property(booking => booking.RentalAmount).HasPrecision(18, 2);
+            entity.Property(booking => booking.PromotionCode).HasMaxLength(50);
+            entity.Property(booking => booking.DiscountAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.AdditionalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.TotalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.RefundAmount).HasPrecision(18, 2);
@@ -223,6 +267,32 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(notification => notification.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Promotion>(entity =>
+        {
+            entity.HasKey(promotion => promotion.PromotionId);
+            entity.Property(promotion => promotion.Code).HasMaxLength(50).IsRequired();
+            entity.Property(promotion => promotion.Name).HasMaxLength(200).IsRequired();
+            entity.Property(promotion => promotion.PromotionType).HasConversion<string>().HasMaxLength(30);
+            entity.Property(promotion => promotion.Value).HasPrecision(18, 2);
+            entity.Property(promotion => promotion.MaximumDiscount).HasPrecision(18, 2);
+            entity.Property(promotion => promotion.MinimumRentalAmount).HasPrecision(18, 2);
+            entity.HasIndex(promotion => promotion.Code).IsUnique();
+            entity.HasIndex(promotion => new { promotion.IsActive, promotion.StartAt, promotion.EndAt });
+        });
+
+        builder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(log => log.AuditLogId);
+            entity.Property(log => log.UserId).HasMaxLength(450);
+            entity.Property(log => log.Action).HasMaxLength(100).IsRequired();
+            entity.Property(log => log.EntityName).HasMaxLength(100).IsRequired();
+            entity.Property(log => log.EntityId).HasMaxLength(100).IsRequired();
+            entity.Property(log => log.Description).HasMaxLength(1000).IsRequired();
+            entity.Property(log => log.IpAddress).HasMaxLength(100);
+            entity.HasIndex(log => new { log.EntityName, log.EntityId, log.CreatedAt });
+            entity.HasIndex(log => new { log.UserId, log.CreatedAt });
         });
     }
 }
