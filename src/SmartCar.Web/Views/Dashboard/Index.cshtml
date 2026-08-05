@@ -1,3 +1,4 @@
+@model SmartCar.Application.Features.Dashboard.DashboardDto
 @{
     ViewData["Title"] = "Dashboard quản lý";
 }
@@ -5,13 +6,49 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h2 mb-1">Dashboard quản lý</h1>
-        <p class="text-muted mb-0">Nền tảng quản trị SmartCar đã sẵn sàng.</p>
+        <p class="text-muted mb-0">Theo dõi đội xe, đơn thuê và doanh thu SmartCar.</p>
+    </div>
+    <div>
+        <a class="btn btn-outline-primary" asp-controller="AdminBookings" asp-action="Index">Quản lý đơn</a>
+        <a class="btn btn-primary" asp-controller="AdminVehicles" asp-action="Index">Quản lý xe</a>
     </div>
 </div>
 
-<div class="row g-3">
-    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Tổng số xe</div><div class="display-6">0</div></div></div></div>
-    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Xe sẵn sàng</div><div class="display-6">0</div></div></div></div>
-    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Đơn chờ xử lý</div><div class="display-6">0</div></div></div></div>
-    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Doanh thu</div><div class="display-6">0 ₫</div></div></div></div>
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Tổng số xe</div><div class="display-6">@Model.TotalVehicles</div></div></div></div>
+    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Xe sẵn sàng</div><div class="display-6">@Model.AvailableVehicles</div></div></div></div>
+    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Xe đang thuê</div><div class="display-6">@Model.RentedVehicles</div></div></div></div>
+    <div class="col-md-3"><div class="card shadow-sm border-0"><div class="card-body"><div class="text-muted">Doanh thu tháng</div><div class="h3 mt-2">@Model.MonthlyRevenue.ToString("N0") đ</div></div></div></div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card card-body"><div class="text-muted">Đơn chờ xác nhận</div><div class="h2">@Model.PendingBookings</div></div></div>
+    <div class="col-md-3"><div class="card card-body"><div class="text-muted">Giao xe hôm nay</div><div class="h2">@Model.TodayPickups</div></div></div>
+    <div class="col-md-3"><div class="card card-body"><div class="text-muted">Trả xe hôm nay</div><div class="h2">@Model.TodayReturns</div></div></div>
+    <div class="col-md-3"><div class="card card-body"><div class="text-muted">Chờ kiểm tra/Bảo trì</div><div class="h2">@(Model.InspectionVehicles + Model.MaintenanceVehicles)</div></div></div>
+</div>
+
+<div class="card card-body shadow-sm">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Đơn thuê gần đây</h2>
+        <a asp-controller="AdminBookings" asp-action="Index">Xem tất cả</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead><tr><th>Mã</th><th>Khách hàng</th><th>Xe</th><th>Thời gian</th><th>Trạng thái</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var booking in Model.RecentBookings)
+            {
+                <tr>
+                    <td>#@booking.BookingId</td>
+                    <td>@booking.CustomerName</td>
+                    <td>@booking.VehicleName<br /><small>@booking.LicensePlate</small></td>
+                    <td>@booking.PickupDate.ToString("dd/MM HH:mm") → @booking.ReturnDate.ToString("dd/MM HH:mm")</td>
+                    <td><span class="badge bg-secondary">@booking.Status</span></td>
+                    <td><a class="btn btn-sm btn-outline-primary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.BookingId">Xử lý</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
 </div>
