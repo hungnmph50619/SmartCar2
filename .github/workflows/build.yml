@@ -8,7 +8,7 @@ on:
   pull_request:
     branches:
       - master
-      - agent/giai-doan-1-luong-thue-xe
+      - agent/**
 
 jobs:
   build:
