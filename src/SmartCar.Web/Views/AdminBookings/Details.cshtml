@@ -1,0 +1,147 @@
+@model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Enums
+@{
+    ViewData["Title"] = $"Xử lý đơn #{Model.BookingId}";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Xử lý đơn #@Model.BookingId</h1>
+        <span class="badge bg-primary">@Model.Status</span>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Index">Danh sách đơn</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card card-body shadow-sm mb-4">
+            <h2 class="h5">Thông tin thuê xe</h2>
+            <div class="row">
+                <div class="col-md-6"><strong>Khách hàng:</strong> @Model.CustomerName<br /><strong>SĐT:</strong> @Model.CustomerPhone</div>
+                <div class="col-md-6"><strong>Xe:</strong> @Model.VehicleName<br /><strong>Biển số:</strong> @Model.LicensePlate</div>
+            </div>
+            <hr />
+            <div><strong>Nhận xe:</strong> @Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div><strong>Trả xe:</strong> @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div><strong>Số ngày:</strong> @Model.NumberOfDays</div>
+        </div>
+
+        @if (Model.Status == BookingStatus.PendingConfirmation)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Xác nhận yêu cầu</h2>
+                <form asp-action="Confirm" method="post" class="mb-3">
+                    <input type="hidden" name="id" value="@Model.BookingId" />
+                    <button class="btn btn-success" type="submit">Xác nhận đơn</button>
+                </form>
+                <form asp-action="Reject" method="post">
+                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                    <label class="form-label">Lý do từ chối</label>
+                    <textarea name="Reason" class="form-control mb-2" required></textarea>
+                    <button class="btn btn-outline-danger" type="submit">Từ chối đơn</button>
+                </form>
+            </div>
+        }
+
+        @if (Model.Status == BookingStatus.Paid)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Chuẩn bị giao xe</h2>
+                <p>Khách đã thanh toán. Kiểm tra xe và đánh dấu sẵn sàng bàn giao.</p>
+                <form asp-action="MarkReady" method="post">
+                    <input type="hidden" name="id" value="@Model.BookingId" />
+                    <button class="btn btn-primary" type="submit">Xe đã sẵn sàng</button>
+                </form>
+            </div>
+        }
+
+        @if (Model.Status == BookingStatus.ReadyForPickup)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Bàn giao xe</h2>
+                <a class="btn btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao xe</a>
+            </div>
+        }
+
+        @if (Model.Status == BookingStatus.Rented)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Nhận xe trả</h2>
+                <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản trả xe</a>
+            </div>
+        }
+
+        @if (Model.Status == BookingStatus.PendingInspection)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Phụ phí sau khi trả xe</h2>
+                <form asp-controller="Returns" asp-action="AddCharge" method="post" class="row g-2 mb-3">
+                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                    <div class="col-md-3">
+                        <select name="ChargeType" class="form-select">
+                            @foreach (var type in Enum.GetValues<AdditionalChargeType>())
+                            {
+                                <option value="@type">@type</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-5"><input name="Description" class="form-control" placeholder="Mô tả phụ phí" required /></div>
+                    <div class="col-md-2"><input name="Amount" type="number" min="1" class="form-control" placeholder="Số tiền" required /></div>
+                    <div class="col-md-2"><button class="btn btn-warning w-100" type="submit">Thêm</button></div>
+                </form>
+
+                @if (Model.AdditionalCharges.Count > 0)
+                {
+                    <table class="table">
+                    @foreach (var charge in Model.AdditionalCharges)
+                    {
+                        <tr>
+                            <td>@charge.ChargeType</td>
+                            <td>@charge.Description</td>
+                            <td class="text-end">@charge.Amount.ToString("N0") đ</td>
+                            <td class="text-end">
+                                <form asp-controller="Returns" asp-action="RemoveCharge" method="post">
+                                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                    <input type="hidden" name="additionalChargeId" value="@charge.AdditionalChargeId" />
+                                    <button class="btn btn-sm btn-outline-danger" type="submit">Xóa</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </table>
+                }
+
+                @if (Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid)
+                {
+                    <div class="alert alert-warning">Đang chờ khách thanh toán phụ phí @Model.AdditionalAmount.ToString("N0") đ.</div>
+                }
+
+                <hr />
+                <h3 class="h6">Hoàn tất kiểm tra</h3>
+                <form asp-controller="Returns" asp-action="Complete" method="post">
+                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="requiresMaintenance" />
+                        <label class="form-check-label" for="requiresMaintenance">Xe cần bảo trì/sửa chữa sau lượt thuê</label>
+                    </div>
+                    <textarea name="MaintenanceNote" class="form-control mb-2" placeholder="Nội dung bảo trì nếu có"></textarea>
+                    <button class="btn btn-success" type="submit">Hoàn tất đơn và cập nhật xe</button>
+                </form>
+            </div>
+        }
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card card-body shadow-sm">
+            <h2 class="h5">Tổng tiền</h2>
+            <div class="d-flex justify-content-between"><span>Tiền thuê</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
+            <div class="d-flex justify-content-between"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+            <hr />
+            <div class="d-flex justify-content-between fs-5"><span>Tổng cộng</span><strong>@Model.TotalAmount.ToString("N0") đ</strong></div>
+            <div class="mt-3">
+                <div>Tiền thuê: <strong>@(Model.RentalPaid ? "Đã thanh toán" : "Chưa thanh toán")</strong></div>
+                <div>Phụ phí: <strong>@(Model.AdditionalChargePaid ? "Đã thanh toán/Không có" : "Chưa thanh toán")</strong></div>
+            </div>
+        </div>
+    </div>
+</div>
