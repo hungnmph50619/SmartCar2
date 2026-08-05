@@ -30,11 +30,26 @@
                         {
                             <li class="nav-item"><a class="nav-link" asp-controller="Dashboard" asp-action="Index">Dashboard</a></li>
                             <li class="nav-item"><a class="nav-link" asp-controller="AdminBookings" asp-action="Index">Đơn thuê</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="AdminDocuments" asp-action="Index">Giấy tờ</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="AdminExtensions" asp-action="Index">Gia hạn</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Maintenance" asp-action="Index">Bảo trì</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="AdminVehicles" asp-action="Index">Xe</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Brands" asp-action="Index">Hãng xe</a></li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Vận hành</a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" asp-controller="AdminDocuments" asp-action="Index">Xác minh khách hàng</a></li>
+                                    <li><a class="dropdown-item" asp-controller="VehicleDocuments" asp-action="Index">Giấy tờ pháp lý xe</a></li>
+                                    <li><a class="dropdown-item" asp-controller="AdminExtensions" asp-action="Index">Gia hạn thuê</a></li>
+                                    <li><a class="dropdown-item" asp-controller="Maintenance" asp-action="Index">Bảo trì xe</a></li>
+                                    <li><a class="dropdown-item" asp-controller="Incidents" asp-action="Index">Sự cố và vi phạm</a></li>
+                                </ul>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Quản trị</a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" asp-controller="AdminVehicles" asp-action="Index">Quản lý xe</a></li>
+                                    <li><a class="dropdown-item" asp-controller="Brands" asp-action="Index">Hãng xe</a></li>
+                                    <li><a class="dropdown-item" asp-controller="Promotions" asp-action="Index">Khuyến mãi</a></li>
+                                    <li><a class="dropdown-item" asp-controller="Reports" asp-action="Index">Hiệu suất và lợi nhuận</a></li>
+                                    <li><a class="dropdown-item" asp-controller="AuditLogs" asp-action="Index">Nhật ký thao tác</a></li>
+                                </ul>
+                            </li>
                         }
                     </ul>
                     <ul class="navbar-nav align-items-xl-center">
