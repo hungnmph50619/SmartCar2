@@ -204,7 +204,7 @@ internal sealed class IncidentService : IIncidentService
         });
 
         incident.Status = IncidentStatus.Resolved;
-        incident.ActualCost = request.ActualCost;
+        incident.ActualCost = request.RequiresMaintenance ? 0m : request.ActualCost;
         incident.FineAmount = request.FineAmount;
         incident.CustomerLiabilityAmount = request.CustomerLiabilityAmount;
         incident.Notes = Normalize(request.Notes) ?? incident.Notes;
@@ -234,26 +234,24 @@ internal sealed class IncidentService : IIncidentService
         }
         else
         {
-            var hasOtherOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(item =>
-                item.VehicleId == incident.VehicleId &&
-                item.VehicleIncidentId != incident.VehicleIncidentId &&
-                item.Status != IncidentStatus.Resolved &&
-                item.Status != IncidentStatus.Cancelled,
-                cancellationToken);
+            incident.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
+                _dbContext,
+                incident.Vehicle,
+                excludedIncidentId: incident.VehicleIncidentId,
+                cancellationToken: cancellationToken);
+        }
 
-            var hasOpenMaintenance = await _dbContext.MaintenanceRecords.AnyAsync(item =>
-                item.VehicleId == incident.VehicleId &&
-                item.Status == MaintenanceStatus.InProgress,
-                cancellationToken);
-
-            var isRented = await _dbContext.Bookings.AnyAsync(item =>
-                item.VehicleId == incident.VehicleId && item.Status == BookingStatus.Rented,
-                cancellationToken);
-
-            if (!hasOtherOpenIncident && !hasOpenMaintenance && !isRented)
+        if (request.CustomerLiabilityAmount > 0 && incident.BookingId.HasValue)
+        {
+            _dbContext.Notifications.Add(new Notification
             {
-                incident.Vehicle.Status = VehicleStatus.Available;
-            }
+                UserId = await _dbContext.Bookings
+                    .Where(item => item.BookingId == incident.BookingId.Value)
+                    .Select(item => item.CustomerId)
+                    .FirstAsync(cancellationToken),
+                Title = "Kết quả xử lý sự cố",
+                Message = $"Sự cố #{incident.VehicleIncidentId} xác định phần trách nhiệm của khách là {request.CustomerLiabilityAmount:N0} đồng. Admin sẽ cập nhật phụ phí vào biên bản trả xe."
+            });
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
