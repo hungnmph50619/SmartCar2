@@ -31,7 +31,7 @@
                 @if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Admin))
                 {
                     <a asp-controller="Dashboard" asp-action="Index" class="btn btn-light btn-lg px-4 hero-secondary-button">
-                        Mở Dashboard
+                        Mở trang tổng quan
                     </a>
                 }
                 else if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
@@ -293,7 +293,7 @@
                     <div class="process-step h-100">
                         <span class="process-number">02</span>
                         <h3 class="h5">Gửi yêu cầu thuê</h3>
-                        <p>Xác minh CCCD, GPLX và gửi yêu cầu để Admin kiểm tra.</p>
+                        <p>Xác minh CCCD, GPLX và gửi yêu cầu để quản trị viên kiểm tra.</p>
                     </div>
                 </div>
                 <div class="col-md-6">
