@@ -1,0 +1,74 @@
+@model SmartCar.Web.ViewModels.VehicleFormViewModel
+
+<div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+<input asp-for="VehicleId" type="hidden" />
+<input asp-for="RowVersionBase64" type="hidden" />
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <label asp-for="BrandId" class="form-label"></label>
+        <select asp-for="BrandId" asp-items="ViewBag.Brands" class="form-select"></select>
+        <span asp-validation-for="BrandId" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="VehicleName" class="form-label"></label>
+        <input asp-for="VehicleName" class="form-control" />
+        <span asp-validation-for="VehicleName" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="Model" class="form-label"></label>
+        <input asp-for="Model" class="form-control" />
+    </div>
+    <div class="col-md-6">
+        <label asp-for="LicensePlate" class="form-label"></label>
+        <input asp-for="LicensePlate" class="form-control" />
+        <span asp-validation-for="LicensePlate" class="text-danger"></span>
+    </div>
+    <div class="col-md-4">
+        <label asp-for="ManufactureYear" class="form-label"></label>
+        <input asp-for="ManufactureYear" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="Seats" class="form-label"></label>
+        <input asp-for="Seats" class="form-control" />
+    </div>
+    <div class="col-md-4">
+        <label asp-for="Color" class="form-label"></label>
+        <input asp-for="Color" class="form-control" />
+    </div>
+    <div class="col-md-6">
+        <label asp-for="Transmission" class="form-label"></label>
+        <select asp-for="Transmission" class="form-select">
+            <option>Tự động</option>
+            <option>Số sàn</option>
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="FuelType" class="form-label"></label>
+        <select asp-for="FuelType" class="form-select">
+            <option>Xăng</option>
+            <option>Dầu</option>
+            <option>Điện</option>
+            <option>Hybrid</option>
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="DailyPrice" class="form-label"></label>
+        <input asp-for="DailyPrice" class="form-control" />
+        <span asp-validation-for="DailyPrice" class="text-danger"></span>
+    </div>
+    <div class="col-md-6">
+        <label asp-for="CurrentMileage" class="form-label"></label>
+        <input asp-for="CurrentMileage" class="form-control" />
+    </div>
+    <div class="col-12">
+        <label asp-for="Description" class="form-label"></label>
+        <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+    </div>
+    <div class="col-12">
+        <label asp-for="Images" class="form-label"></label>
+        <input asp-for="Images" type="file" multiple accept=".jpg,.jpeg,.png,.webp" class="form-control" />
+        <div class="form-text">Tối đa 10 ảnh, mỗi ảnh không quá 5 MB.</div>
+        <span asp-validation-for="Images" class="text-danger"></span>
+    </div>
+</div>
