@@ -4,6 +4,7 @@ using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Handovers;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -11,15 +12,21 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class HandoversController : Controller
 {
+    private const int MaximumImages = 10;
+    private const long MaximumImageBytes = 5 * 1024 * 1024;
+
     private readonly IHandoverService _handoverService;
     private readonly IBookingService _bookingService;
+    private readonly IWebHostEnvironment _environment;
 
     public HandoversController(
         IHandoverService handoverService,
-        IBookingService bookingService)
+        IBookingService bookingService,
+        IWebHostEnvironment environment)
     {
         _handoverService = handoverService;
         _bookingService = bookingService;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -62,10 +69,16 @@ public sealed class HandoversController : Controller
         HandoverViewModel model,
         CancellationToken cancellationToken)
     {
+        await ValidateImagesAsync(model.Images, cancellationToken);
         if (!ModelState.IsValid)
         {
             return View(model);
         }
+
+        var imagePaths = await SaveImagesAsync(
+            model.BookingId,
+            model.Images,
+            cancellationToken);
 
         var result = await _handoverService.CreateAsync(
             new CreateHandoverRequest(
@@ -76,12 +89,13 @@ public sealed class HandoversController : Controller
                 model.ExteriorCondition,
                 model.InteriorCondition,
                 model.Accessories,
-                model.ImagePaths,
+                string.Join(';', imagePaths),
                 model.Notes),
             cancellationToken);
 
         if (!result.Succeeded)
         {
+            DeleteSavedImages(imagePaths);
             foreach (var error in result.Errors)
             {
                 ModelState.AddModelError(string.Empty, error);
@@ -90,7 +104,77 @@ public sealed class HandoversController : Controller
             return View(model);
         }
 
-        TempData["SuccessMessage"] = "Đã lập biên bản giao xe.";
+        TempData["SuccessMessage"] = "Đã lập biên bản giao xe và lưu ảnh bàn giao.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+    }
+
+    private async Task ValidateImagesAsync(
+        IReadOnlyCollection<IFormFile> images,
+        CancellationToken cancellationToken)
+    {
+        var selectedImages = images.Where(file => file.Length > 0).ToList();
+        if (selectedImages.Count == 0)
+        {
+            ModelState.AddModelError(nameof(HandoverViewModel.Images),
+                "Vui lòng tải ít nhất một ảnh tình trạng xe khi bàn giao.");
+            return;
+        }
+
+        if (selectedImages.Count > MaximumImages)
+        {
+            ModelState.AddModelError(nameof(HandoverViewModel.Images),
+                $"Chỉ được tải tối đa {MaximumImages} ảnh bàn giao.");
+        }
+
+        foreach (var image in selectedImages)
+        {
+            var error = await ImageFileValidator.ValidateAsync(
+                image,
+                MaximumImageBytes,
+                cancellationToken);
+            if (error is not null)
+            {
+                ModelState.AddModelError(nameof(HandoverViewModel.Images),
+                    $"{image.FileName}: {error}");
+            }
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> SaveImagesAsync(
+        int bookingId,
+        IEnumerable<IFormFile> images,
+        CancellationToken cancellationToken)
+    {
+        var relativeFolder = $"uploads/handovers/{bookingId}";
+        var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
+        Directory.CreateDirectory(folder);
+
+        var paths = new List<string>();
+        foreach (var image in images.Where(file => file.Length > 0))
+        {
+            var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+            var fileName = $"{Guid.NewGuid():N}{extension}";
+            var fullPath = Path.Combine(folder, fileName);
+
+            await using var stream = System.IO.File.Create(fullPath);
+            await image.CopyToAsync(stream, cancellationToken);
+            paths.Add($"/{relativeFolder}/{fileName}");
+        }
+
+        return paths;
+    }
+
+    private void DeleteSavedImages(IEnumerable<string> imagePaths)
+    {
+        foreach (var imagePath in imagePaths)
+        {
+            var fullPath = Path.Combine(
+                _environment.WebRootPath,
+                imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+            if (System.IO.File.Exists(fullPath))
+            {
+                System.IO.File.Delete(fullPath);
+            }
+        }
     }
 }
