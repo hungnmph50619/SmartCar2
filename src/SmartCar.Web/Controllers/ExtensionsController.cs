@@ -33,7 +33,7 @@ public sealed class ExtensionsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Request(
+    public async Task<IActionResult> SubmitRequest(
         ExtensionRequestViewModel model,
         CancellationToken cancellationToken)
     {
