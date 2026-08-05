@@ -1,8 +1,11 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Handovers;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
@@ -17,15 +20,18 @@ public sealed class HandoversController : Controller
 
     private readonly IHandoverService _handoverService;
     private readonly IBookingService _bookingService;
+    private readonly IAuditService _auditService;
     private readonly IWebHostEnvironment _environment;
 
     public HandoversController(
         IHandoverService handoverService,
         IBookingService bookingService,
+        IAuditService auditService,
         IWebHostEnvironment environment)
     {
         _handoverService = handoverService;
         _bookingService = bookingService;
+        _auditService = auditService;
         _environment = environment;
     }
 
@@ -103,6 +109,16 @@ public sealed class HandoversController : Controller
 
             return View(model);
         }
+
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await _auditService.WriteAsync(
+            adminId,
+            "CreateHandover",
+            nameof(VehicleHandover),
+            model.BookingId.ToString(),
+            $"Lập biên bản giao xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh.",
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = "Đã lập biên bản giao xe và lưu ảnh bàn giao.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
