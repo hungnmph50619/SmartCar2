@@ -21,7 +21,10 @@
 <div class="admin-detail-grid">
     <div class="admin-detail-stack">
         <section class="admin-panel">
-            <div class="admin-panel__head"><div><h2>Thông tin khách hàng</h2><p>Kiểm tra liên hệ và mức độ hoàn thiện hồ sơ.</p></div><a class="admin-panel__link" asp-action="Customers" asp-route-search="@Model.Booking.CustomerEmail">Xem khách hàng →</a></div>
+            <div class="admin-panel__head">
+                <div><h2>Thông tin khách hàng</h2><p>Kiểm tra liên hệ và mức độ hoàn thiện hồ sơ.</p></div>
+                <a class="admin-panel__link" asp-action="Customers" asp-route-search="@Model.Booking.CustomerEmail">Xem khách hàng →</a>
+            </div>
             <div class="admin-panel__body">
                 <div class="admin-info-grid">
                     <div class="admin-info-item"><small>Họ và tên</small><strong>@Model.Booking.CustomerName</strong></div>
@@ -37,7 +40,10 @@
         </section>
 
         <section class="admin-panel">
-            <div class="admin-panel__head"><div><h2>Xe và lịch thuê</h2><p>Đối chiếu xe, biển số và khoảng thời gian sử dụng.</p></div><a class="admin-panel__link" asp-controller="Vehicles" asp-action="Details" asp-route-id="@Model.Booking.BookingId">Xem trang khách →</a></div>
+            <div class="admin-panel__head">
+                <div><h2>Xe và lịch thuê</h2><p>Đối chiếu xe, biển số và khoảng thời gian sử dụng.</p></div>
+                <a class="admin-panel__link" asp-action="Vehicles" asp-route-search="@Model.Booking.LicensePlate">Xem trong đội xe →</a>
+            </div>
             <div class="admin-panel__body">
                 <div class="admin-info-grid">
                     <div class="admin-info-item"><small>Xe</small><strong>@Model.Booking.VehicleName</strong></div>
@@ -54,8 +60,8 @@
                 <div class="admin-info-grid">
                     <div class="admin-info-item"><small>Biên bản giao xe</small><strong>@(Model.HasHandover ? "Đã lập" : "Chưa lập")</strong></div>
                     <div class="admin-info-item"><small>Biên bản trả xe</small><strong>@(Model.HasReturn ? "Đã lập" : "Chưa lập")</strong></div>
-                    <div class="admin-info-item"><small>Kilomet đầu</small><strong>@(Model.HandoverMileage.HasValue ? $"{Model.HandoverMileage:N0} km" : "Chưa ghi nhận")</strong></div>
-                    <div class="admin-info-item"><small>Kilomet cuối</small><strong>@(Model.ReturnMileage.HasValue ? $"{Model.ReturnMileage:N0} km" : "Chưa ghi nhận")</strong></div>
+                    <div class="admin-info-item"><small>Kilomet đầu</small><strong>@(Model.HandoverMileage.HasValue ? $"{Model.HandoverMileage.Value:N0} km" : "Chưa ghi nhận")</strong></div>
+                    <div class="admin-info-item"><small>Kilomet cuối</small><strong>@(Model.ReturnMileage.HasValue ? $"{Model.ReturnMileage.Value:N0} km" : "Chưa ghi nhận")</strong></div>
                     <div class="admin-info-item"><small>Nhiên liệu đầu</small><strong>@(Model.HandoverFuelLevel ?? "Chưa ghi nhận")</strong></div>
                     <div class="admin-info-item"><small>Nhiên liệu cuối</small><strong>@(Model.ReturnFuelLevel ?? "Chưa ghi nhận")</strong></div>
                 </div>
@@ -78,7 +84,7 @@
                     <div class="admin-price-line admin-price-line--total"><span>Tổng tiền thuê</span><strong>@Model.Booking.TotalAmount.ToString("N0")đ</strong></div>
                 </div>
                 <div class="admin-info-grid mt-3">
-                    <div class="admin-info-item"><small>Tiền cọc</small><strong>@(Model.PaymentAmount.HasValue ? $"{Model.PaymentAmount:N0}đ" : "Chưa tạo")</strong></div>
+                    <div class="admin-info-item"><small>Tiền cọc</small><strong>@(Model.PaymentAmount.HasValue ? $"{Model.PaymentAmount.Value:N0}đ" : "Chưa tạo")</strong></div>
                     <div class="admin-info-item"><small>Phương thức</small><strong>@(Model.PaymentMethod ?? "Chưa có")</strong></div>
                     <div class="admin-info-item"><small>Mã giao dịch</small><strong>@(Model.TransactionCode ?? "Chưa có")</strong></div>
                     <div class="admin-info-item"><small>Thanh toán lúc</small><strong>@(Model.PaidAt?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa thanh toán")</strong></div>
@@ -119,23 +125,14 @@
                         </form>
                         break;
                     case BookingStatus.ReadyForPickup:
-                        <form asp-action="ChangeBookingStatus" method="post">
-                            <input type="hidden" name="id" value="@Model.Booking.BookingId" />
-                            <input type="hidden" name="newStatus" value="@BookingStatus.Rented" />
-                            <button class="admin-btn admin-btn--primary" type="submit">⇄ Xác nhận khách đã nhận xe</button>
-                        </form>
+                        <button class="admin-btn admin-btn--primary" type="button" data-bs-toggle="modal" data-bs-target="#handoverModal">⇄ Lập biên bản và giao xe</button>
                         break;
                     case BookingStatus.Rented:
-                        <form asp-action="ChangeBookingStatus" method="post">
-                            <input type="hidden" name="id" value="@Model.Booking.BookingId" />
-                            <input type="hidden" name="newStatus" value="@BookingStatus.PendingInspection" />
-                            <button class="admin-btn admin-btn--primary" type="submit">⌕ Xác nhận khách đã trả xe</button>
-                        </form>
+                        <button class="admin-btn admin-btn--primary" type="button" data-bs-toggle="modal" data-bs-target="#returnModal">⌕ Lập biên bản trả xe</button>
                         break;
                     case BookingStatus.PendingInspection:
-                        <form asp-action="ChangeBookingStatus" method="post">
-                            <input type="hidden" name="id" value="@Model.Booking.BookingId" />
-                            <input type="hidden" name="newStatus" value="@BookingStatus.Completed" />
+                        <form asp-controller="AdminOperations" asp-action="CompleteInspection" method="post" onsubmit="return confirm('Xác nhận đã kiểm tra xong, đóng đơn và mở lại xe cho thuê?');">
+                            <input type="hidden" name="bookingId" value="@Model.Booking.BookingId" />
                             <button class="admin-btn admin-btn--primary" type="submit">✓ Hoàn tất kiểm tra và đóng đơn</button>
                         </form>
                         break;
@@ -161,4 +158,64 @@
             </div>
         </section>
     </aside>
+</div>
+
+<div class="modal fade admin-modal-form" id="handoverModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-controller="AdminOperations" asp-action="CreateHandover" method="post">
+                <input type="hidden" name="bookingId" value="@Model.Booking.BookingId" />
+                <div class="modal-header">
+                    <div><h2 class="modal-title fs-5">Biên bản giao xe</h2><small class="text-muted">@Model.Booking.VehicleName · @Model.Booking.LicensePlate</small></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="admin-form-grid">
+                        <div class="admin-form-field">
+                            <label for="handoverMileage">Kilomet lúc giao</label>
+                            <input id="handoverMileage" class="admin-form-control" type="number" min="0" name="mileage" required />
+                        </div>
+                        <div class="admin-form-field">
+                            <label for="handoverFuel">Mức nhiên liệu</label>
+                            <select id="handoverFuel" class="admin-form-control" name="fuelLevel" required>
+                                <option value="">Chọn mức nhiên liệu</option><option>Đầy bình</option><option>3/4 bình</option><option>1/2 bình</option><option>1/4 bình</option>
+                            </select>
+                        </div>
+                        <div class="admin-form-field admin-form-field--wide"><label for="handoverExterior">Tình trạng ngoại thất</label><textarea id="handoverExterior" class="admin-form-control" name="exteriorCondition" placeholder="Ghi rõ vết xước hoặc khuyết điểm hiện có..."></textarea></div>
+                        <div class="admin-form-field admin-form-field--wide"><label for="handoverInterior">Tình trạng nội thất</label><textarea id="handoverInterior" class="admin-form-control" name="interiorCondition" placeholder="Ghế, điều hòa, màn hình, độ sạch..."></textarea></div>
+                        <div class="admin-form-field"><label for="handoverAccessories">Phụ kiện đi kèm</label><input id="handoverAccessories" class="admin-form-control" name="accessories" placeholder="Chìa khóa, giấy tờ, cáp sạc..." /></div>
+                        <div class="admin-form-field"><label for="handoverNotes">Ghi chú</label><input id="handoverNotes" class="admin-form-control" name="notes" placeholder="Ghi chú thêm" /></div>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="admin-btn" data-bs-dismiss="modal">Đóng</button><button type="submit" class="admin-btn admin-btn--primary">Xác nhận bàn giao xe</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade admin-modal-form" id="returnModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-controller="AdminOperations" asp-action="CreateVehicleReturn" method="post">
+                <input type="hidden" name="bookingId" value="@Model.Booking.BookingId" />
+                <div class="modal-header">
+                    <div><h2 class="modal-title fs-5">Biên bản trả xe</h2><small class="text-muted">Đối chiếu với tình trạng đã ghi nhận khi giao xe.</small></div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="admin-form-grid">
+                        <div class="admin-form-field"><label for="returnMileage">Kilomet lúc trả</label><input id="returnMileage" class="admin-form-control" type="number" min="@(Model.HandoverMileage ?? 0)" name="mileage" required /></div>
+                        <div class="admin-form-field"><label for="returnFuel">Mức nhiên liệu</label><select id="returnFuel" class="admin-form-control" name="fuelLevel" required><option value="">Chọn mức nhiên liệu</option><option>Đầy bình</option><option>3/4 bình</option><option>1/2 bình</option><option>1/4 bình</option></select></div>
+                        <div class="admin-form-field admin-form-field--wide"><label for="returnExterior">Tình trạng ngoại thất</label><textarea id="returnExterior" class="admin-form-control" name="exteriorCondition" placeholder="Ghi nhận vết xước hoặc hư hỏng mới..."></textarea></div>
+                        <div class="admin-form-field admin-form-field--wide"><label for="returnInterior">Tình trạng nội thất</label><textarea id="returnInterior" class="admin-form-control" name="interiorCondition" placeholder="Độ sạch, mùi, ghế và thiết bị trong xe..."></textarea></div>
+                        <div class="admin-form-field"><label class="d-flex align-items-center gap-2"><input type="checkbox" name="hasDamage" value="true" /> Có hư hỏng mới</label></div>
+                        <div class="admin-form-field"><label for="returnNotes">Ghi chú</label><input id="returnNotes" class="admin-form-control" name="notes" placeholder="Ghi chú kiểm tra" /></div>
+                        <div class="admin-form-field"><label for="chargeDescription">Nội dung phụ phí</label><input id="chargeDescription" class="admin-form-control" name="additionalChargeDescription" placeholder="Quá giờ, vượt km, vệ sinh..." /></div>
+                        <div class="admin-form-field"><label for="chargeAmount">Số tiền phụ phí</label><input id="chargeAmount" class="admin-form-control" type="number" min="0" step="1000" name="additionalChargeAmount" value="0" /></div>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="button" class="admin-btn" data-bs-dismiss="modal">Đóng</button><button type="submit" class="admin-btn admin-btn--primary">Xác nhận nhận lại xe</button></div>
+            </form>
+        </div>
+    </div>
 </div>
