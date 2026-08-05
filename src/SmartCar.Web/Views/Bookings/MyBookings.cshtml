@@ -38,14 +38,14 @@ else
                     <div class="d-flex align-items-center gap-2">
                         @if (!string.IsNullOrWhiteSpace(booking.PrimaryImagePath))
                         {
-                            <img src="@booking.PrimaryImagePath" style="width:72px;height:48px;object-fit:cover" class="rounded" />
+                            <img src="@booking.PrimaryImagePath" alt="Ảnh @booking.VehicleName" style="width:72px;height:48px;object-fit:cover" class="rounded" />
                         }
                         <div><strong>@booking.VehicleName</strong><br /><small>@booking.LicensePlate</small></div>
                     </div>
                 </td>
                 <td>@booking.PickupDate.ToString("dd/MM/yyyy HH:mm")<br />→ @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
                 <td>@booking.TotalAmount.ToString("N0") đ</td>
-                <td><span class="badge bg-secondary">@booking.Status</span></td>
+                <td><span class="badge bg-secondary">@booking.Status.ToVietnamese()</span></td>
                 <td><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@booking.BookingId">Chi tiết</a></td>
             </tr>
         }
