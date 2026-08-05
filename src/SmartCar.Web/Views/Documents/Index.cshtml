@@ -10,7 +10,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h3 mb-1">Xác minh CCCD và GPLX</h1>
-        <p class="text-muted mb-0">Cả hai giấy tờ phải được Admin xác minh trước khi bạn đặt xe.</p>
+        <p class="text-muted mb-0">Cả hai giấy tờ phải được quản trị viên xác minh trước khi bạn đặt xe.</p>
     </div>
 </div>
 
@@ -30,7 +30,7 @@
                             }
                             else
                             {
-                                <span class="badge @(document.Status == DocumentStatus.Verified ? "bg-success" : document.Status == DocumentStatus.Rejected ? "bg-danger" : "bg-warning text-dark")">@document.Status</span>
+                                <span class="badge @(document.Status == DocumentStatus.Verified ? "bg-success" : document.Status == DocumentStatus.Rejected ? "bg-danger" : "bg-warning text-dark")">@document.Status.ToVietnamese()</span>
                             }
                         </div>
                         @if (document is not null)
