@@ -58,7 +58,10 @@ internal sealed class BookingOperationService : IBookingOperationService
         booking.CancelReason = "Khách không đến nhận xe đúng thời gian quy định.";
         booking.RefundAmount = 0;
         booking.RefundReason = "Khách không đến nhận xe nên không được hoàn tiền.";
-        booking.Vehicle.Status = VehicleStatus.Available;
+        booking.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
+            _dbContext,
+            booking.Vehicle,
+            cancellationToken: cancellationToken);
 
         _dbContext.Notifications.Add(new Notification
         {
@@ -127,7 +130,10 @@ internal sealed class BookingOperationService : IBookingOperationService
         booking.CancelledAt = DateTime.UtcNow;
         booking.RefundAmount = refundAmount;
         booking.RefundReason = refundReason;
-        booking.Vehicle.Status = VehicleStatus.Available;
+        booking.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
+            _dbContext,
+            booking.Vehicle,
+            cancellationToken: cancellationToken);
 
         if (refundAmount > 0 && !booking.Payments.Any(payment => payment.Type == PaymentType.Refund))
         {
@@ -140,6 +146,17 @@ internal sealed class BookingOperationService : IBookingOperationService
                 PaidAt = DateTime.UtcNow,
                 TransactionCode = $"RF{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}"
             });
+
+            if (!string.IsNullOrWhiteSpace(booking.PromotionCode))
+            {
+                var promotion = await _dbContext.Promotions.FirstOrDefaultAsync(
+                    item => item.Code == booking.PromotionCode,
+                    cancellationToken);
+                if (promotion is not null && promotion.UsedCount > 0)
+                {
+                    promotion.UsedCount--;
+                }
+            }
         }
 
         _dbContext.Notifications.Add(new Notification
