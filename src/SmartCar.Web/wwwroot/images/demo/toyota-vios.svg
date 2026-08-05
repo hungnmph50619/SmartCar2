@@ -6,5 +6,5 @@
   <circle cx="380" cy="545" r="72" fill="#212529"/><circle cx="820" cy="545" r="72" fill="#212529"/>
   <circle cx="380" cy="545" r="34" fill="#adb5bd"/><circle cx="820" cy="545" r="34" fill="#adb5bd"/>
   <text x="600" y="125" text-anchor="middle" font-family="Arial" font-size="64" font-weight="700" fill="#fff">TOYOTA VIOS</text>
-  <text x="600" y="190" text-anchor="middle" font-family="Arial" font-size="30" fill="#fff">SmartCar Demo Fleet</text>
+  <text x="600" y="190" text-anchor="middle" font-family="Arial" font-size="30" fill="#fff">Đội xe mẫu SmartCar</text>
 </svg>
