@@ -1,0 +1,69 @@
+name: Sync EF Snapshot
+
+on:
+  push:
+    branches:
+      - agent/giai-doan-3-quan-ly-nang-cao
+    paths:
+      - .github/workflows/sync-ef-snapshot.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: agent/giai-doan-3-quan-ly-nang-cao
+          fetch-depth: 0
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore SmartCar.sln
+
+      - name: Install EF tool
+        run: dotnet tool install --global dotnet-ef --version 8.0.16
+
+      - name: Generate synchronized snapshot
+        run: |
+          dotnet ef migrations add Phase3SnapshotSync \
+            --project src/SmartCar.Infrastructure \
+            --startup-project src/SmartCar.Web
+
+          migration_file=$(find src/SmartCar.Infrastructure/Persistence/Migrations \
+            -maxdepth 1 -name '*_Phase3SnapshotSync.cs' ! -name '*.Designer.cs' | head -n 1)
+
+          python3 - "$migration_file" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          up_start = text.index("    protected override void Up")
+          class_end = text.rfind("}")
+          text = text[:up_start] + '''    protected override void Up(MigrationBuilder migrationBuilder)
+              {
+              }
+
+              protected override void Down(MigrationBuilder migrationBuilder)
+              {
+              }
+          }
+          '''
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit synchronized snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/SmartCar.Infrastructure/Persistence/Migrations
+          git commit -m "chore: sync EF model snapshot"
+          git push origin HEAD:agent/giai-doan-3-quan-ly-nang-cao
