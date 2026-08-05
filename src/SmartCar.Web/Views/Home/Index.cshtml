@@ -1,46 +1,327 @@
+@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
 @using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Trang chủ";
+    var pickupDate = DateTime.Today.AddDays(1).AddHours(9);
+    var returnDate = pickupDate.AddDays(1);
+    var heroVehicle = Model.FirstOrDefault();
 }
 
-<section class="py-5">
-    <div class="row align-items-center g-4">
-        <div class="col-lg-7">
-            <span class="badge text-bg-primary mb-3">SMARTCAR</span>
-            <h1 class="display-5 fw-bold">Thuê xe tự lái nhanh chóng, minh bạch</h1>
-            <p class="lead text-muted">
-                SmartCar trực tiếp sở hữu và quản lý đội xe. Khách hàng tìm xe, gửi yêu cầu,
-                thanh toán, nhận xe và theo dõi toàn bộ đơn thuê trên một hệ thống.
+<section class="home-hero mb-5">
+    <div class="row align-items-center g-5">
+        <div class="col-lg-6">
+            <div class="hero-kicker mb-3">
+                <span class="hero-kicker-dot"></span>
+                Nền tảng thuê xe tự lái minh bạch
+            </div>
+            <h1 class="hero-title mb-3">
+                Thuê xe dễ dàng,<br />
+                <span>chủ động mọi hành trình</span>
+            </h1>
+            <p class="hero-description mb-4">
+                Tìm xe phù hợp, gửi yêu cầu thuê, thanh toán và theo dõi toàn bộ hành trình
+                ngay trên một hệ thống duy nhất.
             </p>
-            <div class="d-flex flex-wrap gap-2">
-                <a asp-controller="Vehicles" asp-action="Index" class="btn btn-primary btn-lg">Tìm xe ngay</a>
-                @if (User.Identity?.IsAuthenticated != true)
+
+            <div class="d-flex flex-wrap gap-3 mb-4">
+                <a asp-controller="Vehicles" asp-action="Index" class="btn btn-primary btn-lg px-4">
+                    Tìm xe ngay
+                    <span aria-hidden="true">→</span>
+                </a>
+                @if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Admin))
                 {
-                    <a asp-controller="Account" asp-action="Register" class="btn btn-outline-primary btn-lg">Đăng ký</a>
-                    <a asp-controller="Account" asp-action="Login" class="btn btn-outline-secondary btn-lg">Đăng nhập</a>
+                    <a asp-controller="Dashboard" asp-action="Index" class="btn btn-light btn-lg px-4 hero-secondary-button">
+                        Mở Dashboard
+                    </a>
                 }
-                else if (User.IsInRole(RoleNames.Admin))
+                else if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
                 {
-                    <a asp-controller="Dashboard" asp-action="Index" class="btn btn-outline-secondary btn-lg">Mở Dashboard</a>
+                    <a asp-controller="Bookings" asp-action="MyBookings" class="btn btn-light btn-lg px-4 hero-secondary-button">
+                        Đơn thuê của tôi
+                    </a>
                 }
-                else if (User.IsInRole(RoleNames.Customer))
+                else
                 {
-                    <a asp-controller="Bookings" asp-action="MyBookings" class="btn btn-outline-secondary btn-lg">Đơn thuê của tôi</a>
+                    <a asp-controller="Account" asp-action="Register" class="btn btn-light btn-lg px-4 hero-secondary-button">
+                        Tạo tài khoản
+                    </a>
                 }
             </div>
+
+            <div class="hero-trust d-flex flex-wrap gap-4">
+                <div>
+                    <strong>100%</strong>
+                    <span>Xe có giấy tờ rõ ràng</span>
+                </div>
+                <div>
+                    <strong>24/7</strong>
+                    <span>Theo dõi đơn trực tuyến</span>
+                </div>
+                <div>
+                    <strong>4 bước</strong>
+                    <span>Hoàn tất thuê xe</span>
+                </div>
+            </div>
         </div>
-        <div class="col-lg-5">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body p-4">
-                    <h2 class="h4">Quy trình thuê xe</h2>
-                    <ol class="mb-0 ps-3">
-                        <li class="mb-2">Xác minh CCCD và GPLX.</li>
-                        <li class="mb-2">Chọn xe và thời gian thuê.</li>
-                        <li class="mb-2">Chờ Admin xác nhận và thanh toán.</li>
-                        <li>Nhận xe, sử dụng và hoàn trả.</li>
-                    </ol>
+
+        <div class="col-lg-6">
+            <div class="hero-visual">
+                <div class="hero-visual-glow"></div>
+                @if (heroVehicle is not null && !string.IsNullOrWhiteSpace(heroVehicle.PrimaryImagePath))
+                {
+                    <img src="@heroVehicle.PrimaryImagePath"
+                         alt="@heroVehicle.VehicleName"
+                         class="hero-car-image" />
+                    <div class="hero-car-card">
+                        <div>
+                            <small>Xe nổi bật</small>
+                            <strong>@heroVehicle.VehicleName</strong>
+                            <span>@heroVehicle.Seats chỗ · @heroVehicle.Transmission</span>
+                        </div>
+                        <div class="text-end">
+                            <small>Từ</small>
+                            <strong>@heroVehicle.DailyPrice.ToString("N0") đ</strong>
+                            <span>/ ngày</span>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="hero-car-placeholder" aria-label="Minh họa ô tô">
+                        <svg viewBox="0 0 640 300" role="img" aria-hidden="true">
+                            <path d="M145 185c18-60 57-100 119-112h113c50 6 86 40 111 101l53 14c25 7 41 30 41 56v14H63v-15c0-30 20-55 49-62l33-8z" fill="currentColor" opacity=".95" />
+                            <path d="M228 94h142c29 4 55 24 76 63H179c14-34 30-55 49-63z" fill="#dff7f4" />
+                            <circle cx="180" cy="242" r="42" fill="#182a3a" />
+                            <circle cx="180" cy="242" r="18" fill="#cbd5e1" />
+                            <circle cx="477" cy="242" r="42" fill="#182a3a" />
+                            <circle cx="477" cy="242" r="18" fill="#cbd5e1" />
+                        </svg>
+                    </div>
+                }
+                <div class="hero-floating-badge hero-badge-top">
+                    <span class="floating-icon">✓</span>
+                    <div><strong>Đặt xe minh bạch</strong><small>Chi phí hiển thị rõ ràng</small></div>
+                </div>
+                <div class="hero-floating-badge hero-badge-bottom">
+                    <span class="floating-icon">★</span>
+                    <div><strong>Xe được quản lý</strong><small>Kiểm tra trước khi giao</small></div>
                 </div>
             </div>
         </div>
     </div>
+</section>
+
+<section class="home-search-card mb-5" aria-labelledby="quick-search-title">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
+        <div>
+            <span class="section-eyebrow">TÌM XE NHANH</span>
+            <h2 id="quick-search-title" class="h3 mb-1">Bạn muốn nhận xe khi nào?</h2>
+        </div>
+        <span class="text-muted">Chọn thời gian để xem đúng xe còn trống</span>
+    </div>
+
+    <form asp-controller="Vehicles" asp-action="Index" method="get" class="row g-3 align-items-end">
+        <div class="col-lg-4 col-md-6">
+            <label for="homePickupDate" class="form-label fw-semibold">Ngày giờ nhận xe</label>
+            <input id="homePickupDate"
+                   type="datetime-local"
+                   name="PickupDate"
+                   value="@pickupDate.ToString("yyyy-MM-ddTHH:mm")"
+                   min="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")"
+                   class="form-control form-control-lg" />
+        </div>
+        <div class="col-lg-4 col-md-6">
+            <label for="homeReturnDate" class="form-label fw-semibold">Ngày giờ trả xe</label>
+            <input id="homeReturnDate"
+                   type="datetime-local"
+                   name="ReturnDate"
+                   value="@returnDate.ToString("yyyy-MM-ddTHH:mm")"
+                   min="@pickupDate.ToString("yyyy-MM-ddTHH:mm")"
+                   class="form-control form-control-lg" />
+        </div>
+        <div class="col-lg-2 col-md-6">
+            <label for="homeSeats" class="form-label fw-semibold">Số chỗ tối thiểu</label>
+            <select id="homeSeats" name="Seats" class="form-select form-select-lg">
+                <option value="">Tất cả</option>
+                <option value="4">4 chỗ</option>
+                <option value="5">5 chỗ</option>
+                <option value="7">7 chỗ</option>
+            </select>
+        </div>
+        <div class="col-lg-2 col-md-6">
+            <button type="submit" class="btn btn-primary btn-lg w-100 home-search-button">
+                Tìm xe
+            </button>
+        </div>
+    </form>
+</section>
+
+<section class="mb-5" aria-labelledby="featured-title">
+    <div class="section-heading d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+        <div>
+            <span class="section-eyebrow">LỰA CHỌN NỔI BẬT</span>
+            <h2 id="featured-title" class="display-6 fw-bold mb-0">Xe sẵn sàng cho bạn</h2>
+        </div>
+        <a asp-controller="Vehicles" asp-action="Index" class="section-link">
+            Xem tất cả xe <span aria-hidden="true">→</span>
+        </a>
+    </div>
+
+    @if (Model.Count == 0)
+    {
+        <div class="empty-featured-state">
+            <div class="empty-featured-icon">🚗</div>
+            <h3 class="h5">Chưa có xe sẵn sàng</h3>
+            <p class="text-muted mb-0">Danh sách xe nổi bật sẽ xuất hiện khi có xe ở trạng thái sẵn sàng.</p>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var vehicle in Model)
+            {
+                <div class="col-lg-4 col-md-6">
+                    <article class="featured-car-card h-100">
+                        <div class="featured-car-image-wrap">
+                            @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
+                            {
+                                <img src="@vehicle.PrimaryImagePath"
+                                     alt="@vehicle.VehicleName"
+                                     class="featured-car-image" />
+                            }
+                            else
+                            {
+                                <div class="featured-car-placeholder">Chưa có ảnh</div>
+                            }
+                            <span class="availability-badge">Sẵn sàng</span>
+                        </div>
+                        <div class="featured-car-body">
+                            <div class="d-flex justify-content-between gap-3 mb-2">
+                                <div>
+                                    <div class="featured-brand">@vehicle.BrandName</div>
+                                    <h3 class="h5 fw-bold mb-0">@vehicle.VehicleName</h3>
+                                </div>
+                                <div class="featured-price text-end">
+                                    <strong>@vehicle.DailyPrice.ToString("N0") đ</strong>
+                                    <span>/ ngày</span>
+                                </div>
+                            </div>
+                            <div class="featured-specs">
+                                <span>👥 @vehicle.Seats chỗ</span>
+                                <span>⚙ @vehicle.Transmission</span>
+                                <span>⛽ @vehicle.FuelType</span>
+                            </div>
+                            <a asp-controller="Vehicles"
+                               asp-action="Details"
+                               asp-route-id="@vehicle.VehicleId"
+                               asp-route-pickupDate="@pickupDate"
+                               asp-route-returnDate="@returnDate"
+                               class="btn btn-outline-primary w-100 mt-4">
+                                Xem chi tiết xe
+                            </a>
+                        </div>
+                    </article>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+<section class="home-benefits mb-5" aria-labelledby="benefits-title">
+    <div class="text-center mb-5">
+        <span class="section-eyebrow">VÌ SAO CHỌN SMARTCAR?</span>
+        <h2 id="benefits-title" class="display-6 fw-bold">An tâm từ lúc đặt đến lúc trả xe</h2>
+        <p class="text-muted mx-auto section-subtitle">
+            Mọi thông tin quan trọng trong hành trình thuê xe đều được quản lý tập trung và minh bạch.
+        </p>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="benefit-card h-100">
+                <div class="benefit-icon">✓</div>
+                <h3 class="h5">Xe được kiểm tra</h3>
+                <p>Thông tin xe, giấy tờ và tình trạng vận hành được quản lý trước khi giao.</p>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="benefit-card h-100">
+                <div class="benefit-icon">⚡</div>
+                <h3 class="h5">Đặt xe nhanh chóng</h3>
+                <p>Tìm xe còn trống và gửi yêu cầu thuê chỉ trong vài thao tác đơn giản.</p>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="benefit-card h-100">
+                <div class="benefit-icon">₫</div>
+                <h3 class="h5">Chi phí minh bạch</h3>
+                <p>Giá thuê, khuyến mãi, phụ phí và hoàn tiền được hiển thị rõ trên đơn.</p>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="benefit-card h-100">
+                <div class="benefit-icon">↻</div>
+                <h3 class="h5">Theo dõi xuyên suốt</h3>
+                <p>Kiểm tra trạng thái xác nhận, thanh toán, giao xe, gia hạn và trả xe.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="rental-process mb-5" aria-labelledby="process-title">
+    <div class="row align-items-center g-5">
+        <div class="col-lg-4">
+            <span class="section-eyebrow section-eyebrow-light">QUY TRÌNH THUÊ XE</span>
+            <h2 id="process-title" class="display-6 fw-bold text-white">Bốn bước để bắt đầu hành trình</h2>
+            <p class="process-intro">
+                SmartCar giúp bạn hoàn tất các bước thuê xe theo một quy trình rõ ràng và dễ theo dõi.
+            </p>
+            <a asp-controller="Vehicles" asp-action="Index" class="btn btn-light btn-lg px-4">
+                Chọn xe ngay
+            </a>
+        </div>
+        <div class="col-lg-8">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="process-step h-100">
+                        <span class="process-number">01</span>
+                        <h3 class="h5">Tìm và chọn xe</h3>
+                        <p>Chọn thời gian thuê, số chỗ và chiếc xe phù hợp với nhu cầu.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="process-step h-100">
+                        <span class="process-number">02</span>
+                        <h3 class="h5">Gửi yêu cầu thuê</h3>
+                        <p>Xác minh CCCD, GPLX và gửi yêu cầu để Admin kiểm tra.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="process-step h-100">
+                        <span class="process-number">03</span>
+                        <h3 class="h5">Thanh toán và nhận xe</h3>
+                        <p>Thanh toán sau khi đơn được xác nhận và lập biên bản giao xe.</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="process-step h-100">
+                        <span class="process-number">04</span>
+                        <h3 class="h5">Trả xe và đánh giá</h3>
+                        <p>Hoàn tất trả xe, xử lý phụ phí nếu có và chia sẻ trải nghiệm.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="home-cta mb-4">
+    <div>
+        <span class="section-eyebrow">SẴN SÀNG KHỞI HÀNH?</span>
+        <h2 class="h2 fw-bold mb-2">Tìm chiếc xe phù hợp cho hành trình tiếp theo</h2>
+        <p class="text-muted mb-0">Chọn thời gian, xem xe còn trống và gửi yêu cầu thuê ngay hôm nay.</p>
+    </div>
+    <a asp-controller="Vehicles" asp-action="Index" class="btn btn-primary btn-lg px-4">
+        Khám phá đội xe
+    </a>
 </section>
