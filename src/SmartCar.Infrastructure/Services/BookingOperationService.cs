@@ -44,17 +44,18 @@ internal sealed class BookingOperationService : IBookingOperationService
 
         if (booking.Status is not (BookingStatus.Paid or BookingStatus.ReadyForPickup))
         {
-            return OperationResult.Failure("Chỉ đơn đã thanh toán nhưng chưa giao xe mới được đánh dấu không đến nhận.");
+            return OperationResult.Failure("Chỉ đơn đã thanh toán nhưng chưa giao xe mới được ghi nhận khách không đến nhận.");
         }
 
         if (DateTime.Now < booking.PickupDate.AddMinutes(30))
         {
-            return OperationResult.Failure("Chỉ được đánh dấu no-show sau giờ nhận xe ít nhất 30 phút.");
+            return OperationResult.Failure(
+                "Chỉ được ghi nhận khách không đến nhận xe sau giờ nhận ít nhất 30 phút.");
         }
 
         booking.Status = BookingStatus.NoShow;
         booking.NoShowMarkedAt = DateTime.UtcNow;
-        booking.CancelledBy = "Admin";
+        booking.CancelledBy = "Quản trị viên";
         booking.CancelReason = "Khách không đến nhận xe đúng thời gian quy định.";
         booking.RefundAmount = 0;
         booking.RefundReason = "Khách không đến nhận xe nên không được hoàn tiền.";
@@ -66,8 +67,8 @@ internal sealed class BookingOperationService : IBookingOperationService
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Đơn thuê đã bị ghi nhận no-show",
-            Message = $"Đơn #{booking.BookingId} đã bị ghi nhận không đến nhận xe và không được hoàn tiền."
+            Title = "Đơn thuê ghi nhận khách không đến nhận xe",
+            Message = $"Đơn #{booking.BookingId} đã được ghi nhận khách không đến nhận xe và không được hoàn tiền."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -119,14 +120,14 @@ internal sealed class BookingOperationService : IBookingOperationService
 
         var refundAmount = isAdmin ? paidAmount : 0m;
         var refundReason = isAdmin
-            ? "Admin hủy đơn trước khi giao xe: hoàn 100% số tiền khách đã thanh toán."
+            ? "Quản trị viên hủy đơn trước khi giao xe: hoàn 100% số tiền khách đã thanh toán."
             : paidAmount > 0
-                ? "Khách chủ động hủy sau khi thanh toán: không hoàn tiền."
+                ? "Khách hàng chủ động hủy sau khi thanh toán: không hoàn tiền."
                 : "Đơn chưa phát sinh thanh toán nên không có khoản hoàn tiền.";
 
         booking.Status = BookingStatus.Cancelled;
         booking.CancelReason = request.Reason.Trim();
-        booking.CancelledBy = isAdmin ? "Admin" : "Customer";
+        booking.CancelledBy = isAdmin ? "Quản trị viên" : "Khách hàng";
         booking.CancelledAt = DateTime.UtcNow;
         booking.RefundAmount = refundAmount;
         booking.RefundReason = refundReason;
@@ -141,7 +142,7 @@ internal sealed class BookingOperationService : IBookingOperationService
             {
                 Type = PaymentType.Refund,
                 Amount = refundAmount,
-                Method = "Mo phong",
+                Method = "Mô phỏng",
                 Status = PaymentStatus.Paid,
                 PaidAt = DateTime.UtcNow,
                 TransactionCode = $"RF{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}"
