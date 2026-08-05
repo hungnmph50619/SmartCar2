@@ -32,12 +32,20 @@ public sealed class BookingDetailsDto : BookingListItemDto
     public decimal RentalAmount { get; init; }
     public decimal AdditionalAmount { get; init; }
     public string? CancelReason { get; init; }
+    public string? CancelledBy { get; init; }
+    public DateTime? CancelledAt { get; init; }
+    public decimal RefundAmount { get; init; }
+    public string? RefundReason { get; init; }
+    public DateTime? NoShowMarkedAt { get; init; }
     public bool HasHandover { get; init; }
     public bool HasReturn { get; init; }
+    public bool HasReview { get; init; }
     public bool RentalPaid { get; init; }
     public bool AdditionalChargePaid { get; init; }
+    public bool ExtensionPaid { get; init; }
     public IReadOnlyList<PaymentSummaryDto> Payments { get; init; } = Array.Empty<PaymentSummaryDto>();
     public IReadOnlyList<ChargeSummaryDto> AdditionalCharges { get; init; } = Array.Empty<ChargeSummaryDto>();
+    public IReadOnlyList<ExtensionSummaryDto> Extensions { get; init; } = Array.Empty<ExtensionSummaryDto>();
 }
 
 public sealed record PaymentSummaryDto(
@@ -53,6 +61,16 @@ public sealed record ChargeSummaryDto(
     AdditionalChargeType ChargeType,
     string Description,
     decimal Amount);
+
+public sealed record ExtensionSummaryDto(
+    int BookingExtensionId,
+    DateTime OriginalReturnDate,
+    DateTime RequestedReturnDate,
+    int AdditionalDays,
+    decimal AdditionalAmount,
+    BookingExtensionStatus Status,
+    string? CustomerNote,
+    string? AdminNote);
 
 public sealed class BookingMutationResult
 {
