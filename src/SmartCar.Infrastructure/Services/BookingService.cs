@@ -2,6 +2,7 @@ using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -21,10 +22,14 @@ internal sealed class BookingService : IBookingService
     };
 
     private readonly ApplicationDbContext _dbContext;
+    private readonly IDocumentService _documentService;
 
-    public BookingService(ApplicationDbContext dbContext)
+    public BookingService(
+        ApplicationDbContext dbContext,
+        IDocumentService documentService)
     {
         _dbContext = dbContext;
+        _documentService = documentService;
     }
 
     public async Task<BookingMutationResult> CreateAsync(
@@ -40,6 +45,17 @@ internal sealed class BookingService : IBookingService
         if (!BookingDateRules.IsValidRange(request.PickupDate, request.ReturnDate))
         {
             return BookingMutationResult.Failure("Thời gian nhận xe phải trước thời gian trả xe.");
+        }
+
+        var documentsValid = await _documentService.HasValidRentalDocumentsAsync(
+            customerId,
+            request.PickupDate,
+            cancellationToken);
+
+        if (!documentsValid)
+        {
+            return BookingMutationResult.Failure(
+                "Bạn cần xác minh CCCD và GPLX còn hiệu lực trước khi đặt xe.");
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -299,6 +315,8 @@ internal sealed class BookingService : IBookingService
             .Include(booking => booking.Vehicle)
                 .ThenInclude(vehicle => vehicle.Images)
             .Include(booking => booking.Payments)
+            .Include(booking => booking.Extensions)
+            .Include(booking => booking.Review)
             .Include(booking => booking.Handover)
             .Include(booking => booking.VehicleReturn)
                 .ThenInclude(vehicleReturn => vehicleReturn!.AdditionalCharges)
@@ -355,14 +373,22 @@ internal sealed class BookingService : IBookingService
             Status = booking.Status,
             CreatedAt = booking.CreatedAt,
             CancelReason = booking.CancelReason,
+            CancelledBy = booking.CancelledBy,
+            CancelledAt = booking.CancelledAt,
+            RefundAmount = booking.RefundAmount,
+            RefundReason = booking.RefundReason,
+            NoShowMarkedAt = booking.NoShowMarkedAt,
             HasHandover = booking.Handover is not null,
             HasReturn = booking.VehicleReturn is not null,
+            HasReview = booking.Review is not null,
             RentalPaid = booking.Payments.Any(payment =>
                 payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid),
             AdditionalChargePaid = booking.AdditionalAmount == 0 || booking.Payments.Any(payment =>
                 payment.Type == PaymentType.AdditionalCharge &&
                 payment.Status == PaymentStatus.Paid &&
                 payment.Amount >= booking.AdditionalAmount),
+            ExtensionPaid = booking.Extensions.All(extension =>
+                extension.Status != BookingExtensionStatus.Approved),
             Payments = booking.Payments
                 .OrderBy(payment => payment.PaymentId)
                 .Select(payment => new PaymentSummaryDto(
@@ -373,7 +399,19 @@ internal sealed class BookingService : IBookingService
                     payment.PaidAt,
                     payment.TransactionCode))
                 .ToList(),
-            AdditionalCharges = charges
+            AdditionalCharges = charges,
+            Extensions = booking.Extensions
+                .OrderByDescending(extension => extension.RequestedAt)
+                .Select(extension => new ExtensionSummaryDto(
+                    extension.BookingExtensionId,
+                    extension.OriginalReturnDate,
+                    extension.RequestedReturnDate,
+                    extension.AdditionalDays,
+                    extension.AdditionalAmount,
+                    extension.Status,
+                    extension.CustomerNote,
+                    extension.AdminNote))
+                .ToList()
         };
     }
 
