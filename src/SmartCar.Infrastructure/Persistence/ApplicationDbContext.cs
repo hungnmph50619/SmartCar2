@@ -17,6 +17,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<VehicleImage> VehicleImages => Set<VehicleImage>();
     public DbSet<CustomerDocument> CustomerDocuments => Set<CustomerDocument>();
     public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<BookingExtension> BookingExtensions => Set<BookingExtension>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<VehicleHandover> VehicleHandovers => Set<VehicleHandover>();
     public DbSet<VehicleReturn> VehicleReturns => Set<VehicleReturn>();
@@ -83,7 +84,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(document => document.DocumentNumber).HasMaxLength(50).IsRequired();
             entity.Property(document => document.ImagePath).HasMaxLength(300).IsRequired();
             entity.Property(document => document.Status).HasConversion<string>().HasMaxLength(30);
-            entity.HasIndex(document => new { document.CustomerId, document.DocumentType });
+            entity.Property(document => document.RejectionReason).HasMaxLength(500);
+            entity.Property(document => document.VerifiedBy).HasMaxLength(450);
+            entity.HasIndex(document => new { document.CustomerId, document.DocumentType }).IsUnique();
             entity.HasOne<ApplicationUser>()
                 .WithMany()
                 .HasForeignKey(document => document.CustomerId)
@@ -98,8 +101,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.RentalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.AdditionalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.TotalAmount).HasPrecision(18, 2);
+            entity.Property(booking => booking.RefundAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.Status).HasConversion<string>().HasMaxLength(40);
             entity.Property(booking => booking.CancelReason).HasMaxLength(500);
+            entity.Property(booking => booking.CancelledBy).HasMaxLength(30);
+            entity.Property(booking => booking.RefundReason).HasMaxLength(500);
             entity.Property(booking => booking.RowVersion).IsRowVersion();
             entity.HasIndex(booking => new
             {
@@ -116,6 +122,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(booking => booking.CustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<BookingExtension>(entity =>
+        {
+            entity.HasKey(extension => extension.BookingExtensionId);
+            entity.Property(extension => extension.AdditionalAmount).HasPrecision(18, 2);
+            entity.Property(extension => extension.Status).HasConversion<string>().HasMaxLength(30);
+            entity.Property(extension => extension.CustomerNote).HasMaxLength(500);
+            entity.Property(extension => extension.AdminNote).HasMaxLength(500);
+            entity.HasIndex(extension => new { extension.BookingId, extension.Status });
+            entity.HasOne(extension => extension.Booking)
+                .WithMany(booking => booking.Extensions)
+                .HasForeignKey(extension => extension.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Payment>(entity =>
@@ -148,6 +168,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(vehicleReturn => vehicleReturn.VehicleReturnId);
             entity.Property(vehicleReturn => vehicleReturn.FuelLevel).HasMaxLength(30).IsRequired();
+            entity.Property(vehicleReturn => vehicleReturn.LateFee).HasPrecision(18, 2);
             entity.HasIndex(vehicleReturn => vehicleReturn.BookingId).IsUnique();
             entity.HasOne(vehicleReturn => vehicleReturn.Booking)
                 .WithOne(booking => booking.VehicleReturn)
