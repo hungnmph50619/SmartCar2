@@ -45,8 +45,8 @@
                     <tr>
                         <td class="text-nowrap">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
                         <td>@(item.UserName ?? item.UserId ?? "Hệ thống")</td>
-                        <td><span class="badge bg-secondary">@item.Action</span></td>
-                        <td>@item.EntityName #@item.EntityId</td>
+                        <td><span class="badge bg-secondary">@item.Action.ToVietnameseAuditAction()</span></td>
+                        <td>@item.EntityName.ToVietnameseEntity() #@item.EntityId</td>
                         <td>@item.Description</td>
                         <td>
                             @if (!string.IsNullOrWhiteSpace(item.OldValues) || !string.IsNullOrWhiteSpace(item.NewValues))
