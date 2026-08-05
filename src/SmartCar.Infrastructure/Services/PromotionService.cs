@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
@@ -153,7 +154,9 @@ internal sealed class PromotionService : IPromotionService
             return PromotionApplyResult.Failure("Vui lòng nhập mã khuyến mãi.");
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
@@ -203,26 +206,15 @@ internal sealed class PromotionService : IPromotionService
                 $"Đơn thuê phải từ {promotion.MinimumRentalAmount:N0} đồng để dùng mã này.");
         }
 
-        if (!string.IsNullOrWhiteSpace(booking.PromotionCode))
+        if (booking.PromotionCode == promotion.Code)
         {
-            if (booking.PromotionCode == promotion.Code)
-            {
-                return PromotionApplyResult.Failure("Mã khuyến mãi đã được áp dụng cho đơn.");
-            }
-
-            var oldPromotion = await _dbContext.Promotions
-                .FirstOrDefaultAsync(item => item.Code == booking.PromotionCode, cancellationToken);
-            if (oldPromotion is not null && oldPromotion.UsedCount > 0)
-            {
-                oldPromotion.UsedCount--;
-            }
+            return PromotionApplyResult.Failure("Mã khuyến mãi đã được áp dụng cho đơn.");
         }
 
         var discount = CalculateDiscount(promotion, booking.RentalAmount);
         booking.PromotionCode = promotion.Code;
         booking.DiscountAmount = discount;
         booking.TotalAmount = Math.Max(0, booking.RentalAmount - discount + booking.AdditionalAmount);
-        promotion.UsedCount++;
 
         var pendingRentalPayment = booking.Payments.FirstOrDefault(item =>
             item.Type == PaymentType.Rental && item.Status == PaymentStatus.Pending);
@@ -256,7 +248,9 @@ internal sealed class PromotionService : IPromotionService
         string customerId,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
@@ -280,13 +274,6 @@ internal sealed class PromotionService : IPromotionService
         }
 
         var oldCode = booking.PromotionCode;
-        var promotion = await _dbContext.Promotions
-            .FirstOrDefaultAsync(item => item.Code == oldCode, cancellationToken);
-        if (promotion is not null && promotion.UsedCount > 0)
-        {
-            promotion.UsedCount--;
-        }
-
         booking.PromotionCode = null;
         booking.DiscountAmount = 0;
         booking.TotalAmount = booking.RentalAmount + booking.AdditionalAmount;
