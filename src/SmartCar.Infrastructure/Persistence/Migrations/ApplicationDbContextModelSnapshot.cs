@@ -167,6 +167,11 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("ChargeType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(250)
@@ -180,6 +185,60 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.HasIndex("VehicleReturnId");
 
                     b.ToTable("AdditionalCharges");
+                });
+
+            modelBuilder.Entity("SmartCar.Domain.Entities.AuditLog", b =>
+                {
+                    b.Property<long>("AuditLogId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("AuditLogId"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NewValues")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OldValues")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("AuditLogId");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.HasIndex("EntityName", "EntityId", "CreatedAt");
+
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("SmartCar.Domain.Entities.Booking", b =>
@@ -198,6 +257,13 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -210,11 +276,30 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("NoShowMarkedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("NumberOfDays")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("PickupDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PromotionCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("RefundReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<decimal>("RentalAmount")
                         .HasPrecision(18, 2)
@@ -222,6 +307,12 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("ReturnDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -242,6 +333,59 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.HasIndex("VehicleId", "PickupDate", "ReturnDate", "Status");
 
                     b.ToTable("Bookings");
+                });
+
+            modelBuilder.Entity("SmartCar.Domain.Entities.BookingExtension", b =>
+                {
+                    b.Property<int>("BookingExtensionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("BookingExtensionId"));
+
+                    b.Property<decimal>("AdditionalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("AdditionalDays")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("BookingId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CustomerNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("OriginalReturnDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("RequestedReturnDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("BookingExtensionId");
+
+                    b.HasIndex("BookingId", "Status");
+
+                    b.ToTable("BookingExtensions");
                 });
 
             modelBuilder.Entity("SmartCar.Domain.Entities.Brand", b =>
@@ -303,16 +447,28 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("RejectionReason")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VerifiedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.HasKey("CustomerDocumentId");
 
-                    b.HasIndex("CustomerId", "DocumentType");
+                    b.HasIndex("CustomerId", "DocumentType")
+                        .IsUnique();
 
                     b.ToTable("CustomerDocuments");
                 });
@@ -433,12 +589,79 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.HasKey("PaymentId");
 
-                    b.HasIndex("BookingId")
-                        .IsUnique();
+                    b.HasIndex("BookingId", "Type", "Status");
 
                     b.ToTable("Payments");
+                });
+
+            modelBuilder.Entity("SmartCar.Domain.Entities.Promotion", b =>
+                {
+                    b.Property<int>("PromotionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PromotionId"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("EndAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaximumDiscount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("MinimumRentalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PromotionType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("StartAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UsageLimit")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UsedCount")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("PromotionId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("IsActive", "StartAt", "EndAt");
+
+                    b.ToTable("Promotions");
                 });
 
             modelBuilder.Entity("SmartCar.Domain.Entities.Review", b =>
@@ -515,6 +738,12 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<int>("Seats")
                         .HasColumnType("int");
 
@@ -541,6 +770,51 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Vehicles");
+                });
+
+            modelBuilder.Entity("SmartCar.Domain.Entities.VehicleDocument", b =>
+                {
+                    b.Property<int>("VehicleDocumentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("VehicleDocumentId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DocumentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ImagePath")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("IssuedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("VehicleDocumentId");
+
+                    b.HasIndex("VehicleId", "DocumentType", "ExpiryDate");
+
+                    b.ToTable("VehicleDocuments");
                 });
 
             modelBuilder.Entity("SmartCar.Domain.Entities.VehicleHandover", b =>
@@ -617,6 +891,81 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.ToTable("VehicleImages");
                 });
 
+            modelBuilder.Entity("SmartCar.Domain.Entities.VehicleIncident", b =>
+                {
+                    b.Property<int>("VehicleIncidentId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("VehicleIncidentId"));
+
+                    b.Property<decimal>("ActualCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("BookingId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("CustomerLiabilityAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1500)
+                        .HasColumnType("nvarchar(1500)");
+
+                    b.Property<decimal>("EstimatedCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("EvidencePaths")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<decimal>("FineAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("IncidentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("VehicleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("VehicleIncidentId");
+
+                    b.HasIndex("BookingId");
+
+                    b.HasIndex("VehicleId", "Status", "OccurredAt");
+
+                    b.ToTable("VehicleIncidents");
+                });
+
             modelBuilder.Entity("SmartCar.Domain.Entities.VehicleReturn", b =>
                 {
                     b.Property<int>("VehicleReturnId")
@@ -644,6 +993,16 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("InteriorCondition")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsLateReturn")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("LateFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("LateMinutes")
+                        .HasColumnType("int");
 
                     b.Property<int>("Mileage")
                         .HasColumnType("int");
@@ -829,6 +1188,17 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.Navigation("Vehicle");
                 });
 
+            modelBuilder.Entity("SmartCar.Domain.Entities.BookingExtension", b =>
+                {
+                    b.HasOne("SmartCar.Domain.Entities.Booking", "Booking")
+                        .WithMany("Extensions")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Booking");
+                });
+
             modelBuilder.Entity("SmartCar.Domain.Entities.CustomerDocument", b =>
                 {
                     b.HasOne("SmartCar.Infrastructure.Identity.ApplicationUser", null)
@@ -861,8 +1231,8 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("SmartCar.Domain.Entities.Payment", b =>
                 {
                     b.HasOne("SmartCar.Domain.Entities.Booking", "Booking")
-                        .WithOne("Payment")
-                        .HasForeignKey("SmartCar.Domain.Entities.Payment", "BookingId")
+                        .WithMany("Payments")
+                        .HasForeignKey("BookingId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -891,6 +1261,17 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.Navigation("Brand");
                 });
 
+            modelBuilder.Entity("SmartCar.Domain.Entities.VehicleDocument", b =>
+                {
+                    b.HasOne("SmartCar.Domain.Entities.Vehicle", "Vehicle")
+                        .WithMany("Documents")
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Vehicle");
+                });
+
             modelBuilder.Entity("SmartCar.Domain.Entities.VehicleHandover", b =>
                 {
                     b.HasOne("SmartCar.Domain.Entities.Booking", "Booking")
@@ -913,6 +1294,24 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.Navigation("Vehicle");
                 });
 
+            modelBuilder.Entity("SmartCar.Domain.Entities.VehicleIncident", b =>
+                {
+                    b.HasOne("SmartCar.Domain.Entities.Booking", "Booking")
+                        .WithMany("Incidents")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SmartCar.Domain.Entities.Vehicle", "Vehicle")
+                        .WithMany("Incidents")
+                        .HasForeignKey("VehicleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Vehicle");
+                });
+
             modelBuilder.Entity("SmartCar.Domain.Entities.VehicleReturn", b =>
                 {
                     b.HasOne("SmartCar.Domain.Entities.Booking", "Booking")
@@ -926,9 +1325,13 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("SmartCar.Domain.Entities.Booking", b =>
                 {
+                    b.Navigation("Extensions");
+
                     b.Navigation("Handover");
 
-                    b.Navigation("Payment");
+                    b.Navigation("Incidents");
+
+                    b.Navigation("Payments");
 
                     b.Navigation("Review");
 
@@ -944,7 +1347,11 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("Bookings");
 
+                    b.Navigation("Documents");
+
                     b.Navigation("Images");
+
+                    b.Navigation("Incidents");
 
                     b.Navigation("MaintenanceRecords");
                 });

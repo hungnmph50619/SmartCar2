@@ -1,0 +1,48 @@
+@model IReadOnlyList<SmartCar.Application.Features.Bookings.BookingListItemDto>
+@using SmartCar.Domain.Enums
+@{
+    ViewData["Title"] = "Quản lý đơn thuê";
+    var selectedStatus = ViewBag.Status as BookingStatus?;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Quản lý đơn thuê</h1>
+        <p class="text-muted mb-0">Xử lý đơn từ lúc khách yêu cầu đến khi hoàn tất.</p>
+    </div>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <select name="status" class="form-select">
+            <option value="">Tất cả trạng thái</option>
+            @foreach (var status in Enum.GetValues<BookingStatus>())
+            {
+                <option value="@status" selected="@(selectedStatus == status)">@status</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto"><button class="btn btn-outline-primary" type="submit">Lọc đơn</button></div>
+</form>
+
+<div class="table-responsive">
+<table class="table table-bordered align-middle">
+    <thead>
+        <tr><th>Mã</th><th>Khách hàng</th><th>Xe</th><th>Thời gian</th><th>Tổng tiền</th><th>Trạng thái</th><th></th></tr>
+    </thead>
+    <tbody>
+    @foreach (var booking in Model)
+    {
+        <tr>
+            <td>#@booking.BookingId</td>
+            <td><strong>@booking.CustomerName</strong><br /><small>@booking.CustomerPhone</small></td>
+            <td>@booking.VehicleName<br /><small>@booking.LicensePlate</small></td>
+            <td>@booking.PickupDate.ToString("dd/MM HH:mm")<br />→ @booking.ReturnDate.ToString("dd/MM HH:mm")</td>
+            <td>@booking.TotalAmount.ToString("N0") đ</td>
+            <td><span class="badge bg-secondary">@booking.Status</span></td>
+            <td><a class="btn btn-sm btn-primary" asp-action="Details" asp-route-id="@booking.BookingId">Xử lý</a></td>
+        </tr>
+    }
+    </tbody>
+</table>
+</div>

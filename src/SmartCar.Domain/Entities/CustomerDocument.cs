@@ -12,5 +12,8 @@ public class CustomerDocument
     public string ImagePath { get; set; } = string.Empty;
     public DocumentStatus Status { get; set; } = DocumentStatus.Pending;
     public string? RejectionReason { get; set; }
+    public string? VerifiedBy { get; set; }
+    public DateTime? VerifiedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

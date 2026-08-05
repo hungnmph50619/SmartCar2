@@ -1,22 +1,46 @@
+@using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Trang chủ";
 }
 
-<section class="py-5 text-center">
-    <div class="mx-auto" style="max-width: 760px;">
-        <span class="badge text-bg-primary mb-3">SMARTCAR</span>
-        <h1 class="display-5 fw-bold">Quản lý và cho thuê xe tự lái</h1>
-        <p class="lead text-muted">Nền tảng MVC đã được cấu hình SQL Server, Entity Framework Core, Identity và hai vai trò Customer/Manager.</p>
-        <div class="d-flex justify-content-center gap-2">
-            @if (User.Identity?.IsAuthenticated != true)
-            {
-                <a asp-controller="Account" asp-action="Register" class="btn btn-primary btn-lg">Đăng ký thuê xe</a>
-                <a asp-controller="Account" asp-action="Login" class="btn btn-outline-secondary btn-lg">Đăng nhập</a>
-            }
-            else if (User.IsInRole("Manager"))
-            {
-                <a asp-controller="Dashboard" asp-action="Index" class="btn btn-primary btn-lg">Mở Dashboard</a>
-            }
+<section class="py-5">
+    <div class="row align-items-center g-4">
+        <div class="col-lg-7">
+            <span class="badge text-bg-primary mb-3">SMARTCAR</span>
+            <h1 class="display-5 fw-bold">Thuê xe tự lái nhanh chóng, minh bạch</h1>
+            <p class="lead text-muted">
+                SmartCar trực tiếp sở hữu và quản lý đội xe. Khách hàng tìm xe, gửi yêu cầu,
+                thanh toán, nhận xe và theo dõi toàn bộ đơn thuê trên một hệ thống.
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+                <a asp-controller="Vehicles" asp-action="Index" class="btn btn-primary btn-lg">Tìm xe ngay</a>
+                @if (User.Identity?.IsAuthenticated != true)
+                {
+                    <a asp-controller="Account" asp-action="Register" class="btn btn-outline-primary btn-lg">Đăng ký</a>
+                    <a asp-controller="Account" asp-action="Login" class="btn btn-outline-secondary btn-lg">Đăng nhập</a>
+                }
+                else if (User.IsInRole(RoleNames.Admin))
+                {
+                    <a asp-controller="Dashboard" asp-action="Index" class="btn btn-outline-secondary btn-lg">Mở Dashboard</a>
+                }
+                else if (User.IsInRole(RoleNames.Customer))
+                {
+                    <a asp-controller="Bookings" asp-action="MyBookings" class="btn btn-outline-secondary btn-lg">Đơn thuê của tôi</a>
+                }
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <h2 class="h4">Quy trình thuê xe</h2>
+                    <ol class="mb-0 ps-3">
+                        <li class="mb-2">Xác minh CCCD và GPLX.</li>
+                        <li class="mb-2">Chọn xe và thời gian thuê.</li>
+                        <li class="mb-2">Chờ Admin xác nhận và thanh toán.</li>
+                        <li>Nhận xe, sử dụng và hoàn trả.</li>
+                    </ol>
+                </div>
+            </div>
         </div>
     </div>
 </section>

@@ -1,0 +1,78 @@
+@model IReadOnlyList<SmartCar.Application.Features.VehicleDocuments.VehicleDocumentDto>
+@{
+    ViewData["Title"] = "Giấy tờ pháp lý xe";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Giấy tờ pháp lý xe</h1>
+        <p class="text-muted mb-0">Theo dõi đăng ký, đăng kiểm, bảo hiểm và phí đường bộ.</p>
+    </div>
+    <a class="btn btn-primary" asp-action="Create" asp-route-vehicleId="@ViewBag.VehicleId">Thêm giấy tờ</a>
+</div>
+
+<div class="alert alert-info">
+    Xe chỉ xuất hiện cho khách đặt khi có đăng ký, đăng kiểm và bảo hiểm còn hiệu lực đến ngày trả xe.
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Xe</th>
+                    <th>Loại</th>
+                    <th>Số giấy tờ</th>
+                    <th>Ngày cấp</th>
+                    <th>Hết hạn</th>
+                    <th>Trạng thái</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @if (Model.Count == 0)
+            {
+                <tr><td colspan="7" class="text-center text-muted py-4">Chưa có giấy tờ xe.</td></tr>
+            }
+            else
+            {
+                @foreach (var item in Model)
+                {
+                    var warning = item.DaysUntilExpiry.HasValue && item.DaysUntilExpiry.Value <= 30;
+                    <tr>
+                        <td>
+                            <strong>@item.VehicleName</strong>
+                            <div class="text-muted small">@item.LicensePlate</div>
+                        </td>
+                        <td>@item.DocumentType</td>
+                        <td>@item.DocumentNumber</td>
+                        <td>@item.IssuedDate.ToString("dd/MM/yyyy")</td>
+                        <td>@(item.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Không thời hạn")</td>
+                        <td>
+                            @if (item.IsExpired)
+                            {
+                                <span class="badge bg-danger">Đã hết hạn</span>
+                            }
+                            else if (warning)
+                            {
+                                <span class="badge bg-warning text-dark">Còn @item.DaysUntilExpiry ngày</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">Còn hiệu lực</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <form asp-action="Delete" method="post" onsubmit="return confirm('Xóa giấy tờ này?');">
+                                <input type="hidden" name="id" value="@item.VehicleDocumentId" />
+                                <input type="hidden" name="vehicleId" value="@ViewBag.VehicleId" />
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Xóa</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

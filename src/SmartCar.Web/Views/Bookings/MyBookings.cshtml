@@ -1,0 +1,55 @@
+@model IReadOnlyList<SmartCar.Application.Features.Bookings.BookingListItemDto>
+@{
+    ViewData["Title"] = "Đơn thuê của tôi";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Đơn thuê của tôi</h1>
+        <p class="text-muted mb-0">Theo dõi toàn bộ yêu cầu và lịch sử thuê xe.</p>
+    </div>
+    <a class="btn btn-primary" asp-controller="Vehicles" asp-action="Index">Tìm xe</a>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">Bạn chưa có đơn thuê nào.</div>
+}
+else
+{
+    <div class="table-responsive">
+    <table class="table table-bordered align-middle">
+        <thead>
+            <tr>
+                <th>Mã đơn</th>
+                <th>Xe</th>
+                <th>Thời gian thuê</th>
+                <th>Tổng tiền</th>
+                <th>Trạng thái</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var booking in Model)
+        {
+            <tr>
+                <td>#@booking.BookingId</td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (!string.IsNullOrWhiteSpace(booking.PrimaryImagePath))
+                        {
+                            <img src="@booking.PrimaryImagePath" style="width:72px;height:48px;object-fit:cover" class="rounded" />
+                        }
+                        <div><strong>@booking.VehicleName</strong><br /><small>@booking.LicensePlate</small></div>
+                    </div>
+                </td>
+                <td>@booking.PickupDate.ToString("dd/MM/yyyy HH:mm")<br />→ @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
+                <td>@booking.TotalAmount.ToString("N0") đ</td>
+                <td><span class="badge bg-secondary">@booking.Status</span></td>
+                <td><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@booking.BookingId">Chi tiết</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    </div>
+}

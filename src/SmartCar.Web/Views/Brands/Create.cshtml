@@ -1,0 +1,18 @@
+@model SmartCar.Web.ViewModels.BrandFormViewModel
+@{
+    ViewData["Title"] = "Thêm hãng xe";
+}
+
+<h1 class="h3 mb-3">Thêm hãng xe</h1>
+<form asp-action="Create" method="post" class="card card-body shadow-sm">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="BrandName" class="form-label"></label>
+        <input asp-for="BrandName" class="form-control" />
+        <span asp-validation-for="BrandName" class="text-danger"></span>
+    </div>
+    <div>
+        <button class="btn btn-primary" type="submit">Lưu hãng xe</button>
+        <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
+    </div>
+</form>

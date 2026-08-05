@@ -19,9 +19,12 @@ public class Vehicle
     public VehicleStatus Status { get; set; } = VehicleStatus.Available;
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 
     public Brand Brand { get; set; } = null!;
     public ICollection<VehicleImage> Images { get; set; } = new List<VehicleImage>();
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
     public ICollection<MaintenanceRecord> MaintenanceRecords { get; set; } = new List<MaintenanceRecord>();
+    public ICollection<VehicleDocument> Documents { get; set; } = new List<VehicleDocument>();
+    public ICollection<VehicleIncident> Incidents { get; set; } = new List<VehicleIncident>();
 }

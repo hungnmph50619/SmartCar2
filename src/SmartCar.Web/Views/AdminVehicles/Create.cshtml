@@ -1,0 +1,13 @@
+@model SmartCar.Web.ViewModels.VehicleFormViewModel
+@{
+    ViewData["Title"] = "Thêm xe";
+}
+
+<h1 class="h3 mb-3">Thêm xe mới</h1>
+<form asp-action="Create" method="post" enctype="multipart/form-data" class="card card-body shadow-sm">
+    <partial name="_VehicleForm" model="Model" />
+    <div class="mt-4">
+        <button class="btn btn-primary" type="submit">Lưu xe</button>
+        <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
+    </div>
+</form>

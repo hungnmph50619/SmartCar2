@@ -3,8 +3,27 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SmartCar.Application.Features.Accounts;
+using SmartCar.Application.Features.Audits;
+using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Brands;
+using SmartCar.Application.Features.Dashboard;
+using SmartCar.Application.Features.Documents;
+using SmartCar.Application.Features.Extensions;
+using SmartCar.Application.Features.Handovers;
+using SmartCar.Application.Features.Incidents;
+using SmartCar.Application.Features.Maintenance;
+using SmartCar.Application.Features.Notifications;
+using SmartCar.Application.Features.Operations;
+using SmartCar.Application.Features.Payments;
+using SmartCar.Application.Features.Promotions;
+using SmartCar.Application.Features.Reports;
+using SmartCar.Application.Features.Returns;
+using SmartCar.Application.Features.Reviews;
+using SmartCar.Application.Features.VehicleDocuments;
+using SmartCar.Application.Features.Vehicles;
 using SmartCar.Infrastructure.Identity;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Infrastructure.Services;
 
 namespace SmartCar.Infrastructure;
 
@@ -48,6 +67,25 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<IBrandService, BrandService>();
+        services.AddScoped<IVehicleService, VehicleService>();
+        services.AddScoped<IDocumentService, DocumentService>();
+        services.AddScoped<IVehicleDocumentService, VehicleDocumentService>();
+        services.AddScoped<IBookingService, BookingService>();
+        services.AddScoped<IBookingOperationService, BookingOperationService>();
+        services.AddScoped<IExtensionService, ExtensionService>();
+        services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IPromotionService, PromotionService>();
+        services.AddScoped<IHandoverService, HandoverService>();
+        services.AddScoped<IReturnService, ReturnService>();
+        services.AddScoped<IMaintenanceService, MaintenanceService>();
+        services.AddScoped<IIncidentService, IncidentService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IReviewService, ReviewService>();
+        services.AddScoped<IAuditService, AuditService>();
+        services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<IDashboardService, DashboardService>();
+
         return services;
     }
 }

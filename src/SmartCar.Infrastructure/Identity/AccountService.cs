@@ -87,8 +87,8 @@ internal sealed class AccountService : IAccountService
             return LoginResult.Failure("Email hoặc mật khẩu không đúng.");
         }
 
-        var isManager = await _userManager.IsInRoleAsync(user, RoleNames.Manager);
-        return LoginResult.Success(isManager);
+        var isAdmin = await _userManager.IsInRoleAsync(user, RoleNames.Admin);
+        return LoginResult.Success(isAdmin);
     }
 
     public Task LogoutAsync() => _signInManager.SignOutAsync();

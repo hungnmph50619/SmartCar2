@@ -1,0 +1,92 @@
+@model IReadOnlyList<SmartCar.Application.Features.Promotions.PromotionDto>
+@using SmartCar.Domain.Enums
+@{
+    ViewData["Title"] = "Khuyến mãi";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="h3 mb-1">Mã khuyến mãi</h1>
+        <p class="text-muted mb-0">Quản lý thời hạn, điều kiện và giới hạn sử dụng.</p>
+    </div>
+    <a class="btn btn-primary" asp-action="Create">Tạo mã mới</a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Mã</th>
+                    <th>Chương trình</th>
+                    <th>Mức giảm</th>
+                    <th>Thời hạn</th>
+                    <th>Lượt dùng</th>
+                    <th>Trạng thái</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @if (Model.Count == 0)
+            {
+                <tr><td colspan="7" class="text-center text-muted py-4">Chưa có mã khuyến mãi.</td></tr>
+            }
+            else
+            {
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td><code class="fw-bold">@item.Code</code></td>
+                        <td>
+                            <strong>@item.Name</strong>
+                            <div class="small text-muted">Đơn tối thiểu @item.MinimumRentalAmount.ToString("N0") đ</div>
+                        </td>
+                        <td>
+                            @if (item.PromotionType == PromotionType.Percentage)
+                            {
+                                <span>@item.Value.ToString("0.##")%</span>
+                            }
+                            else
+                            {
+                                <span>@item.Value.ToString("N0") đ</span>
+                            }
+                            @if (item.MaximumDiscount.HasValue)
+                            {
+                                <div class="small text-muted">Tối đa @item.MaximumDiscount.Value.ToString("N0") đ</div>
+                            }
+                        </td>
+                        <td>
+                            @item.StartAt.ToString("dd/MM/yyyy")
+                            <div class="small text-muted">đến @item.EndAt.ToString("dd/MM/yyyy")</div>
+                        </td>
+                        <td>@item.UsedCount / @(item.UsageLimit?.ToString() ?? "∞")</td>
+                        <td>
+                            @if (item.IsCurrentlyValid)
+                            {
+                                <span class="badge bg-success">Đang áp dụng</span>
+                            }
+                            else if (item.IsActive)
+                            {
+                                <span class="badge bg-warning text-dark">Chưa/đã hết hạn</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Đã ngừng</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <form asp-action="ChangeStatus" method="post">
+                                <input type="hidden" name="id" value="@item.PromotionId" />
+                                <input type="hidden" name="isActive" value="@(!item.IsActive)" />
+                                <button class="btn btn-sm @(item.IsActive ? "btn-outline-danger" : "btn-outline-success")" type="submit">
+                                    @(item.IsActive ? "Ngừng" : "Kích hoạt")
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -1,0 +1,84 @@
+@model SmartCar.Web.ViewModels.DocumentUploadViewModel
+@using SmartCar.Application.Features.Documents
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
+@{
+    ViewData["Title"] = "Xác minh giấy tờ";
+    var documents = ViewBag.Documents as IReadOnlyList<DocumentDto> ?? Array.Empty<DocumentDto>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Xác minh CCCD và GPLX</h1>
+        <p class="text-muted mb-0">Cả hai giấy tờ phải được Admin xác minh trước khi bạn đặt xe.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="row g-3">
+            @foreach (var type in DocumentTypes.RequiredForRental)
+            {
+                var document = documents.FirstOrDefault(item => item.DocumentType == type);
+                <div class="col-md-6">
+                    <div class="card card-body h-100 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h2 class="h5 mb-0">@type</h2>
+                            @if (document is null)
+                            {
+                                <span class="badge bg-secondary">Chưa gửi</span>
+                            }
+                            else
+                            {
+                                <span class="badge @(document.Status == DocumentStatus.Verified ? "bg-success" : document.Status == DocumentStatus.Rejected ? "bg-danger" : "bg-warning text-dark")">@document.Status</span>
+                            }
+                        </div>
+                        @if (document is not null)
+                        {
+                            <div><strong>Số:</strong> @document.DocumentNumber</div>
+                            @if (document.ExpiryDate.HasValue)
+                            {
+                                <div><strong>Hết hạn:</strong> @document.ExpiryDate.Value.ToString("dd/MM/yyyy")</div>
+                            }
+                            <img src="@document.ImagePath" class="img-fluid rounded mt-3" style="height:180px;width:100%;object-fit:cover" alt="@type" />
+                            @if (!string.IsNullOrWhiteSpace(document.RejectionReason))
+                            {
+                                <div class="alert alert-danger mt-3 mb-0">@document.RejectionReason</div>
+                            }
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <form asp-action="Submit" method="post" enctype="multipart/form-data" class="card card-body shadow-sm">
+            <h2 class="h5">Gửi hoặc cập nhật giấy tờ</h2>
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <div class="mb-3">
+                <label asp-for="DocumentType" class="form-label">Loại giấy tờ</label>
+                <select asp-for="DocumentType" class="form-select">
+                    <option value="@DocumentTypes.CitizenId">CCCD</option>
+                    <option value="@DocumentTypes.DrivingLicense">GPLX</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label asp-for="DocumentNumber" class="form-label">Số giấy tờ</label>
+                <input asp-for="DocumentNumber" class="form-control" />
+                <span asp-validation-for="DocumentNumber" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="ExpiryDate" class="form-label">Ngày hết hạn</label>
+                <input asp-for="ExpiryDate" type="date" class="form-control" />
+                <div class="form-text">Bắt buộc với GPLX.</div>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Image" class="form-label">Ảnh giấy tờ</label>
+                <input asp-for="Image" type="file" accept=".jpg,.jpeg,.png,.webp" class="form-control" />
+                <span asp-validation-for="Image" class="text-danger"></span>
+            </div>
+            <button class="btn btn-primary" type="submit">Gửi xác minh</button>
+        </form>
+    </div>
+</div>

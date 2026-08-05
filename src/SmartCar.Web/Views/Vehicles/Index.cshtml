@@ -1,0 +1,76 @@
+@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
+@using SmartCar.Web.ViewModels
+@{
+    ViewData["Title"] = "Tìm xe";
+    var search = ViewBag.Search as VehicleSearchViewModel ?? new VehicleSearchViewModel();
+}
+
+<div class="card card-body shadow-sm mb-4">
+    <h1 class="h3">Tìm xe còn trống</h1>
+    <form method="get" class="row g-3">
+        <div class="col-md-3">
+            <label class="form-label">Ngày giờ nhận xe</label>
+            <input type="datetime-local" name="PickupDate" value="@search.PickupDate.ToString("yyyy-MM-ddTHH:mm")" class="form-control" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Ngày giờ trả xe</label>
+            <input type="datetime-local" name="ReturnDate" value="@search.ReturnDate.ToString("yyyy-MM-ddTHH:mm")" class="form-control" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Hãng xe</label>
+            <select name="BrandId" asp-items="ViewBag.Brands" class="form-select">
+                <option value="">Tất cả</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Số chỗ tối thiểu</label>
+            <input type="number" name="Seats" value="@search.Seats" min="1" class="form-control" />
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100" type="submit">Tìm xe</button>
+        </div>
+    </form>
+    <div asp-validation-summary="ModelOnly" class="text-danger mt-2"></div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h4 mb-0">Xe phù hợp</h2>
+    <span class="text-muted">@Model.Count xe</span>
+</div>
+
+@if (Model.Count == 0)
+{
+    <div class="alert alert-info">Không có xe phù hợp trong khoảng thời gian đã chọn.</div>
+}
+else
+{
+    <div class="row g-4">
+    @foreach (var vehicle in Model)
+    {
+        <div class="col-md-4">
+            <div class="card h-100 shadow-sm border-0">
+                @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
+                {
+                    <img src="@vehicle.PrimaryImagePath" class="card-img-top" style="height:210px;object-fit:cover" alt="@vehicle.VehicleName" />
+                }
+                else
+                {
+                    <div class="bg-light d-flex align-items-center justify-content-center" style="height:210px">Chưa có ảnh</div>
+                }
+                <div class="card-body">
+                    <h3 class="h5">@vehicle.VehicleName</h3>
+                    <p class="text-muted">@vehicle.BrandName · @vehicle.Seats chỗ · @vehicle.Transmission</p>
+                    <div class="fw-bold fs-5 text-primary">@vehicle.DailyPrice.ToString("N0") đ/ngày</div>
+                </div>
+                <div class="card-footer bg-white border-0 pb-3">
+                    <a class="btn btn-outline-primary w-100"
+                       asp-action="Details"
+                       asp-route-id="@vehicle.VehicleId"
+                       asp-route-pickupDate="@search.PickupDate"
+                       asp-route-returnDate="@search.ReturnDate">Xem chi tiết</a>
+                </div>
+            </div>
+        </div>
+    }
+    </div>
+}

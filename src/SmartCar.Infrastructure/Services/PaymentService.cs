@@ -1,0 +1,150 @@
+using System.Data;
+using Microsoft.EntityFrameworkCore;
+using SmartCar.Application.Common;
+using SmartCar.Application.Features.Payments;
+using SmartCar.Domain.Entities;
+using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
+
+namespace SmartCar.Infrastructure.Services;
+
+internal sealed class PaymentService : IPaymentService
+{
+    private readonly ApplicationDbContext _dbContext;
+
+    public PaymentService(ApplicationDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    public async Task<OperationResult> SimulatePaymentAsync(
+        int bookingId,
+        string customerId,
+        PaymentType paymentType,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .Include(item => item.Extensions)
+            .FirstOrDefaultAsync(item =>
+                item.BookingId == bookingId && item.CustomerId == customerId,
+                cancellationToken);
+
+        if (booking is null)
+        {
+            return OperationResult.Failure("Không tìm thấy đơn thuê của bạn.");
+        }
+
+        if (paymentType == PaymentType.Rental && booking.Status != BookingStatus.PendingPayment)
+        {
+            return OperationResult.Failure("Đơn không ở trạng thái chờ thanh toán tiền thuê.");
+        }
+
+        if (paymentType == PaymentType.AdditionalCharge &&
+            booking.Status != BookingStatus.PendingInspection)
+        {
+            return OperationResult.Failure("Đơn không ở trạng thái chờ thanh toán phụ phí.");
+        }
+
+        if (paymentType == PaymentType.Extension &&
+            (booking.Status != BookingStatus.Rented ||
+             !booking.Extensions.Any(extension => extension.Status == BookingExtensionStatus.Approved)))
+        {
+            return OperationResult.Failure("Không có yêu cầu gia hạn đã duyệt đang chờ thanh toán.");
+        }
+
+        if (paymentType == PaymentType.Refund)
+        {
+            return OperationResult.Failure("Khoản hoàn tiền chỉ do hệ thống xử lý.");
+        }
+
+        var payment = booking.Payments
+            .FirstOrDefault(item => item.Type == paymentType && item.Status == PaymentStatus.Pending);
+
+        if (payment is null && paymentType == PaymentType.AdditionalCharge && booking.AdditionalAmount > 0)
+        {
+            payment = new Payment
+            {
+                BookingId = booking.BookingId,
+                Type = PaymentType.AdditionalCharge,
+                Amount = booking.AdditionalAmount,
+                Method = "Mo phong",
+                Status = PaymentStatus.Pending
+            };
+            booking.Payments.Add(payment);
+        }
+
+        if (payment is null)
+        {
+            var alreadyPaid = booking.Payments.Any(item =>
+                item.Type == paymentType && item.Status == PaymentStatus.Paid);
+
+            return alreadyPaid
+                ? OperationResult.Failure("Khoản tiền này đã được thanh toán.")
+                : OperationResult.Failure("Không tìm thấy khoản thanh toán phù hợp.");
+        }
+
+        if (paymentType == PaymentType.Rental && !string.IsNullOrWhiteSpace(booking.PromotionCode))
+        {
+            var now = DateTime.Now;
+            var promotion = await _dbContext.Promotions.FirstOrDefaultAsync(item =>
+                item.Code == booking.PromotionCode &&
+                item.IsActive &&
+                item.StartAt <= now &&
+                item.EndAt >= now,
+                cancellationToken);
+
+            if (promotion is null)
+            {
+                return OperationResult.Failure(
+                    "Mã khuyến mãi không còn hiệu lực. Vui lòng gỡ mã hoặc chọn mã khác.");
+            }
+
+            if (promotion.UsageLimit.HasValue && promotion.UsedCount >= promotion.UsageLimit.Value)
+            {
+                return OperationResult.Failure(
+                    "Mã khuyến mãi vừa hết lượt sử dụng. Vui lòng gỡ mã hoặc chọn mã khác.");
+            }
+
+            promotion.UsedCount++;
+        }
+
+        payment.Status = PaymentStatus.Paid;
+        payment.PaidAt = DateTime.UtcNow;
+        payment.TransactionCode = $"SC{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}";
+
+        if (paymentType == PaymentType.Rental)
+        {
+            booking.Status = BookingStatus.Paid;
+        }
+        else if (paymentType == PaymentType.Extension)
+        {
+            var extension = booking.Extensions
+                .Where(item => item.Status == BookingExtensionStatus.Approved)
+                .OrderByDescending(item => item.RequestedAt)
+                .First();
+            extension.Status = BookingExtensionStatus.Paid;
+            extension.PaidAt = DateTime.UtcNow;
+        }
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Thanh toán thành công",
+            Message = paymentType switch
+            {
+                PaymentType.Rental => $"Đơn #{booking.BookingId} đã thanh toán tiền thuê thành công.",
+                PaymentType.Extension => $"Đơn #{booking.BookingId} đã thanh toán tiền gia hạn thành công.",
+                _ => $"Đơn #{booking.BookingId} đã thanh toán phụ phí thành công."
+            }
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return OperationResult.Success();
+    }
+}

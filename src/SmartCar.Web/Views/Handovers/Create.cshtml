@@ -1,0 +1,24 @@
+@model SmartCar.Web.ViewModels.HandoverViewModel
+@{
+    ViewData["Title"] = "Biên bản giao xe";
+}
+
+<h1 class="h3 mb-3">Lập biên bản giao xe - Đơn #@Model.BookingId</h1>
+<form asp-action="Create" method="post" class="card card-body shadow-sm">
+    <input asp-for="BookingId" type="hidden" />
+    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+    <div class="row g-3">
+        <div class="col-md-6"><label asp-for="HandoverAt" class="form-label">Thời gian giao</label><input asp-for="HandoverAt" type="datetime-local" class="form-control" /></div>
+        <div class="col-md-6"><label asp-for="Mileage" class="form-label">Số km khi giao</label><input asp-for="Mileage" class="form-control" /></div>
+        <div class="col-md-6"><label asp-for="FuelLevel" class="form-label">Mức nhiên liệu</label><input asp-for="FuelLevel" class="form-control" placeholder="Ví dụ: 100% hoặc 8/8" /></div>
+        <div class="col-md-6"><label asp-for="Accessories" class="form-label">Phụ kiện bàn giao</label><input asp-for="Accessories" class="form-control" /></div>
+        <div class="col-md-6"><label asp-for="ExteriorCondition" class="form-label">Ngoại thất</label><textarea asp-for="ExteriorCondition" class="form-control"></textarea></div>
+        <div class="col-md-6"><label asp-for="InteriorCondition" class="form-label">Nội thất</label><textarea asp-for="InteriorCondition" class="form-control"></textarea></div>
+        <div class="col-12"><label asp-for="ImagePaths" class="form-label">Đường dẫn ảnh biên bản</label><input asp-for="ImagePaths" class="form-control" placeholder="Giai đoạn mô phỏng: nhập các đường dẫn ảnh, phân cách bằng dấu ;" /></div>
+        <div class="col-12"><label asp-for="Notes" class="form-label">Ghi chú</label><textarea asp-for="Notes" class="form-control"></textarea></div>
+    </div>
+    <div class="mt-4">
+        <button class="btn btn-primary" type="submit">Xác nhận giao xe</button>
+        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại</a>
+    </div>
+</form>

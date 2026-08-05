@@ -1,0 +1,83 @@
+@model IReadOnlyList<SmartCar.Application.Features.Maintenance.MaintenanceDto>
+@using SmartCar.Domain.Enums
+@{
+    ViewData["Title"] = "Bảo trì xe";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Quản lý bảo trì xe</h1>
+        <p class="text-muted mb-0">Xe đang bảo trì sẽ tự động bị khóa khỏi danh sách cho thuê.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <form asp-action="Create" method="post" class="card card-body shadow-sm">
+            <h2 class="h5">Tạo phiếu bảo trì</h2>
+            <div class="mb-3">
+                <label class="form-label">Xe</label>
+                <select name="VehicleId" asp-items="ViewBag.Vehicles" class="form-select"></select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Ngày bắt đầu</label>
+                <input name="StartDate" type="datetime-local" value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Nội dung</label>
+                <textarea name="Content" class="form-control" required></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Đơn vị sửa chữa</label>
+                <input name="ServiceProvider" class="form-control" />
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-6"><label class="form-label">Chi phí dự kiến</label><input name="Cost" type="number" min="0" class="form-control" /></div>
+                <div class="col-6"><label class="form-label">Số km</label><input name="Mileage" type="number" min="0" class="form-control" /></div>
+            </div>
+            <button class="btn btn-primary" type="submit">Bắt đầu bảo trì</button>
+        </form>
+    </div>
+
+    <div class="col-lg-8">
+        @if (Model.Count == 0)
+        {
+            <div class="alert alert-info">Chưa có lịch sử bảo trì.</div>
+        }
+        else
+        {
+            @foreach (var item in Model)
+            {
+                <div class="card card-body shadow-sm mb-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h2 class="h5 mb-1">@item.VehicleName - @item.LicensePlate</h2>
+                            <div class="text-muted">Bắt đầu @item.StartDate.ToString("dd/MM/yyyy HH:mm")</div>
+                        </div>
+                        <span class="badge @(item.Status == MaintenanceStatus.InProgress ? "bg-warning text-dark" : item.Status == MaintenanceStatus.Completed ? "bg-success" : "bg-secondary")">@item.Status</span>
+                    </div>
+                    <p class="mt-3 mb-2">@item.Content</p>
+                    <div><strong>Đơn vị:</strong> @item.ServiceProvider</div>
+                    <div><strong>Chi phí:</strong> @item.Cost.ToString("N0") đ</div>
+                    <div><strong>Số km:</strong> @item.Mileage.ToString("N0") km</div>
+
+                    @if (item.Status == MaintenanceStatus.InProgress)
+                    {
+                        <hr />
+                        <form asp-action="Complete" method="post" class="row g-2 mb-3">
+                            <input type="hidden" name="MaintenanceId" value="@item.MaintenanceRecordId" />
+                            <div class="col-md-4"><input name="FinalCost" type="number" min="0" value="@item.Cost" class="form-control" placeholder="Chi phí cuối" /></div>
+                            <div class="col-md-5"><input name="CompletionNote" class="form-control" placeholder="Kết quả sửa chữa" /></div>
+                            <div class="col-md-3"><button class="btn btn-success w-100" type="submit">Hoàn tất</button></div>
+                        </form>
+                        <form asp-action="Cancel" method="post" class="row g-2">
+                            <input type="hidden" name="maintenanceId" value="@item.MaintenanceRecordId" />
+                            <div class="col-md-9"><input name="reason" class="form-control" required placeholder="Lý do hủy phiếu" /></div>
+                            <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit">Hủy phiếu</button></div>
+                        </form>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
