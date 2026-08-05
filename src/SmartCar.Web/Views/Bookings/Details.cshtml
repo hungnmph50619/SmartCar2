@@ -11,7 +11,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h1 class="h3 mb-1">Đơn thuê #@Model.BookingId</h1>
-        <span class="badge bg-primary">@Model.Status</span>
+        <span class="badge bg-primary">@Model.Status.ToVietnamese()</span>
     </div>
     <a class="btn btn-outline-secondary" asp-action="MyBookings">Danh sách đơn</a>
 </div>
@@ -22,7 +22,7 @@
             <div class="d-flex gap-3">
                 @if (!string.IsNullOrWhiteSpace(Model.PrimaryImagePath))
                 {
-                    <img src="@Model.PrimaryImagePath" style="width:180px;height:120px;object-fit:cover" class="rounded" />
+                    <img src="@Model.PrimaryImagePath" style="width:180px;height:120px;object-fit:cover" class="rounded" alt="Ảnh @Model.VehicleName" />
                 }
                 <div>
                     <h2 class="h5">@Model.VehicleName</h2>
@@ -38,10 +38,10 @@
             <ol class="mb-0">
                 <li>Gửi yêu cầu và kiểm tra giấy tờ</li>
                 <li>Áp dụng mã khuyến mãi trước khi thanh toán</li>
-                <li>Admin xác nhận hoặc từ chối</li>
-                <li>Khách thanh toán tiền thuê</li>
-                <li>Admin bàn giao xe</li>
-                <li>Gia hạn nếu cần và được Admin duyệt</li>
+                <li>Quản trị viên xác nhận hoặc từ chối</li>
+                <li>Khách hàng thanh toán tiền thuê</li>
+                <li>Quản trị viên bàn giao xe</li>
+                <li>Gia hạn nếu cần và được quản trị viên duyệt</li>
                 <li>Trả xe, xử lý phụ phí và hoàn tất</li>
             </ol>
             @if (!string.IsNullOrWhiteSpace(Model.CancelReason))
@@ -97,7 +97,7 @@
                             <td>@extension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
                             <td>@extension.AdditionalDays ngày</td>
                             <td>@extension.AdditionalAmount.ToString("N0") đ</td>
-                            <td><span class="badge bg-secondary">@extension.Status</span></td>
+                            <td><span class="badge bg-secondary">@extension.Status.ToVietnamese()</span></td>
                         </tr>
                     }
                     </table>
@@ -112,7 +112,7 @@
                 <table class="table mb-0">
                 @foreach (var charge in Model.AdditionalCharges)
                 {
-                    <tr><td>@charge.ChargeType</td><td>@charge.Description</td><td class="text-end">@charge.Amount.ToString("N0") đ</td></tr>
+                    <tr><td>@charge.ChargeType.ToVietnamese()</td><td>@charge.Description</td><td class="text-end">@charge.Amount.ToString("N0") đ</td></tr>
                 }
                 </table>
             </div>
@@ -125,7 +125,7 @@
                 <form asp-controller="Reviews" asp-action="Create" method="post" class="row g-2">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-3">
-                        <select name="Rating" class="form-select">
+                        <select name="Rating" class="form-select" aria-label="Số sao đánh giá">
                             <option value="5">5 sao</option>
                             <option value="4">4 sao</option>
                             <option value="3">3 sao</option>
@@ -133,7 +133,7 @@
                             <option value="1">1 sao</option>
                         </select>
                     </div>
-                    <div class="col-md-7"><input name="Comment" class="form-control" placeholder="Chia sẻ trải nghiệm" /></div>
+                    <div class="col-md-7"><input name="Comment" class="form-control" placeholder="Chia sẻ trải nghiệm của bạn" /></div>
                     <div class="col-md-2"><button class="btn btn-success w-100" type="submit">Gửi đánh giá</button></div>
                 </form>
             </div>
@@ -143,7 +143,7 @@
         {
             <div class="card card-body border-danger shadow-sm">
                 <h2 class="h5 text-danger">Hủy đơn thuê</h2>
-                <p class="text-muted">Khách chủ động hủy sau khi đã thanh toán sẽ không được hoàn tiền. Admin hủy trước khi giao xe sẽ hoàn 100%.</p>
+                <p class="text-muted">Khách hàng chủ động hủy sau khi đã thanh toán sẽ không được hoàn tiền. Quản trị viên hủy trước khi giao xe sẽ hoàn 100%.</p>
                 <form asp-controller="BookingOperations" asp-action="Cancel" method="post" class="row g-2">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-9"><input name="Reason" class="form-control" required placeholder="Lý do hủy đơn" /></div>
@@ -220,6 +220,10 @@
             @if (Model.RentalPaid)
             {
                 <div class="alert alert-success mt-3 mb-0">Tiền thuê đã thanh toán.</div>
+            }
+            @if (Model.AdditionalAmount > 0 && Model.AdditionalChargePaid)
+            {
+                <div class="alert alert-success mt-3 mb-0">Phụ phí đã thanh toán.</div>
             }
         </div>
     </div>
