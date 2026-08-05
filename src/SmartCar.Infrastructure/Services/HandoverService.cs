@@ -56,6 +56,18 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
 
+        if (request.HandoverAt < booking.PickupDate)
+        {
+            return OperationResult.Failure(
+                "Thời gian giao xe không được trước thời gian nhận xe đã đặt.");
+        }
+
+        if (request.HandoverAt >= booking.ReturnDate)
+        {
+            return OperationResult.Failure(
+                "Thời gian giao xe phải trước thời gian trả xe đã đặt.");
+        }
+
         if (request.Mileage < booking.Vehicle.CurrentMileage)
         {
             return OperationResult.Failure("Số km giao xe không được nhỏ hơn số km hiện tại.");
