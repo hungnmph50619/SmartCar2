@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -11,16 +12,37 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminDocumentsController : Controller
 {
     private readonly IDocumentService _documentService;
+    private readonly ISecureDocumentStorage _storage;
 
-    public AdminDocumentsController(IDocumentService documentService)
+    public AdminDocumentsController(
+        IDocumentService documentService,
+        ISecureDocumentStorage storage)
     {
         _documentService = documentService;
+        _storage = storage;
     }
 
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
         return View(await _documentService.GetPendingDocumentsAsync(cancellationToken));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ViewImage(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var document = await _documentService.GetDocumentAsync(id, cancellationToken);
+        if (document is null ||
+            !_storage.TryResolve(document.ImagePath, out var fullPath, out var contentType))
+        {
+            return NotFound();
+        }
+
+        Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        Response.Headers.Pragma = "no-cache";
+        return PhysicalFile(fullPath, contentType, enableRangeProcessing: false);
     }
 
     [HttpPost]
