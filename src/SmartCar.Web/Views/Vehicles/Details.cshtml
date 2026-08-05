@@ -1,10 +1,13 @@
 @model SmartCar.Application.Features.Vehicles.VehicleDto
+@using SmartCar.Application.Features.Reviews
 @{
     ViewData["Title"] = Model.VehicleName;
     var pickupDate = (DateTime)ViewBag.PickupDate;
     var returnDate = (DateTime)ViewBag.ReturnDate;
     var numberOfDays = Math.Max(1, (int)Math.Ceiling((returnDate - pickupDate).TotalHours / 24d));
     var estimatedAmount = numberOfDays * Model.DailyPrice;
+    var reviews = ViewBag.Reviews as IReadOnlyList<ReviewDto> ?? Array.Empty<ReviewDto>();
+    var averageRating = (double)(ViewBag.AverageRating ?? 0d);
 }
 
 <div class="row g-4">
@@ -29,6 +32,14 @@
         <div class="card card-body shadow-sm sticky-top" style="top:1rem">
             <h1 class="h3">@Model.VehicleName</h1>
             <p class="text-muted">@Model.BrandName · @Model.Model · @Model.LicensePlate</p>
+            <div class="mb-3">
+                <span class="text-warning fs-5">★</span>
+                <strong>@(reviews.Count == 0 ? "Chưa có đánh giá" : $"{averageRating:F1}/5")</strong>
+                @if (reviews.Count > 0)
+                {
+                    <span class="text-muted">(@reviews.Count lượt)</span>
+                }
+            </div>
             <dl class="row mb-3">
                 <dt class="col-5">Số chỗ</dt><dd class="col-7">@Model.Seats</dd>
                 <dt class="col-5">Hộp số</dt><dd class="col-7">@Model.Transmission</dd>
@@ -50,6 +61,7 @@
                     <input type="hidden" name="ReturnDate" value="@returnDate.ToString("O")" />
                     <button class="btn btn-primary btn-lg w-100" type="submit">Gửi yêu cầu thuê xe</button>
                 </form>
+                <a class="btn btn-link mt-2" asp-controller="Documents" asp-action="Index">Kiểm tra trạng thái CCCD/GPLX</a>
             }
             else if (User.Identity?.IsAuthenticated != true)
             {
@@ -57,4 +69,30 @@
             }
         </div>
     </div>
+</div>
+
+<div class="card card-body shadow-sm mt-4">
+    <h2 class="h4">Đánh giá từ khách hàng</h2>
+    @if (reviews.Count == 0)
+    {
+        <p class="text-muted mb-0">Xe chưa có đánh giá sau chuyến thuê.</p>
+    }
+    else
+    {
+        <div class="row g-3">
+        @foreach (var review in reviews)
+        {
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <div class="d-flex justify-content-between">
+                        <strong>@review.CustomerName</strong>
+                        <span class="text-warning">@string.Concat(Enumerable.Repeat("★", review.Rating))</span>
+                    </div>
+                    <p class="mb-1 mt-2">@(string.IsNullOrWhiteSpace(review.Comment) ? "Khách hàng không để lại nhận xét." : review.Comment)</p>
+                    <small class="text-muted">@review.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small>
+                </div>
+            </div>
+        }
+        </div>
+    }
 </div>
