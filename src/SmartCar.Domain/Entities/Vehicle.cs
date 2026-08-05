@@ -25,4 +25,6 @@ public class Vehicle
     public ICollection<VehicleImage> Images { get; set; } = new List<VehicleImage>();
     public ICollection<Booking> Bookings { get; set; } = new List<Booking>();
     public ICollection<MaintenanceRecord> MaintenanceRecords { get; set; } = new List<MaintenanceRecord>();
+    public ICollection<VehicleDocument> Documents { get; set; } = new List<VehicleDocument>();
+    public ICollection<VehicleIncident> Incidents { get; set; } = new List<VehicleIncident>();
 }
