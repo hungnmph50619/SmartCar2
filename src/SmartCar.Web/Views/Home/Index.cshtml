@@ -15,7 +15,7 @@
                 Nền tảng thuê xe tự lái minh bạch
             </div>
             <h1 class="hero-title mb-3">
-                Thuê xe dễ dàng,<br />
+                Thuê xe dễ dàng,
                 <span>chủ động mọi hành trình</span>
             </h1>
             <p class="hero-description mb-4">
@@ -37,7 +37,7 @@
                 else if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
                 {
                     <a asp-controller="Bookings" asp-action="MyBookings" class="btn btn-light btn-lg px-4 hero-secondary-button">
-                        Đơn thuê của tôi
+                        Xem đơn của tôi
                     </a>
                 }
                 else
@@ -90,7 +90,7 @@
                     <div class="hero-car-placeholder" aria-label="Minh họa ô tô">
                         <svg viewBox="0 0 640 300" role="img" aria-hidden="true">
                             <path d="M145 185c18-60 57-100 119-112h113c50 6 86 40 111 101l53 14c25 7 41 30 41 56v14H63v-15c0-30 20-55 49-62l33-8z" fill="currentColor" opacity=".95" />
-                            <path d="M228 94h142c29 4 55 24 76 63H179c14-34 30-55 49-63z" fill="#dff7f4" />
+                            <path d="M228 94h142c29 4 55 24 76 63H179c14-34 30-55 49-63z" fill="#e3f1ff" />
                             <circle cx="180" cy="242" r="42" fill="#182a3a" />
                             <circle cx="180" cy="242" r="18" fill="#cbd5e1" />
                             <circle cx="477" cy="242" r="42" fill="#182a3a" />
@@ -117,27 +117,47 @@
             <span class="section-eyebrow">TÌM XE NHANH</span>
             <h2 id="quick-search-title" class="h3 mb-1">Bạn muốn nhận xe khi nào?</h2>
         </div>
-        <span class="text-muted">Chọn thời gian để xem đúng xe còn trống</span>
+        <span class="text-muted">Nhập theo giờ Việt Nam để xem đúng xe còn trống</span>
     </div>
 
-    <form asp-controller="Vehicles" asp-action="Index" method="get" class="row g-3 align-items-end">
+    <form asp-controller="Vehicles" asp-action="Index" method="get" class="row g-3 align-items-end" id="homeVehicleSearchForm" novalidate>
         <div class="col-lg-4 col-md-6">
-            <label for="homePickupDate" class="form-label fw-semibold">Ngày giờ nhận xe</label>
-            <input id="homePickupDate"
-                   type="datetime-local"
-                   name="PickupDate"
-                   value="@pickupDate.ToString("yyyy-MM-ddTHH:mm")"
-                   min="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")"
-                   class="form-control form-control-lg" />
+            <label for="homePickupDisplay" class="form-label fw-semibold">Ngày giờ nhận xe</label>
+            <div class="vn-datetime-control">
+                <input id="homePickupDisplay"
+                       type="text"
+                       value="@pickupDate.ToString("dd/MM/yyyy HH:mm")"
+                       placeholder="dd/MM/yyyy HH:mm"
+                       inputmode="numeric"
+                       autocomplete="off"
+                       class="form-control form-control-lg vn-datetime-input"
+                       aria-describedby="homePickupHint" />
+                <svg class="vn-datetime-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+                    <path d="M16 3v4M8 3v4M3 10h18"></path>
+                </svg>
+            </div>
+            <small id="homePickupHint" class="vn-datetime-hint">Ví dụ: 06/08/2026 09:00</small>
+            <input id="homePickupDate" type="hidden" name="PickupDate" value="@pickupDate.ToString("yyyy-MM-ddTHH:mm")" />
         </div>
         <div class="col-lg-4 col-md-6">
-            <label for="homeReturnDate" class="form-label fw-semibold">Ngày giờ trả xe</label>
-            <input id="homeReturnDate"
-                   type="datetime-local"
-                   name="ReturnDate"
-                   value="@returnDate.ToString("yyyy-MM-ddTHH:mm")"
-                   min="@pickupDate.ToString("yyyy-MM-ddTHH:mm")"
-                   class="form-control form-control-lg" />
+            <label for="homeReturnDisplay" class="form-label fw-semibold">Ngày giờ trả xe</label>
+            <div class="vn-datetime-control">
+                <input id="homeReturnDisplay"
+                       type="text"
+                       value="@returnDate.ToString("dd/MM/yyyy HH:mm")"
+                       placeholder="dd/MM/yyyy HH:mm"
+                       inputmode="numeric"
+                       autocomplete="off"
+                       class="form-control form-control-lg vn-datetime-input"
+                       aria-describedby="homeReturnHint" />
+                <svg class="vn-datetime-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+                    <path d="M16 3v4M8 3v4M3 10h18"></path>
+                </svg>
+            </div>
+            <small id="homeReturnHint" class="vn-datetime-hint">Ngày trả xe phải sau ngày nhận xe</small>
+            <input id="homeReturnDate" type="hidden" name="ReturnDate" value="@returnDate.ToString("yyyy-MM-ddTHH:mm")" />
         </div>
         <div class="col-lg-2 col-md-6">
             <label for="homeSeats" class="form-label fw-semibold">Số chỗ tối thiểu</label>
@@ -152,6 +172,9 @@
             <button type="submit" class="btn btn-primary btn-lg w-100 home-search-button">
                 Tìm xe
             </button>
+        </div>
+        <div class="col-12">
+            <div id="homeSearchError" class="home-search-error" role="alert" aria-live="polite"></div>
         </div>
     </form>
 </section>
@@ -181,46 +204,47 @@
             @foreach (var vehicle in Model)
             {
                 <div class="col-lg-4 col-md-6">
-                    <article class="featured-car-card h-100">
-                        <div class="featured-car-image-wrap">
-                            @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
-                            {
-                                <img src="@vehicle.PrimaryImagePath"
-                                     alt="@vehicle.VehicleName"
-                                     class="featured-car-image" />
-                            }
-                            else
-                            {
-                                <div class="featured-car-placeholder">Chưa có ảnh</div>
-                            }
-                            <span class="availability-badge">Sẵn sàng</span>
-                        </div>
-                        <div class="featured-car-body">
-                            <div class="d-flex justify-content-between gap-3 mb-2">
-                                <div>
-                                    <div class="featured-brand">@vehicle.BrandName</div>
-                                    <h3 class="h5 fw-bold mb-0">@vehicle.VehicleName</h3>
-                                </div>
-                                <div class="featured-price text-end">
-                                    <strong>@vehicle.DailyPrice.ToString("N0") đ</strong>
-                                    <span>/ ngày</span>
-                                </div>
+                    <a asp-controller="Vehicles"
+                       asp-action="Details"
+                       asp-route-id="@vehicle.VehicleId"
+                       asp-route-pickupDate="@pickupDate"
+                       asp-route-returnDate="@returnDate"
+                       class="featured-card-link h-100"
+                       aria-label="Xem chi tiết @vehicle.VehicleName">
+                        <article class="featured-car-card h-100">
+                            <div class="featured-car-image-wrap">
+                                @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
+                                {
+                                    <img src="@vehicle.PrimaryImagePath"
+                                         alt="@vehicle.VehicleName"
+                                         class="featured-car-image" />
+                                }
+                                else
+                                {
+                                    <div class="featured-car-placeholder">Chưa có ảnh</div>
+                                }
+                                <span class="availability-badge">Sẵn sàng</span>
                             </div>
-                            <div class="featured-specs">
-                                <span>👥 @vehicle.Seats chỗ</span>
-                                <span>⚙ @vehicle.Transmission</span>
-                                <span>⛽ @vehicle.FuelType</span>
+                            <div class="featured-car-body">
+                                <div class="d-flex justify-content-between gap-3 mb-2">
+                                    <div>
+                                        <div class="featured-brand">@vehicle.BrandName</div>
+                                        <h3 class="h5 fw-bold mb-0">@vehicle.VehicleName</h3>
+                                    </div>
+                                    <div class="featured-price text-end">
+                                        <strong>@vehicle.DailyPrice.ToString("N0") đ</strong>
+                                        <span>/ ngày</span>
+                                    </div>
+                                </div>
+                                <div class="featured-specs">
+                                    <span>👥 @vehicle.Seats chỗ</span>
+                                    <span>⚙ @vehicle.Transmission</span>
+                                    <span>⛽ @vehicle.FuelType</span>
+                                </div>
+                                <span class="btn btn-outline-primary w-100 mt-4">Xem chi tiết xe</span>
                             </div>
-                            <a asp-controller="Vehicles"
-                               asp-action="Details"
-                               asp-route-id="@vehicle.VehicleId"
-                               asp-route-pickupDate="@pickupDate"
-                               asp-route-returnDate="@returnDate"
-                               class="btn btn-outline-primary w-100 mt-4">
-                                Xem chi tiết xe
-                            </a>
-                        </div>
-                    </article>
+                        </article>
+                    </a>
                 </div>
             }
         </div>
@@ -325,3 +349,116 @@
         Khám phá đội xe
     </a>
 </section>
+
+@section Scripts {
+    <script>
+        (function () {
+            const form = document.getElementById('homeVehicleSearchForm');
+            const pickupDisplay = document.getElementById('homePickupDisplay');
+            const returnDisplay = document.getElementById('homeReturnDisplay');
+            const pickupHidden = document.getElementById('homePickupDate');
+            const returnHidden = document.getElementById('homeReturnDate');
+            const errorBox = document.getElementById('homeSearchError');
+
+            if (!form || !pickupDisplay || !returnDisplay || !pickupHidden || !returnHidden || !errorBox) {
+                return;
+            }
+
+            function parseVietnameseDateTime(value) {
+                const match = /^\s*(\d{2})\/(\d{2})\/(\d{4})\s+([01]\d|2[0-3]):([0-5]\d)\s*$/.exec(value);
+                if (!match) {
+                    return null;
+                }
+
+                const day = Number(match[1]);
+                const month = Number(match[2]);
+                const year = Number(match[3]);
+                const hour = Number(match[4]);
+                const minute = Number(match[5]);
+                const result = new Date(year, month - 1, day, hour, minute, 0, 0);
+
+                if (result.getFullYear() !== year ||
+                    result.getMonth() !== month - 1 ||
+                    result.getDate() !== day ||
+                    result.getHours() !== hour ||
+                    result.getMinutes() !== minute) {
+                    return null;
+                }
+
+                return result;
+            }
+
+            function toLocalIso(date) {
+                const pad = value => String(value).padStart(2, '0');
+                return date.getFullYear() + '-' +
+                    pad(date.getMonth() + 1) + '-' +
+                    pad(date.getDate()) + 'T' +
+                    pad(date.getHours()) + ':' +
+                    pad(date.getMinutes());
+            }
+
+            function setInvalid(input, invalid) {
+                input.classList.toggle('is-invalid', invalid);
+                input.setAttribute('aria-invalid', invalid ? 'true' : 'false');
+            }
+
+            function showError(message) {
+                errorBox.textContent = message;
+                errorBox.classList.add('is-visible');
+            }
+
+            function clearError() {
+                errorBox.textContent = '';
+                errorBox.classList.remove('is-visible');
+                setInvalid(pickupDisplay, false);
+                setInvalid(returnDisplay, false);
+            }
+
+            form.addEventListener('submit', function (event) {
+                clearError();
+
+                const pickup = parseVietnameseDateTime(pickupDisplay.value);
+                const returnDateValue = parseVietnameseDateTime(returnDisplay.value);
+
+                if (!pickup) {
+                    event.preventDefault();
+                    setInvalid(pickupDisplay, true);
+                    showError('Ngày giờ nhận xe chưa đúng. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.');
+                    pickupDisplay.focus();
+                    return;
+                }
+
+                if (!returnDateValue) {
+                    event.preventDefault();
+                    setInvalid(returnDisplay, true);
+                    showError('Ngày giờ trả xe chưa đúng. Vui lòng nhập theo định dạng dd/MM/yyyy HH:mm.');
+                    returnDisplay.focus();
+                    return;
+                }
+
+                if (pickup.getTime() <= Date.now()) {
+                    event.preventDefault();
+                    setInvalid(pickupDisplay, true);
+                    showError('Ngày giờ nhận xe phải lớn hơn thời điểm hiện tại.');
+                    pickupDisplay.focus();
+                    return;
+                }
+
+                if (returnDateValue.getTime() <= pickup.getTime()) {
+                    event.preventDefault();
+                    setInvalid(returnDisplay, true);
+                    showError('Ngày giờ trả xe phải sau ngày giờ nhận xe.');
+                    returnDisplay.focus();
+                    return;
+                }
+
+                pickupHidden.value = toLocalIso(pickup);
+                returnHidden.value = toLocalIso(returnDateValue);
+            });
+
+            [pickupDisplay, returnDisplay].forEach(function (input) {
+                input.addEventListener('input', clearError);
+            });
+        })();
+    </script>
+}

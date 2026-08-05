@@ -1,3 +1,29 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using SmartCar.Application.Features.Notifications
+@using SmartCar.Infrastructure.Identity
+@inject UserManager<ApplicationUser> UserManager
+@inject INotificationService NotificationService
+@{
+    ApplicationUser? currentUser = null;
+    var unreadNotificationCount = 0;
+
+    if (User.Identity?.IsAuthenticated == true)
+    {
+        currentUser = await UserManager.GetUserAsync(User);
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!string.IsNullOrWhiteSpace(currentUserId))
+        {
+            unreadNotificationCount = await NotificationService.GetUnreadCountAsync(currentUserId);
+        }
+    }
+
+    var displayName = !string.IsNullOrWhiteSpace(currentUser?.FullName)
+        ? currentUser.FullName
+        : User.Identity?.Name ?? "Tài khoản";
+    var avatarInitial = displayName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
+}
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -9,6 +35,7 @@
     <link rel="stylesheet" href="~/css/navigation-fixes.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/SmartCar.Web.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/home-ux.css" asp-append-version="true" />
 </head>
 <body>
     <header>
@@ -25,8 +52,6 @@
                         @if (User.IsInRole(RoleNames.Customer))
                         {
                             <li class="nav-item"><a class="nav-link" asp-controller="Bookings" asp-action="MyBookings">Đơn của tôi</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Documents" asp-action="Index">CCCD/GPLX</a></li>
-                            <li class="nav-item"><a class="nav-link" asp-controller="Extensions" asp-action="Index">Gia hạn</a></li>
                         }
                         @if (User.IsInRole(RoleNames.Admin))
                         {
@@ -54,15 +79,57 @@
                             </li>
                         }
                     </ul>
-                    <ul class="navbar-nav align-items-xl-center">
+                    <ul class="navbar-nav align-items-xl-center account-navigation">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Notifications" asp-action="Index">Thông báo</a></li>
-                            <li class="nav-item"><span class="nav-link">Xin chào, @User.Identity.Name</span></li>
                             <li class="nav-item">
-                                <form asp-controller="Account" asp-action="Logout" method="post">
-                                    <button type="submit" class="btn btn-outline-secondary btn-sm">Đăng xuất</button>
-                                </form>
+                                <a class="nav-link notification-navigation-link" asp-controller="Notifications" asp-action="Index" aria-label="Thông báo">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+                                        <path d="M10 21h4"></path>
+                                    </svg>
+                                    <span>Thông báo</span>
+                                    @if (unreadNotificationCount > 0)
+                                    {
+                                        <span class="notification-count">@(unreadNotificationCount > 99 ? "99+" : unreadNotificationCount)</span>
+                                    }
+                                </a>
+                            </li>
+                            <li class="nav-item dropdown user-navigation-dropdown">
+                                <a class="nav-link dropdown-toggle user-navigation-toggle"
+                                   href="#"
+                                   role="button"
+                                   data-bs-toggle="dropdown"
+                                   aria-expanded="false">
+                                    <span class="user-avatar" aria-hidden="true">@avatarInitial</span>
+                                    <span class="user-display-name">@displayName</span>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end user-navigation-menu">
+                                    <li class="user-menu-heading">
+                                        <strong>@displayName</strong>
+                                        <small>@currentUser?.Email</small>
+                                    </li>
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <a class="dropdown-item" asp-controller="Profile" asp-action="Index">Hồ sơ cá nhân</a>
+                                    </li>
+                                    @if (User.IsInRole(RoleNames.Customer))
+                                    {
+                                        <li><a class="dropdown-item" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Documents" asp-action="Index">CCCD/GPLX</a></li>
+                                        <li><a class="dropdown-item" asp-controller="Extensions" asp-action="Index">Gia hạn thuê</a></li>
+                                    }
+                                    @if (User.IsInRole(RoleNames.Admin))
+                                    {
+                                        <li><a class="dropdown-item" asp-controller="Dashboard" asp-action="Index">Trang tổng quan</a></li>
+                                    }
+                                    <li><hr class="dropdown-divider" /></li>
+                                    <li>
+                                        <form asp-controller="Account" asp-action="Logout" method="post">
+                                            <button type="submit" class="dropdown-item text-danger">Đăng xuất</button>
+                                        </form>
+                                    </li>
+                                </ul>
                             </li>
                         }
                         else
