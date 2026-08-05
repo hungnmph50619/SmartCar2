@@ -273,7 +273,9 @@ internal sealed class ReturnService : IReturnService
         booking.AdditionalAmount = await _dbContext.AdditionalCharges
             .Where(charge => charge.VehicleReturn.BookingId == booking.BookingId)
             .SumAsync(charge => (decimal?)charge.Amount, cancellationToken) ?? 0;
-        booking.TotalAmount = booking.RentalAmount + booking.AdditionalAmount;
+        booking.TotalAmount = Math.Max(
+            0,
+            booking.RentalAmount - booking.DiscountAmount + booking.AdditionalAmount);
 
         var pendingPayment = booking.Payments.FirstOrDefault(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
