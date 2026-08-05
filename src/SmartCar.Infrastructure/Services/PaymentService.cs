@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Payments;
@@ -22,7 +23,9 @@ internal sealed class PaymentService : IPaymentService
         PaymentType paymentType,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
@@ -83,6 +86,31 @@ internal sealed class PaymentService : IPaymentService
             return alreadyPaid
                 ? OperationResult.Failure("Khoản tiền này đã được thanh toán.")
                 : OperationResult.Failure("Không tìm thấy khoản thanh toán phù hợp.");
+        }
+
+        if (paymentType == PaymentType.Rental && !string.IsNullOrWhiteSpace(booking.PromotionCode))
+        {
+            var now = DateTime.Now;
+            var promotion = await _dbContext.Promotions.FirstOrDefaultAsync(item =>
+                item.Code == booking.PromotionCode &&
+                item.IsActive &&
+                item.StartAt <= now &&
+                item.EndAt >= now,
+                cancellationToken);
+
+            if (promotion is null)
+            {
+                return OperationResult.Failure(
+                    "Mã khuyến mãi không còn hiệu lực. Vui lòng gỡ mã hoặc chọn mã khác.");
+            }
+
+            if (promotion.UsageLimit.HasValue && promotion.UsedCount >= promotion.UsageLimit.Value)
+            {
+                return OperationResult.Failure(
+                    "Mã khuyến mãi vừa hết lượt sử dụng. Vui lòng gỡ mã hoặc chọn mã khác.");
+            }
+
+            promotion.UsedCount++;
         }
 
         payment.Status = PaymentStatus.Paid;
