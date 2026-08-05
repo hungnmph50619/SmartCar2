@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SmartCar.Application.Features.Documents;
 
 namespace SmartCar.Web.ViewModels;
 
@@ -22,4 +23,10 @@ public sealed class ProfileViewModel
     public string Address { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; }
+
+    public string ActiveTab { get; set; } = "profile";
+
+    public DocumentUploadViewModel DocumentUpload { get; set; } = new();
+
+    public IReadOnlyList<DocumentDto> Documents { get; set; } = Array.Empty<DocumentDto>();
 }
