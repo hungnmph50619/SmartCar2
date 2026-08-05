@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SmartCar.Web.Validation;
 
 namespace SmartCar.Web.ViewModels;
 
@@ -35,7 +36,7 @@ public class RegisterViewModel
     [Display(Name = "Xác nhận mật khẩu")]
     public string ConfirmPassword { get; set; } = string.Empty;
 
-    [Range(typeof(bool), "true", "true", ErrorMessage = "Bạn cần đồng ý với Điều khoản sử dụng và Chính sách bảo mật.")]
+    [MustBeTrue(ErrorMessage = "Bạn cần đồng ý với Điều khoản sử dụng và Chính sách bảo mật.")]
     [Display(Name = "Tôi đồng ý với Điều khoản sử dụng và Chính sách bảo mật")]
     public bool AcceptTerms { get; set; }
 }
