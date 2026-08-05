@@ -3,6 +3,10 @@
     ViewData["Title"] = "Sửa thông tin xe";
 }
 
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-vehicle-form.css" asp-append-version="true" />
+}
+
 <div class="admin-page-head">
     <div>
         <a class="admin-panel__link" asp-controller="Dashboard" asp-action="Vehicles">← Quay lại đội xe</a>
@@ -10,7 +14,10 @@
         <p>@Model.VehicleName · @Model.LicensePlate</p>
     </div>
     <div class="admin-page-actions">
-        <a class="admin-btn" asp-controller="Vehicles" asp-action="Details" asp-route-id="@Model.VehicleId" target="_blank">↗ Xem trang khách</a>
+        @if (Model.Status == VehicleStatus.Available)
+        {
+            <a class="admin-btn" asp-controller="Vehicles" asp-action="Details" asp-route-id="@Model.VehicleId" target="_blank">↗ Xem trang khách</a>
+        }
     </div>
 </div>
 
