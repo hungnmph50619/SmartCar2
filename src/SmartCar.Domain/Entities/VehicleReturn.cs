@@ -10,6 +10,9 @@ public class VehicleReturn
     public string? ExteriorCondition { get; set; }
     public string? InteriorCondition { get; set; }
     public bool HasDamage { get; set; }
+    public bool IsLateReturn { get; set; }
+    public int LateMinutes { get; set; }
+    public decimal LateFee { get; set; }
     public string? ImagePaths { get; set; }
     public string? Notes { get; set; }
 
