@@ -1,0 +1,69 @@
+@model SmartCar.Web.ViewModels.IncidentCreateViewModel
+@using SmartCar.Domain.Enums
+@{
+    ViewData["Title"] = "Ghi nhận sự cố";
+}
+
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        <div class="card card-body shadow-sm">
+            <h1 class="h3 mb-3">Ghi nhận sự cố hoặc vi phạm</h1>
+            <form asp-action="Create" method="post" class="row g-3">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <div class="col-md-5">
+                    <label class="form-label">Xe</label>
+                    <select asp-for="VehicleId" asp-items="ViewBag.Vehicles" class="form-select"></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Mã đơn liên quan</label>
+                    <input asp-for="BookingId" type="number" min="1" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Loại sự cố</label>
+                    <select asp-for="IncidentType" asp-items="Html.GetEnumSelectList<IncidentType>()" class="form-select"></select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Thời điểm xảy ra</label>
+                    <input asp-for="OccurredAt" type="datetime-local" class="form-control" />
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Địa điểm</label>
+                    <input asp-for="Location" class="form-control" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Mô tả</label>
+                    <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                    <span asp-validation-for="Description" class="text-danger"></span>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Chi phí ước tính</label>
+                    <input asp-for="EstimatedCost" type="number" min="0" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Tiền phạt</label>
+                    <input asp-for="FineAmount" type="number" min="0" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Số tiền khách chịu</label>
+                    <input asp-for="CustomerLiabilityAmount" type="number" min="0" class="form-control" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Đường dẫn bằng chứng</label>
+                    <input asp-for="EvidencePaths" class="form-control" placeholder="Các đường dẫn ảnh, phân cách bằng dấu ;" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Ghi chú</label>
+                    <textarea asp-for="Notes" class="form-control" rows="2"></textarea>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button class="btn btn-primary" type="submit">Lưu sự cố</button>
+                    <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
