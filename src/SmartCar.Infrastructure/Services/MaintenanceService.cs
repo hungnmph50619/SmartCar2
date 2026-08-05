@@ -101,7 +101,13 @@ internal sealed class MaintenanceService : IMaintenanceService
             record.Content = $"{record.Content}\nKết quả: {completionNote.Trim()}";
         }
 
-        record.Vehicle.Status = VehicleStatus.Available;
+        record.Vehicle.CurrentMileage = Math.Max(record.Vehicle.CurrentMileage, record.Mileage);
+        record.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
+            _dbContext,
+            record.Vehicle,
+            excludedMaintenanceId: record.MaintenanceRecordId,
+            cancellationToken: cancellationToken);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         return OperationResult.Success();
     }
@@ -128,7 +134,11 @@ internal sealed class MaintenanceService : IMaintenanceService
         record.Status = MaintenanceStatus.Cancelled;
         record.CompletedDate = DateTime.UtcNow;
         record.Content = $"{record.Content}\nĐã hủy: {reason.Trim()}";
-        record.Vehicle.Status = VehicleStatus.Available;
+        record.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
+            _dbContext,
+            record.Vehicle,
+            excludedMaintenanceId: record.MaintenanceRecordId,
+            cancellationToken: cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return OperationResult.Success();
