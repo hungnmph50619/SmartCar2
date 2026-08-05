@@ -11,6 +11,7 @@ public sealed record CreateBookingRequest(
 public class BookingListItemDto
 {
     public int BookingId { get; init; }
+    public string CustomerId { get; init; } = string.Empty;
     public string CustomerName { get; init; } = string.Empty;
     public string? CustomerPhone { get; init; }
     public int VehicleId { get; init; }
@@ -26,7 +27,6 @@ public class BookingListItemDto
 
 public sealed class BookingDetailsDto : BookingListItemDto
 {
-    public string CustomerId { get; init; } = string.Empty;
     public decimal DailyPrice { get; init; }
     public int NumberOfDays { get; init; }
     public decimal RentalAmount { get; init; }
