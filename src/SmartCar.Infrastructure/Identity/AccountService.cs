@@ -62,7 +62,6 @@ internal sealed class AccountService : IAccountService
             return OperationResult.Failure(roleResult.Errors.Select(error => error.Description));
         }
 
-        await _signInManager.SignInAsync(user, isPersistent: false);
         return OperationResult.Success();
     }
 
@@ -82,6 +81,12 @@ internal sealed class AccountService : IAccountService
             request.RememberMe,
             lockoutOnFailure: true);
 
+        if (signInResult.IsLockedOut)
+        {
+            return LoginResult.Failure(
+                "Bạn đã nhập sai quá nhiều lần. Tài khoản tạm khóa trong 10 phút.");
+        }
+
         if (!signInResult.Succeeded)
         {
             return LoginResult.Failure("Email hoặc mật khẩu không đúng.");
@@ -89,6 +94,45 @@ internal sealed class AccountService : IAccountService
 
         var isAdmin = await _userManager.IsInRoleAsync(user, RoleNames.Admin);
         return LoginResult.Success(isAdmin);
+    }
+
+    public async Task<string?> GeneratePasswordResetTokenAsync(
+        string email,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await _userManager.FindByEmailAsync(email.Trim());
+        if (user is null || !user.IsActive)
+        {
+            return null;
+        }
+
+        return await _userManager.GeneratePasswordResetTokenAsync(user);
+    }
+
+    public async Task<OperationResult> ResetPasswordAsync(
+        string email,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = await _userManager.FindByEmailAsync(email.Trim());
+        if (user is null || !user.IsActive)
+        {
+            return OperationResult.Failure("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.");
+        }
+
+        var resetResult = await _userManager.ResetPasswordAsync(user, token, newPassword);
+        if (!resetResult.Succeeded)
+        {
+            return OperationResult.Failure(resetResult.Errors.Select(error => error.Description));
+        }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+        return OperationResult.Success();
     }
 
     public Task LogoutAsync() => _signInManager.SignOutAsync();
