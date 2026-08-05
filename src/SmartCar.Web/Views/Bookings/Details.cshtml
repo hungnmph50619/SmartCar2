@@ -141,7 +141,7 @@
         {
             <div class="card card-body border-danger shadow-sm">
                 <h2 class="h5 text-danger">Hủy đơn thuê</h2>
-                <p class="text-muted">Trước 24 giờ hoàn 100%; trong 24 giờ hoàn 50% số tiền đã thanh toán.</p>
+                <p class="text-muted">Khách chủ động hủy sau khi đã thanh toán sẽ không được hoàn tiền. Admin hủy trước khi giao xe sẽ hoàn 100%.</p>
                 <form asp-controller="BookingOperations" asp-action="Cancel" method="post" class="row g-2">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-9"><input name="Reason" class="form-control" required placeholder="Lý do hủy đơn" /></div>
