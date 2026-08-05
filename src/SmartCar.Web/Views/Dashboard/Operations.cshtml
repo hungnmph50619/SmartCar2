@@ -1,0 +1,51 @@
+@model IReadOnlyList<AdminOperationRowViewModel>
+@{
+    ViewData["Title"] = "Giao và trả xe";
+    var grouped = Model.GroupBy(item => item.Time.Date).OrderBy(group => group.Key).ToList();
+}
+
+<div class="admin-page-head">
+    <div>
+        <h1>Lịch giao và trả xe</h1>
+        <p>Theo dõi các lượt giao xe, nhận xe và trạng thái đơn trong 7 ngày tới.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-action="Calendar">▦ Lịch đội xe</a>
+        <a class="admin-btn" asp-action="Bookings">▣ Đơn thuê</a>
+    </div>
+</div>
+
+@if (Model.Count == 0)
+{
+    <section class="admin-panel"><div class="admin-empty"><span class="admin-empty__icon">⇄</span>Không có lịch giao hoặc trả xe trong 7 ngày tới.</div></section>
+}
+else
+{
+    @foreach (var day in grouped)
+    {
+        <section class="admin-panel mb-3">
+            <div class="admin-panel__head">
+                <div>
+                    <h2>@day.Key.ToString("dddd, dd/MM/yyyy", new System.Globalization.CultureInfo("vi-VN"))</h2>
+                    <p>@day.Count(item => item.OperationType == "Giao xe") lượt giao · @day.Count(item => item.OperationType == "Nhận xe") lượt nhận</p>
+                </div>
+            </div>
+            <div class="admin-panel__body">
+                <div class="admin-operation-list">
+                    @foreach (var operation in day.OrderBy(item => item.Time))
+                    {
+                        <div class="admin-operation">
+                            <time>@operation.Time.ToString("HH:mm")</time>
+                            <span class="admin-operation__type">@operation.OperationType</span>
+                            <div class="admin-operation__info">
+                                <strong>@operation.VehicleName · @operation.LicensePlate</strong>
+                                <span>@operation.CustomerName · @(string.IsNullOrWhiteSpace(operation.CustomerPhone) ? "Chưa có SĐT" : operation.CustomerPhone)</span>
+                            </div>
+                            <a class="admin-status admin-status--@AdminDisplayHelper.BookingCss(operation.Status)" asp-action="BookingDetails" asp-route-id="@operation.BookingId">@AdminDisplayHelper.BookingLabel(operation.Status)</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+}
