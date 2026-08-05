@@ -60,7 +60,21 @@ internal sealed class VehicleService : IVehicleService
             .Where(vehicle => !vehicle.Bookings.Any(booking =>
                 BlockingBookingStatuses.Contains(booking.Status) &&
                 request.PickupDate < booking.ReturnDate &&
-                request.ReturnDate > booking.PickupDate));
+                request.ReturnDate > booking.PickupDate))
+            .Where(vehicle => !vehicle.Incidents.Any(incident =>
+                incident.Status != IncidentStatus.Resolved &&
+                incident.Status != IncidentStatus.Cancelled))
+            .Where(vehicle => vehicle.Documents.Any(document =>
+                document.DocumentType == VehicleDocumentType.Registration &&
+                (!document.ExpiryDate.HasValue || document.ExpiryDate.Value >= request.ReturnDate)))
+            .Where(vehicle => vehicle.Documents.Any(document =>
+                document.DocumentType == VehicleDocumentType.Inspection &&
+                document.ExpiryDate.HasValue &&
+                document.ExpiryDate.Value >= request.ReturnDate))
+            .Where(vehicle => vehicle.Documents.Any(document =>
+                document.DocumentType == VehicleDocumentType.Insurance &&
+                document.ExpiryDate.HasValue &&
+                document.ExpiryDate.Value >= request.ReturnDate));
 
         if (request.BrandId.HasValue)
         {
@@ -322,7 +336,9 @@ internal sealed class VehicleService : IVehicleService
             .AsNoTracking()
             .Include(vehicle => vehicle.Brand)
             .Include(vehicle => vehicle.Images)
-            .Include(vehicle => vehicle.Bookings);
+            .Include(vehicle => vehicle.Bookings)
+            .Include(vehicle => vehicle.Documents)
+            .Include(vehicle => vehicle.Incidents);
 
     private async Task<string?> ValidateVehicleAsync(
         int brandId,
