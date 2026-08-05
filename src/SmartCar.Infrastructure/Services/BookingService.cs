@@ -70,6 +70,42 @@ internal sealed class BookingService : IBookingService
             return BookingMutationResult.Failure("Xe không tồn tại hoặc hiện không thể cho thuê.");
         }
 
+        var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(item =>
+            item.VehicleId == request.VehicleId &&
+            item.Status != IncidentStatus.Resolved &&
+            item.Status != IncidentStatus.Cancelled,
+            cancellationToken);
+
+        if (hasOpenIncident)
+        {
+            return BookingMutationResult.Failure("Xe đang có sự cố chưa xử lý nên chưa thể cho thuê.");
+        }
+
+        var hasValidRegistration = await HasValidVehicleDocumentAsync(
+            request.VehicleId,
+            VehicleDocumentType.Registration,
+            request.ReturnDate,
+            allowNoExpiry: true,
+            cancellationToken);
+        var hasValidInspection = await HasValidVehicleDocumentAsync(
+            request.VehicleId,
+            VehicleDocumentType.Inspection,
+            request.ReturnDate,
+            allowNoExpiry: false,
+            cancellationToken);
+        var hasValidInsurance = await HasValidVehicleDocumentAsync(
+            request.VehicleId,
+            VehicleDocumentType.Insurance,
+            request.ReturnDate,
+            allowNoExpiry: false,
+            cancellationToken);
+
+        if (!hasValidRegistration || !hasValidInspection || !hasValidInsurance)
+        {
+            return BookingMutationResult.Failure(
+                "Xe chưa có đủ đăng ký, đăng kiểm và bảo hiểm còn hiệu lực đến ngày trả.");
+        }
+
         var hasConflict = await HasConflictAsync(
             request.VehicleId,
             request.PickupDate,
@@ -97,6 +133,7 @@ internal sealed class BookingService : IBookingService
             DailyPrice = vehicle.DailyPrice,
             NumberOfDays = numberOfDays,
             RentalAmount = rentalAmount,
+            DiscountAmount = 0,
             AdditionalAmount = 0,
             TotalAmount = rentalAmount,
             Status = BookingStatus.PendingConfirmation,
@@ -181,13 +218,14 @@ internal sealed class BookingService : IBookingService
         }
 
         booking.Status = BookingStatus.PendingPayment;
+        var rentalPaymentAmount = Math.Max(0, booking.RentalAmount - booking.DiscountAmount);
 
         if (!booking.Payments.Any(payment => payment.Type == PaymentType.Rental))
         {
             booking.Payments.Add(new Payment
             {
                 Type = PaymentType.Rental,
-                Amount = booking.RentalAmount,
+                Amount = rentalPaymentAmount,
                 Status = PaymentStatus.Pending,
                 Method = "Mo phong"
             });
@@ -368,6 +406,8 @@ internal sealed class BookingService : IBookingService
             DailyPrice = booking.DailyPrice,
             NumberOfDays = booking.NumberOfDays,
             RentalAmount = booking.RentalAmount,
+            PromotionCode = booking.PromotionCode,
+            DiscountAmount = booking.DiscountAmount,
             AdditionalAmount = booking.AdditionalAmount,
             TotalAmount = booking.TotalAmount,
             Status = booking.Status,
@@ -427,5 +467,18 @@ internal sealed class BookingService : IBookingService
             BlockingStatuses.Contains(booking.Status) &&
             pickupDate < booking.ReturnDate &&
             returnDate > booking.PickupDate,
+            cancellationToken);
+
+    private Task<bool> HasValidVehicleDocumentAsync(
+        int vehicleId,
+        VehicleDocumentType documentType,
+        DateTime requiredUntil,
+        bool allowNoExpiry,
+        CancellationToken cancellationToken) =>
+        _dbContext.VehicleDocuments.AnyAsync(document =>
+            document.VehicleId == vehicleId &&
+            document.DocumentType == documentType &&
+            ((allowNoExpiry && !document.ExpiryDate.HasValue) ||
+             (document.ExpiryDate.HasValue && document.ExpiryDate.Value >= requiredUntil)),
             cancellationToken);
 }
