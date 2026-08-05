@@ -112,12 +112,15 @@ public sealed class HandoverViewModel
     [Range(0, int.MaxValue)]
     public int Mileage { get; set; }
 
-    [Required]
+    [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi giao xe.")]
     public string FuelLevel { get; set; } = string.Empty;
     public string? ExteriorCondition { get; set; }
     public string? InteriorCondition { get; set; }
     public string? Accessories { get; set; }
-    public string? ImagePaths { get; set; }
+
+    [Display(Name = "Ảnh bàn giao")]
+    public List<IFormFile> Images { get; set; } = new();
+
     public string? Notes { get; set; }
 }
 
@@ -129,12 +132,15 @@ public sealed class ReturnViewModel
     [Range(0, int.MaxValue)]
     public int Mileage { get; set; }
 
-    [Required]
+    [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi trả xe.")]
     public string FuelLevel { get; set; } = string.Empty;
     public string? ExteriorCondition { get; set; }
     public string? InteriorCondition { get; set; }
     public bool HasDamage { get; set; }
-    public string? ImagePaths { get; set; }
+
+    [Display(Name = "Ảnh khi trả xe")]
+    public List<IFormFile> Images { get; set; } = new();
+
     public string? Notes { get; set; }
 }
 
