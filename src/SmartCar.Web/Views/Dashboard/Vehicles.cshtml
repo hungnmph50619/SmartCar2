@@ -119,8 +119,7 @@ else
         <div class="modal fade admin-modal-form" id="vehicleStatusModal-@vehicle.VehicleId" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
-                    <form asp-action="ChangeVehicleStatus" method="post">
-                        <input type="hidden" name="id" value="@vehicle.VehicleId" />
+                    <form asp-controller="AdminVehicles" asp-action="ChangeStatus" asp-route-id="@vehicle.VehicleId" method="post">
                         <div class="modal-header">
                             <div><h2 class="modal-title fs-5">Cập nhật trạng thái xe</h2><small class="text-muted">@vehicle.VehicleName · @vehicle.LicensePlate</small></div>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
