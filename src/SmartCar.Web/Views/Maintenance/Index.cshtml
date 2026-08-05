@@ -54,7 +54,7 @@
                             <h2 class="h5 mb-1">@item.VehicleName - @item.LicensePlate</h2>
                             <div class="text-muted">Bắt đầu @item.StartDate.ToString("dd/MM/yyyy HH:mm")</div>
                         </div>
-                        <span class="badge @(item.Status == MaintenanceStatus.InProgress ? "bg-warning text-dark" : item.Status == MaintenanceStatus.Completed ? "bg-success" : "bg-secondary")">@item.Status</span>
+                        <span class="badge @(item.Status == MaintenanceStatus.InProgress ? "bg-warning text-dark" : item.Status == MaintenanceStatus.Completed ? "bg-success" : "bg-secondary")">@item.Status.ToVietnamese()</span>
                     </div>
                     <p class="mt-3 mb-2">@item.Content</p>
                     <div><strong>Đơn vị:</strong> @item.ServiceProvider</div>
@@ -66,7 +66,7 @@
                         <hr />
                         <form asp-action="Complete" method="post" class="row g-2 mb-3">
                             <input type="hidden" name="MaintenanceId" value="@item.MaintenanceRecordId" />
-                            <div class="col-md-4"><input name="FinalCost" type="number" min="0" value="@item.Cost" class="form-control" placeholder="Chi phí cuối" /></div>
+                            <div class="col-md-4"><input name="FinalCost" type="number" min="0" value="@item.Cost" class="form-control" placeholder="Chi phí cuối cùng" /></div>
                             <div class="col-md-5"><input name="CompletionNote" class="form-control" placeholder="Kết quả sửa chữa" /></div>
                             <div class="col-md-3"><button class="btn btn-success w-100" type="submit">Hoàn tất</button></div>
                         </form>
