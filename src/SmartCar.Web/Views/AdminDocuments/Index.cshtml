@@ -3,12 +3,16 @@
     ViewData["Title"] = "Xác minh giấy tờ";
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
     <div>
         <h1 class="h3 mb-1">Giấy tờ chờ xác minh</h1>
-        <p class="text-muted mb-0">Kiểm tra ảnh, số giấy tờ và thời hạn trước khi duyệt.</p>
+        <p class="text-muted mb-0">Kiểm tra ảnh, số giấy tờ và thời hạn trước khi đưa ra quyết định.</p>
     </div>
     <span class="badge bg-warning text-dark fs-6">@Model.Count hồ sơ</span>
+</div>
+
+<div class="alert alert-info">
+    <strong>Quy trình:</strong> kiểm tra ảnh rõ chữ và đủ góc → đối chiếu số giấy tờ → kiểm tra thời hạn → xác minh hoặc nhập lý do từ chối.
 </div>
 
 @if (Model.Count == 0)
@@ -22,27 +26,46 @@ else
     {
         <div class="col-lg-6">
             <div class="card shadow-sm h-100">
-                <img src="@document.ImagePath" class="card-img-top" style="height:280px;object-fit:contain;background:#f8f9fa" alt="@document.DocumentType" />
+                <img src="@Url.Action("ViewImage", "AdminDocuments", new { id = document.CustomerDocumentId })"
+                     class="card-img-top"
+                     style="height:280px;object-fit:contain;background:#f8f9fa"
+                     alt="Ảnh @document.DocumentType của @document.CustomerName" />
                 <div class="card-body">
-                    <div class="d-flex justify-content-between">
+                    <div class="d-flex justify-content-between gap-2">
                         <h2 class="h5">@document.DocumentType</h2>
-                        <span class="badge bg-warning text-dark">Chờ duyệt</span>
+                        <span class="badge bg-warning text-dark">Chờ xác minh</span>
                     </div>
                     <div><strong>Khách hàng:</strong> @document.CustomerName</div>
-                    <div><strong>SĐT:</strong> @document.CustomerPhone</div>
+                    <div><strong>SĐT:</strong> @(string.IsNullOrWhiteSpace(document.CustomerPhone) ? "Chưa cập nhật" : document.CustomerPhone)</div>
                     <div><strong>Số giấy tờ:</strong> @document.DocumentNumber</div>
                     <div><strong>Hết hạn:</strong> @(document.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Không áp dụng")</div>
                     <div><strong>Gửi lúc:</strong> @document.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
                 </div>
                 <div class="card-footer bg-white">
-                    <form asp-action="Verify" method="post" class="mb-3">
+                    <form asp-action="Verify"
+                          method="post"
+                          class="mb-3"
+                          data-loading-form
+                          data-confirm="Xác nhận giấy tờ này hợp lệ? Hành động sẽ được ghi vào nhật ký hệ thống.">
                         <input type="hidden" name="id" value="@document.CustomerDocumentId" />
-                        <button class="btn btn-success w-100" type="submit">Xác minh hợp lệ</button>
+                        <button class="btn btn-success w-100" type="submit" data-loading-text="Đang xác minh...">
+                            Xác minh hợp lệ
+                        </button>
                     </form>
-                    <form asp-action="Reject" method="post">
+                    <form asp-action="Reject"
+                          method="post"
+                          data-loading-form
+                          data-confirm="Từ chối giấy tờ này và gửi lý do cho khách hàng?">
                         <input type="hidden" name="DocumentId" value="@document.CustomerDocumentId" />
-                        <textarea name="Reason" class="form-control mb-2" required placeholder="Lý do từ chối"></textarea>
-                        <button class="btn btn-outline-danger w-100" type="submit">Từ chối giấy tờ</button>
+                        <label class="form-label fw-semibold">Lý do từ chối</label>
+                        <textarea name="Reason"
+                                  class="form-control mb-2"
+                                  required
+                                  maxlength="500"
+                                  placeholder="Ví dụ: Ảnh bị lóa, không đọc được số giấy tờ."></textarea>
+                        <button class="btn btn-outline-danger w-100" type="submit" data-loading-text="Đang từ chối...">
+                            Từ chối giấy tờ
+                        </button>
                     </form>
                 </div>
             </div>
