@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using SmartCar.Application.Features.Documents;
 
 namespace SmartCar.Web.ViewModels;
@@ -26,7 +27,9 @@ public sealed class ProfileViewModel
 
     public string ActiveTab { get; set; } = "profile";
 
+    [ValidateNever]
     public DocumentUploadViewModel DocumentUpload { get; set; } = new();
 
+    [ValidateNever]
     public IReadOnlyList<DocumentDto> Documents { get; set; } = Array.Empty<DocumentDto>();
 }
