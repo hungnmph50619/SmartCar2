@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
+using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Payments;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -11,10 +12,14 @@ namespace SmartCar.Infrastructure.Services;
 internal sealed class PaymentService : IPaymentService
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IAuditService _auditService;
 
-    public PaymentService(ApplicationDbContext dbContext)
+    public PaymentService(
+        ApplicationDbContext dbContext,
+        IAuditService auditService)
     {
         _dbContext = dbContext;
+        _auditService = auditService;
     }
 
     public async Task<OperationResult> SimulatePaymentAsync(
@@ -72,7 +77,7 @@ internal sealed class PaymentService : IPaymentService
                 BookingId = booking.BookingId,
                 Type = PaymentType.AdditionalCharge,
                 Amount = booking.AdditionalAmount,
-                Method = "Mo phong",
+                Method = "Mô phỏng",
                 Status = PaymentStatus.Pending
             };
             booking.Payments.Add(payment);
@@ -145,6 +150,15 @@ internal sealed class PaymentService : IPaymentService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        await _auditService.WriteAsync(
+            customerId,
+            "Pay",
+            nameof(Payment),
+            payment.PaymentId.ToString(),
+            $"Thanh toán {paymentType} cho đơn #{booking.BookingId}, số tiền {payment.Amount:N0} đồng, mã giao dịch {payment.TransactionCode}.",
+            cancellationToken: cancellationToken);
+
         return OperationResult.Success();
     }
 }
