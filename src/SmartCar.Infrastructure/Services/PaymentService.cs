@@ -26,6 +26,7 @@ internal sealed class PaymentService : IPaymentService
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
+            .Include(item => item.Extensions)
             .FirstOrDefaultAsync(item =>
                 item.BookingId == bookingId && item.CustomerId == customerId,
                 cancellationToken);
@@ -44,6 +45,18 @@ internal sealed class PaymentService : IPaymentService
             booking.Status != BookingStatus.PendingInspection)
         {
             return OperationResult.Failure("Đơn không ở trạng thái chờ thanh toán phụ phí.");
+        }
+
+        if (paymentType == PaymentType.Extension &&
+            (booking.Status != BookingStatus.Rented ||
+             !booking.Extensions.Any(extension => extension.Status == BookingExtensionStatus.Approved)))
+        {
+            return OperationResult.Failure("Không có yêu cầu gia hạn đã duyệt đang chờ thanh toán.");
+        }
+
+        if (paymentType == PaymentType.Refund)
+        {
+            return OperationResult.Failure("Khoản hoàn tiền chỉ do hệ thống xử lý.");
         }
 
         var payment = booking.Payments
@@ -80,14 +93,26 @@ internal sealed class PaymentService : IPaymentService
         {
             booking.Status = BookingStatus.Paid;
         }
+        else if (paymentType == PaymentType.Extension)
+        {
+            var extension = booking.Extensions
+                .Where(item => item.Status == BookingExtensionStatus.Approved)
+                .OrderByDescending(item => item.RequestedAt)
+                .First();
+            extension.Status = BookingExtensionStatus.Paid;
+            extension.PaidAt = DateTime.UtcNow;
+        }
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
             Title = "Thanh toán thành công",
-            Message = paymentType == PaymentType.Rental
-                ? $"Đơn #{booking.BookingId} đã thanh toán tiền thuê thành công."
-                : $"Đơn #{booking.BookingId} đã thanh toán phụ phí thành công."
+            Message = paymentType switch
+            {
+                PaymentType.Rental => $"Đơn #{booking.BookingId} đã thanh toán tiền thuê thành công.",
+                PaymentType.Extension => $"Đơn #{booking.BookingId} đã thanh toán tiền gia hạn thành công.",
+                _ => $"Đơn #{booking.BookingId} đã thanh toán phụ phí thành công."
+            }
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
