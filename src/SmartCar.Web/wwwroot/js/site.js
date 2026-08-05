@@ -49,15 +49,17 @@ function initializeImageInputs() {
         const previewContainer = previewSelector ? document.querySelector(previewSelector) : null;
         const infoContainer = infoSelector ? document.querySelector(infoSelector) : null;
         const previewImage = previewContainer?.querySelector("img") ?? null;
+        const previewList = previewContainer?.querySelector("[data-preview-list]") ?? null;
         const clearButton = previewContainer?.querySelector("[data-clear-image]") ?? null;
-        let objectUrl = null;
+        let objectUrls = [];
+
+        const releaseObjectUrls = () => {
+            objectUrls.forEach((url) => URL.revokeObjectURL(url));
+            objectUrls = [];
+        };
 
         const clearPreview = () => {
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-                objectUrl = null;
-            }
-
+            releaseObjectUrls();
             input.value = "";
             previewContainer?.classList.add("d-none");
             infoContainer?.classList.add("d-none");
@@ -66,35 +68,60 @@ function initializeImageInputs() {
                 previewImage.removeAttribute("src");
             }
 
+            if (previewList) {
+                previewList.innerHTML = "";
+            }
+
             if (infoContainer) {
                 infoContainer.textContent = "";
             }
         };
 
         input.addEventListener("change", () => {
-            const file = input.files?.[0];
-            if (!file) {
+            const files = Array.from(input.files ?? []);
+            if (files.length === 0) {
                 clearPreview();
                 return;
             }
 
-            if (!file.type.startsWith("image/")) {
+            if (files.some((file) => !file.type.startsWith("image/"))) {
                 clearPreview();
                 return;
             }
 
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-            }
+            releaseObjectUrls();
+            objectUrls = files.map((file) => URL.createObjectURL(file));
 
-            objectUrl = URL.createObjectURL(file);
+            if (previewList) {
+                previewList.innerHTML = "";
+                files.forEach((file, index) => {
+                    const column = document.createElement("div");
+                    column.className = "col-6 col-md-4";
 
-            if (previewImage) {
-                previewImage.src = objectUrl;
+                    const image = document.createElement("img");
+                    image.src = objectUrls[index];
+                    image.alt = `Xem trước ${file.name}`;
+                    image.className = "img-fluid rounded border w-100";
+                    image.style.height = "140px";
+                    image.style.objectFit = "cover";
+
+                    const caption = document.createElement("div");
+                    caption.className = "small text-truncate mt-1";
+                    caption.title = file.name;
+                    caption.textContent = file.name;
+
+                    column.append(image, caption);
+                    previewList.appendChild(column);
+                });
+            } else if (previewImage) {
+                previewImage.src = objectUrls[0];
             }
 
             if (infoContainer) {
-                infoContainer.textContent = `${file.name} · ${formatBytes(file.size)}`;
+                const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+                infoContainer.textContent = files.length === 1
+                    ? `${files[0].name} · ${formatBytes(files[0].size)}`
+                    : `${files.length} ảnh · Tổng dung lượng ${formatBytes(totalSize)}`;
                 infoContainer.classList.remove("d-none");
             }
 
@@ -102,6 +129,7 @@ function initializeImageInputs() {
         });
 
         clearButton?.addEventListener("click", clearPreview);
+        window.addEventListener("beforeunload", releaseObjectUrls, { once: true });
     });
 }
 
