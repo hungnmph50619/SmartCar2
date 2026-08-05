@@ -1,3 +1,29 @@
-﻿@{
-    Layout = "_Layout";
+@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var adminControllers = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+    {
+        "Dashboard",
+        "AdminBookings",
+        "AdminBookingOperations",
+        "Handovers",
+        "Returns",
+        "AdminDocuments",
+        "AdminExtensions",
+        "AdminVehicles",
+        "VehicleDocuments",
+        "Maintenance",
+        "Incidents",
+        "Brands",
+        "Promotions",
+        "Reports",
+        "AuditLogs"
+    };
+
+    var isAdmin = ViewContext.HttpContext.User.IsInRole(RoleNames.Admin);
+    var useAdminLayout = isAdmin &&
+        (adminControllers.Contains(controller) ||
+         controller.Equals("Notifications", System.StringComparison.OrdinalIgnoreCase) ||
+         controller.Equals("Profile", System.StringComparison.OrdinalIgnoreCase));
+
+    Layout = useAdminLayout ? "_AdminLayout" : "_Layout";
 }
