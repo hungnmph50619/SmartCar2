@@ -1,0 +1,74 @@
+@model AdminCalendarViewModel
+@{
+    ViewData["Title"] = "Lịch xe";
+    var previousMonth = Model.Month.AddMonths(-1);
+    var nextMonth = Model.Month.AddMonths(1);
+}
+
+<div class="admin-page-head">
+    <div>
+        <h1>Lịch đội xe</h1>
+        <p>Kiểm tra xe trống, giữ lịch, đã cọc, đang thuê, bảo trì và ngừng hoạt động theo ngày.</p>
+    </div>
+    <div class="admin-page-actions">
+        <a class="admin-btn" asp-action="Bookings">▣ Danh sách đơn</a>
+        <a class="admin-btn" asp-action="Vehicles">▰ Danh sách xe</a>
+    </div>
+</div>
+
+<div class="admin-calendar-nav">
+    <a class="admin-btn" asp-action="Calendar" asp-route-month="@previousMonth.ToString("yyyy-MM-dd")">← Tháng trước</a>
+    <h2>Tháng @Model.Month.ToString("MM/yyyy")</h2>
+    <a class="admin-btn" asp-action="Calendar" asp-route-month="@nextMonth.ToString("yyyy-MM-dd")">Tháng sau →</a>
+</div>
+
+<div class="admin-tabs mb-3">
+    <span class="admin-tab is-active"><span class="admin-calendar__cell" style="min-height:20px;padding:2px 7px">Trống</span></span>
+    <span class="admin-tab"><span class="admin-calendar__cell admin-calendar__cell--pending" style="min-height:20px;padding:2px 7px">Chờ duyệt</span></span>
+    <span class="admin-tab"><span class="admin-calendar__cell admin-calendar__cell--payment" style="min-height:20px;padding:2px 7px">Chờ cọc</span></span>
+    <span class="admin-tab"><span class="admin-calendar__cell admin-calendar__cell--reserved" style="min-height:20px;padding:2px 7px">Đã đặt</span></span>
+    <span class="admin-tab"><span class="admin-calendar__cell admin-calendar__cell--rented" style="min-height:20px;padding:2px 7px">Đang thuê</span></span>
+    <span class="admin-tab"><span class="admin-calendar__cell admin-calendar__cell--maintenance" style="min-height:20px;padding:2px 7px">Bảo trì</span></span>
+</div>
+
+<div class="admin-calendar-wrap">
+    <table class="admin-calendar">
+        <thead>
+            <tr>
+                <th>Xe</th>
+                @foreach (var day in Model.Days)
+                {
+                    <th class="@(day.Date == DateTime.Today ? "text-primary" : "")">
+                        <strong>@day.Day</strong><br />
+                        <span>@day.ToString("ddd", new System.Globalization.CultureInfo("vi-VN"))</span>
+                    </th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var vehicle in Model.Vehicles)
+            {
+                <tr>
+                    <td>
+                        <span class="admin-table__primary">@vehicle.VehicleName</span>
+                        <span class="admin-table__secondary">@vehicle.LicensePlate · @AdminDisplayHelper.VehicleLabel(vehicle.VehicleStatus)</span>
+                    </td>
+                    @foreach (var day in Model.Days)
+                    {
+                        var cell = vehicle.Cells[day.Day];
+                        <td>
+                            @if (cell.BookingId.HasValue)
+                            {
+                                <a class="admin-calendar__cell admin-calendar__cell--@cell.Status" asp-action="BookingDetails" asp-route-id="@cell.BookingId">@cell.Label</a>
+                            }
+                            else
+                            {
+                                <span class="admin-calendar__cell admin-calendar__cell--@cell.Status">@cell.Label</span>
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
