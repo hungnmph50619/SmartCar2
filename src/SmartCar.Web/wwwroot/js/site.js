@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initializeForms();
     initializeImageInputs();
     initializeAdminCustomerNavigation();
+    initializeDocumentUpdateButtons();
 });
 
 function initializeForms() {
@@ -160,6 +161,34 @@ function initializeAdminCustomerNavigation() {
     if (isCustomerAdminPage) {
         customerLink.classList.add("active");
     }
+}
+
+function initializeDocumentUpdateButtons() {
+    const form = document.getElementById("profile-document-upload-form");
+    const typeSelect = document.getElementById("profile-document-type");
+
+    if (!form || !(typeSelect instanceof HTMLSelectElement)) {
+        return;
+    }
+
+    const numberInput = form.querySelector('input[name="DocumentUpload.DocumentNumber"]');
+
+    document.querySelectorAll("[data-document-update-button]").forEach((button) => {
+        button.addEventListener("click", () => {
+            const documentType = button.dataset.documentType;
+            if (documentType) {
+                typeSelect.value = documentType;
+                typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+
+            form.scrollIntoView({ behavior: "smooth", block: "start" });
+            window.setTimeout(() => {
+                if (numberInput instanceof HTMLElement) {
+                    numberInput.focus({ preventScroll: true });
+                }
+            }, 450);
+        });
+    });
 }
 
 function formatBytes(bytes) {
