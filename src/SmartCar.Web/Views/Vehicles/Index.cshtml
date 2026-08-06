@@ -3,6 +3,9 @@
 @{
     ViewData["Title"] = "Tìm xe";
     var search = ViewBag.Search as VehicleSearchViewModel ?? new VehicleSearchViewModel();
+    var hasSearch = Context.Request.Query.ContainsKey("PickupDate") &&
+                    Context.Request.Query.ContainsKey("ReturnDate");
+    var searchAction = $"{Url.Action("Index", "Vehicles")}#vehicle-results";
 }
 
 <section class="vehicle-search-page" aria-labelledby="vehicle-search-title">
@@ -17,6 +20,7 @@
         </div>
 
         <form method="get"
+              action="@searchAction"
               class="row g-3 align-items-start"
               data-vehicle-search-form
               novalidate>
@@ -127,77 +131,112 @@
         </form>
     </div>
 
-    <div class="vehicle-results-header">
-        <div>
-            <span class="section-eyebrow">KẾT QUẢ PHÙ HỢP</span>
-            <h2 class="h4 mb-0">Xe có thể thuê trong thời gian đã chọn</h2>
-        </div>
-        <span class="vehicle-result-count">@Model.Count xe</span>
-    </div>
-
-    @if (Model.Count == 0)
-    {
-        <div class="vehicle-empty-state">
-            <div class="vehicle-empty-icon" aria-hidden="true">🚗</div>
-            <h3 class="h5">Không tìm thấy xe phù hợp</h3>
-            <p>
-                Có thể xe đã được đặt trong khoảng thời gian này hoặc chưa đáp ứng số chỗ bạn chọn.
-                Hãy thay đổi thời gian hoặc mở rộng điều kiện tìm kiếm.
-            </p>
-            <div class="vehicle-empty-actions">
-                <button type="button"
-                        class="btn btn-primary"
-                        onclick="document.getElementById('vehiclePickupDisplay')?.focus(); window.scrollTo({ top: 0, behavior: 'smooth' });">
-                    Thay đổi thời gian
-                </button>
-                <a asp-action="Index" class="btn btn-outline-primary">Đặt lại bộ lọc</a>
+    <div id="vehicle-results"
+         class="vehicle-results-section"
+         tabindex="-1"
+         style="scroll-margin-top: 96px; outline: none;">
+        @if (hasSearch)
+        {
+            <div class="alert @(Model.Count > 0 ? "alert-success" : "alert-warning") d-flex align-items-start gap-2 mb-4"
+                 role="status"
+                 aria-live="polite">
+                <span aria-hidden="true">@(Model.Count > 0 ? "✓" : "!")</span>
+                <div>
+                    @if (Model.Count > 0)
+                    {
+                        <strong>Đã tìm thấy @Model.Count xe còn trống.</strong>
+                        <div>
+                            Thời gian thuê từ
+                            <strong>@search.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong>
+                            đến
+                            <strong>@search.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong>.
+                        </div>
+                    }
+                    else
+                    {
+                        <strong>Không tìm thấy xe phù hợp với điều kiện đã chọn.</strong>
+                        <div>Hãy thay đổi thời gian, hãng xe hoặc số chỗ để tìm lại.</div>
+                    }
+                </div>
             </div>
+        }
+
+        <div class="vehicle-results-header">
+            <div>
+                <span class="section-eyebrow">@(hasSearch ? "KẾT QUẢ TÌM KIẾM" : "XE ĐANG SẴN SÀNG")</span>
+                <h2 class="h4 mb-0">
+                    @(hasSearch
+                        ? $"{Model.Count} xe phù hợp với thời gian đã chọn"
+                        : "Xe có thể thuê trong thời gian đã chọn")
+                </h2>
+            </div>
+            <span class="vehicle-result-count">@Model.Count xe</span>
         </div>
-    }
-    else
-    {
-        <div class="row g-4">
-            @foreach (var vehicle in Model)
-            {
-                <div class="col-lg-4 col-md-6">
-                    <div class="card h-100 shadow-sm border-0 vehicle-result-card">
-                        @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
-                        {
-                            <img src="@vehicle.PrimaryImagePath"
-                                 class="card-img-top vehicle-result-image"
-                                 alt="@vehicle.VehicleName" />
-                        }
-                        else
-                        {
-                            <div class="vehicle-result-placeholder">Chưa có ảnh</div>
-                        }
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between gap-3">
-                                <div>
-                                    <span class="availability-badge vehicle-result-status">Sẵn sàng</span>
-                                    <h3 class="h5 mt-2">@vehicle.VehicleName</h3>
-                                    <p class="text-muted mb-0">@vehicle.BrandName · @vehicle.Seats chỗ · @vehicle.Transmission</p>
-                                </div>
-                                <div class="vehicle-result-price text-end">
-                                    <strong>@vehicle.DailyPrice.ToString("N0") đ</strong>
-                                    <span>/ ngày</span>
+
+        @if (Model.Count == 0)
+        {
+            <div class="vehicle-empty-state">
+                <div class="vehicle-empty-icon" aria-hidden="true">🚗</div>
+                <h3 class="h5">Không tìm thấy xe phù hợp</h3>
+                <p>
+                    Có thể xe đã được đặt trong khoảng thời gian này hoặc chưa đáp ứng số chỗ bạn chọn.
+                    Hãy thay đổi thời gian hoặc mở rộng điều kiện tìm kiếm.
+                </p>
+                <div class="vehicle-empty-actions">
+                    <button type="button"
+                            class="btn btn-primary"
+                            onclick="document.getElementById('vehiclePickupDisplay')?.focus(); window.scrollTo({ top: 0, behavior: 'smooth' });">
+                        Thay đổi thời gian
+                    </button>
+                    <a asp-action="Index" class="btn btn-outline-primary">Đặt lại bộ lọc</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row g-4">
+                @foreach (var vehicle in Model)
+                {
+                    <div class="col-lg-4 col-md-6">
+                        <div class="card h-100 shadow-sm border-0 vehicle-result-card">
+                            @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
+                            {
+                                <img src="@vehicle.PrimaryImagePath"
+                                     class="card-img-top vehicle-result-image"
+                                     alt="@vehicle.VehicleName" />
+                            }
+                            else
+                            {
+                                <div class="vehicle-result-placeholder">Chưa có ảnh</div>
+                            }
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between gap-3">
+                                    <div>
+                                        <span class="availability-badge vehicle-result-status">Sẵn sàng</span>
+                                        <h3 class="h5 mt-2">@vehicle.VehicleName</h3>
+                                        <p class="text-muted mb-0">@vehicle.BrandName · @vehicle.Seats chỗ · @vehicle.Transmission</p>
+                                    </div>
+                                    <div class="vehicle-result-price text-end">
+                                        <strong>@vehicle.DailyPrice.ToString("N0") đ</strong>
+                                        <span>/ ngày</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="card-footer bg-white border-0 pb-3">
-                            <a class="btn btn-outline-primary w-100"
-                               asp-action="Details"
-                               asp-route-id="@vehicle.VehicleId"
-                               asp-route-pickupDate="@search.PickupDate"
-                               asp-route-returnDate="@search.ReturnDate">
-                                Xem chi tiết xe
-                            </a>
+                            <div class="card-footer bg-white border-0 pb-3">
+                                <a class="btn btn-outline-primary w-100"
+                                   asp-action="Details"
+                                   asp-route-id="@vehicle.VehicleId"
+                                   asp-route-pickupDate="@search.PickupDate"
+                                   asp-route-returnDate="@search.ReturnDate">
+                                    Xem chi tiết xe
+                                </a>
+                            </div>
                         </div>
                     </div>
-                </div>
-            }
-        </div>
-    }
+                }
+            </div>
+        }
+    </div>
 </section>
 
 @section Scripts {
