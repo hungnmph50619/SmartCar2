@@ -20,6 +20,8 @@
     };
 }
 
+<link rel="stylesheet" href="~/css/admin-customers.css" asp-append-version="true" />
+
 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mb-4">
     <div>
         <span class="text-uppercase text-primary fw-bold small">Khách hàng</span>
@@ -64,26 +66,26 @@
         <form method="get" class="row g-3 align-items-end">
             <div class="col-lg-5">
                 <label class="form-label fw-semibold" for="query">Tìm khách hàng</label>
-                <input id="query" name="query" value="@Model.Query" class="form-control"
+                <input id="query" asp-for="Query" name="query" class="form-control"
                        placeholder="Họ tên, email hoặc số điện thoại" />
             </div>
             <div class="col-md-4 col-lg-3">
                 <label class="form-label fw-semibold" for="profileStatus">Hồ sơ thuê xe</label>
-                <select id="profileStatus" name="profileStatus" class="form-select">
+                <select id="profileStatus" asp-for="ProfileStatus" name="profileStatus" class="form-select">
                     <option value="">Tất cả trạng thái</option>
-                    <option value="Missing" selected="@(Model.ProfileStatus == "Missing")">Chưa hoàn tất</option>
-                    <option value="Pending" selected="@(Model.ProfileStatus == "Pending")">Chờ xác minh</option>
-                    <option value="Rejected" selected="@(Model.ProfileStatus == "Rejected")">Cần gửi lại</option>
-                    <option value="Verified" selected="@(Model.ProfileStatus == "Verified")">Đã xác minh</option>
-                    <option value="Expired" selected="@(Model.ProfileStatus == "Expired")">Giấy tờ hết hạn</option>
+                    <option value="Missing">Chưa hoàn tất</option>
+                    <option value="Pending">Chờ xác minh</option>
+                    <option value="Rejected">Cần gửi lại</option>
+                    <option value="Verified">Đã xác minh</option>
+                    <option value="Expired">Giấy tờ hết hạn</option>
                 </select>
             </div>
             <div class="col-md-4 col-lg-2">
                 <label class="form-label fw-semibold" for="accountStatus">Tài khoản</label>
-                <select id="accountStatus" name="accountStatus" class="form-select">
+                <select id="accountStatus" asp-for="AccountStatus" name="accountStatus" class="form-select">
                     <option value="">Tất cả</option>
-                    <option value="Active" selected="@(Model.AccountStatus == "Active")">Đang hoạt động</option>
-                    <option value="Locked" selected="@(Model.AccountStatus == "Locked")">Đã khóa</option>
+                    <option value="Active">Đang hoạt động</option>
+                    <option value="Locked">Đã khóa</option>
                 </select>
             </div>
             <div class="col-md-4 col-lg-2 d-grid">
