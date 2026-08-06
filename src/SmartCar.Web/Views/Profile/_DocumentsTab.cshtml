@@ -14,6 +14,9 @@
             ? new string('*', trimmed.Length)
             : new string('*', trimmed.Length - 4) + trimmed[^4..];
     }
+
+    var documentNeedingResubmission = Model.Documents
+        .FirstOrDefault(item => item.Status == DocumentStatus.Rejected);
 }
 
 <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
@@ -24,10 +27,21 @@
     <a class="btn btn-outline-primary" asp-controller="Vehicles" asp-action="Index">Tiếp tục tìm xe</a>
 </div>
 
-<div class="alert alert-info" role="alert">
-    <strong>Bước tiếp theo:</strong> Gửi đủ CCCD và GPLX. Khi cả hai chuyển sang
-    <strong>Đã xác minh</strong>, bạn có thể gửi yêu cầu thuê xe.
-</div>
+@if (documentNeedingResubmission is not null)
+{
+    <div class="alert alert-danger" role="alert">
+        <strong>@documentNeedingResubmission.DocumentType cần được gửi lại.</strong>
+        <div class="mt-1">Lý do: @documentNeedingResubmission.RejectionReason</div>
+        <div class="mt-1">Chọn đúng loại giấy tờ trong biểu mẫu bên dưới, cập nhật thông tin và tải ảnh mới rõ nét.</div>
+    </div>
+}
+else
+{
+    <div class="alert alert-info" role="alert">
+        <strong>Bước tiếp theo:</strong> Gửi đủ CCCD và GPLX. Khi cả hai chuyển sang
+        <strong>Đã xác minh</strong>, bạn có thể gửi yêu cầu thuê xe.
+    </div>
+}
 
 <div class="row g-4">
     <div class="col-lg-7">
@@ -80,11 +94,11 @@
                                     Giấy tờ đã hợp lệ và có thể dùng để thuê xe.
                                 </div>
                             }
-                            else if (!string.IsNullOrWhiteSpace(document.RejectionReason))
+                            else if (document.Status == DocumentStatus.Rejected)
                             {
                                 <div class="alert alert-danger mt-3 mb-0">
-                                    <strong>Lý do từ chối:</strong> @document.RejectionReason
-                                    <div class="mt-1">Hãy sửa thông tin và gửi lại ảnh rõ hơn.</div>
+                                    <strong>Cần gửi lại:</strong> @document.RejectionReason
+                                    <div class="mt-1">Hãy sửa thông tin và tải lên ảnh mới rõ chữ, đủ bốn góc, không bị lóa.</div>
                                 </div>
                             }
                         }
@@ -100,8 +114,8 @@
               enctype="multipart/form-data"
               class="card card-body shadow-sm"
               data-loading-form>
-            <h2 class="h5 mb-1">Gửi hoặc cập nhật giấy tờ</h2>
-            <p class="text-muted small">Ảnh mới sẽ thay thế ảnh cũ của cùng loại giấy tờ.</p>
+            <h2 class="h5 mb-1">@(documentNeedingResubmission is null ? "Gửi hoặc cập nhật giấy tờ" : $"Gửi lại {documentNeedingResubmission.DocumentType}")</h2>
+            <p class="text-muted small">Ảnh mới sẽ thay thế ảnh cũ của cùng loại giấy tờ và trạng thái chuyển về Chờ xác minh.</p>
 
             <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
 
@@ -146,7 +160,7 @@
             </div>
 
             <button class="btn btn-primary" type="submit" data-loading-text="Đang gửi giấy tờ...">
-                Gửi xác minh
+                @(documentNeedingResubmission is null ? "Gửi xác minh" : "Gửi lại giấy tờ")
             </button>
         </form>
     </div>
