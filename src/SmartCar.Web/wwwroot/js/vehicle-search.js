@@ -39,6 +39,25 @@
             pad(date.getMinutes());
     }
 
+    function focusSearchResults() {
+        if (window.location.hash !== '#vehicle-results') {
+            return;
+        }
+
+        const resultsSection = document.getElementById('vehicle-results');
+        if (!resultsSection) {
+            return;
+        }
+
+        window.setTimeout(function () {
+            resultsSection.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+            resultsSection.focus({ preventScroll: true });
+        }, 100);
+    }
+
     forms.forEach(function (form) {
         const pickupDisplay = form.querySelector('[data-vn-datetime="pickup"]');
         const returnDisplay = form.querySelector('[data-vn-datetime="return"]');
@@ -173,4 +192,6 @@
             setSubmitting(false);
         });
     });
+
+    focusSearchResults();
 })();
