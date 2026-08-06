@@ -1,0 +1,425 @@
+@model SmartCar.Web.ViewModels.AdminCustomerDetailsViewModel
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
+@{
+    ViewData["Title"] = $"Khách hàng - {Model.FullName}";
+    var avatarInitial = Model.FullName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
+
+    static string ProfileBadge(string code) => code switch
+    {
+        "Verified" => "bg-success",
+        "Pending" => "bg-warning text-dark",
+        "Rejected" => "bg-danger",
+        "Expired" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    static string DocumentBadge(DocumentStatus status, bool expired) => expired
+        ? "bg-danger"
+        : status switch
+        {
+            DocumentStatus.Verified => "bg-success",
+            DocumentStatus.Pending => "bg-warning text-dark",
+            DocumentStatus.Rejected => "bg-danger",
+            _ => "bg-secondary"
+        };
+
+    static string PaymentBadge(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Paid => "bg-success",
+        PaymentStatus.Pending => "bg-warning text-dark",
+        PaymentStatus.Refunded => "bg-info text-dark",
+        _ => "bg-danger"
+    };
+}
+
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
+    <div class="d-flex align-items-center gap-3">
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm" aria-label="Quay lại">←</a>
+        <span class="customer-detail-avatar">@avatarInitial</span>
+        <div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <h1 class="h2 fw-bold mb-0">@Model.FullName</h1>
+                <span class="badge @ProfileBadge(Model.ProfileStatusCode)">@Model.ProfileStatusText</span>
+                <span class="badge @(Model.IsActive ? "bg-success" : "bg-danger")">
+                    @(Model.IsActive ? "Đang hoạt động" : "Đã khóa")
+                </span>
+            </div>
+            <p class="text-muted mb-0">@Model.Email · @(string.IsNullOrWhiteSpace(Model.PhoneNumber) ? "Chưa có số điện thoại" : Model.PhoneNumber)</p>
+        </div>
+    </div>
+    <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-outline-success")"
+            type="button" data-bs-toggle="modal" data-bs-target="#accountStatusModal">
+        @(Model.IsActive ? "Khóa tài khoản" : "Mở khóa tài khoản")
+    </button>
+</div>
+
+<div class="customer-detail-tabs mb-4">
+    <a class="@(Model.ActiveTab == "overview" ? "active" : string.Empty)"
+       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="overview">Tổng quan</a>
+    <a class="@(Model.ActiveTab == "documents" ? "active" : string.Empty)"
+       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents">
+        CCCD/GPLX
+        @if (Model.ProfileStatusCode == "Pending")
+        {
+            <span class="badge bg-warning text-dark ms-1">Chờ xử lý</span>
+        }
+    </a>
+    <a class="@(Model.ActiveTab == "bookings" ? "active" : string.Empty)"
+       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="bookings">Đơn thuê</a>
+    <a class="@(Model.ActiveTab == "payments" ? "active" : string.Empty)"
+       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="payments">Thanh toán</a>
+    <a class="@(Model.ActiveTab == "incidents" ? "active" : string.Empty)"
+       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="incidents">Sự cố & vi phạm</a>
+</div>
+
+@if (Model.ActiveTab == "overview")
+{
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <section class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h2 class="h5 fw-bold mb-3">Thông tin khách hàng</h2>
+                    <div class="row g-3 customer-info-grid">
+                        <div class="col-md-6"><span>Họ và tên</span><strong>@Model.FullName</strong></div>
+                        <div class="col-md-6"><span>Email</span><strong>@Model.Email</strong></div>
+                        <div class="col-md-6"><span>Số điện thoại</span><strong>@(Model.PhoneNumber ?? "Chưa cập nhật")</strong></div>
+                        <div class="col-md-6"><span>Ngày tham gia</span><strong>@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong></div>
+                        <div class="col-12"><span>Địa chỉ</span><strong>@(string.IsNullOrWhiteSpace(Model.Address) ? "Chưa cập nhật" : Model.Address)</strong></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <h2 class="h5 fw-bold mb-3">Hoạt động thuê xe</h2>
+                    <div class="row g-3">
+                        <div class="col-sm-4"><div class="customer-metric"><span>Đang xử lý</span><strong>@Model.ActiveBookingCount</strong></div></div>
+                        <div class="col-sm-4"><div class="customer-metric"><span>Đã hoàn tất</span><strong>@Model.CompletedBookingCount</strong></div></div>
+                        <div class="col-sm-4"><div class="customer-metric"><span>Hủy/Từ chối</span><strong>@Model.CancelledBookingCount</strong></div></div>
+                        <div class="col-sm-6"><div class="customer-metric"><span>Tổng đã thanh toán</span><strong>@Model.TotalPaidAmount.ToString("N0") đ</strong></div></div>
+                        <div class="col-sm-6"><div class="customer-metric"><span>Đang chờ thanh toán</span><strong>@Model.PendingPaymentAmount.ToString("N0") đ</strong></div></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <div class="col-xl-4">
+            <section class="card border-0 shadow-sm customer-rental-eligibility @(Model.CanRent ? "eligible" : "not-eligible")">
+                <div class="card-body p-4">
+                    <span class="text-uppercase fw-bold small">Điều kiện thuê xe</span>
+                    <h2 class="h4 fw-bold mt-2">@(Model.CanRent ? "Đủ điều kiện" : "Chưa đủ điều kiện")</h2>
+                    @if (!Model.IsActive)
+                    {
+                        <p>Tài khoản đang bị khóa nên khách hàng không thể đăng nhập hoặc tạo đơn mới.</p>
+                    }
+                    else if (Model.ProfileStatusCode == "Pending")
+                    {
+                        <p>CCCD hoặc GPLX đang chờ Quản trị viên xác minh.</p>
+                    }
+                    else if (Model.ProfileStatusCode == "Rejected")
+                    {
+                        <p>Khách hàng cần gửi lại ít nhất một giấy tờ chưa đạt yêu cầu.</p>
+                    }
+                    else if (Model.ProfileStatusCode == "Expired")
+                    {
+                        <p>GPLX đã hết hạn và cần được cập nhật trước khi thuê xe.</p>
+                    }
+                    else if (Model.ProfileStatusCode == "Missing")
+                    {
+                        <p>Khách hàng chưa gửi đủ CCCD và GPLX.</p>
+                    }
+                    else
+                    {
+                        <p>CCCD và GPLX đã được xác minh, tài khoản đang hoạt động.</p>
+                    }
+                    <a asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents"
+                       class="btn @(Model.CanRent ? "btn-outline-success" : "btn-primary") w-100">
+                        Xem hồ sơ giấy tờ
+                    </a>
+                </div>
+            </section>
+        </div>
+    </div>
+}
+else if (Model.ActiveTab == "documents")
+{
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+        <div>
+            <h2 class="h4 fw-bold mb-1">CCCD và GPLX</h2>
+            <p class="text-muted mb-0">Số giấy tờ được hiển thị đầy đủ tại màn hình này để Quản trị viên đối chiếu trực tiếp với ảnh.</p>
+        </div>
+        <span class="badge @ProfileBadge(Model.ProfileStatusCode) fs-6">Hồ sơ: @Model.ProfileStatusText</span>
+    </div>
+
+    <div class="row g-4">
+        @foreach (var documentType in DocumentTypes.RequiredForRental)
+        {
+            var document = Model.Documents.FirstOrDefault(item => item.DocumentType == documentType);
+            var expired = document?.ExpiryDate.HasValue == true && document.ExpiryDate.Value.Date < DateTime.Today;
+            <div class="col-xl-6">
+                <section class="card border-0 shadow-sm h-100 document-review-card">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                            <div>
+                                <span class="text-muted small">Giấy tờ khách hàng</span>
+                                <h3 class="h4 fw-bold mb-0">@documentType</h3>
+                            </div>
+                            @if (document is null)
+                            {
+                                <span class="badge bg-secondary">Chưa gửi</span>
+                            }
+                            else
+                            {
+                                <span class="badge @DocumentBadge(document.Status, expired)">
+                                    @(expired ? "Đã hết hạn" : document.Status.ToVietnamese())
+                                </span>
+                            }
+                        </div>
+
+                        @if (document is null)
+                        {
+                            <div class="document-empty-state">
+                                <p class="mb-3">Khách hàng chưa gửi @documentType. Hãy gửi lời nhắc để khách hoàn thiện hồ sơ.</p>
+                                <form asp-action="SendDocumentReminder" method="post" data-loading-form>
+                                    <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                                    <input type="hidden" name="documentType" value="@documentType" />
+                                    <button class="btn btn-outline-primary" type="submit" data-loading-text="Đang gửi lời nhắc...">Gửi lời nhắc</button>
+                                </form>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="document-meta mb-3">
+                                <div><span>Số giấy tờ</span><strong>@document.DocumentNumber</strong></div>
+                                <div><span>Ngày gửi gần nhất</span><strong>@document.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong></div>
+                                <div><span>Ngày hết hạn</span><strong>@(document.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Không áp dụng")</strong></div>
+                            </div>
+
+                            <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = document.CustomerDocumentId })"
+                               target="_blank" rel="noopener" class="document-image-link">
+                                <img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = document.CustomerDocumentId })"
+                                     alt="Ảnh @documentType của @Model.FullName" />
+                                <span>Mở ảnh kích thước đầy đủ</span>
+                            </a>
+
+                            @if (document.Status == DocumentStatus.Pending && !expired)
+                            {
+                                <form asp-action="VerifyDocument" method="post" class="mt-4"
+                                      data-loading-form
+                                      data-confirm="Xác nhận @documentType hợp lệ? Hành động này sẽ được ghi vào nhật ký hệ thống.">
+                                    <input type="hidden" name="documentId" value="@document.CustomerDocumentId" />
+                                    <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                                    <fieldset class="document-checklist">
+                                        <legend>Kiểm tra trước khi xác minh</legend>
+                                        <label><input class="form-check-input" type="checkbox" required /> Ảnh rõ chữ và không bị lóa</label>
+                                        <label><input class="form-check-input" type="checkbox" required /> Ảnh hiển thị đủ bốn góc</label>
+                                        <label><input class="form-check-input" type="checkbox" required /> Số @document.DocumentNumber khớp với ảnh</label>
+                                        <label><input class="form-check-input" type="checkbox" required /> Thông tin không có dấu hiệu sai lệch</label>
+                                    </fieldset>
+                                    <button class="btn btn-success w-100 mt-3" type="submit" data-loading-text="Đang xác minh...">Xác minh hợp lệ</button>
+                                </form>
+
+                                <button class="btn btn-outline-danger w-100 mt-2" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#resubmit-@document.CustomerDocumentId">
+                                    Yêu cầu gửi lại
+                                </button>
+                                <div class="collapse mt-3" id="resubmit-@document.CustomerDocumentId">
+                                    <form asp-action="RequestDocumentResubmission" method="post" class="resubmission-form"
+                                          data-loading-form
+                                          data-confirm="Gửi yêu cầu khách hàng cập nhật lại @documentType?">
+                                        <input type="hidden" name="DocumentId" value="@document.CustomerDocumentId" />
+                                        <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                                        <fieldset>
+                                            <legend>Lý do không đạt</legend>
+                                            <label><input type="radio" name="Reason" value="Ảnh bị mờ, không đọc được thông tin" required /> Ảnh bị mờ, không đọc được thông tin</label>
+                                            <label><input type="radio" name="Reason" value="Ảnh bị lóa sáng" /> Ảnh bị lóa sáng</label>
+                                            <label><input type="radio" name="Reason" value="Ảnh bị mất góc" /> Ảnh bị mất góc</label>
+                                            <label><input type="radio" name="Reason" value="Số giấy tờ không khớp với ảnh" /> Số giấy tờ không khớp với ảnh</label>
+                                            <label><input type="radio" name="Reason" value="Giấy tờ đã hết hạn" /> Giấy tờ đã hết hạn</label>
+                                            <label><input type="radio" name="Reason" value="Sai loại giấy tờ" /> Sai loại giấy tờ</label>
+                                            <label><input type="radio" name="Reason" value="Thông tin có dấu hiệu sai lệch" /> Thông tin có dấu hiệu sai lệch</label>
+                                        </fieldset>
+                                        <label class="form-label fw-semibold mt-3" for="note-@document.CustomerDocumentId">Ghi chú cho khách hàng</label>
+                                        <textarea id="note-@document.CustomerDocumentId" name="AdditionalNote" class="form-control" rows="3" maxlength="500"
+                                                  placeholder="Mô tả cụ thể phần khách hàng cần chụp hoặc nhập lại."></textarea>
+                                        <button class="btn btn-danger w-100 mt-3" type="submit" data-loading-text="Đang gửi yêu cầu...">Gửi yêu cầu</button>
+                                    </form>
+                                </div>
+                            }
+                            else if (document.Status == DocumentStatus.Rejected)
+                            {
+                                <div class="alert alert-danger mt-4 mb-3">
+                                    <strong>Cần gửi lại:</strong> @document.RejectionReason
+                                    <div class="small mt-1">Đang chờ khách hàng tải lên hồ sơ mới.</div>
+                                </div>
+                                <form asp-action="SendDocumentReminder" method="post" data-loading-form>
+                                    <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                                    <input type="hidden" name="documentType" value="@documentType" />
+                                    <button class="btn btn-outline-primary w-100" type="submit" data-loading-text="Đang gửi lời nhắc...">Gửi lời nhắc cập nhật</button>
+                                </form>
+                            }
+                            else if (expired)
+                            {
+                                <div class="alert alert-danger mt-4 mb-3">Giấy tờ đã hết hạn và cần được khách hàng cập nhật trước khi tạo đơn thuê mới.</div>
+                                <form asp-action="SendDocumentReminder" method="post" data-loading-form>
+                                    <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                                    <input type="hidden" name="documentType" value="@documentType" />
+                                    <button class="btn btn-outline-primary w-100" type="submit" data-loading-text="Đang gửi lời nhắc...">Yêu cầu cập nhật giấy tờ</button>
+                                </form>
+                            }
+                            else if (document.Status == DocumentStatus.Verified)
+                            {
+                                <div class="alert alert-success mt-4 mb-0">
+                                    <strong>Đã xác minh</strong>
+                                    @if (document.VerifiedAt.HasValue)
+                                    {
+                                        <span> lúc @document.VerifiedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm").</span>
+                                    }
+                                    Giấy tờ đang hợp lệ để xét điều kiện thuê xe.
+                                </div>
+                            }
+                        }
+                    </div>
+                </section>
+            </div>
+        }
+    </div>
+}
+else if (Model.ActiveTab == "bookings")
+{
+    <section class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 p-4 pb-2">
+            <h2 class="h4 fw-bold mb-1">Lịch sử đơn thuê</h2>
+            <p class="text-muted mb-0">@Model.Bookings.Count đơn thuê được ghi nhận cho khách hàng này.</p>
+        </div>
+        @if (Model.Bookings.Count == 0)
+        {
+            <div class="card-body text-center py-5 text-muted">Khách hàng chưa có đơn thuê nào.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Mã đơn</th><th>Xe</th><th>Thời gian thuê</th><th>Trạng thái</th><th>Tổng tiền</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var booking in Model.Bookings)
+                    {
+                        <tr>
+                            <td><strong>#@booking.BookingId</strong><small class="d-block text-muted">@booking.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small></td>
+                            <td>@booking.VehicleName<small class="d-block text-muted">@booking.LicensePlate</small></td>
+                            <td>@booking.PickupDate.ToString("dd/MM/yyyy HH:mm")<br /><span class="text-muted">đến @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</span></td>
+                            <td><span class="badge bg-primary">@booking.Status.ToVietnamese()</span></td>
+                            <td><strong>@booking.TotalAmount.ToString("N0") đ</strong></td>
+                            <td class="text-end"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.BookingId" class="btn btn-sm btn-outline-primary">Mở đơn</a></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+else if (Model.ActiveTab == "payments")
+{
+    <section class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 p-4 pb-2">
+            <h2 class="h4 fw-bold mb-1">Lịch sử thanh toán</h2>
+            <p class="text-muted mb-0">Phân biệt tiền thuê, gia hạn, phụ phí và hoàn tiền theo từng đơn.</p>
+        </div>
+        @if (Model.Payments.Count == 0)
+        {
+            <div class="card-body text-center py-5 text-muted">Chưa có giao dịch thanh toán.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Giao dịch</th><th>Đơn thuê</th><th>Loại</th><th>Số tiền</th><th>Trạng thái</th><th>Thời gian</th></tr></thead>
+                    <tbody>
+                    @foreach (var payment in Model.Payments)
+                    {
+                        <tr>
+                            <td><strong>#@payment.PaymentId</strong><small class="d-block text-muted">@(payment.TransactionCode ?? payment.Method)</small></td>
+                            <td><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">#@payment.BookingId</a></td>
+                            <td>@payment.Type.ToVietnamese()</td>
+                            <td><strong>@payment.Amount.ToString("N0") đ</strong></td>
+                            <td><span class="badge @PaymentBadge(payment.Status)">@payment.Status.ToVietnamese()</span></td>
+                            <td>@(payment.PaidAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa thanh toán")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+else
+{
+    <section class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 p-4 pb-2">
+            <h2 class="h4 fw-bold mb-1">Sự cố và vi phạm</h2>
+            <p class="text-muted mb-0">Các sự cố gắn với đơn thuê của khách hàng.</p>
+        </div>
+        @if (Model.Incidents.Count == 0)
+        {
+            <div class="card-body text-center py-5 text-muted">Không có sự cố hoặc vi phạm nào được ghi nhận.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead><tr><th>Thời gian</th><th>Xe/Đơn</th><th>Loại</th><th>Nội dung</th><th>Trạng thái</th><th>Khách chịu</th></tr></thead>
+                    <tbody>
+                    @foreach (var incident in Model.Incidents)
+                    {
+                        <tr>
+                            <td>@incident.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@incident.VehicleName@if (incident.BookingId.HasValue){<small class="d-block"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@incident.BookingId">Đơn #@incident.BookingId</a></small>}</td>
+                            <td>@incident.Type.ToVietnamese()</td>
+                            <td class="incident-description">@incident.Description</td>
+                            <td><span class="badge bg-primary">@incident.Status.ToVietnamese()</span></td>
+                            <td>@incident.CustomerLiabilityAmount.ToString("N0") đ</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+<div class="modal fade" id="accountStatusModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form asp-action="SetAccountStatus" method="post" data-loading-form>
+                <div class="modal-header">
+                    <h2 class="modal-title h5">@(Model.IsActive ? "Khóa tài khoản khách hàng" : "Mở khóa tài khoản khách hàng")</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="CustomerId" value="@Model.CustomerId" />
+                    <input type="hidden" name="Activate" value="@(!Model.IsActive)" />
+                    <div class="alert @(Model.IsActive ? "alert-warning" : "alert-info")">
+                        @if (Model.IsActive)
+                        {
+                            <span>Khách hàng sẽ không thể đăng nhập hoặc tạo đơn mới. Các đơn đang hoạt động vẫn phải được xử lý.</span>
+                        }
+                        else
+                        {
+                            <span>Khách hàng sẽ có thể đăng nhập và sử dụng lại các chức năng theo trạng thái hồ sơ hiện tại.</span>
+                        }
+                    </div>
+                    <label class="form-label fw-semibold" for="accountReason">Lý do *</label>
+                    <textarea id="accountReason" name="Reason" class="form-control" rows="3" required maxlength="500"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Quay lại</button>
+                    <button type="submit" class="btn @(Model.IsActive ? "btn-danger" : "btn-success")"
+                            data-loading-text="Đang cập nhật...">
+                        @(Model.IsActive ? "Xác nhận khóa" : "Xác nhận mở khóa")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

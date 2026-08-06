@@ -23,9 +23,9 @@ public sealed class AdminDocumentsController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public IActionResult Index()
     {
-        return View(await _documentService.GetPendingDocumentsAsync(cancellationToken));
+        return RedirectToAction("Index", "AdminCustomers", new { profileStatus = "Pending" });
     }
 
     [HttpGet]
@@ -50,11 +50,14 @@ public sealed class AdminDocumentsController : Controller
     public async Task<IActionResult> Verify(int id, CancellationToken cancellationToken)
     {
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var document = await _documentService.GetDocumentAsync(id, cancellationToken);
         var result = await _documentService.VerifyAsync(id, adminId, cancellationToken);
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã xác minh giấy tờ."
             : string.Join("; ", result.Errors);
-        return RedirectToAction(nameof(Index));
+        return document is null
+            ? RedirectToAction("Index", "AdminCustomers")
+            : RedirectToAction("Details", "AdminCustomers", new { id = document.CustomerId, tab = "documents" });
     }
 
     [HttpPost]
@@ -64,17 +67,20 @@ public sealed class AdminDocumentsController : Controller
         CancellationToken cancellationToken)
     {
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var document = await _documentService.GetDocumentAsync(model.DocumentId, cancellationToken);
         var result = ModelState.IsValid
             ? await _documentService.RejectAsync(
                 model.DocumentId,
                 adminId,
                 model.Reason,
                 cancellationToken)
-            : SmartCar.Application.Common.OperationResult.Failure("Vui lòng nhập lý do từ chối.");
+            : SmartCar.Application.Common.OperationResult.Failure("Vui lòng nhập lý do yêu cầu gửi lại.");
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã từ chối giấy tờ."
+            ? "Đã yêu cầu khách hàng gửi lại giấy tờ."
             : string.Join("; ", result.Errors);
-        return RedirectToAction(nameof(Index));
+        return document is null
+            ? RedirectToAction("Index", "AdminCustomers")
+            : RedirectToAction("Details", "AdminCustomers", new { id = document.CustomerId, tab = "documents" });
     }
 }

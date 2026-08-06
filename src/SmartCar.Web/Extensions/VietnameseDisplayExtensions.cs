@@ -94,7 +94,7 @@ public static class VietnameseDisplayExtensions
         {
             DocumentStatus.Pending => "Chờ xác minh",
             DocumentStatus.Verified => "Đã xác minh",
-            DocumentStatus.Rejected => "Đã từ chối",
+            DocumentStatus.Rejected => "Cần gửi lại",
             _ => status.ToString()
         },
         VehicleDocumentType type => type switch
@@ -132,6 +132,10 @@ public static class VietnameseDisplayExtensions
         "Submit" => "Gửi xác minh",
         "Verify" => "Xác minh",
         "Reject" => "Từ chối",
+        "RequestResubmission" => "Yêu cầu gửi lại giấy tờ",
+        "SendDocumentReminder" => "Nhắc hoàn thiện giấy tờ",
+        "LockCustomer" => "Khóa tài khoản khách hàng",
+        "UnlockCustomer" => "Mở khóa tài khoản khách hàng",
         "Confirm" => "Xác nhận đơn",
         "MarkReady" => "Đánh dấu sẵn sàng",
         "Pay" => "Thanh toán",
@@ -164,6 +168,7 @@ public static class VietnameseDisplayExtensions
         "VehicleIncident" => "Sự cố xe",
         "Vehicle" => "Xe",
         "MaintenanceRecord" => "Phiếu bảo trì",
+        "UserProfile" => "Hồ sơ người dùng",
         null or "" => "Không xác định",
         _ => value
     };

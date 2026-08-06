@@ -193,7 +193,7 @@ internal sealed class DocumentService : IDocumentService
 
         if (!verified && string.IsNullOrWhiteSpace(reason))
         {
-            return OperationResult.Failure("Vui lòng nhập lý do từ chối.");
+            return OperationResult.Failure("Vui lòng nhập lý do yêu cầu gửi lại.");
         }
 
         document.Status = verified ? DocumentStatus.Verified : DocumentStatus.Rejected;
@@ -205,22 +205,22 @@ internal sealed class DocumentService : IDocumentService
         _dbContext.Notifications.Add(new Notification
         {
             UserId = document.CustomerId,
-            Title = verified ? "Giấy tờ đã được xác minh" : "Giấy tờ bị từ chối",
+            Title = verified ? "Giấy tờ đã được xác minh" : "Cần gửi lại giấy tờ",
             Message = verified
                 ? $"{document.DocumentType} của bạn đã được Quản trị viên xác minh."
-                : $"{document.DocumentType} bị từ chối. Lý do: {document.RejectionReason}"
+                : $"{document.DocumentType} cần được gửi lại. Lý do: {document.RejectionReason}"
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.WriteAsync(
             adminId,
-            verified ? "Verify" : "Reject",
+            verified ? "Verify" : "RequestResubmission",
             nameof(CustomerDocument),
             document.CustomerDocumentId.ToString(),
             verified
                 ? $"Xác minh {document.DocumentType} của khách hàng {document.CustomerId}."
-                : $"Từ chối {document.DocumentType} của khách hàng {document.CustomerId}: {document.RejectionReason}",
+                : $"Yêu cầu khách hàng {document.CustomerId} gửi lại {document.DocumentType}: {document.RejectionReason}",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
