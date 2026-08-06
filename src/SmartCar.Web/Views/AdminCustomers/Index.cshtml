@@ -1,0 +1,174 @@
+@model SmartCar.Web.ViewModels.AdminCustomerIndexViewModel
+@{
+    ViewData["Title"] = "Quản lý khách hàng";
+
+    static string MaskPhone(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Chưa cập nhật";
+        var phone = value.Trim();
+        if (phone.Length <= 6) return phone;
+        return phone[..4] + new string('*', phone.Length - 7) + phone[^3..];
+    }
+
+    static string ProfileBadge(string code) => code switch
+    {
+        "Verified" => "bg-success",
+        "Pending" => "bg-warning text-dark",
+        "Rejected" => "bg-danger",
+        "Expired" => "bg-danger",
+        _ => "bg-secondary"
+    };
+}
+
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mb-4">
+    <div>
+        <span class="text-uppercase text-primary fw-bold small">Khách hàng</span>
+        <h1 class="h2 fw-bold mb-1">Quản lý khách hàng</h1>
+        <p class="text-muted mb-0">Theo dõi tài khoản, điều kiện thuê xe và toàn bộ lịch sử liên quan của từng khách hàng.</p>
+    </div>
+</div>
+
+<div class="row g-3 mb-4 admin-customer-stats">
+    <div class="col-sm-6 col-xl-3">
+        <a class="card card-body text-decoration-none h-100" asp-action="Index">
+            <span class="text-muted small">Tổng khách hàng</span>
+            <strong class="display-6 text-dark">@Model.TotalCustomers</strong>
+            <small class="text-primary">Xem tất cả</small>
+        </a>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a class="card card-body text-decoration-none h-100" asp-action="Index" asp-route-profileStatus="Pending">
+            <span class="text-muted small">Chờ xác minh</span>
+            <strong class="display-6 text-warning">@Model.PendingVerificationCount</strong>
+            <small class="text-primary">Cần xử lý</small>
+        </a>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a class="card card-body text-decoration-none h-100" asp-action="Index" asp-route-profileStatus="Rejected">
+            <span class="text-muted small">Cần gửi lại</span>
+            <strong class="display-6 text-danger">@Model.NeedResubmissionCount</strong>
+            <small class="text-primary">Đang chờ khách cập nhật</small>
+        </a>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <a class="card card-body text-decoration-none h-100" asp-action="Index" asp-route-profileStatus="Verified">
+            <span class="text-muted small">Đã xác minh</span>
+            <strong class="display-6 text-success">@Model.VerifiedCount</strong>
+            <small class="text-primary">Đủ điều kiện hồ sơ</small>
+        </a>
+    </div>
+</div>
+
+<section class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-lg-5">
+                <label class="form-label fw-semibold" for="query">Tìm khách hàng</label>
+                <input id="query" name="query" value="@Model.Query" class="form-control"
+                       placeholder="Họ tên, email hoặc số điện thoại" />
+            </div>
+            <div class="col-md-4 col-lg-3">
+                <label class="form-label fw-semibold" for="profileStatus">Hồ sơ thuê xe</label>
+                <select id="profileStatus" name="profileStatus" class="form-select">
+                    <option value="">Tất cả trạng thái</option>
+                    <option value="Missing" selected="@(Model.ProfileStatus == "Missing")">Chưa hoàn tất</option>
+                    <option value="Pending" selected="@(Model.ProfileStatus == "Pending")">Chờ xác minh</option>
+                    <option value="Rejected" selected="@(Model.ProfileStatus == "Rejected")">Cần gửi lại</option>
+                    <option value="Verified" selected="@(Model.ProfileStatus == "Verified")">Đã xác minh</option>
+                    <option value="Expired" selected="@(Model.ProfileStatus == "Expired")">Giấy tờ hết hạn</option>
+                </select>
+            </div>
+            <div class="col-md-4 col-lg-2">
+                <label class="form-label fw-semibold" for="accountStatus">Tài khoản</label>
+                <select id="accountStatus" name="accountStatus" class="form-select">
+                    <option value="">Tất cả</option>
+                    <option value="Active" selected="@(Model.AccountStatus == "Active")">Đang hoạt động</option>
+                    <option value="Locked" selected="@(Model.AccountStatus == "Locked")">Đã khóa</option>
+                </select>
+            </div>
+            <div class="col-md-4 col-lg-2 d-grid">
+                <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<section class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-0 pt-4 px-4">
+        <div class="d-flex justify-content-between align-items-center gap-3">
+            <div>
+                <h2 class="h5 fw-bold mb-1">Danh sách khách hàng</h2>
+                <p class="text-muted small mb-0">Mở chi tiết để xác minh giấy tờ hoặc xem lịch sử nghiệp vụ.</p>
+            </div>
+            <span class="badge text-bg-light border">@Model.Customers.Count kết quả</span>
+        </div>
+    </div>
+
+    @if (Model.Customers.Count == 0)
+    {
+        <div class="card-body text-center py-5">
+            <div class="display-6 mb-3">⌕</div>
+            <h3 class="h5">Không tìm thấy khách hàng phù hợp</h3>
+            <p class="text-muted mb-3">Hãy thay đổi từ khóa hoặc bộ lọc trạng thái hồ sơ.</p>
+            <a asp-action="Index" class="btn btn-outline-primary">Đặt lại bộ lọc</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle mb-0 admin-customer-table">
+                <thead>
+                    <tr>
+                        <th>Khách hàng</th>
+                        <th>Liên hệ</th>
+                        <th>Hồ sơ thuê xe</th>
+                        <th>Đơn thuê</th>
+                        <th>Tài khoản</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var customer in Model.Customers)
+                {
+                    var initial = customer.FullName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center gap-3">
+                                <span class="customer-list-avatar">@initial</span>
+                                <div>
+                                    <strong class="d-block">@customer.FullName</strong>
+                                    <small class="text-muted">Tham gia @customer.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="d-block">@customer.Email</span>
+                            <small class="text-muted">@MaskPhone(customer.PhoneNumber)</small>
+                        </td>
+                        <td>
+                            <span class="badge @ProfileBadge(customer.ProfileStatusCode)">@customer.ProfileStatusText</span>
+                            @if (customer.HasActiveBooking)
+                            {
+                                <small class="d-block text-primary mt-1">Có đơn đang xử lý</small>
+                            }
+                        </td>
+                        <td>
+                            <strong>@customer.BookingCount</strong>
+                            <small class="text-muted"> đơn</small>
+                        </td>
+                        <td>
+                            <span class="badge @(customer.IsActive ? "bg-success" : "bg-danger")">
+                                @(customer.IsActive ? "Đang hoạt động" : "Đã khóa")
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@customer.CustomerId"
+                               class="btn btn-sm btn-outline-primary">Xem chi tiết</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
