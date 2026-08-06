@@ -135,6 +135,15 @@ function initializeImageInputs() {
 }
 
 function initializeAdminCustomerNavigation() {
+    const isCustomerAdminPage = window.location.pathname.toLowerCase().startsWith("/admincustomers");
+
+    if (isCustomerAdminPage && !document.querySelector('link[href*="admin-customers.css"]')) {
+        const stylesheet = document.createElement("link");
+        stylesheet.rel = "stylesheet";
+        stylesheet.href = "/css/admin-customers.css";
+        document.head.appendChild(stylesheet);
+    }
+
     const customerLink = Array.from(document.querySelectorAll(".admin-sidebar a.admin-nav-link"))
         .find((link) => link.getAttribute("href")?.includes("/AdminDocuments"));
 
@@ -148,7 +157,7 @@ function initializeAdminCustomerNavigation() {
         label.textContent = "Quản lý khách hàng";
     }
 
-    if (window.location.pathname.toLowerCase().startsWith("/admincustomers")) {
+    if (isCustomerAdminPage) {
         customerLink.classList.add("active");
     }
 }
