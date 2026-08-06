@@ -186,41 +186,58 @@ internal sealed class DocumentService : IDocumentService
             return OperationResult.Failure("Không tìm thấy giấy tờ.");
         }
 
-        if (document.Status != DocumentStatus.Pending)
+        var previousStatus = document.Status;
+
+        if (verified && previousStatus != DocumentStatus.Pending)
         {
-            return OperationResult.Failure("Chỉ giấy tờ đang chờ xác minh mới được xử lý.");
+            return OperationResult.Failure("Chỉ giấy tờ đang chờ xác minh mới có thể được xác minh.");
+        }
+
+        if (!verified && previousStatus is not DocumentStatus.Pending and not DocumentStatus.Verified)
+        {
+            return OperationResult.Failure("Giấy tờ hiện không thể chuyển sang trạng thái cần cập nhật.");
         }
 
         if (!verified && string.IsNullOrWhiteSpace(reason))
         {
-            return OperationResult.Failure("Vui lòng nhập lý do yêu cầu gửi lại.");
+            return OperationResult.Failure("Vui lòng nhập lý do yêu cầu gửi lại hoặc cập nhật giấy tờ.");
         }
+
+        var requestedUpdateForVerifiedDocument = !verified && previousStatus == DocumentStatus.Verified;
 
         document.Status = verified ? DocumentStatus.Verified : DocumentStatus.Rejected;
         document.RejectionReason = verified ? null : reason!.Trim();
-        document.VerifiedBy = adminId;
-        document.VerifiedAt = DateTime.UtcNow;
+        document.VerifiedBy = verified ? adminId : null;
+        document.VerifiedAt = verified ? DateTime.UtcNow : null;
         document.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = document.CustomerId,
-            Title = verified ? "Giấy tờ đã được xác minh" : "Cần gửi lại giấy tờ",
+            Title = verified
+                ? "Giấy tờ đã được xác minh"
+                : requestedUpdateForVerifiedDocument
+                    ? "Giấy tờ cần được cập nhật"
+                    : "Cần gửi lại giấy tờ",
             Message = verified
                 ? $"{document.DocumentType} của bạn đã được Quản trị viên xác minh."
-                : $"{document.DocumentType} cần được gửi lại. Lý do: {document.RejectionReason}"
+                : $"{document.DocumentType} cần được cập nhật và gửi lại. Lý do: {document.RejectionReason}"
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.WriteAsync(
             adminId,
-            verified ? "Verify" : "RequestResubmission",
+            verified
+                ? "Verify"
+                : requestedUpdateForVerifiedDocument
+                    ? "RequestUpdate"
+                    : "RequestResubmission",
             nameof(CustomerDocument),
             document.CustomerDocumentId.ToString(),
             verified
                 ? $"Xác minh {document.DocumentType} của khách hàng {document.CustomerId}."
-                : $"Yêu cầu khách hàng {document.CustomerId} gửi lại {document.DocumentType}: {document.RejectionReason}",
+                : $"Yêu cầu khách hàng {document.CustomerId} cập nhật và gửi lại {document.DocumentType}: {document.RejectionReason}",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
