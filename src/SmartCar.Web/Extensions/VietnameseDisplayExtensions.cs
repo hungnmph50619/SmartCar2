@@ -133,6 +133,7 @@ public static class VietnameseDisplayExtensions
         "Verify" => "Xác minh",
         "Reject" => "Từ chối",
         "RequestResubmission" => "Yêu cầu gửi lại giấy tờ",
+        "RequestUpdate" => "Yêu cầu cập nhật giấy tờ",
         "SendDocumentReminder" => "Nhắc hoàn thiện giấy tờ",
         "LockCustomer" => "Khóa tài khoản khách hàng",
         "UnlockCustomer" => "Mở khóa tài khoản khách hàng",
