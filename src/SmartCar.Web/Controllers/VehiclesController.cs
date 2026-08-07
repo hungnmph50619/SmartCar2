@@ -108,26 +108,38 @@ public sealed class VehiclesController : Controller
         ViewBag.AverageRating = reviews.Count == 0 ? 0 : reviews.Average(review => review.Rating);
         ViewBag.PickupDate = selectedPickupDate;
         ViewBag.ReturnDate = selectedReturnDate;
-
         ViewBag.KycVerified = false;
         ViewBag.KycVerifiedCount = 0;
+        ViewBag.KycTotal = 2;
 
         if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
         {
             var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (!string.IsNullOrWhiteSpace(customerId))
             {
-                var documents = await _documentService.GetCustomerDocumentsAsync(
-                    customerId,
-                    cancellationToken);
+                var documents = await _documentService.GetCustomerDocumentsAsync(customerId, cancellationToken);
+                var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
+                var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
+                var license = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
 
-                var verifiedCount = documents.Count(document =>
-                    DocumentTypes.RequiredForRental.Contains(document.DocumentType) &&
-                    document.Status == DocumentStatus.Verified &&
-                    (!document.ExpiryDate.HasValue || document.ExpiryDate.Value.Date >= selectedReturnDate.Date));
+                var citizenVerified = citizenFront is not null &&
+                                      citizenBack is not null &&
+                                      citizenFront.Status == DocumentStatus.Verified &&
+                                      citizenBack.Status == DocumentStatus.Verified &&
+                                      citizenFront.HasRequiredData &&
+                                      citizenBack.HasRequiredData &&
+                                      citizenFront.ExpiryDate.HasValue &&
+                                      citizenFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
 
+                var licenseVerified = license is not null &&
+                                      license.Status == DocumentStatus.Verified &&
+                                      license.HasRequiredData &&
+                                      license.ExpiryDate.HasValue &&
+                                      license.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+
+                var verifiedCount = (citizenVerified ? 1 : 0) + (licenseVerified ? 1 : 0);
                 ViewBag.KycVerifiedCount = verifiedCount;
-                ViewBag.KycVerified = verifiedCount == DocumentTypes.RequiredForRental.Count;
+                ViewBag.KycVerified = verifiedCount == 2;
             }
         }
 
