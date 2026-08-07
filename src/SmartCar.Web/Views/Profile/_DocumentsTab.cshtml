@@ -74,6 +74,12 @@
                 : drivingLicense.Status == DocumentStatus.Pending
                     ? "Chờ xác minh"
                     : "Chưa đủ điều kiện";
+
+    var citizenBirthDisplay = Model.CitizenIdVerification.DateOfBirth?.ToString("dd/MM/yyyy") ?? string.Empty;
+    var citizenIssuedDisplay = Model.CitizenIdVerification.IssuedDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+    var citizenExpiryDisplay = Model.CitizenIdVerification.ExpiryDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+    var licenseIssuedDisplay = Model.DrivingLicenseVerification.IssuedDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+    var licenseExpiryDisplay = Model.DrivingLicenseVerification.ExpiryDate?.ToString("dd/MM/yyyy") ?? string.Empty;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
@@ -210,7 +216,8 @@ else if (hasReturnContext)
                 </div>
                 <div class="col-md-4">
                     <label asp-for="CitizenIdVerification.DateOfBirth" class="form-label fw-semibold"></label>
-                    <input asp-for="CitizenIdVerification.DateOfBirth" type="date" class="form-control" />
+                    <input type="text" class="form-control" value="@citizenBirthDisplay" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10" required data-vn-date-input data-hidden-target="#citizen-birth-value" />
+                    <input asp-for="CitizenIdVerification.DateOfBirth" id="citizen-birth-value" type="hidden" />
                     <span asp-validation-for="CitizenIdVerification.DateOfBirth" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
@@ -225,12 +232,14 @@ else if (hasReturnContext)
                 </div>
                 <div class="col-md-4">
                     <label asp-for="CitizenIdVerification.IssuedDate" class="form-label fw-semibold"></label>
-                    <input asp-for="CitizenIdVerification.IssuedDate" type="date" class="form-control" />
+                    <input type="text" class="form-control" value="@citizenIssuedDisplay" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10" required data-vn-date-input data-hidden-target="#citizen-issued-value" />
+                    <input asp-for="CitizenIdVerification.IssuedDate" id="citizen-issued-value" type="hidden" />
                     <span asp-validation-for="CitizenIdVerification.IssuedDate" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="CitizenIdVerification.ExpiryDate" class="form-label fw-semibold"></label>
-                    <input asp-for="CitizenIdVerification.ExpiryDate" type="date" class="form-control" />
+                    <input type="text" class="form-control" value="@citizenExpiryDisplay" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10" required data-vn-date-input data-hidden-target="#citizen-expiry-value" />
+                    <input asp-for="CitizenIdVerification.ExpiryDate" id="citizen-expiry-value" type="hidden" />
                     <span asp-validation-for="CitizenIdVerification.ExpiryDate" class="text-danger small"></span>
                 </div>
                 <div class="col-md-8">
@@ -350,12 +359,14 @@ else if (hasReturnContext)
                 </div>
                 <div class="col-md-4">
                     <label asp-for="DrivingLicenseVerification.IssuedDate" class="form-label fw-semibold"></label>
-                    <input asp-for="DrivingLicenseVerification.IssuedDate" type="date" class="form-control" />
+                    <input type="text" class="form-control" value="@licenseIssuedDisplay" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10" required data-vn-date-input data-hidden-target="#license-issued-value" />
+                    <input asp-for="DrivingLicenseVerification.IssuedDate" id="license-issued-value" type="hidden" />
                     <span asp-validation-for="DrivingLicenseVerification.IssuedDate" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label asp-for="DrivingLicenseVerification.ExpiryDate" class="form-label fw-semibold"></label>
-                    <input asp-for="DrivingLicenseVerification.ExpiryDate" type="date" class="form-control" />
+                    <input type="text" class="form-control" value="@licenseExpiryDisplay" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10" required data-vn-date-input data-hidden-target="#license-expiry-value" />
+                    <input asp-for="DrivingLicenseVerification.ExpiryDate" id="license-expiry-value" type="hidden" />
                     <span asp-validation-for="DrivingLicenseVerification.ExpiryDate" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
