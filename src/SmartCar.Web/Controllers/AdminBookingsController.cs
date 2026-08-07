@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -19,15 +20,18 @@ public sealed class AdminBookingsController : Controller
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
+    private readonly IDocumentService _documentService;
 
     public AdminBookingsController(
         IBookingService bookingService,
         IAuditService auditService,
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IDocumentService documentService)
     {
         _bookingService = bookingService;
         _auditService = auditService;
         _dbContext = dbContext;
+        _documentService = documentService;
     }
 
     [HttpGet]
@@ -60,25 +64,27 @@ public sealed class AdminBookingsController : Controller
             .Select(item => item.Status)
             .ToListAsync(cancellationToken);
 
-        var customerDocuments = await _dbContext.CustomerDocuments
-            .AsNoTracking()
-            .Where(document => document.CustomerId == booking.CustomerId)
-            .Select(document => new
-            {
-                document.DocumentType,
-                document.Status,
-                document.ExpiryDate
-            })
-            .ToListAsync(cancellationToken);
+        var documents = await _documentService.GetCustomerDocumentsAsync(
+            booking.CustomerId,
+            cancellationToken);
+        var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
+        var drivingLicense = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
 
-        bool IsVerified(string documentType) => customerDocuments.Any(document =>
-            document.DocumentType == documentType &&
-            document.Status == DocumentStatus.Verified &&
-            (!document.ExpiryDate.HasValue || document.ExpiryDate.Value.Date >= booking.ReturnDate.Date));
+        var citizenVerified = citizenFront is not null &&
+                              citizenBack is not null &&
+                              citizenFront.Status == DocumentStatus.Verified &&
+                              citizenBack.Status == DocumentStatus.Verified &&
+                              citizenFront.HasRequiredData &&
+                              citizenBack.HasRequiredData &&
+                              citizenFront.ExpiryDate.HasValue &&
+                              citizenFront.ExpiryDate.Value.Date >= booking.ReturnDate.Date;
 
-        var citizenIdFrontVerified = IsVerified(DocumentTypes.CitizenId);
-        var citizenIdBackVerified = IsVerified(DocumentTypes.CitizenIdBack);
-        var drivingLicenseVerified = IsVerified(DocumentTypes.DrivingLicense);
+        var drivingLicenseVerified = drivingLicense is not null &&
+                                     drivingLicense.Status == DocumentStatus.Verified &&
+                                     drivingLicense.HasRequiredData &&
+                                     drivingLicense.ExpiryDate.HasValue &&
+                                     drivingLicense.ExpiryDate.Value.Date >= booking.ReturnDate.Date;
 
         ViewBag.CustomerCreatedAt = customerCreatedAt;
         ViewBag.CustomerTotalBookingCount = customerBookingStatuses.Count;
@@ -86,10 +92,9 @@ public sealed class AdminBookingsController : Controller
         ViewBag.CustomerCancelledBookingCount = customerBookingStatuses.Count(status =>
             status is BookingStatus.Cancelled or BookingStatus.Rejected);
         ViewBag.CustomerNoShowCount = customerBookingStatuses.Count(status => status == BookingStatus.NoShow);
-        ViewBag.CitizenIdFrontVerified = citizenIdFrontVerified;
-        ViewBag.CitizenIdBackVerified = citizenIdBackVerified;
+        ViewBag.CitizenIdentityVerified = citizenVerified;
         ViewBag.DrivingLicenseVerified = drivingLicenseVerified;
-        ViewBag.CustomerKycVerified = citizenIdFrontVerified && citizenIdBackVerified && drivingLicenseVerified;
+        ViewBag.CustomerKycVerified = citizenVerified && drivingLicenseVerified;
 
         return View(booking);
     }
