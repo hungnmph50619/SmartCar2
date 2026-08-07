@@ -43,30 +43,22 @@ public sealed class VehiclesController : Controller
         var now = DateTime.Now;
         if (model.PickupDate <= now)
         {
-            ModelState.AddModelError(
-                nameof(model.PickupDate),
-                "Ngày giờ nhận xe phải sau thời điểm hiện tại.");
+            ModelState.AddModelError(nameof(model.PickupDate), "Ngày giờ nhận xe phải sau thời điểm hiện tại.");
         }
 
         if (model.ReturnDate <= model.PickupDate)
         {
-            ModelState.AddModelError(
-                nameof(model.ReturnDate),
-                "Ngày giờ trả xe phải sau ngày giờ nhận xe.");
+            ModelState.AddModelError(nameof(model.ReturnDate), "Ngày giờ trả xe phải sau ngày giờ nhận xe.");
         }
 
         if (model.Seats is <= 0)
         {
-            ModelState.AddModelError(
-                nameof(model.Seats),
-                "Số chỗ tối thiểu phải lớn hơn 0.");
+            ModelState.AddModelError(nameof(model.Seats), "Số chỗ tối thiểu phải lớn hơn 0.");
         }
 
         if (model.MaxDailyPrice is <= 0)
         {
-            ModelState.AddModelError(
-                nameof(model.MaxDailyPrice),
-                "Giá thuê tối đa phải lớn hơn 0.");
+            ModelState.AddModelError(nameof(model.MaxDailyPrice), "Giá thuê tối đa phải lớn hơn 0.");
         }
 
         if (!ModelState.IsValid)
@@ -120,7 +112,8 @@ public sealed class VehiclesController : Controller
                 var documents = await _documentService.GetCustomerDocumentsAsync(customerId, cancellationToken);
                 var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
                 var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
-                var license = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+                var licenseFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+                var licenseBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
                 var citizenVerified = citizenFront is not null &&
                                       citizenBack is not null &&
@@ -131,11 +124,14 @@ public sealed class VehiclesController : Controller
                                       citizenFront.ExpiryDate.HasValue &&
                                       citizenFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
 
-                var licenseVerified = license is not null &&
-                                      license.Status == DocumentStatus.Verified &&
-                                      license.HasRequiredData &&
-                                      license.ExpiryDate.HasValue &&
-                                      license.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+                var licenseVerified = licenseFront is not null &&
+                                      licenseBack is not null &&
+                                      licenseFront.Status == DocumentStatus.Verified &&
+                                      licenseBack.Status == DocumentStatus.Verified &&
+                                      licenseFront.HasRequiredData &&
+                                      licenseBack.HasRequiredData &&
+                                      licenseFront.ExpiryDate.HasValue &&
+                                      licenseFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
 
                 var verifiedCount = (citizenVerified ? 1 : 0) + (licenseVerified ? 1 : 0);
                 ViewBag.KycVerifiedCount = verifiedCount;
