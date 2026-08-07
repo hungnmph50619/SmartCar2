@@ -181,7 +181,6 @@ public sealed class ProfileController : Controller
                     model.IssuedDate!.Value,
                     model.ExpiryDate!.Value,
                     model.PermanentAddress,
-                    model.PermanentAddress,
                     newFrontPath,
                     newBackPath),
                 cancellationToken);
@@ -488,8 +487,7 @@ public sealed class ProfileController : Controller
                 Gender = citizenId?.Gender ?? string.Empty,
                 IssuedDate = citizenId?.IssuedDate,
                 ExpiryDate = citizenId?.ExpiryDate,
-                PermanentAddress = citizenId?.PermanentAddress ?? user.Address ?? string.Empty,
-                TemporaryAddress = citizenId?.TemporaryAddress ?? string.Empty
+                PermanentAddress = citizenId?.PermanentAddress ?? user.Address ?? string.Empty
             },
             DrivingLicenseVerification = new DrivingLicenseVerificationViewModel
             {
