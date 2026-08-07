@@ -6,11 +6,23 @@
     var canMarkNoShow = (Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup) &&
         DateTime.Now >= Model.PickupDate.AddMinutes(30);
 
+    var customerCreatedAt = ViewBag.CustomerCreatedAt is DateTime createdAtValue
+        ? createdAtValue
+        : (DateTime?)null;
+    var customerTotalBookingCount = ViewBag.CustomerTotalBookingCount is int totalValue ? totalValue : 0;
+    var customerCompletedBookingCount = ViewBag.CustomerCompletedBookingCount is int completedValue ? completedValue : 0;
+    var customerCancelledBookingCount = ViewBag.CustomerCancelledBookingCount is int cancelledValue ? cancelledValue : 0;
+    var customerNoShowCount = ViewBag.CustomerNoShowCount is int noShowValue ? noShowValue : 0;
+    var citizenIdFrontVerified = ViewBag.CitizenIdFrontVerified is bool frontValue && frontValue;
+    var citizenIdBackVerified = ViewBag.CitizenIdBackVerified is bool backValue && backValue;
+    var drivingLicenseVerified = ViewBag.DrivingLicenseVerified is bool licenseValue && licenseValue;
+    var customerKycVerified = ViewBag.CustomerKycVerified is bool kycValue && kycValue;
+
     var nextAction = Model.Status switch
     {
         BookingStatus.PendingConfirmation => (
             "Kiểm tra và quyết định đơn",
-            "Đối chiếu giấy tờ khách hàng, lịch xe và thông tin thuê. Sau đó xác nhận hoặc nhập lý do từ chối.",
+            "Đối chiếu hồ sơ xác minh, lịch sử thuê xe, lịch xe và thông tin thuê. Sau đó xác nhận hoặc nhập lý do từ chối.",
             "warning"),
         BookingStatus.PendingPayment => (
             "Chờ khách hàng thanh toán",
@@ -84,11 +96,90 @@
             }
         </div>
 
+        <div class="card card-body shadow-sm mb-4 border-0">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-muted fw-semibold">Kiểm soát khách thuê</div>
+                    <h2 class="h5 mb-1">Hồ sơ & độ tin cậy khách hàng</h2>
+                    <p class="text-muted small mb-0">Dùng thông tin xác minh và lịch sử thuê để hỗ trợ quyết định duyệt đơn.</p>
+                </div>
+                <span class="badge @(customerKycVerified ? "bg-success" : "bg-danger") px-3 py-2">
+                    @(customerKycVerified ? "Hồ sơ đã xác minh" : "Hồ sơ chưa đủ")
+                </span>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="small text-muted">CCCD mặt trước</div>
+                        <strong class="@(citizenIdFrontVerified ? "text-success" : "text-danger")">
+                            @(citizenIdFrontVerified ? "✓ Đã xác minh" : "✕ Chưa hợp lệ")
+                        </strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="small text-muted">CCCD mặt sau</div>
+                        <strong class="@(citizenIdBackVerified ? "text-success" : "text-danger")">
+                            @(citizenIdBackVerified ? "✓ Đã xác minh" : "✕ Chưa hợp lệ")
+                        </strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-3 h-100">
+                        <div class="small text-muted">GPLX đến ngày trả</div>
+                        <strong class="@(drivingLicenseVerified ? "text-success" : "text-danger")">
+                            @(drivingLicenseVerified ? "✓ Còn hiệu lực" : "✕ Chưa hợp lệ")
+                        </strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-6 col-md-3">
+                    <div class="bg-light rounded p-3 h-100">
+                        <div class="small text-muted">Tổng đơn</div>
+                        <div class="fs-4 fw-bold">@customerTotalBookingCount</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="bg-light rounded p-3 h-100">
+                        <div class="small text-muted">Hoàn thành</div>
+                        <div class="fs-4 fw-bold text-success">@customerCompletedBookingCount</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="bg-light rounded p-3 h-100">
+                        <div class="small text-muted">Hủy / bị từ chối</div>
+                        <div class="fs-4 fw-bold">@customerCancelledBookingCount</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="bg-light rounded p-3 h-100">
+                        <div class="small text-muted">Không đến nhận xe</div>
+                        <div class="fs-4 fw-bold @(customerNoShowCount > 0 ? "text-danger" : string.Empty)">@customerNoShowCount</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3 pt-3 border-top">
+                <div class="small text-muted">
+                    Thành viên từ: <strong>@(customerCreatedAt.HasValue ? customerCreatedAt.Value.ToLocalTime().ToString("dd/MM/yyyy") : "Không xác định")</strong>
+                </div>
+                <a class="btn btn-sm btn-outline-primary"
+                   asp-controller="AdminCustomers"
+                   asp-action="Details"
+                   asp-route-id="@Model.CustomerId">
+                    Xem hồ sơ khách hàng
+                </a>
+            </div>
+        </div>
+
         @if (Model.Status == BookingStatus.PendingConfirmation)
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Xác nhận yêu cầu</h2>
-                <p class="text-muted">Chỉ xác nhận sau khi CCCD, GPLX và lịch xe đã hợp lệ đến ngày trả.</p>
+                <p class="text-muted">Chỉ xác nhận sau khi CCCD hai mặt, GPLX và lịch xe đã hợp lệ đến ngày trả.</p>
                 <form asp-action="Confirm"
                       method="post"
                       class="mb-3"
