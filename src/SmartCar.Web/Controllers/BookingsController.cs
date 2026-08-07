@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
 using SmartCar.Web.ViewModels;
 
@@ -11,10 +12,14 @@ namespace SmartCar.Web.Controllers;
 public sealed class BookingsController : Controller
 {
     private readonly IBookingService _bookingService;
+    private readonly IDocumentService _documentService;
 
-    public BookingsController(IBookingService bookingService)
+    public BookingsController(
+        IBookingService bookingService,
+        IDocumentService documentService)
     {
         _bookingService = bookingService;
+        _documentService = documentService;
     }
 
     [HttpPost]
@@ -27,6 +32,22 @@ public sealed class BookingsController : Controller
         if (string.IsNullOrWhiteSpace(customerId))
         {
             return Challenge();
+        }
+
+        var hasValidRentalDocuments = await _documentService.HasValidRentalDocumentsAsync(
+            customerId,
+            model.ReturnDate,
+            cancellationToken);
+
+        if (!hasValidRentalDocuments)
+        {
+            TempData["ErrorMessage"] =
+                "Bạn cần hoàn tất xác minh CCCD mặt trước, CCCD mặt sau và GPLX còn hiệu lực đến ngày trả xe trước khi gửi yêu cầu thuê.";
+            TempData["KycRequired"] = "true";
+            return RedirectToAction(
+                "Index",
+                "Profile",
+                new { tab = "documents" });
         }
 
         var result = await _bookingService.CreateAsync(
