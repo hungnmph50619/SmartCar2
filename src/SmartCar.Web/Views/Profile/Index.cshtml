@@ -6,15 +6,19 @@
     var avatarInitial = Model.FullName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
     var isCustomer = User.IsInRole(RoleNames.Customer);
     var showDocuments = isCustomer && Model.ActiveTab == "documents";
-    var verifiedCount = Model.Documents.Count(item =>
-        DocumentTypes.RequiredForRental.Contains(item.DocumentType) &&
-        item.Status == DocumentStatus.Verified &&
-        (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today));
 
     var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
     var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
     var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
     var hasReturnContext = returnVehicleId.HasValue && returnPickupDate.HasValue && returnDate.HasValue;
+    var returnPickupRoute = returnPickupDate?.ToString("O");
+    var returnDateRoute = returnDate?.ToString("O");
+    var requiredValidThrough = returnDate?.Date ?? DateTime.Today;
+
+    var verifiedCount = Model.Documents.Count(item =>
+        DocumentTypes.RequiredForRental.Contains(item.DocumentType) &&
+        item.Status == DocumentStatus.Verified &&
+        (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= requiredValidThrough));
 }
 
 <div class="profile-shell py-3">
@@ -39,16 +43,16 @@
                asp-action="Index"
                asp-route-tab="profile"
                asp-route-returnVehicleId="@returnVehicleId"
-               asp-route-pickupDate="@(returnPickupDate?.ToString("O"))"
-               asp-route-returnDate="@(returnDate?.ToString("O"))">
+               asp-route-pickupDate="@returnPickupRoute"
+               asp-route-returnDate="@returnDateRoute">
                 Thông tin cá nhân
             </a>
             <a class="nav-link @(showDocuments ? "active" : string.Empty)"
                asp-action="Index"
                asp-route-tab="documents"
                asp-route-returnVehicleId="@returnVehicleId"
-               asp-route-pickupDate="@(returnPickupDate?.ToString("O"))"
-               asp-route-returnDate="@(returnDate?.ToString("O"))">
+               asp-route-pickupDate="@returnPickupRoute"
+               asp-route-returnDate="@returnDateRoute">
                 CCCD/GPLX
                 <span class="badge rounded-pill @(verifiedCount == DocumentTypes.RequiredForRental.Count ? "bg-success" : "bg-secondary") ms-1">
                     @verifiedCount/@DocumentTypes.RequiredForRental.Count
@@ -96,8 +100,8 @@
                                    asp-action="Index"
                                    asp-route-tab="documents"
                                    asp-route-returnVehicleId="@returnVehicleId"
-                                   asp-route-pickupDate="@(returnPickupDate?.ToString("O"))"
-                                   asp-route-returnDate="@(returnDate?.ToString("O"))">
+                                   asp-route-pickupDate="@returnPickupRoute"
+                                   asp-route-returnDate="@returnDateRoute">
                                     Hoàn thiện CCCD/GPLX
                                 </a>
                             }
@@ -118,8 +122,8 @@
                     @if (hasReturnContext)
                     {
                         <input type="hidden" name="returnVehicleId" value="@returnVehicleId" />
-                        <input type="hidden" name="pickupDate" value="@returnPickupDate.Value.ToString("O")" />
-                        <input type="hidden" name="returnDate" value="@returnDate.Value.ToString("O")" />
+                        <input type="hidden" name="pickupDate" value="@returnPickupRoute" />
+                        <input type="hidden" name="returnDate" value="@returnDateRoute" />
                     }
 
                     <div class="mb-4">
