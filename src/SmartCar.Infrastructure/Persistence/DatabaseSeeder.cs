@@ -106,27 +106,21 @@ public static class DatabaseSeeder
             await dbContext.SaveChangesAsync();
         }
 
-        if (!await dbContext.CustomerDocuments.AnyAsync(item =>
-                item.CustomerId == demoCustomer.Id &&
-                item.DocumentType == DocumentTypes.CitizenIdBack))
-        {
-            var now = DateTime.UtcNow;
-            dbContext.CustomerDocuments.Add(new CustomerDocument
-            {
-                CustomerId = demoCustomer.Id,
-                DocumentType = DocumentTypes.CitizenIdBack,
-                DocumentNumber = "001204000001",
-                ExpiryDate = DateTime.Today.AddYears(10),
-                ImagePath = "/images/demo/document-placeholder.svg",
-                Status = DocumentStatus.Verified,
-                VerifiedBy = admin.Id,
-                VerifiedAt = now,
-                CreatedAt = now,
-                UpdatedAt = now
-            });
+        await EnsureDemoDocumentAsync(
+            dbContext,
+            demoCustomer.Id,
+            admin.Id,
+            DocumentTypes.CitizenIdBack,
+            "001204000001",
+            DateTime.Today.AddYears(10));
 
-            await dbContext.SaveChangesAsync();
-        }
+        await EnsureDemoDocumentAsync(
+            dbContext,
+            demoCustomer.Id,
+            admin.Id,
+            DocumentTypes.DrivingLicenseBack,
+            "790000000001",
+            DateTime.Today.AddYears(5));
 
         // Đồng bộ dữ liệu KYC chi tiết cho cả database demo cũ và database mới.
         var demoDocuments = await dbContext.CustomerDocuments
@@ -135,6 +129,7 @@ public static class DatabaseSeeder
         var citizenFront = demoDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
         var citizenBack = demoDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
         var drivingLicense = demoDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+        var drivingLicenseBack = demoDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
         if (citizenFront is not null && citizenBack is not null)
         {
@@ -154,12 +149,17 @@ public static class DatabaseSeeder
                     [DateOfBirth] = {demoBirthDate},
                     [Gender] = {demoGender},
                     [IssuedDate] = {demoIssuedDate},
-                    [PermanentAddress] = {demoAddress}
+                    [PermanentAddress] = {demoAddress},
+                    [TemporaryAddress] = {demoAddress}
                 WHERE [CustomerDocumentId] IN ({citizenFront.CustomerDocumentId}, {citizenBack.CustomerDocumentId})");
         }
 
-        if (drivingLicense is not null)
+        if (drivingLicense is not null && drivingLicenseBack is not null)
         {
+            drivingLicense.ExpiryDate ??= DateTime.Today.AddYears(5);
+            drivingLicenseBack.ExpiryDate ??= drivingLicense.ExpiryDate;
+            await dbContext.SaveChangesAsync();
+
             var demoName = "Khách hàng Demo";
             var demoIssuedDate = DateTime.Today.AddYears(-3);
             var demoLicenseClass = "B";
@@ -169,7 +169,7 @@ public static class DatabaseSeeder
                 SET [FullNameOnDocument] = {demoName},
                     [IssuedDate] = {demoIssuedDate},
                     [LicenseClass] = {demoLicenseClass}
-                WHERE [CustomerDocumentId] = {drivingLicense.CustomerDocumentId}");
+                WHERE [CustomerDocumentId] IN ({drivingLicense.CustomerDocumentId}, {drivingLicenseBack.CustomerDocumentId})");
         }
 
         if (!await dbContext.Promotions.AnyAsync())
@@ -191,6 +191,37 @@ public static class DatabaseSeeder
 
             await dbContext.SaveChangesAsync();
         }
+    }
+
+    private static async Task EnsureDemoDocumentAsync(
+        ApplicationDbContext dbContext,
+        string customerId,
+        string adminId,
+        string documentType,
+        string documentNumber,
+        DateTime expiryDate)
+    {
+        if (await dbContext.CustomerDocuments.AnyAsync(item =>
+                item.CustomerId == customerId && item.DocumentType == documentType))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        dbContext.CustomerDocuments.Add(new CustomerDocument
+        {
+            CustomerId = customerId,
+            DocumentType = documentType,
+            DocumentNumber = documentNumber,
+            ExpiryDate = expiryDate,
+            ImagePath = "/images/demo/document-placeholder.svg",
+            Status = DocumentStatus.Verified,
+            VerifiedBy = adminId,
+            VerifiedAt = now,
+            CreatedAt = now,
+            UpdatedAt = now
+        });
+        await dbContext.SaveChangesAsync();
     }
 
     private static async Task<ApplicationUser> EnsureUserAsync(
