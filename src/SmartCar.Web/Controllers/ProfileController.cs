@@ -181,6 +181,7 @@ public sealed class ProfileController : Controller
                     model.IssuedDate!.Value,
                     model.ExpiryDate!.Value,
                     model.PermanentAddress,
+                    model.TemporaryAddress,
                     newFrontPath,
                     newBackPath),
                 cancellationToken);
@@ -232,7 +233,7 @@ public sealed class ProfileController : Controller
         }
 
         await ValidateDrivingLicenseFormAsync(model, returnDate, cancellationToken);
-        if (!ModelState.IsValid || model.Image is null)
+        if (!ModelState.IsValid || model.FrontImage is null || model.BackImage is null)
         {
             return await RenderInvalidKycAsync(
                 user,
@@ -245,30 +246,53 @@ public sealed class ProfileController : Controller
         }
 
         var existingDocuments = await _documentService.GetCustomerDocumentsAsync(user.Id, cancellationToken);
-        var existingDocument = existingDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+        var existingFront = existingDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+        var existingBack = existingDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
-        var newStoredPath = await _documentStorage.SaveAsync(model.Image, user.Id, cancellationToken);
-        var result = await _documentService.SubmitDrivingLicenseAsync(
-            user.Id,
-            new SubmitDrivingLicenseRequest(
-                model.FullNameOnDocument,
-                model.DocumentNumber,
-                model.LicenseClass,
-                model.IssuedDate!.Value,
-                model.ExpiryDate!.Value,
-                newStoredPath),
-            cancellationToken);
-
-        if (!result.Succeeded)
+        string? newFrontPath = null;
+        string? newBackPath = null;
+        try
         {
-            _documentStorage.Delete(newStoredPath);
-            TempData["ErrorMessage"] = string.Join("; ", result.Errors);
+            newFrontPath = await _documentStorage.SaveAsync(model.FrontImage, user.Id, cancellationToken);
+            newBackPath = await _documentStorage.SaveAsync(model.BackImage, user.Id, cancellationToken);
+
+            var result = await _documentService.SubmitDrivingLicenseAsync(
+                user.Id,
+                new SubmitDrivingLicenseRequest(
+                    model.FullNameOnDocument,
+                    model.DocumentNumber,
+                    model.LicenseClass,
+                    model.IssuedDate!.Value,
+                    model.ExpiryDate!.Value,
+                    newFrontPath,
+                    newBackPath),
+                cancellationToken);
+
+            if (!result.Succeeded)
+            {
+                _documentStorage.Delete(newFrontPath);
+                _documentStorage.Delete(newBackPath);
+                TempData["ErrorMessage"] = string.Join("; ", result.Errors);
+            }
+            else
+            {
+                DeleteReplacedImage(existingFront?.ImagePath, newFrontPath);
+                DeleteReplacedImage(existingBack?.ImagePath, newBackPath);
+                TempData["SuccessMessage"] =
+                    "Đã gửi thông tin GPLX cùng ảnh mặt trước và mặt sau. Hồ sơ đang chờ Quản trị viên xác minh.";
+            }
         }
-        else
+        catch
         {
-            DeleteReplacedImage(existingDocument?.ImagePath, newStoredPath);
-            TempData["SuccessMessage"] =
-                "Đã gửi đầy đủ thông tin và ảnh GPLX. Hồ sơ đang chờ Quản trị viên xác minh.";
+            if (!string.IsNullOrWhiteSpace(newFrontPath))
+            {
+                _documentStorage.Delete(newFrontPath);
+            }
+            if (!string.IsNullOrWhiteSpace(newBackPath))
+            {
+                _documentStorage.Delete(newBackPath);
+            }
+            throw;
         }
 
         return RedirectToKyc(returnVehicleId, pickupDate, returnDate);
@@ -332,13 +356,22 @@ public sealed class ProfileController : Controller
         DateTime? returnDate,
         CancellationToken cancellationToken)
     {
-        var imageError = await ImageFileValidator.ValidateAsync(
-            model.Image,
+        var frontImageError = await ImageFileValidator.ValidateAsync(
+            model.FrontImage,
             MaximumDocumentImageBytes,
             cancellationToken);
-        if (imageError is not null)
+        if (frontImageError is not null)
         {
-            ModelState.AddModelError("DrivingLicenseVerification.Image", imageError);
+            ModelState.AddModelError("DrivingLicenseVerification.FrontImage", frontImageError);
+        }
+
+        var backImageError = await ImageFileValidator.ValidateAsync(
+            model.BackImage,
+            MaximumDocumentImageBytes,
+            cancellationToken);
+        if (backImageError is not null)
+        {
+            ModelState.AddModelError("DrivingLicenseVerification.BackImage", backImageError);
         }
 
         if (model.IssuedDate.HasValue && model.IssuedDate.Value.Date > DateTime.Today)
@@ -455,7 +488,8 @@ public sealed class ProfileController : Controller
                 Gender = citizenId?.Gender ?? string.Empty,
                 IssuedDate = citizenId?.IssuedDate,
                 ExpiryDate = citizenId?.ExpiryDate,
-                PermanentAddress = citizenId?.PermanentAddress ?? user.Address ?? string.Empty
+                PermanentAddress = citizenId?.PermanentAddress ?? user.Address ?? string.Empty,
+                TemporaryAddress = citizenId?.TemporaryAddress ?? string.Empty
             },
             DrivingLicenseVerification = new DrivingLicenseVerificationViewModel
             {
@@ -477,6 +511,8 @@ public sealed class ProfileController : Controller
             return Array.Empty<DocumentDto>();
         }
 
-        return await _documentService.GetCustomerDocumentsAsync(userId, cancellationToken);
+        return await _documentService.GetCustomerDocumentsAsync(
+            userId,
+            cancellationToken);
     }
 }
