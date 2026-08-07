@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
@@ -76,105 +77,188 @@ internal sealed class DocumentService : IDocumentService
             return OperationResult.Failure("Số giấy tờ và ảnh giấy tờ là bắt buộc.");
         }
 
-        if (request.DocumentType == DocumentTypes.DrivingLicense &&
-            (!request.ExpiryDate.HasValue || request.ExpiryDate.Value.Date < DateTime.Today))
-        {
-            return OperationResult.Failure("GPLX phải còn thời hạn sử dụng.");
-        }
-
         var normalizedNumber = request.DocumentNumber.Trim().ToUpperInvariant();
-        var isCitizenId = request.DocumentType is DocumentTypes.CitizenId or DocumentTypes.CitizenIdBack;
-
-        if (isCitizenId)
-        {
-            var pairedType = request.DocumentType == DocumentTypes.CitizenId
-                ? DocumentTypes.CitizenIdBack
-                : DocumentTypes.CitizenId;
-
-            var pairedNumber = await _dbContext.CustomerDocuments
-                .AsNoTracking()
-                .Where(item =>
-                    item.CustomerId == customerId &&
-                    item.DocumentType == pairedType)
-                .Select(item => item.DocumentNumber)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (request.DocumentType == DocumentTypes.CitizenIdBack &&
-                string.IsNullOrWhiteSpace(pairedNumber))
-            {
-                return OperationResult.Failure(
-                    "Vui lòng gửi CCCD mặt trước trước khi tải ảnh CCCD mặt sau.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(pairedNumber) &&
-                !string.Equals(pairedNumber, normalizedNumber, StringComparison.OrdinalIgnoreCase))
-            {
-                return OperationResult.Failure(
-                    "Số CCCD mặt trước và mặt sau phải trùng nhau.");
-            }
-        }
-
-        var duplicate = isCitizenId
-            ? await _dbContext.CustomerDocuments
-                .AsNoTracking()
-                .AnyAsync(item =>
-                    item.CustomerId != customerId &&
-                    (item.DocumentType == DocumentTypes.CitizenId ||
-                     item.DocumentType == DocumentTypes.CitizenIdBack) &&
-                    item.DocumentNumber == normalizedNumber,
-                    cancellationToken)
-            : await _dbContext.CustomerDocuments
-                .AsNoTracking()
-                .AnyAsync(item =>
-                    item.CustomerId != customerId &&
-                    item.DocumentType == request.DocumentType &&
-                    item.DocumentNumber == normalizedNumber,
-                    cancellationToken);
+        var duplicate = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .AnyAsync(item =>
+                item.CustomerId != customerId &&
+                item.DocumentType == request.DocumentType &&
+                item.DocumentNumber == normalizedNumber,
+                cancellationToken);
 
         if (duplicate)
         {
             return OperationResult.Failure("Số giấy tờ đã được sử dụng bởi tài khoản khác.");
         }
 
-        var document = await _dbContext.CustomerDocuments
-            .FirstOrDefaultAsync(item =>
-                item.CustomerId == customerId &&
-                item.DocumentType == request.DocumentType,
-                cancellationToken);
-
-        if (document is null)
-        {
-            document = new CustomerDocument
-            {
-                CustomerId = customerId,
-                DocumentType = request.DocumentType,
-                CreatedAt = DateTime.UtcNow
-            };
-            _dbContext.CustomerDocuments.Add(document);
-        }
+        var document = await GetOrCreateDocumentAsync(
+            customerId,
+            request.DocumentType,
+            cancellationToken);
 
         document.DocumentNumber = normalizedNumber;
         document.ExpiryDate = request.ExpiryDate;
         document.ImagePath = request.ImagePath;
-        document.Status = DocumentStatus.Pending;
-        document.RejectionReason = null;
-        document.VerifiedBy = null;
-        document.VerifiedAt = null;
-        document.UpdatedAt = DateTime.UtcNow;
+        ResetToPending(document);
 
         await NotifyAdminsAsync(
             "Có giấy tờ chờ xác minh",
             $"Khách hàng vừa gửi {request.DocumentType} để xác minh.",
             cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return OperationResult.Success();
+    }
+
+    public async Task<OperationResult> SubmitCitizenIdAsync(
+        string customerId,
+        SubmitCitizenIdRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var validationError = ValidateCitizenId(request);
+        if (validationError is not null)
+        {
+            return OperationResult.Failure(validationError);
+        }
+
+        var normalizedNumber = request.DocumentNumber.Trim();
+        var duplicate = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .AnyAsync(item =>
+                item.CustomerId != customerId &&
+                (item.DocumentType == DocumentTypes.CitizenId ||
+                 item.DocumentType == DocumentTypes.CitizenIdBack) &&
+                item.DocumentNumber == normalizedNumber,
+                cancellationToken);
+
+        if (duplicate)
+        {
+            return OperationResult.Failure("Số CCCD đã được sử dụng bởi tài khoản khác.");
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var front = await GetOrCreateDocumentAsync(
+            customerId,
+            DocumentTypes.CitizenId,
+            cancellationToken);
+        var back = await GetOrCreateDocumentAsync(
+            customerId,
+            DocumentTypes.CitizenIdBack,
+            cancellationToken);
+
+        front.DocumentNumber = normalizedNumber;
+        front.ExpiryDate = request.ExpiryDate.Date;
+        front.ImagePath = request.FrontImagePath;
+        ResetToPending(front);
+
+        back.DocumentNumber = normalizedNumber;
+        back.ExpiryDate = request.ExpiryDate.Date;
+        back.ImagePath = request.BackImagePath;
+        ResetToPending(back);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await UpdateKycMetadataAsync(
+            front.CustomerDocumentId,
+            request.FullNameOnDocument.Trim(),
+            request.DateOfBirth.Date,
+            request.Gender.Trim(),
+            request.IssuedDate.Date,
+            request.PermanentAddress.Trim(),
+            null,
+            cancellationToken);
+
+        await UpdateKycMetadataAsync(
+            back.CustomerDocumentId,
+            request.FullNameOnDocument.Trim(),
+            request.DateOfBirth.Date,
+            request.Gender.Trim(),
+            request.IssuedDate.Date,
+            request.PermanentAddress.Trim(),
+            null,
+            cancellationToken);
+
+        await NotifyAdminsAsync(
+            "Có CCCD chờ xác minh",
+            "Khách hàng vừa gửi thông tin CCCD kèm ảnh mặt trước và mặt sau để xác minh.",
+            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        await _auditService.WriteAsync(
+            customerId,
+            "Submit",
+            nameof(CustomerDocument),
+            front.CustomerDocumentId.ToString(),
+            "Gửi hồ sơ CCCD gồm thông tin khai báo, ảnh mặt trước và ảnh mặt sau để xác minh.",
+            cancellationToken: cancellationToken);
+
+        return OperationResult.Success();
+    }
+
+    public async Task<OperationResult> SubmitDrivingLicenseAsync(
+        string customerId,
+        SubmitDrivingLicenseRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var validationError = ValidateDrivingLicense(request);
+        if (validationError is not null)
+        {
+            return OperationResult.Failure(validationError);
+        }
+
+        var normalizedNumber = request.DocumentNumber.Trim().ToUpperInvariant();
+        var duplicate = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .AnyAsync(item =>
+                item.CustomerId != customerId &&
+                item.DocumentType == DocumentTypes.DrivingLicense &&
+                item.DocumentNumber == normalizedNumber,
+                cancellationToken);
+
+        if (duplicate)
+        {
+            return OperationResult.Failure("Số GPLX đã được sử dụng bởi tài khoản khác.");
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var document = await GetOrCreateDocumentAsync(
+            customerId,
+            DocumentTypes.DrivingLicense,
+            cancellationToken);
+
+        document.DocumentNumber = normalizedNumber;
+        document.ExpiryDate = request.ExpiryDate.Date;
+        document.ImagePath = request.ImagePath;
+        ResetToPending(document);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await UpdateKycMetadataAsync(
+            document.CustomerDocumentId,
+            request.FullNameOnDocument.Trim(),
+            null,
+            null,
+            request.IssuedDate.Date,
+            null,
+            request.LicenseClass.Trim().ToUpperInvariant(),
+            cancellationToken);
+
+        await NotifyAdminsAsync(
+            "Có GPLX chờ xác minh",
+            "Khách hàng vừa gửi đầy đủ thông tin và ảnh GPLX để xác minh.",
+            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
             customerId,
             "Submit",
             nameof(CustomerDocument),
             document.CustomerDocumentId.ToString(),
-            $"Gửi {document.DocumentType} để xác minh.",
+            "Gửi thông tin và ảnh GPLX để xác minh.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -198,17 +282,27 @@ internal sealed class DocumentService : IDocumentService
         DateTime rentalDate,
         CancellationToken cancellationToken = default)
     {
-        var validTypes = await _dbContext.CustomerDocuments
-            .AsNoTracking()
-            .Where(document =>
-                document.CustomerId == customerId &&
-                document.Status == DocumentStatus.Verified &&
-                (!document.ExpiryDate.HasValue || document.ExpiryDate.Value.Date >= rentalDate.Date))
-            .Select(document => document.DocumentType)
-            .Distinct()
-            .ToListAsync(cancellationToken);
+        var documents = await GetCustomerDocumentsAsync(customerId, cancellationToken);
+        var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
+        var license = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
 
-        return DocumentTypes.RequiredForRental.All(validTypes.Contains);
+        var citizenValid = citizenFront is not null &&
+                           citizenBack is not null &&
+                           citizenFront.Status == DocumentStatus.Verified &&
+                           citizenBack.Status == DocumentStatus.Verified &&
+                           citizenFront.HasRequiredData &&
+                           citizenBack.HasRequiredData &&
+                           citizenFront.ExpiryDate.HasValue &&
+                           citizenFront.ExpiryDate.Value.Date >= rentalDate.Date;
+
+        var licenseValid = license is not null &&
+                           license.Status == DocumentStatus.Verified &&
+                           license.HasRequiredData &&
+                           license.ExpiryDate.HasValue &&
+                           license.ExpiryDate.Value.Date >= rentalDate.Date;
+
+        return citizenValid && licenseValid;
     }
 
     private async Task<OperationResult> DecideAsync(
@@ -224,6 +318,12 @@ internal sealed class DocumentService : IDocumentService
         if (document is null)
         {
             return OperationResult.Failure("Không tìm thấy giấy tờ.");
+        }
+
+        var metadata = await ReadKycMetadataAsync(document.CustomerDocumentId, cancellationToken);
+        if (verified && !HasRequiredData(document, metadata))
+        {
+            return OperationResult.Failure("Giấy tờ chưa có đủ thông tin KYC để xác minh.");
         }
 
         var previousStatus = document.Status;
@@ -283,6 +383,202 @@ internal sealed class DocumentService : IDocumentService
         return OperationResult.Success();
     }
 
+    private async Task<CustomerDocument> GetOrCreateDocumentAsync(
+        string customerId,
+        string documentType,
+        CancellationToken cancellationToken)
+    {
+        var document = await _dbContext.CustomerDocuments
+            .FirstOrDefaultAsync(item =>
+                item.CustomerId == customerId &&
+                item.DocumentType == documentType,
+                cancellationToken);
+
+        if (document is not null)
+        {
+            return document;
+        }
+
+        document = new CustomerDocument
+        {
+            CustomerId = customerId,
+            DocumentType = documentType,
+            CreatedAt = DateTime.UtcNow
+        };
+        _dbContext.CustomerDocuments.Add(document);
+        return document;
+    }
+
+    private static void ResetToPending(CustomerDocument document)
+    {
+        document.Status = DocumentStatus.Pending;
+        document.RejectionReason = null;
+        document.VerifiedBy = null;
+        document.VerifiedAt = null;
+        document.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static string? ValidateCitizenId(SubmitCitizenIdRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.FullNameOnDocument) ||
+            string.IsNullOrWhiteSpace(request.DocumentNumber) ||
+            string.IsNullOrWhiteSpace(request.Gender) ||
+            string.IsNullOrWhiteSpace(request.PermanentAddress) ||
+            string.IsNullOrWhiteSpace(request.FrontImagePath) ||
+            string.IsNullOrWhiteSpace(request.BackImagePath))
+        {
+            return "Vui lòng nhập đầy đủ thông tin và tải cả hai mặt CCCD.";
+        }
+
+        if (request.DocumentNumber.Length != 12 || !request.DocumentNumber.All(char.IsDigit))
+        {
+            return "Số CCCD phải gồm đúng 12 chữ số.";
+        }
+
+        if (request.DateOfBirth.Date > DateTime.Today.AddYears(-18))
+        {
+            return "Khách thuê xe phải đủ 18 tuổi.";
+        }
+
+        if (request.IssuedDate.Date > DateTime.Today)
+        {
+            return "Ngày cấp CCCD không được sau ngày hiện tại.";
+        }
+
+        if (request.ExpiryDate.Date < DateTime.Today)
+        {
+            return "CCCD đã hết hạn. Vui lòng sử dụng CCCD còn hiệu lực.";
+        }
+
+        if (request.ExpiryDate.Date <= request.IssuedDate.Date)
+        {
+            return "Ngày hết hạn CCCD phải sau ngày cấp.";
+        }
+
+        return null;
+    }
+
+    private static string? ValidateDrivingLicense(SubmitDrivingLicenseRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.FullNameOnDocument) ||
+            string.IsNullOrWhiteSpace(request.DocumentNumber) ||
+            string.IsNullOrWhiteSpace(request.LicenseClass) ||
+            string.IsNullOrWhiteSpace(request.ImagePath))
+        {
+            return "Vui lòng nhập đầy đủ thông tin và tải ảnh GPLX.";
+        }
+
+        if (request.IssuedDate.Date > DateTime.Today)
+        {
+            return "Ngày cấp GPLX không được sau ngày hiện tại.";
+        }
+
+        if (request.ExpiryDate.Date < DateTime.Today)
+        {
+            return "GPLX đã hết hạn. Vui lòng sử dụng GPLX còn hiệu lực.";
+        }
+
+        if (request.ExpiryDate.Date <= request.IssuedDate.Date)
+        {
+            return "Ngày hết hạn GPLX phải sau ngày cấp.";
+        }
+
+        return null;
+    }
+
+    private async Task UpdateKycMetadataAsync(
+        int documentId,
+        string? fullNameOnDocument,
+        DateTime? dateOfBirth,
+        string? gender,
+        DateTime? issuedDate,
+        string? permanentAddress,
+        string? licenseClass,
+        CancellationToken cancellationToken)
+    {
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+            UPDATE [CustomerDocuments]
+            SET [FullNameOnDocument] = {fullNameOnDocument},
+                [DateOfBirth] = {dateOfBirth},
+                [Gender] = {gender},
+                [IssuedDate] = {issuedDate},
+                [PermanentAddress] = {permanentAddress},
+                [LicenseClass] = {licenseClass}
+            WHERE [CustomerDocumentId] = {documentId}", cancellationToken);
+    }
+
+    private async Task<KycMetadata> ReadKycMetadataAsync(
+        int documentId,
+        CancellationToken cancellationToken)
+    {
+        var connection = _dbContext.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT [FullNameOnDocument], [DateOfBirth], [Gender], [IssuedDate], [PermanentAddress], [LicenseClass]
+                FROM [CustomerDocuments]
+                WHERE [CustomerDocumentId] = @documentId";
+
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@documentId";
+            parameter.Value = documentId;
+            command.Parameters.Add(parameter);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return KycMetadata.Empty;
+            }
+
+            return new KycMetadata(
+                reader.IsDBNull(0) ? null : reader.GetString(0),
+                reader.IsDBNull(1) ? null : reader.GetDateTime(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5));
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static bool HasRequiredData(CustomerDocument document, KycMetadata metadata) =>
+        document.DocumentType switch
+        {
+            DocumentTypes.CitizenId =>
+                !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
+                !string.IsNullOrWhiteSpace(document.ImagePath) &&
+                document.ExpiryDate.HasValue &&
+                !string.IsNullOrWhiteSpace(metadata.FullNameOnDocument) &&
+                metadata.DateOfBirth.HasValue &&
+                !string.IsNullOrWhiteSpace(metadata.Gender) &&
+                metadata.IssuedDate.HasValue &&
+                !string.IsNullOrWhiteSpace(metadata.PermanentAddress),
+            DocumentTypes.CitizenIdBack =>
+                !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
+                !string.IsNullOrWhiteSpace(document.ImagePath),
+            DocumentTypes.DrivingLicense =>
+                !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
+                !string.IsNullOrWhiteSpace(document.ImagePath) &&
+                document.ExpiryDate.HasValue &&
+                !string.IsNullOrWhiteSpace(metadata.FullNameOnDocument) &&
+                metadata.IssuedDate.HasValue &&
+                !string.IsNullOrWhiteSpace(metadata.LicenseClass),
+            _ => false
+        };
+
     private async Task<IReadOnlyList<DocumentDto>> MapDocumentsAsync(
         IReadOnlyCollection<CustomerDocument> documents,
         CancellationToken cancellationToken)
@@ -308,27 +604,38 @@ internal sealed class DocumentService : IDocumentService
             })
             .ToDictionaryAsync(user => user.Id, cancellationToken);
 
-        return documents
-            .Select(document =>
-            {
-                users.TryGetValue(document.CustomerId, out var user);
+        var result = new List<DocumentDto>(documents.Count);
+        foreach (var document in documents)
+        {
+            users.TryGetValue(document.CustomerId, out var user);
+            var metadata = await ReadKycMetadataAsync(
+                document.CustomerDocumentId,
+                cancellationToken);
 
-                return new DocumentDto(
-                    document.CustomerDocumentId,
-                    document.CustomerId,
-                    user?.FullName ?? string.Empty,
-                    user?.PhoneNumber,
-                    document.DocumentType,
-                    document.DocumentNumber,
-                    document.ExpiryDate,
-                    document.ImagePath,
-                    document.Status,
-                    document.RejectionReason,
-                    document.VerifiedBy,
-                    document.VerifiedAt,
-                    document.UpdatedAt);
-            })
-            .ToList();
+            result.Add(new DocumentDto(
+                document.CustomerDocumentId,
+                document.CustomerId,
+                user?.FullName ?? string.Empty,
+                user?.PhoneNumber,
+                document.DocumentType,
+                document.DocumentNumber,
+                document.ExpiryDate,
+                document.ImagePath,
+                document.Status,
+                document.RejectionReason,
+                document.VerifiedBy,
+                document.VerifiedAt,
+                document.UpdatedAt,
+                metadata.FullNameOnDocument,
+                metadata.DateOfBirth,
+                metadata.Gender,
+                metadata.IssuedDate,
+                metadata.PermanentAddress,
+                metadata.LicenseClass,
+                HasRequiredData(document, metadata)));
+        }
+
+        return result;
     }
 
     private async Task NotifyAdminsAsync(
@@ -360,5 +667,16 @@ internal sealed class DocumentService : IDocumentService
                 Message = message
             });
         }
+    }
+
+    private sealed record KycMetadata(
+        string? FullNameOnDocument,
+        DateTime? DateOfBirth,
+        string? Gender,
+        DateTime? IssuedDate,
+        string? PermanentAddress,
+        string? LicenseClass)
+    {
+        public static readonly KycMetadata Empty = new(null, null, null, null, null, null);
     }
 }
