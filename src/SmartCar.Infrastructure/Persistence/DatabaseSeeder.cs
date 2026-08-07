@@ -149,8 +149,7 @@ public static class DatabaseSeeder
                     [DateOfBirth] = {demoBirthDate},
                     [Gender] = {demoGender},
                     [IssuedDate] = {demoIssuedDate},
-                    [PermanentAddress] = {demoAddress},
-                    [TemporaryAddress] = {demoAddress}
+                    [PermanentAddress] = {demoAddress}
                 WHERE [CustomerDocumentId] IN ({citizenFront.CustomerDocumentId}, {citizenBack.CustomerDocumentId})");
         }
 
