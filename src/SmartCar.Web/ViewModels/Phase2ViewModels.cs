@@ -53,9 +53,7 @@ public sealed class CitizenIdVerificationViewModel
     [Display(Name = "Địa chỉ thường trú")]
     public string PermanentAddress { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng nhập địa chỉ tạm trú.")]
-    [StringLength(500, ErrorMessage = "Địa chỉ tạm trú không được vượt quá 500 ký tự.")]
-    [Display(Name = "Địa chỉ tạm trú hiện tại")]
+    // Giữ lại để tương thích dữ liệu cũ; không còn là trường KYC hiển thị cho khách.
     public string TemporaryAddress { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng chọn ảnh CCCD mặt trước.")]
