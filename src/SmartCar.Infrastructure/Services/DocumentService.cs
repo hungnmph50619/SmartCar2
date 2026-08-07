@@ -168,7 +168,6 @@ internal sealed class DocumentService : IDocumentService
                 request.Gender.Trim(),
                 request.IssuedDate.Date,
                 request.PermanentAddress.Trim(),
-                request.TemporaryAddress.Trim(),
                 null,
                 cancellationToken);
         }
@@ -185,7 +184,7 @@ internal sealed class DocumentService : IDocumentService
             "Submit",
             nameof(CustomerDocument),
             front.CustomerDocumentId.ToString(),
-            "Gửi hồ sơ CCCD gồm thông tin khai báo, thường trú, tạm trú và hai ảnh để xác minh.",
+            "Gửi hồ sơ CCCD gồm thông tin khai báo, địa chỉ thường trú và hai ảnh để xác minh.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -248,7 +247,6 @@ internal sealed class DocumentService : IDocumentService
                 null,
                 null,
                 request.IssuedDate.Date,
-                null,
                 null,
                 request.LicenseClass.Trim().ToUpperInvariant(),
                 cancellationToken);
@@ -436,11 +434,10 @@ internal sealed class DocumentService : IDocumentService
             string.IsNullOrWhiteSpace(request.DocumentNumber) ||
             string.IsNullOrWhiteSpace(request.Gender) ||
             string.IsNullOrWhiteSpace(request.PermanentAddress) ||
-            string.IsNullOrWhiteSpace(request.TemporaryAddress) ||
             string.IsNullOrWhiteSpace(request.FrontImagePath) ||
             string.IsNullOrWhiteSpace(request.BackImagePath))
         {
-            return "Vui lòng nhập đầy đủ thông tin, thường trú, tạm trú và tải cả hai mặt CCCD.";
+            return "Vui lòng nhập đầy đủ thông tin trên CCCD và tải cả hai mặt CCCD.";
         }
 
         if (request.DocumentNumber.Length != 12 || !request.DocumentNumber.All(char.IsDigit))
@@ -507,7 +504,6 @@ internal sealed class DocumentService : IDocumentService
         string? gender,
         DateTime? issuedDate,
         string? permanentAddress,
-        string? temporaryAddress,
         string? licenseClass,
         CancellationToken cancellationToken)
     {
@@ -518,7 +514,6 @@ internal sealed class DocumentService : IDocumentService
                 [Gender] = {gender},
                 [IssuedDate] = {issuedDate},
                 [PermanentAddress] = {permanentAddress},
-                [TemporaryAddress] = {temporaryAddress},
                 [LicenseClass] = {licenseClass}
             WHERE [CustomerDocumentId] = {documentId}", cancellationToken);
     }
@@ -538,7 +533,7 @@ internal sealed class DocumentService : IDocumentService
         {
             await using var command = connection.CreateCommand();
             command.CommandText = @"
-                SELECT [FullNameOnDocument], [DateOfBirth], [Gender], [IssuedDate], [PermanentAddress], [TemporaryAddress], [LicenseClass]
+                SELECT [FullNameOnDocument], [DateOfBirth], [Gender], [IssuedDate], [PermanentAddress], [LicenseClass]
                 FROM [CustomerDocuments]
                 WHERE [CustomerDocumentId] = @documentId";
 
@@ -559,8 +554,7 @@ internal sealed class DocumentService : IDocumentService
                 reader.IsDBNull(2) ? null : reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetDateTime(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4),
-                reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.IsDBNull(6) ? null : reader.GetString(6));
+                reader.IsDBNull(5) ? null : reader.GetString(5));
         }
         finally
         {
@@ -582,8 +576,7 @@ internal sealed class DocumentService : IDocumentService
                 metadata.DateOfBirth.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.Gender) &&
                 metadata.IssuedDate.HasValue &&
-                !string.IsNullOrWhiteSpace(metadata.PermanentAddress) &&
-                !string.IsNullOrWhiteSpace(metadata.TemporaryAddress),
+                !string.IsNullOrWhiteSpace(metadata.PermanentAddress),
             DocumentTypes.CitizenIdBack =>
                 !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
                 !string.IsNullOrWhiteSpace(document.ImagePath),
@@ -652,7 +645,6 @@ internal sealed class DocumentService : IDocumentService
                 metadata.Gender,
                 metadata.IssuedDate,
                 metadata.PermanentAddress,
-                metadata.TemporaryAddress,
                 metadata.LicenseClass,
                 HasRequiredData(document, metadata)));
         }
@@ -697,9 +689,8 @@ internal sealed class DocumentService : IDocumentService
         string? Gender,
         DateTime? IssuedDate,
         string? PermanentAddress,
-        string? TemporaryAddress,
         string? LicenseClass)
     {
-        public static readonly KycMetadata Empty = new(null, null, null, null, null, null, null);
+        public static readonly KycMetadata Empty = new(null, null, null, null, null, null);
     }
 }
