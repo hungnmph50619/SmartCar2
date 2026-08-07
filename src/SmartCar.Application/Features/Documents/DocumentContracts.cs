@@ -17,7 +17,6 @@ public sealed record SubmitCitizenIdRequest(
     DateTime IssuedDate,
     DateTime ExpiryDate,
     string PermanentAddress,
-    string TemporaryAddress,
     string FrontImagePath,
     string BackImagePath);
 
@@ -49,7 +48,6 @@ public sealed record DocumentDto(
     string? Gender,
     DateTime? IssuedDate,
     string? PermanentAddress,
-    string? TemporaryAddress,
     string? LicenseClass,
     bool HasRequiredData);
 
