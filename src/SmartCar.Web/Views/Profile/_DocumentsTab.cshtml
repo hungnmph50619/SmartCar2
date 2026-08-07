@@ -27,6 +27,7 @@
     var citizenFront = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
     var citizenBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
     var drivingLicense = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+    var drivingLicenseBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
     var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
     var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
@@ -37,18 +38,17 @@
     var returnDateRoute = returnDate?.ToString("O");
     var requiredValidThrough = returnDate?.Date ?? DateTime.Today;
 
-    var citizenVerified = citizenFront is not null &&
-                          citizenBack is not null &&
+    var citizenVerified = citizenFront is not null && citizenBack is not null &&
                           citizenFront.Status == DocumentStatus.Verified &&
                           citizenBack.Status == DocumentStatus.Verified &&
-                          citizenFront.HasRequiredData &&
-                          citizenBack.HasRequiredData &&
+                          citizenFront.HasRequiredData && citizenBack.HasRequiredData &&
                           citizenFront.ExpiryDate.HasValue &&
                           citizenFront.ExpiryDate.Value.Date >= requiredValidThrough;
 
-    var licenseVerified = drivingLicense is not null &&
+    var licenseVerified = drivingLicense is not null && drivingLicenseBack is not null &&
                           drivingLicense.Status == DocumentStatus.Verified &&
-                          drivingLicense.HasRequiredData &&
+                          drivingLicenseBack.Status == DocumentStatus.Verified &&
+                          drivingLicense.HasRequiredData && drivingLicenseBack.HasRequiredData &&
                           drivingLicense.ExpiryDate.HasValue &&
                           drivingLicense.ExpiryDate.Value.Date >= requiredValidThrough;
 
@@ -67,11 +67,11 @@
 
     var licenseStatus = licenseVerified
         ? "Đã xác minh"
-        : drivingLicense is null
+        : drivingLicense is null || drivingLicenseBack is null
             ? "Chưa hoàn tất"
-            : drivingLicense.Status == DocumentStatus.Rejected
+            : drivingLicense.Status == DocumentStatus.Rejected || drivingLicenseBack.Status == DocumentStatus.Rejected
                 ? "Cần gửi lại"
-                : drivingLicense.Status == DocumentStatus.Pending
+                : drivingLicense.Status == DocumentStatus.Pending || drivingLicenseBack.Status == DocumentStatus.Pending
                     ? "Chờ xác minh"
                     : "Chưa đủ điều kiện";
 
@@ -136,25 +136,21 @@ else if (hasReturnContext)
             <div class="border rounded-3 p-3 h-100 @(citizenVerified ? "border-success" : string.Empty)">
                 <div class="small text-muted">Bước 1</div>
                 <div class="fw-bold">Xác minh danh tính — CCCD</div>
-                <div class="small mt-1 @(citizenVerified ? "text-success" : "text-muted")">
-                    @(citizenVerified ? "✓ Đã xác minh" : citizenStatus)
-                </div>
+                <div class="small mt-1 @(citizenVerified ? "text-success" : "text-muted")">@(citizenVerified ? "✓ Đã xác minh" : citizenStatus)</div>
             </div>
         </div>
         <div class="col-md-6">
             <div class="border rounded-3 p-3 h-100 @(licenseVerified ? "border-success" : string.Empty)">
                 <div class="small text-muted">Bước 2</div>
                 <div class="fw-bold">Xác minh giấy phép lái xe</div>
-                <div class="small mt-1 @(licenseVerified ? "text-success" : "text-muted")">
-                    @(licenseVerified ? "✓ Đã xác minh" : licenseStatus)
-                </div>
+                <div class="small mt-1 @(licenseVerified ? "text-success" : "text-muted")">@(licenseVerified ? "✓ Đã xác minh" : licenseStatus)</div>
             </div>
         </div>
     </div>
 </div>
 
 <div class="alert alert-info" role="alert">
-    <strong>Yêu cầu ảnh:</strong> ảnh rõ chữ, đủ bốn góc, không bị lóa hoặc che thông tin. CCCD cần đủ <strong>mặt trước và mặt sau</strong>. GPLX phải còn hiệu lực ít nhất đến ngày trả xe.
+    <strong>Yêu cầu ảnh:</strong> ảnh rõ chữ, đủ bốn góc, không bị lóa hoặc che thông tin. Cả CCCD và GPLX đều cần <strong>mặt trước và mặt sau</strong>.
 </div>
 
 <section id="citizen-id-verification" class="card border-0 shadow-sm mb-4">
@@ -163,7 +159,7 @@ else if (hasReturnContext)
             <div>
                 <div class="text-uppercase small text-primary fw-semibold">Bước 1</div>
                 <h3 class="h4 fw-bold mb-1">Thông tin căn cước công dân</h3>
-                <p class="text-muted mb-0">Nhập đúng thông tin in trên CCCD và tải cả hai mặt để đối chiếu.</p>
+                <p class="text-muted mb-0">Nhập đúng thông tin in trên CCCD, nơi cư trú hiện tại và tải cả hai mặt để đối chiếu.</p>
             </div>
             <span class="badge @StatusBadge(citizenFront?.Status, citizenVerified) px-3 py-2">@citizenStatus</span>
         </div>
@@ -172,16 +168,11 @@ else if (hasReturnContext)
     <div class="card-body p-4">
         @if (citizenFront?.Status == DocumentStatus.Rejected || citizenBack?.Status == DocumentStatus.Rejected)
         {
-            <div class="alert alert-danger">
-                <strong>Hồ sơ CCCD cần gửi lại.</strong>
-                @(citizenFront?.RejectionReason ?? citizenBack?.RejectionReason)
-            </div>
+            <div class="alert alert-danger"><strong>Hồ sơ CCCD cần gửi lại.</strong> @(citizenFront?.RejectionReason ?? citizenBack?.RejectionReason)</div>
         }
         else if (citizenFront?.Status == DocumentStatus.Pending || citizenBack?.Status == DocumentStatus.Pending)
         {
-            <div class="alert alert-warning">
-                Hồ sơ CCCD đang chờ Quản trị viên đối chiếu thông tin với ảnh. Bạn có thể gửi lại nếu cần sửa dữ liệu.
-            </div>
+            <div class="alert alert-warning">Hồ sơ CCCD đang chờ Quản trị viên đối chiếu thông tin với ảnh.</div>
         }
 
         @if (citizenFront is not null)
@@ -244,8 +235,21 @@ else if (hasReturnContext)
                 </div>
                 <div class="col-md-8">
                     <label asp-for="CitizenIdVerification.PermanentAddress" class="form-label fw-semibold"></label>
-                    <input asp-for="CitizenIdVerification.PermanentAddress" class="form-control" autocomplete="street-address" />
+                    <input asp-for="CitizenIdVerification.PermanentAddress" id="citizen-permanent-address" class="form-control" autocomplete="street-address" />
                     <span asp-validation-for="CitizenIdVerification.PermanentAddress" class="text-danger small"></span>
+                </div>
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
+                        <label asp-for="CitizenIdVerification.TemporaryAddress" class="form-label fw-semibold mb-0"></label>
+                        <label class="form-check small mb-0">
+                            <input class="form-check-input" type="checkbox"
+                                   data-copy-address-from="#citizen-permanent-address"
+                                   data-copy-address-to="#citizen-temporary-address" />
+                            <span class="form-check-label">Tạm trú giống thường trú</span>
+                        </label>
+                    </div>
+                    <input asp-for="CitizenIdVerification.TemporaryAddress" id="citizen-temporary-address" class="form-control" autocomplete="street-address" />
+                    <span asp-validation-for="CitizenIdVerification.TemporaryAddress" class="text-danger small"></span>
                 </div>
             </div>
 
@@ -254,13 +258,7 @@ else if (hasReturnContext)
             <div class="row g-4">
                 <div class="col-md-6">
                     <label asp-for="CitizenIdVerification.FrontImage" class="form-label fw-semibold"></label>
-                    <input asp-for="CitizenIdVerification.FrontImage"
-                           type="file"
-                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                           class="form-control"
-                           data-image-input
-                           data-preview-target="#citizen-front-preview"
-                           data-file-info-target="#citizen-front-info" />
+                    <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-control" data-image-input data-preview-target="#citizen-front-preview" data-file-info-target="#citizen-front-info" />
                     <span asp-validation-for="CitizenIdVerification.FrontImage" class="text-danger small"></span>
                     <div id="citizen-front-info" class="small text-muted mt-2 d-none"></div>
                     <div id="citizen-front-preview" class="mt-2 d-none"><img class="img-fluid rounded border" style="height:180px;width:100%;object-fit:contain" alt="Xem trước CCCD mặt trước" /></div>
@@ -272,13 +270,7 @@ else if (hasReturnContext)
                 </div>
                 <div class="col-md-6">
                     <label asp-for="CitizenIdVerification.BackImage" class="form-label fw-semibold"></label>
-                    <input asp-for="CitizenIdVerification.BackImage"
-                           type="file"
-                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                           class="form-control"
-                           data-image-input
-                           data-preview-target="#citizen-back-preview"
-                           data-file-info-target="#citizen-back-info" />
+                    <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-control" data-image-input data-preview-target="#citizen-back-preview" data-file-info-target="#citizen-back-info" />
                     <span asp-validation-for="CitizenIdVerification.BackImage" class="text-danger small"></span>
                     <div id="citizen-back-info" class="small text-muted mt-2 d-none"></div>
                     <div id="citizen-back-preview" class="mt-2 d-none"><img class="img-fluid rounded border" style="height:180px;width:100%;object-fit:contain" alt="Xem trước CCCD mặt sau" /></div>
@@ -292,9 +284,7 @@ else if (hasReturnContext)
 
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-4">
                 <div class="small text-muted">JPG, PNG hoặc WEBP; tối đa 5 MB cho mỗi ảnh.</div>
-                <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang gửi CCCD...">
-                    @(citizenFront is null ? "Gửi xác minh CCCD" : "Cập nhật và gửi lại CCCD")
-                </button>
+                <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang gửi CCCD...">@(citizenFront is null ? "Gửi xác minh CCCD" : "Cập nhật và gửi lại CCCD")</button>
             </div>
         </form>
     </div>
@@ -306,20 +296,20 @@ else if (hasReturnContext)
             <div>
                 <div class="text-uppercase small text-primary fw-semibold">Bước 2</div>
                 <h3 class="h4 fw-bold mb-1">Thông tin giấy phép lái xe</h3>
-                <p class="text-muted mb-0">Nhập thông tin trên GPLX và tải ảnh rõ nét để Quản trị viên đối chiếu.</p>
+                <p class="text-muted mb-0">Nhập thông tin trên GPLX và tải cả mặt trước lẫn mặt sau để Quản trị viên đối chiếu.</p>
             </div>
             <span class="badge @StatusBadge(drivingLicense?.Status, licenseVerified) px-3 py-2">@licenseStatus</span>
         </div>
     </div>
 
     <div class="card-body p-4">
-        @if (drivingLicense?.Status == DocumentStatus.Rejected)
+        @if (drivingLicense?.Status == DocumentStatus.Rejected || drivingLicenseBack?.Status == DocumentStatus.Rejected)
         {
-            <div class="alert alert-danger"><strong>GPLX cần gửi lại.</strong> @drivingLicense.RejectionReason</div>
+            <div class="alert alert-danger"><strong>GPLX cần gửi lại.</strong> @(drivingLicense?.RejectionReason ?? drivingLicenseBack?.RejectionReason)</div>
         }
-        else if (drivingLicense?.Status == DocumentStatus.Pending)
+        else if (drivingLicense?.Status == DocumentStatus.Pending || drivingLicenseBack?.Status == DocumentStatus.Pending)
         {
-            <div class="alert alert-warning">GPLX đang chờ Quản trị viên đối chiếu thông tin với ảnh.</div>
+            <div class="alert alert-warning">GPLX đang chờ Quản trị viên đối chiếu thông tin với cả hai mặt ảnh.</div>
         }
 
         @if (drivingLicense is not null)
@@ -357,57 +347,62 @@ else if (hasReturnContext)
                     <input asp-for="DrivingLicenseVerification.LicenseClass" class="form-control text-uppercase" placeholder="B, C1..." />
                     <span asp-validation-for="DrivingLicenseVerification.LicenseClass" class="text-danger small"></span>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label asp-for="DrivingLicenseVerification.IssuedDate" class="form-label fw-semibold"></label>
                     <input type="text" class="form-control" value="@licenseIssuedDisplay" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10" required data-vn-date-input data-hidden-target="#license-issued-value" />
                     <input asp-for="DrivingLicenseVerification.IssuedDate" id="license-issued-value" type="hidden" />
                     <span asp-validation-for="DrivingLicenseVerification.IssuedDate" class="text-danger small"></span>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label asp-for="DrivingLicenseVerification.ExpiryDate" class="form-label fw-semibold"></label>
                     <input type="text" class="form-control" value="@licenseExpiryDisplay" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10" required data-vn-date-input data-hidden-target="#license-expiry-value" />
                     <input asp-for="DrivingLicenseVerification.ExpiryDate" id="license-expiry-value" type="hidden" />
                     <span asp-validation-for="DrivingLicenseVerification.ExpiryDate" class="text-danger small"></span>
                 </div>
-                <div class="col-md-4">
-                    <label asp-for="DrivingLicenseVerification.Image" class="form-label fw-semibold"></label>
-                    <input asp-for="DrivingLicenseVerification.Image"
-                           type="file"
-                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                           class="form-control"
-                           data-image-input
-                           data-preview-target="#license-preview"
-                           data-file-info-target="#license-info" />
-                    <span asp-validation-for="DrivingLicenseVerification.Image" class="text-danger small"></span>
+            </div>
+
+            <hr class="my-4" />
+            <h4 class="h6 fw-bold mb-3">Ảnh giấy phép lái xe</h4>
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <label asp-for="DrivingLicenseVerification.FrontImage" class="form-label fw-semibold"></label>
+                    <input asp-for="DrivingLicenseVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-control" data-image-input data-preview-target="#license-front-preview" data-file-info-target="#license-front-info" />
+                    <span asp-validation-for="DrivingLicenseVerification.FrontImage" class="text-danger small"></span>
+                    <div id="license-front-info" class="small text-muted mt-2 d-none"></div>
+                    <div id="license-front-preview" class="mt-2 d-none"><img class="img-fluid rounded border" style="height:180px;width:100%;object-fit:contain" alt="Xem trước GPLX mặt trước" /></div>
+                    @if (drivingLicense is not null)
+                    {
+                        <div class="small text-muted mt-2">Ảnh đang lưu:</div>
+                        <img src="@Url.Action("ViewImage", "Documents", new { id = drivingLicense.CustomerDocumentId })" class="img-fluid rounded border mt-1" style="height:180px;width:100%;object-fit:contain" alt="GPLX mặt trước hiện tại" />
+                    }
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="DrivingLicenseVerification.BackImage" class="form-label fw-semibold"></label>
+                    <input asp-for="DrivingLicenseVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-control" data-image-input data-preview-target="#license-back-preview" data-file-info-target="#license-back-info" />
+                    <span asp-validation-for="DrivingLicenseVerification.BackImage" class="text-danger small"></span>
+                    <div id="license-back-info" class="small text-muted mt-2 d-none"></div>
+                    <div id="license-back-preview" class="mt-2 d-none"><img class="img-fluid rounded border" style="height:180px;width:100%;object-fit:contain" alt="Xem trước GPLX mặt sau" /></div>
+                    @if (drivingLicenseBack is not null)
+                    {
+                        <div class="small text-muted mt-2">Ảnh đang lưu:</div>
+                        <img src="@Url.Action("ViewImage", "Documents", new { id = drivingLicenseBack.CustomerDocumentId })" class="img-fluid rounded border mt-1" style="height:180px;width:100%;object-fit:contain" alt="GPLX mặt sau hiện tại" />
+                    }
                 </div>
             </div>
 
-            <div id="license-info" class="small text-muted mt-2 d-none"></div>
-            <div id="license-preview" class="mt-2 d-none"><img class="img-fluid rounded border" style="max-height:220px;width:100%;object-fit:contain" alt="Xem trước GPLX" /></div>
-
-            @if (drivingLicense is not null)
-            {
-                <div class="small text-muted mt-3">Ảnh GPLX đang lưu:</div>
-                <img src="@Url.Action("ViewImage", "Documents", new { id = drivingLicense.CustomerDocumentId })" class="img-fluid rounded border mt-1" style="max-height:220px;width:100%;object-fit:contain" alt="GPLX hiện tại" />
-            }
-
             @if (drivingLicense?.ExpiryDate.HasValue == true && drivingLicense.ExpiryDate.Value.Date < requiredValidThrough)
             {
-                <div class="alert alert-danger mt-3 mb-0">
-                    GPLX hiện tại không còn hiệu lực đến ngày trả xe <strong>@requiredValidThrough.ToString("dd/MM/yyyy")</strong>. Vui lòng cập nhật GPLX mới.
-                </div>
+                <div class="alert alert-danger mt-3 mb-0">GPLX hiện tại không còn hiệu lực đến ngày trả xe <strong>@requiredValidThrough.ToString("dd/MM/yyyy")</strong>. Vui lòng cập nhật GPLX mới.</div>
             }
 
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-4">
-                <div class="small text-muted">Số GPLX được hiển thị đầy đủ cho Quản trị viên để đối chiếu với ảnh.</div>
-                <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang gửi GPLX...">
-                    @(drivingLicense is null ? "Gửi xác minh GPLX" : "Cập nhật và gửi lại GPLX")
-                </button>
+                <div class="small text-muted">JPG, PNG hoặc WEBP; tối đa 5 MB cho mỗi ảnh.</div>
+                <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang gửi GPLX...">@(drivingLicense is null ? "Gửi xác minh GPLX" : "Cập nhật và gửi lại GPLX")</button>
             </div>
         </form>
     </div>
 </section>
 
 <div class="alert alert-light border mb-0 small">
-    <strong>Bảo mật:</strong> trên màn hình quản trị, chỉ số CCCD được che một phần; các thông tin KYC còn lại được hiển thị đầy đủ để Quản trị viên đối chiếu với ảnh giấy tờ.
+    <strong>Bảo mật thông tin:</strong> thông tin và hình ảnh giấy tờ chỉ được sử dụng để xác minh danh tính và điều kiện thuê xe.
 </div>
