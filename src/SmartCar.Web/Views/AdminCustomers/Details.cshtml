@@ -142,7 +142,7 @@ else if (Model.ActiveTab == "documents")
                 <div>
                     <span class="text-uppercase small text-primary fw-semibold">Bước 1</span>
                     <h3 class="h4 fw-bold mb-1">Xác minh danh tính — CCCD</h3>
-                    <p class="text-muted mb-0">Đối chiếu thông tin cư trú và cả mặt trước lẫn mặt sau CCCD.</p>
+                    <p class="text-muted mb-0">Đối chiếu thông tin trên CCCD và cả mặt trước lẫn mặt sau.</p>
                 </div>
                 <span class="badge @(citizenVerified ? "bg-success" : "bg-warning text-dark") px-3 py-2">@(citizenVerified ? "Đã xác minh" : citizenFront is null || citizenBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
             </div>
@@ -162,7 +162,6 @@ else if (Model.ActiveTab == "documents")
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày cấp</span><strong>@(citizenFront.IssuedDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
                     <div class="col-12"><div class="border rounded p-3"><span class="small text-muted d-block">Địa chỉ thường trú</span><strong>@(citizenFront.PermanentAddress ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-12"><div class="border rounded p-3"><span class="small text-muted d-block">Địa chỉ tạm trú hiện tại</span><strong>@(citizenFront.TemporaryAddress ?? "Chưa cập nhật")</strong></div></div>
                 </div>
 
                 <div class="row g-4 mb-4">
@@ -186,8 +185,7 @@ else if (Model.ActiveTab == "documents")
                             <legend>Kiểm tra trước khi xác minh</legend>
                             <label><input class="form-check-input" type="checkbox" required /> Họ tên, ngày sinh và giới tính khớp với ảnh</label>
                             <label><input class="form-check-input" type="checkbox" required /> Số CCCD hiển thị trên hai mặt khớp nhau</label>
-                            <label><input class="form-check-input" type="checkbox" required /> Ngày cấp và ngày hết hạn khớp với ảnh</label>
-                            <label><input class="form-check-input" type="checkbox" required /> Thường trú và tạm trú đã được khai báo đầy đủ</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Ngày cấp, ngày hết hạn và địa chỉ thường trú khớp với ảnh</label>
                             <label><input class="form-check-input" type="checkbox" required /> Hai ảnh rõ chữ, đủ góc và không có dấu hiệu chỉnh sửa bất thường</label>
                         </fieldset>
                         <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh CCCD...">Xác minh CCCD hợp lệ</button>
@@ -208,7 +206,7 @@ else if (Model.ActiveTab == "documents")
                         <select name="reason" class="form-select" required>
                             <option value="">-- Chọn lý do --</option>
                             <option value="Thông tin khai báo không khớp với CCCD">Thông tin khai báo không khớp với CCCD</option>
-                            <option value="Thông tin thường trú hoặc tạm trú chưa đầy đủ">Thông tin thường trú hoặc tạm trú chưa đầy đủ</option>
+                            <option value="Địa chỉ thường trú chưa đầy đủ hoặc không khớp">Địa chỉ thường trú chưa đầy đủ hoặc không khớp</option>
                             <option value="Ảnh CCCD bị mờ, lóa hoặc mất góc">Ảnh CCCD bị mờ, lóa hoặc mất góc</option>
                             <option value="CCCD đã hoặc sắp hết hạn">CCCD đã hoặc sắp hết hạn</option>
                             <option value="Thông tin có dấu hiệu sai lệch">Thông tin có dấu hiệu sai lệch</option>
