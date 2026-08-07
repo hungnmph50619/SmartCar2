@@ -38,6 +38,7 @@
     var citizenFront = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
     var citizenBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
     var drivingLicense = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+    var drivingLicenseBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
     var citizenVerified = citizenFront is not null && citizenBack is not null &&
                           citizenFront.Status == DocumentStatus.Verified &&
@@ -45,9 +46,10 @@
                           citizenFront.HasRequiredData && citizenBack.HasRequiredData &&
                           citizenFront.ExpiryDate.HasValue && citizenFront.ExpiryDate.Value.Date >= DateTime.Today;
 
-    var licenseVerified = drivingLicense is not null &&
+    var licenseVerified = drivingLicense is not null && drivingLicenseBack is not null &&
                           drivingLicense.Status == DocumentStatus.Verified &&
-                          drivingLicense.HasRequiredData &&
+                          drivingLicenseBack.Status == DocumentStatus.Verified &&
+                          drivingLicense.HasRequiredData && drivingLicenseBack.HasRequiredData &&
                           drivingLicense.ExpiryDate.HasValue && drivingLicense.ExpiryDate.Value.Date >= DateTime.Today;
 }
 
@@ -59,30 +61,22 @@
             <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                 <h1 class="h2 fw-bold mb-0">@Model.FullName</h1>
                 <span class="badge @ProfileBadge(Model.ProfileStatusCode)">@Model.ProfileStatusText</span>
-                <span class="badge @(Model.IsActive ? "bg-success" : "bg-danger")">
-                    @(Model.IsActive ? "Đang hoạt động" : "Đã khóa")
-                </span>
+                <span class="badge @(Model.IsActive ? "bg-success" : "bg-danger")">@(Model.IsActive ? "Đang hoạt động" : "Đã khóa")</span>
             </div>
             <p class="text-muted mb-0">@Model.Email · @(string.IsNullOrWhiteSpace(Model.PhoneNumber) ? "Chưa có số điện thoại" : Model.PhoneNumber)</p>
         </div>
     </div>
-    <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-outline-success")"
-            type="button" data-bs-toggle="modal" data-bs-target="#accountStatusModal">
+    <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-outline-success")" type="button" data-bs-toggle="modal" data-bs-target="#accountStatusModal">
         @(Model.IsActive ? "Khóa tài khoản" : "Mở khóa tài khoản")
     </button>
 </div>
 
 <div class="customer-detail-tabs mb-4">
-    <a class="@(Model.ActiveTab == "overview" ? "active" : string.Empty)"
-       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="overview">Tổng quan</a>
-    <a class="@(Model.ActiveTab == "documents" ? "active" : string.Empty)"
-       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents">Xác minh KYC</a>
-    <a class="@(Model.ActiveTab == "bookings" ? "active" : string.Empty)"
-       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="bookings">Đơn thuê</a>
-    <a class="@(Model.ActiveTab == "payments" ? "active" : string.Empty)"
-       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="payments">Thanh toán</a>
-    <a class="@(Model.ActiveTab == "incidents" ? "active" : string.Empty)"
-       asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="incidents">Sự cố & vi phạm</a>
+    <a class="@(Model.ActiveTab == "overview" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="overview">Tổng quan</a>
+    <a class="@(Model.ActiveTab == "documents" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents">Xác minh KYC</a>
+    <a class="@(Model.ActiveTab == "bookings" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="bookings">Đơn thuê</a>
+    <a class="@(Model.ActiveTab == "payments" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="payments">Thanh toán</a>
+    <a class="@(Model.ActiveTab == "incidents" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="incidents">Sự cố & vi phạm</a>
 </div>
 
 @if (Model.ActiveTab == "overview")
@@ -126,10 +120,7 @@
                     {
                         <p class="text-danger">Tài khoản đang bị khóa.</p>
                     }
-                    <a asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents"
-                       class="btn @(Model.CanRent ? "btn-outline-success" : "btn-primary") w-100">
-                        Xem và đối chiếu KYC
-                    </a>
+                    <a asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents" class="btn @(Model.CanRent ? "btn-outline-success" : "btn-primary") w-100">Xem và đối chiếu KYC</a>
                 </div>
             </section>
         </div>
@@ -140,7 +131,7 @@ else if (Model.ActiveTab == "documents")
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
         <div>
             <h2 class="h4 fw-bold mb-1">Đối chiếu hồ sơ KYC</h2>
-            <p class="text-muted mb-0">Đối chiếu dữ liệu khách nhập với ảnh. Chỉ số CCCD được che một phần; các thông tin còn lại hiển thị đầy đủ.</p>
+            <p class="text-muted mb-0">Chỉ số CCCD được che một phần; các thông tin còn lại hiển thị đầy đủ để đối chiếu với ảnh.</p>
         </div>
         <span class="badge @ProfileBadge(Model.ProfileStatusCode) fs-6">Hồ sơ: @Model.ProfileStatusText</span>
     </div>
@@ -151,19 +142,15 @@ else if (Model.ActiveTab == "documents")
                 <div>
                     <span class="text-uppercase small text-primary fw-semibold">Bước 1</span>
                     <h3 class="h4 fw-bold mb-1">Xác minh danh tính — CCCD</h3>
-                    <p class="text-muted mb-0">Kiểm tra thông tin khai báo và đồng thời đối chiếu cả mặt trước lẫn mặt sau CCCD.</p>
+                    <p class="text-muted mb-0">Đối chiếu thông tin cư trú và cả mặt trước lẫn mặt sau CCCD.</p>
                 </div>
-                <span class="badge @(citizenVerified ? "bg-success" : "bg-warning text-dark") px-3 py-2">
-                    @(citizenVerified ? "Đã xác minh" : citizenFront is null || citizenBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")
-                </span>
+                <span class="badge @(citizenVerified ? "bg-success" : "bg-warning text-dark") px-3 py-2">@(citizenVerified ? "Đã xác minh" : citizenFront is null || citizenBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
             </div>
         </div>
         <div class="card-body p-4">
             @if (citizenFront is null || citizenBack is null)
             {
-                <div class="alert alert-secondary mb-0">
-                    Khách hàng chưa gửi đủ hồ sơ CCCD gồm thông tin, ảnh mặt trước và ảnh mặt sau.
-                </div>
+                <div class="alert alert-secondary mb-0">Khách hàng chưa gửi đủ hồ sơ CCCD gồm thông tin, ảnh mặt trước và ảnh mặt sau.</div>
             }
             else
             {
@@ -175,29 +162,23 @@ else if (Model.ActiveTab == "documents")
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày cấp</span><strong>@(citizenFront.IssuedDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
                     <div class="col-12"><div class="border rounded p-3"><span class="small text-muted d-block">Địa chỉ thường trú</span><strong>@(citizenFront.PermanentAddress ?? "Chưa cập nhật")</strong></div></div>
+                    <div class="col-12"><div class="border rounded p-3"><span class="small text-muted d-block">Địa chỉ tạm trú hiện tại</span><strong>@(citizenFront.TemporaryAddress ?? "Chưa cập nhật")</strong></div></div>
                 </div>
 
                 <div class="row g-4 mb-4">
                     <div class="col-md-6">
                         <div class="small fw-semibold mb-2">Ảnh CCCD mặt trước</div>
-                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenFront.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link">
-                            <img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenFront.CustomerDocumentId })" alt="CCCD mặt trước" />
-                            <span>Mở ảnh kích thước đầy đủ</span>
-                        </a>
+                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenFront.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link"><img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenFront.CustomerDocumentId })" alt="CCCD mặt trước" /><span>Mở ảnh kích thước đầy đủ</span></a>
                     </div>
                     <div class="col-md-6">
                         <div class="small fw-semibold mb-2">Ảnh CCCD mặt sau</div>
-                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenBack.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link">
-                            <img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenBack.CustomerDocumentId })" alt="CCCD mặt sau" />
-                            <span>Mở ảnh kích thước đầy đủ</span>
-                        </a>
+                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenBack.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link"><img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenBack.CustomerDocumentId })" alt="CCCD mặt sau" /><span>Mở ảnh kích thước đầy đủ</span></a>
                     </div>
                 </div>
 
                 @if (!citizenVerified)
                 {
-                    <form asp-action="VerifyCitizenId" method="post" data-loading-form
-                          data-confirm="Xác nhận toàn bộ thông tin và hai ảnh CCCD khớp nhau?">
+                    <form asp-action="VerifyCitizenId" method="post" data-loading-form data-confirm="Xác nhận toàn bộ thông tin và hai ảnh CCCD khớp nhau?">
                         <input type="hidden" name="customerId" value="@Model.CustomerId" />
                         <input type="hidden" name="frontDocumentId" value="@citizenFront.CustomerDocumentId" />
                         <input type="hidden" name="backDocumentId" value="@citizenBack.CustomerDocumentId" />
@@ -205,7 +186,8 @@ else if (Model.ActiveTab == "documents")
                             <legend>Kiểm tra trước khi xác minh</legend>
                             <label><input class="form-check-input" type="checkbox" required /> Họ tên, ngày sinh và giới tính khớp với ảnh</label>
                             <label><input class="form-check-input" type="checkbox" required /> Số CCCD hiển thị trên hai mặt khớp nhau</label>
-                            <label><input class="form-check-input" type="checkbox" required /> Ngày cấp, ngày hết hạn và địa chỉ thường trú khớp với ảnh</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Ngày cấp và ngày hết hạn khớp với ảnh</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Thường trú và tạm trú đã được khai báo đầy đủ</label>
                             <label><input class="form-check-input" type="checkbox" required /> Hai ảnh rõ chữ, đủ góc và không có dấu hiệu chỉnh sửa bất thường</label>
                         </fieldset>
                         <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh CCCD...">Xác minh CCCD hợp lệ</button>
@@ -226,6 +208,7 @@ else if (Model.ActiveTab == "documents")
                         <select name="reason" class="form-select" required>
                             <option value="">-- Chọn lý do --</option>
                             <option value="Thông tin khai báo không khớp với CCCD">Thông tin khai báo không khớp với CCCD</option>
+                            <option value="Thông tin thường trú hoặc tạm trú chưa đầy đủ">Thông tin thường trú hoặc tạm trú chưa đầy đủ</option>
                             <option value="Ảnh CCCD bị mờ, lóa hoặc mất góc">Ảnh CCCD bị mờ, lóa hoặc mất góc</option>
                             <option value="CCCD đã hoặc sắp hết hạn">CCCD đã hoặc sắp hết hạn</option>
                             <option value="Thông tin có dấu hiệu sai lệch">Thông tin có dấu hiệu sai lệch</option>
@@ -246,17 +229,15 @@ else if (Model.ActiveTab == "documents")
                 <div>
                     <span class="text-uppercase small text-primary fw-semibold">Bước 2</span>
                     <h3 class="h4 fw-bold mb-1">Xác minh giấy phép lái xe</h3>
-                    <p class="text-muted mb-0">Số GPLX và toàn bộ thông tin GPLX được hiển thị đầy đủ để đối chiếu.</p>
+                    <p class="text-muted mb-0">Đối chiếu thông tin và cả mặt trước lẫn mặt sau GPLX.</p>
                 </div>
-                <span class="badge @(licenseVerified ? "bg-success" : "bg-warning text-dark") px-3 py-2">
-                    @(licenseVerified ? "Đã xác minh" : drivingLicense is null ? "Chưa gửi" : drivingLicense.Status.ToVietnamese())
-                </span>
+                <span class="badge @(licenseVerified ? "bg-success" : "bg-warning text-dark") px-3 py-2">@(licenseVerified ? "Đã xác minh" : drivingLicense is null || drivingLicenseBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
             </div>
         </div>
         <div class="card-body p-4">
-            @if (drivingLicense is null)
+            @if (drivingLicense is null || drivingLicenseBack is null)
             {
-                <div class="alert alert-secondary mb-0">Khách hàng chưa gửi thông tin và ảnh GPLX.</div>
+                <div class="alert alert-secondary mb-0">Khách hàng chưa gửi đủ thông tin cùng ảnh mặt trước và mặt sau GPLX.</div>
             }
             else
             {
@@ -268,52 +249,61 @@ else if (Model.ActiveTab == "documents")
                     <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(drivingLicense.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
                 </div>
 
-                <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicense.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link mb-4">
-                    <img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicense.CustomerDocumentId })" alt="Ảnh GPLX" />
-                    <span>Mở ảnh GPLX kích thước đầy đủ</span>
-                </a>
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="small fw-semibold mb-2">Ảnh GPLX mặt trước</div>
+                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicense.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link"><img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicense.CustomerDocumentId })" alt="GPLX mặt trước" /><span>Mở ảnh kích thước đầy đủ</span></a>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small fw-semibold mb-2">Ảnh GPLX mặt sau</div>
+                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicenseBack.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link"><img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicenseBack.CustomerDocumentId })" alt="GPLX mặt sau" /><span>Mở ảnh kích thước đầy đủ</span></a>
+                    </div>
+                </div>
 
-                @if (drivingLicense.Status == DocumentStatus.Pending && drivingLicense.HasRequiredData)
+                @if (!licenseVerified && drivingLicense.Status == DocumentStatus.Pending && drivingLicenseBack.Status == DocumentStatus.Pending && drivingLicense.HasRequiredData && drivingLicenseBack.HasRequiredData)
                 {
-                    <form asp-action="VerifyDocument" method="post" data-loading-form data-confirm="Xác nhận thông tin GPLX khớp với ảnh?">
-                        <input type="hidden" name="documentId" value="@drivingLicense.CustomerDocumentId" />
+                    <form asp-controller="AdminKyc" asp-action="VerifyDrivingLicense" method="post" data-loading-form data-confirm="Xác nhận thông tin và hai mặt GPLX khớp nhau?">
                         <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                        <input type="hidden" name="frontDocumentId" value="@drivingLicense.CustomerDocumentId" />
+                        <input type="hidden" name="backDocumentId" value="@drivingLicenseBack.CustomerDocumentId" />
                         <fieldset class="document-checklist">
                             <legend>Kiểm tra trước khi xác minh</legend>
                             <label><input class="form-check-input" type="checkbox" required /> Họ tên và số GPLX khớp với ảnh</label>
                             <label><input class="form-check-input" type="checkbox" required /> Hạng GPLX khớp với ảnh</label>
                             <label><input class="form-check-input" type="checkbox" required /> Ngày cấp và ngày hết hạn khớp với ảnh</label>
-                            <label><input class="form-check-input" type="checkbox" required /> Ảnh rõ nét và không có dấu hiệu sai lệch</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Cả hai mặt ảnh rõ nét và thuộc cùng một GPLX</label>
                         </fieldset>
                         <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh GPLX...">Xác minh GPLX hợp lệ</button>
                     </form>
                 }
                 else if (licenseVerified)
                 {
-                    <div class="alert alert-success"><strong>✓ GPLX đã xác minh.</strong> Giấy phép đang đủ điều kiện xét thuê xe.</div>
+                    <div class="alert alert-success"><strong>✓ GPLX đã xác minh.</strong> Thông tin và cả hai mặt GPLX đã được duyệt.</div>
                 }
-                else if (!drivingLicense.HasRequiredData)
+                else if (!drivingLicense.HasRequiredData || !drivingLicenseBack.HasRequiredData)
                 {
-                    <div class="alert alert-danger">GPLX chưa có đủ dữ liệu KYC để xác minh. Hãy yêu cầu khách hàng gửi lại đầy đủ.</div>
+                    <div class="alert alert-danger">GPLX chưa có đủ dữ liệu hoặc đủ hai mặt ảnh để xác minh.</div>
                 }
 
                 <button class="btn btn-outline-danger mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#license-resubmit">Yêu cầu khách cập nhật GPLX</button>
                 <div class="collapse mt-3" id="license-resubmit">
-                    <form asp-action="RequestDocumentResubmission" method="post" data-loading-form data-confirm="Gửi yêu cầu khách hàng cập nhật GPLX?">
-                        <input type="hidden" name="DocumentId" value="@drivingLicense.CustomerDocumentId" />
+                    <form asp-controller="AdminKyc" asp-action="RequestDrivingLicenseResubmission" method="post" data-loading-form data-confirm="Gửi yêu cầu khách hàng cập nhật lại GPLX?">
                         <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                        <input type="hidden" name="frontDocumentId" value="@drivingLicense.CustomerDocumentId" />
+                        <input type="hidden" name="backDocumentId" value="@drivingLicenseBack.CustomerDocumentId" />
                         <label class="form-label fw-semibold">Lý do cần cập nhật</label>
-                        <select name="Reason" class="form-select" required>
+                        <select name="reason" class="form-select" required>
                             <option value="">-- Chọn lý do --</option>
                             <option value="Thông tin GPLX không khớp với ảnh">Thông tin GPLX không khớp với ảnh</option>
                             <option value="Ảnh GPLX bị mờ hoặc không đọc được">Ảnh GPLX bị mờ hoặc không đọc được</option>
+                            <option value="Thiếu hoặc sai mặt trước/mặt sau GPLX">Thiếu hoặc sai mặt trước/mặt sau GPLX</option>
                             <option value="GPLX đã hoặc sắp hết hạn">GPLX đã hoặc sắp hết hạn</option>
-                            <option value="Hạng GPLX không phù hợp hoặc cần kiểm tra lại">Hạng GPLX cần kiểm tra lại</option>
+                            <option value="Hạng GPLX cần kiểm tra lại">Hạng GPLX cần kiểm tra lại</option>
                             <option value="Thông tin có dấu hiệu sai lệch">Thông tin có dấu hiệu sai lệch</option>
                             <option value="Lý do khác">Lý do khác</option>
                         </select>
                         <label class="form-label fw-semibold mt-3">Ghi chú cho khách hàng</label>
-                        <textarea name="AdditionalNote" class="form-control" rows="3" maxlength="500"></textarea>
+                        <textarea name="additionalNote" class="form-control" rows="3" maxlength="500"></textarea>
                         <button class="btn btn-danger mt-3" type="submit" data-loading-text="Đang gửi yêu cầu...">Gửi yêu cầu cập nhật GPLX</button>
                     </form>
                 </div>
@@ -324,126 +314,71 @@ else if (Model.ActiveTab == "documents")
 else if (Model.ActiveTab == "bookings")
 {
     <section class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-0 p-4 pb-2">
-            <h2 class="h4 fw-bold mb-1">Lịch sử đơn thuê</h2>
-            <p class="text-muted mb-0">@Model.Bookings.Count đơn thuê được ghi nhận cho khách hàng này.</p>
-        </div>
+        <div class="card-header bg-white border-0 p-4 pb-2"><h2 class="h4 fw-bold mb-1">Lịch sử đơn thuê</h2><p class="text-muted mb-0">@Model.Bookings.Count đơn thuê được ghi nhận cho khách hàng này.</p></div>
         @if (Model.Bookings.Count == 0)
         {
             <div class="card-body text-center py-5 text-muted">Khách hàng chưa có đơn thuê nào.</div>
         }
         else
         {
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead><tr><th>Mã đơn</th><th>Xe</th><th>Thời gian thuê</th><th>Trạng thái</th><th>Tổng tiền</th><th></th></tr></thead>
-                    <tbody>
-                    @foreach (var booking in Model.Bookings)
-                    {
-                        <tr>
-                            <td><strong>#@booking.BookingId</strong><small class="d-block text-muted">@booking.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small></td>
-                            <td>@booking.VehicleName<small class="d-block text-muted">@booking.LicensePlate</small></td>
-                            <td>@booking.PickupDate.ToString("dd/MM/yyyy HH:mm")<br /><span class="text-muted">đến @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</span></td>
-                            <td><span class="badge bg-primary">@booking.Status.ToVietnamese()</span></td>
-                            <td><strong>@booking.TotalAmount.ToString("N0") đ</strong></td>
-                            <td class="text-end"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.BookingId" class="btn btn-sm btn-outline-primary">Mở đơn</a></td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-            </div>
+            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Mã đơn</th><th>Xe</th><th>Thời gian thuê</th><th>Trạng thái</th><th>Tổng tiền</th><th></th></tr></thead><tbody>
+            @foreach (var booking in Model.Bookings)
+            {
+                <tr><td><strong>#@booking.BookingId</strong><small class="d-block text-muted">@booking.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small></td><td>@booking.VehicleName<small class="d-block text-muted">@booking.LicensePlate</small></td><td>@booking.PickupDate.ToString("dd/MM/yyyy HH:mm")<br /><span class="text-muted">đến @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</span></td><td><span class="badge bg-primary">@booking.Status.ToVietnamese()</span></td><td><strong>@booking.TotalAmount.ToString("N0") đ</strong></td><td class="text-end"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.BookingId" class="btn btn-sm btn-outline-primary">Mở đơn</a></td></tr>
+            }
+            </tbody></table></div>
         }
     </section>
 }
 else if (Model.ActiveTab == "payments")
 {
     <section class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-0 p-4 pb-2">
-            <h2 class="h4 fw-bold mb-1">Lịch sử thanh toán</h2>
-            <p class="text-muted mb-0">Theo dõi tiền thuê, gia hạn, phụ phí và hoàn tiền.</p>
-        </div>
+        <div class="card-header bg-white border-0 p-4 pb-2"><h2 class="h4 fw-bold mb-1">Lịch sử thanh toán</h2><p class="text-muted mb-0">Theo dõi tiền thuê, gia hạn, phụ phí và hoàn tiền.</p></div>
         @if (Model.Payments.Count == 0)
         {
             <div class="card-body text-center py-5 text-muted">Khách hàng chưa có giao dịch nào.</div>
         }
         else
         {
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead><tr><th>Giao dịch</th><th>Đơn thuê</th><th>Loại</th><th>Số tiền</th><th>Trạng thái</th><th>Thời gian</th></tr></thead>
-                    <tbody>
-                    @foreach (var payment in Model.Payments)
-                    {
-                        <tr>
-                            <td><strong>#@payment.PaymentId</strong><small class="d-block text-muted">@(string.IsNullOrWhiteSpace(payment.TransactionCode) ? payment.Method : payment.TransactionCode)</small></td>
-                            <td><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">#@payment.BookingId</a></td>
-                            <td>@payment.Type.ToVietnamese()</td>
-                            <td><strong>@payment.Amount.ToString("N0") đ</strong></td>
-                            <td><span class="badge @PaymentBadge(payment.Status)">@payment.Status.ToVietnamese()</span></td>
-                            <td>@(payment.PaidAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa thanh toán")</td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-            </div>
+            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Giao dịch</th><th>Đơn thuê</th><th>Loại</th><th>Số tiền</th><th>Trạng thái</th><th>Thời gian</th></tr></thead><tbody>
+            @foreach (var payment in Model.Payments)
+            {
+                <tr><td><strong>#@payment.PaymentId</strong><small class="d-block text-muted">@(string.IsNullOrWhiteSpace(payment.TransactionCode) ? payment.Method : payment.TransactionCode)</small></td><td><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">#@payment.BookingId</a></td><td>@payment.Type.ToVietnamese()</td><td><strong>@payment.Amount.ToString("N0") đ</strong></td><td><span class="badge @PaymentBadge(payment.Status)">@payment.Status.ToVietnamese()</span></td><td>@(payment.PaidAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa thanh toán")</td></tr>
+            }
+            </tbody></table></div>
         }
     </section>
 }
 else
 {
     <section class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-0 p-4 pb-2">
-            <h2 class="h4 fw-bold mb-1">Sự cố và vi phạm</h2>
-            <p class="text-muted mb-0">Các sự cố liên quan đến đơn thuê của khách hàng.</p>
-        </div>
+        <div class="card-header bg-white border-0 p-4 pb-2"><h2 class="h4 fw-bold mb-1">Sự cố và vi phạm</h2><p class="text-muted mb-0">Các sự cố liên quan đến đơn thuê của khách hàng.</p></div>
         @if (Model.Incidents.Count == 0)
         {
             <div class="card-body text-center py-5 text-muted">Không có sự cố hoặc vi phạm nào được ghi nhận.</div>
         }
         else
         {
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead><tr><th>Mã</th><th>Xe/Đơn</th><th>Loại</th><th>Nội dung</th><th>Trạng thái</th><th>Trách nhiệm khách</th></tr></thead>
-                    <tbody>
-                    @foreach (var incident in Model.Incidents)
-                    {
-                        <tr>
-                            <td><strong>#@incident.IncidentId</strong><small class="d-block text-muted">@incident.OccurredAt.ToString("dd/MM/yyyy HH:mm")</small></td>
-                            <td>@incident.VehicleName@if (incident.BookingId.HasValue){<small class="d-block"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@incident.BookingId">Đơn #@incident.BookingId</a></small>}</td>
-                            <td>@incident.Type.ToVietnamese()</td>
-                            <td>@incident.Description</td>
-                            <td><span class="badge bg-primary">@incident.Status.ToVietnamese()</span></td>
-                            <td>@incident.CustomerLiabilityAmount.ToString("N0") đ</td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-            </div>
+            <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Mã</th><th>Xe/Đơn</th><th>Loại</th><th>Nội dung</th><th>Trạng thái</th><th>Trách nhiệm khách</th></tr></thead><tbody>
+            @foreach (var incident in Model.Incidents)
+            {
+                <tr><td><strong>#@incident.IncidentId</strong><small class="d-block text-muted">@incident.OccurredAt.ToString("dd/MM/yyyy HH:mm")</small></td><td>@incident.VehicleName@if (incident.BookingId.HasValue){<small class="d-block"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@incident.BookingId">Đơn #@incident.BookingId</a></small>}</td><td>@incident.Type.ToVietnamese()</td><td>@incident.Description</td><td><span class="badge bg-primary">@incident.Status.ToVietnamese()</span></td><td>@incident.CustomerLiabilityAmount.ToString("N0") đ</td></tr>
+            }
+            </tbody></table></div>
         }
     </section>
 }
 
 <div class="modal fade" id="accountStatusModal" tabindex="-1" aria-labelledby="accountStatusModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form asp-action="SetAccountStatus" method="post" data-loading-form data-confirm="Xác nhận thay đổi trạng thái tài khoản khách hàng?">
-                <div class="modal-header">
-                    <h2 class="modal-title h5" id="accountStatusModalLabel">@(Model.IsActive ? "Khóa tài khoản" : "Mở khóa tài khoản")</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" name="CustomerId" value="@Model.CustomerId" />
-                    <input type="hidden" name="Activate" value="@(!Model.IsActive)" />
-                    <p>@(Model.IsActive ? "Khách hàng sẽ không thể đăng nhập hoặc tạo đơn mới. Các đơn đang hoạt động vẫn cần được xử lý." : "Khách hàng sẽ có thể đăng nhập và tiếp tục sử dụng hệ thống.")</p>
-                    <label class="form-label fw-semibold" for="account-status-reason">Lý do *</label>
-                    <textarea id="account-status-reason" name="Reason" class="form-control" rows="3" maxlength="500" required></textarea>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Quay lại</button>
-                    <button type="submit" class="btn @(Model.IsActive ? "btn-danger" : "btn-success")" data-loading-text="Đang cập nhật...">Xác nhận @(Model.IsActive ? "khóa" : "mở khóa")</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <form asp-action="SetAccountStatus" method="post" data-loading-form data-confirm="Xác nhận thay đổi trạng thái tài khoản khách hàng?">
+            <div class="modal-header"><h2 class="modal-title h5" id="accountStatusModalLabel">@(Model.IsActive ? "Khóa tài khoản" : "Mở khóa tài khoản")</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button></div>
+            <div class="modal-body">
+                <input type="hidden" name="CustomerId" value="@Model.CustomerId" /><input type="hidden" name="Activate" value="@(!Model.IsActive)" />
+                <p>@(Model.IsActive ? "Khách hàng sẽ không thể đăng nhập hoặc tạo đơn mới. Các đơn đang hoạt động vẫn cần được xử lý." : "Khách hàng sẽ có thể đăng nhập và tiếp tục sử dụng hệ thống.")</p>
+                <label class="form-label fw-semibold" for="account-status-reason">Lý do *</label><textarea id="account-status-reason" name="Reason" class="form-control" rows="3" maxlength="500" required></textarea>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Quay lại</button><button type="submit" class="btn @(Model.IsActive ? "btn-danger" : "btn-success")" data-loading-text="Đang cập nhật...">Xác nhận @(Model.IsActive ? "khóa" : "mở khóa")</button></div>
+        </form>
+    </div></div>
 </div>
