@@ -159,25 +159,19 @@ internal sealed class DocumentService : IDocumentService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await UpdateKycMetadataAsync(
-            front.CustomerDocumentId,
-            request.FullNameOnDocument.Trim(),
-            request.DateOfBirth.Date,
-            request.Gender.Trim(),
-            request.IssuedDate.Date,
-            request.PermanentAddress.Trim(),
-            null,
-            cancellationToken);
-
-        await UpdateKycMetadataAsync(
-            back.CustomerDocumentId,
-            request.FullNameOnDocument.Trim(),
-            request.DateOfBirth.Date,
-            request.Gender.Trim(),
-            request.IssuedDate.Date,
-            request.PermanentAddress.Trim(),
-            null,
-            cancellationToken);
+        foreach (var document in new[] { front, back })
+        {
+            await UpdateKycMetadataAsync(
+                document.CustomerDocumentId,
+                request.FullNameOnDocument.Trim(),
+                request.DateOfBirth.Date,
+                request.Gender.Trim(),
+                request.IssuedDate.Date,
+                request.PermanentAddress.Trim(),
+                request.TemporaryAddress.Trim(),
+                null,
+                cancellationToken);
+        }
 
         await NotifyAdminsAsync(
             "Có CCCD chờ xác minh",
@@ -191,7 +185,7 @@ internal sealed class DocumentService : IDocumentService
             "Submit",
             nameof(CustomerDocument),
             front.CustomerDocumentId.ToString(),
-            "Gửi hồ sơ CCCD gồm thông tin khai báo, ảnh mặt trước và ảnh mặt sau để xác minh.",
+            "Gửi hồ sơ CCCD gồm thông tin khai báo, thường trú, tạm trú và hai ảnh để xác minh.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -213,7 +207,8 @@ internal sealed class DocumentService : IDocumentService
             .AsNoTracking()
             .AnyAsync(item =>
                 item.CustomerId != customerId &&
-                item.DocumentType == DocumentTypes.DrivingLicense &&
+                (item.DocumentType == DocumentTypes.DrivingLicense ||
+                 item.DocumentType == DocumentTypes.DrivingLicenseBack) &&
                 item.DocumentNumber == normalizedNumber,
                 cancellationToken);
 
@@ -224,31 +219,44 @@ internal sealed class DocumentService : IDocumentService
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var document = await GetOrCreateDocumentAsync(
+        var front = await GetOrCreateDocumentAsync(
             customerId,
             DocumentTypes.DrivingLicense,
             cancellationToken);
+        var back = await GetOrCreateDocumentAsync(
+            customerId,
+            DocumentTypes.DrivingLicenseBack,
+            cancellationToken);
 
-        document.DocumentNumber = normalizedNumber;
-        document.ExpiryDate = request.ExpiryDate.Date;
-        document.ImagePath = request.ImagePath;
-        ResetToPending(document);
+        front.DocumentNumber = normalizedNumber;
+        front.ExpiryDate = request.ExpiryDate.Date;
+        front.ImagePath = request.FrontImagePath;
+        ResetToPending(front);
+
+        back.DocumentNumber = normalizedNumber;
+        back.ExpiryDate = request.ExpiryDate.Date;
+        back.ImagePath = request.BackImagePath;
+        ResetToPending(back);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await UpdateKycMetadataAsync(
-            document.CustomerDocumentId,
-            request.FullNameOnDocument.Trim(),
-            null,
-            null,
-            request.IssuedDate.Date,
-            null,
-            request.LicenseClass.Trim().ToUpperInvariant(),
-            cancellationToken);
+        foreach (var document in new[] { front, back })
+        {
+            await UpdateKycMetadataAsync(
+                document.CustomerDocumentId,
+                request.FullNameOnDocument.Trim(),
+                null,
+                null,
+                request.IssuedDate.Date,
+                null,
+                null,
+                request.LicenseClass.Trim().ToUpperInvariant(),
+                cancellationToken);
+        }
 
         await NotifyAdminsAsync(
             "Có GPLX chờ xác minh",
-            "Khách hàng vừa gửi đầy đủ thông tin và ảnh GPLX để xác minh.",
+            "Khách hàng vừa gửi đầy đủ thông tin cùng ảnh mặt trước và mặt sau GPLX để xác minh.",
             cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -257,8 +265,8 @@ internal sealed class DocumentService : IDocumentService
             customerId,
             "Submit",
             nameof(CustomerDocument),
-            document.CustomerDocumentId.ToString(),
-            "Gửi thông tin và ảnh GPLX để xác minh.",
+            front.CustomerDocumentId.ToString(),
+            "Gửi thông tin GPLX cùng ảnh mặt trước và mặt sau để xác minh.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -285,7 +293,8 @@ internal sealed class DocumentService : IDocumentService
         var documents = await GetCustomerDocumentsAsync(customerId, cancellationToken);
         var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
         var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
-        var license = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+        var licenseFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+        var licenseBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
         var citizenValid = citizenFront is not null &&
                            citizenBack is not null &&
@@ -296,11 +305,14 @@ internal sealed class DocumentService : IDocumentService
                            citizenFront.ExpiryDate.HasValue &&
                            citizenFront.ExpiryDate.Value.Date >= rentalDate.Date;
 
-        var licenseValid = license is not null &&
-                           license.Status == DocumentStatus.Verified &&
-                           license.HasRequiredData &&
-                           license.ExpiryDate.HasValue &&
-                           license.ExpiryDate.Value.Date >= rentalDate.Date;
+        var licenseValid = licenseFront is not null &&
+                           licenseBack is not null &&
+                           licenseFront.Status == DocumentStatus.Verified &&
+                           licenseBack.Status == DocumentStatus.Verified &&
+                           licenseFront.HasRequiredData &&
+                           licenseBack.HasRequiredData &&
+                           licenseFront.ExpiryDate.HasValue &&
+                           licenseFront.ExpiryDate.Value.Date >= rentalDate.Date;
 
         return citizenValid && licenseValid;
     }
@@ -424,10 +436,11 @@ internal sealed class DocumentService : IDocumentService
             string.IsNullOrWhiteSpace(request.DocumentNumber) ||
             string.IsNullOrWhiteSpace(request.Gender) ||
             string.IsNullOrWhiteSpace(request.PermanentAddress) ||
+            string.IsNullOrWhiteSpace(request.TemporaryAddress) ||
             string.IsNullOrWhiteSpace(request.FrontImagePath) ||
             string.IsNullOrWhiteSpace(request.BackImagePath))
         {
-            return "Vui lòng nhập đầy đủ thông tin và tải cả hai mặt CCCD.";
+            return "Vui lòng nhập đầy đủ thông tin, thường trú, tạm trú và tải cả hai mặt CCCD.";
         }
 
         if (request.DocumentNumber.Length != 12 || !request.DocumentNumber.All(char.IsDigit))
@@ -463,9 +476,10 @@ internal sealed class DocumentService : IDocumentService
         if (string.IsNullOrWhiteSpace(request.FullNameOnDocument) ||
             string.IsNullOrWhiteSpace(request.DocumentNumber) ||
             string.IsNullOrWhiteSpace(request.LicenseClass) ||
-            string.IsNullOrWhiteSpace(request.ImagePath))
+            string.IsNullOrWhiteSpace(request.FrontImagePath) ||
+            string.IsNullOrWhiteSpace(request.BackImagePath))
         {
-            return "Vui lòng nhập đầy đủ thông tin và tải ảnh GPLX.";
+            return "Vui lòng nhập đầy đủ thông tin và tải cả mặt trước lẫn mặt sau GPLX.";
         }
 
         if (request.IssuedDate.Date > DateTime.Today)
@@ -493,6 +507,7 @@ internal sealed class DocumentService : IDocumentService
         string? gender,
         DateTime? issuedDate,
         string? permanentAddress,
+        string? temporaryAddress,
         string? licenseClass,
         CancellationToken cancellationToken)
     {
@@ -503,6 +518,7 @@ internal sealed class DocumentService : IDocumentService
                 [Gender] = {gender},
                 [IssuedDate] = {issuedDate},
                 [PermanentAddress] = {permanentAddress},
+                [TemporaryAddress] = {temporaryAddress},
                 [LicenseClass] = {licenseClass}
             WHERE [CustomerDocumentId] = {documentId}", cancellationToken);
     }
@@ -522,7 +538,7 @@ internal sealed class DocumentService : IDocumentService
         {
             await using var command = connection.CreateCommand();
             command.CommandText = @"
-                SELECT [FullNameOnDocument], [DateOfBirth], [Gender], [IssuedDate], [PermanentAddress], [LicenseClass]
+                SELECT [FullNameOnDocument], [DateOfBirth], [Gender], [IssuedDate], [PermanentAddress], [TemporaryAddress], [LicenseClass]
                 FROM [CustomerDocuments]
                 WHERE [CustomerDocumentId] = @documentId";
 
@@ -543,7 +559,8 @@ internal sealed class DocumentService : IDocumentService
                 reader.IsDBNull(2) ? null : reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetDateTime(3),
                 reader.IsDBNull(4) ? null : reader.GetString(4),
-                reader.IsDBNull(5) ? null : reader.GetString(5));
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6));
         }
         finally
         {
@@ -565,7 +582,8 @@ internal sealed class DocumentService : IDocumentService
                 metadata.DateOfBirth.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.Gender) &&
                 metadata.IssuedDate.HasValue &&
-                !string.IsNullOrWhiteSpace(metadata.PermanentAddress),
+                !string.IsNullOrWhiteSpace(metadata.PermanentAddress) &&
+                !string.IsNullOrWhiteSpace(metadata.TemporaryAddress),
             DocumentTypes.CitizenIdBack =>
                 !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
                 !string.IsNullOrWhiteSpace(document.ImagePath),
@@ -576,6 +594,9 @@ internal sealed class DocumentService : IDocumentService
                 !string.IsNullOrWhiteSpace(metadata.FullNameOnDocument) &&
                 metadata.IssuedDate.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.LicenseClass),
+            DocumentTypes.DrivingLicenseBack =>
+                !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
+                !string.IsNullOrWhiteSpace(document.ImagePath),
             _ => false
         };
 
@@ -631,6 +652,7 @@ internal sealed class DocumentService : IDocumentService
                 metadata.Gender,
                 metadata.IssuedDate,
                 metadata.PermanentAddress,
+                metadata.TemporaryAddress,
                 metadata.LicenseClass,
                 HasRequiredData(document, metadata)));
         }
@@ -675,8 +697,9 @@ internal sealed class DocumentService : IDocumentService
         string? Gender,
         DateTime? IssuedDate,
         string? PermanentAddress,
+        string? TemporaryAddress,
         string? LicenseClass)
     {
-        public static readonly KycMetadata Empty = new(null, null, null, null, null, null);
+        public static readonly KycMetadata Empty = new(null, null, null, null, null, null, null);
     }
 }
