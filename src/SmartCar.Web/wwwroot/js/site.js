@@ -1,8 +1,8 @@
 document.addEventListener("DOMContentLoaded", () => {
+    initializeVietnameseDateInputs();
     initializeForms();
     initializeImageInputs();
     initializeAdminCustomerNavigation();
-    initializeDocumentUpdateButtons();
 });
 
 function initializeForms() {
@@ -39,6 +39,76 @@ function initializeForms() {
             } else {
                 submitter.dataset.originalValue = submitter.value;
                 submitter.value = submitter.dataset.loadingText ?? "Đang xử lý...";
+            }
+        });
+    });
+}
+
+function initializeVietnameseDateInputs() {
+    document.querySelectorAll("input[data-vn-date-input]").forEach((displayInput) => {
+        if (!(displayInput instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const hiddenSelector = displayInput.dataset.hiddenTarget;
+        const hiddenInput = hiddenSelector ? document.querySelector(hiddenSelector) : null;
+        if (!(hiddenInput instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const syncToHidden = () => {
+            const value = displayInput.value.trim();
+            if (!value) {
+                hiddenInput.value = "";
+                displayInput.setCustomValidity("");
+                return true;
+            }
+
+            const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
+            if (!match) {
+                hiddenInput.value = "";
+                displayInput.setCustomValidity("Vui lòng nhập ngày theo định dạng dd/mm/yyyy.");
+                return false;
+            }
+
+            const day = Number(match[1]);
+            const month = Number(match[2]);
+            const year = Number(match[3]);
+            const date = new Date(year, month - 1, day);
+            const isValid = date.getFullYear() === year &&
+                date.getMonth() === month - 1 &&
+                date.getDate() === day;
+
+            if (!isValid) {
+                hiddenInput.value = "";
+                displayInput.setCustomValidity("Ngày không hợp lệ.");
+                return false;
+            }
+
+            displayInput.setCustomValidity("");
+            hiddenInput.value = `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+            return true;
+        };
+
+        if (!displayInput.value && hiddenInput.value) {
+            const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(hiddenInput.value);
+            if (match) {
+                displayInput.value = `${match[3]}/${match[2]}/${match[1]}`;
+            }
+        }
+
+        displayInput.addEventListener("input", syncToHidden);
+        displayInput.addEventListener("blur", () => {
+            syncToHidden();
+            if (!displayInput.checkValidity()) {
+                displayInput.reportValidity();
+            }
+        });
+
+        displayInput.form?.addEventListener("submit", (event) => {
+            if (!syncToHidden()) {
+                event.preventDefault();
+                displayInput.reportValidity();
             }
         });
     });
@@ -161,166 +231,6 @@ function initializeAdminCustomerNavigation() {
     if (isCustomerAdminPage) {
         customerLink.classList.add("active");
     }
-}
-
-function initializeDocumentUpdateButtons() {
-    const form = document.getElementById("profile-document-upload-form");
-    const typeSelect = document.getElementById("profile-document-type");
-
-    if (!form || !(typeSelect instanceof HTMLSelectElement)) {
-        return;
-    }
-
-    const citizenIdFrontType = "CCCD";
-    const citizenIdBackType = "CCCD mặt sau";
-    const drivingLicenseType = "GPLX";
-    const citizenIdNumber = form.dataset.citizenIdNumber ?? "";
-    const maskedCitizenIdNumber = form.dataset.citizenIdMaskedNumber ?? "Chưa có";
-
-    const numberInput = form.querySelector('input[name="DocumentUpload.DocumentNumber"]');
-    const numberGroup = document.getElementById("profile-document-number-group");
-    const numberSummary = document.getElementById("profile-document-number-summary");
-    const citizenIdSummary = numberSummary?.querySelector("[data-citizen-id-summary]") ?? null;
-    const expiryGroup = document.getElementById("profile-document-expiry-group");
-    const expiryDisplay = document.getElementById("profile-document-expiry-display");
-    const expiryValue = document.getElementById("profile-document-expiry-value");
-    const imageInput = form.querySelector('input[name="DocumentUpload.Image"]');
-    const submitButton = document.getElementById("profile-document-submit");
-    let previousType = typeSelect.value;
-
-    const setExpiryFromDisplay = () => {
-        if (!(expiryDisplay instanceof HTMLInputElement) || !(expiryValue instanceof HTMLInputElement)) {
-            return;
-        }
-
-        const value = expiryDisplay.value.trim();
-        if (!value) {
-            expiryValue.value = "";
-            expiryDisplay.setCustomValidity("");
-            return;
-        }
-
-        const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
-        if (!match) {
-            expiryValue.value = "";
-            expiryDisplay.setCustomValidity("Vui lòng nhập ngày theo định dạng dd/mm/yyyy.");
-            return;
-        }
-
-        const day = Number(match[1]);
-        const month = Number(match[2]);
-        const year = Number(match[3]);
-        const date = new Date(year, month - 1, day);
-        const isValid = date.getFullYear() === year &&
-            date.getMonth() === month - 1 &&
-            date.getDate() === day;
-
-        if (!isValid) {
-            expiryValue.value = "";
-            expiryDisplay.setCustomValidity("Ngày hết hạn không hợp lệ.");
-            return;
-        }
-
-        expiryDisplay.setCustomValidity("");
-        expiryValue.value = `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-    };
-
-    const restoreExpiryDisplay = () => {
-        if (!(expiryDisplay instanceof HTMLInputElement) || !(expiryValue instanceof HTMLInputElement)) {
-            return;
-        }
-
-        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(expiryValue.value);
-        if (match) {
-            expiryDisplay.value = `${match[3]}/${match[2]}/${match[1]}`;
-        }
-    };
-
-    const syncDocumentFields = () => {
-        const type = typeSelect.value;
-        const isCitizenIdBack = type === citizenIdBackType;
-        const isDrivingLicense = type === drivingLicenseType;
-
-        numberGroup?.classList.toggle("d-none", isCitizenIdBack);
-        numberSummary?.classList.toggle("d-none", !isCitizenIdBack);
-        expiryGroup?.classList.toggle("d-none", !isDrivingLicense);
-
-        if (isCitizenIdBack && numberInput instanceof HTMLInputElement) {
-            numberInput.value = citizenIdNumber;
-        }
-
-        if (citizenIdSummary) {
-            citizenIdSummary.textContent = citizenIdNumber
-                ? maskedCitizenIdNumber
-                : "Chưa có CCCD mặt trước";
-        }
-
-        if (expiryDisplay instanceof HTMLInputElement) {
-            expiryDisplay.required = isDrivingLicense;
-            if (!isDrivingLicense) {
-                expiryDisplay.value = "";
-                expiryDisplay.setCustomValidity("");
-            }
-        }
-
-        if (expiryValue instanceof HTMLInputElement && !isDrivingLicense) {
-            expiryValue.value = "";
-        }
-
-        if (submitButton instanceof HTMLButtonElement) {
-            submitButton.disabled = isCitizenIdBack && !citizenIdNumber;
-        }
-    };
-
-    restoreExpiryDisplay();
-    syncDocumentFields();
-
-    typeSelect.addEventListener("change", () => {
-        const nextType = typeSelect.value;
-        if (nextType !== previousType &&
-            nextType !== citizenIdBackType &&
-            numberInput instanceof HTMLInputElement) {
-            numberInput.value = "";
-        }
-
-        previousType = nextType;
-        syncDocumentFields();
-    });
-
-    if (expiryDisplay instanceof HTMLInputElement) {
-        expiryDisplay.addEventListener("input", setExpiryFromDisplay);
-        expiryDisplay.addEventListener("blur", () => {
-            setExpiryFromDisplay();
-            if (!expiryDisplay.checkValidity()) {
-                expiryDisplay.reportValidity();
-            }
-        });
-    }
-
-    form.addEventListener("submit", () => {
-        if (typeSelect.value === drivingLicenseType) {
-            setExpiryFromDisplay();
-        }
-    });
-
-    document.querySelectorAll("[data-document-update-button]").forEach((button) => {
-        button.addEventListener("click", () => {
-            const documentType = button.dataset.documentType;
-            if (documentType) {
-                typeSelect.value = documentType;
-                typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
-            }
-
-            form.scrollIntoView({ behavior: "smooth", block: "start" });
-            window.setTimeout(() => {
-                if (typeSelect.value === citizenIdBackType && imageInput instanceof HTMLElement) {
-                    imageInput.focus({ preventScroll: true });
-                } else if (numberInput instanceof HTMLElement) {
-                    numberInput.focus({ preventScroll: true });
-                }
-            }, 450);
-        });
-    });
 }
 
 function formatBytes(bytes) {
