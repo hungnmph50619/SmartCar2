@@ -17,6 +17,7 @@ public sealed record SubmitCitizenIdRequest(
     DateTime IssuedDate,
     DateTime ExpiryDate,
     string PermanentAddress,
+    string TemporaryAddress,
     string FrontImagePath,
     string BackImagePath);
 
@@ -26,7 +27,8 @@ public sealed record SubmitDrivingLicenseRequest(
     string LicenseClass,
     DateTime IssuedDate,
     DateTime ExpiryDate,
-    string ImagePath);
+    string FrontImagePath,
+    string BackImagePath);
 
 public sealed record DocumentDto(
     int CustomerDocumentId,
@@ -47,6 +49,7 @@ public sealed record DocumentDto(
     string? Gender,
     DateTime? IssuedDate,
     string? PermanentAddress,
+    string? TemporaryAddress,
     string? LicenseClass,
     bool HasRequiredData);
 
