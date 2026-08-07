@@ -6,7 +6,10 @@
     var avatarInitial = Model.FullName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
     var isCustomer = User.IsInRole(RoleNames.Customer);
     var showDocuments = isCustomer && Model.ActiveTab == "documents";
-    var verifiedCount = Model.Documents.Count(item => item.Status == DocumentStatus.Verified);
+    var verifiedCount = Model.Documents.Count(item =>
+        DocumentTypes.RequiredForRental.Contains(item.DocumentType) &&
+        item.Status == DocumentStatus.Verified &&
+        (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today));
 }
 
 <div class="profile-shell py-3">
