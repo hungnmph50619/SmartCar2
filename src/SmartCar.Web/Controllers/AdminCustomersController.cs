@@ -239,11 +239,7 @@ public sealed class AdminCustomersController : Controller
             })
             .ToListAsync(cancellationToken);
 
-        var documentEntities = await _dbContext.CustomerDocuments
-            .AsNoTracking()
-            .Where(document => document.CustomerId == id)
-            .ToListAsync(cancellationToken);
-        var state = ResolveProfileState(documentEntities);
+        var state = ResolveProfileState(documents);
         var activeTab = NormalizeTab(tab);
         var paidIn = payments
             .Where(payment => payment.Status == PaymentStatus.Paid && payment.Type != PaymentType.Refund)
@@ -310,6 +306,119 @@ public sealed class AdminCustomersController : Controller
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã xác minh giấy tờ."
             : string.Join("; ", result.Errors);
+
+        return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> VerifyCitizenId(
+        string customerId,
+        int frontDocumentId,
+        int backDocumentId,
+        CancellationToken cancellationToken)
+    {
+        var front = await _documentService.GetDocumentAsync(frontDocumentId, cancellationToken);
+        var back = await _documentService.GetDocumentAsync(backDocumentId, cancellationToken);
+
+        if (front is null || back is null ||
+            front.CustomerId != customerId || back.CustomerId != customerId ||
+            front.DocumentType != DocumentTypes.CitizenId ||
+            back.DocumentType != DocumentTypes.CitizenIdBack)
+        {
+            return NotFound();
+        }
+
+        if (!front.HasRequiredData || !back.HasRequiredData)
+        {
+            TempData["ErrorMessage"] = "Hồ sơ CCCD chưa có đủ thông tin KYC để xác minh.";
+            return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
+        }
+
+        if (front.Status != DocumentStatus.Pending || back.Status != DocumentStatus.Pending)
+        {
+            TempData["ErrorMessage"] = "Cả hai mặt CCCD phải ở trạng thái chờ xác minh.";
+            return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
+        }
+
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var frontResult = await _documentService.VerifyAsync(frontDocumentId, adminId, cancellationToken);
+        if (!frontResult.Succeeded)
+        {
+            TempData["ErrorMessage"] = string.Join("; ", frontResult.Errors);
+            return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
+        }
+
+        var backResult = await _documentService.VerifyAsync(backDocumentId, adminId, cancellationToken);
+        TempData[backResult.Succeeded ? "SuccessMessage" : "ErrorMessage"] = backResult.Succeeded
+            ? "Đã xác minh danh tính CCCD gồm thông tin, mặt trước và mặt sau."
+            : string.Join("; ", backResult.Errors);
+
+        return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestCitizenIdResubmission(
+        string customerId,
+        int frontDocumentId,
+        int backDocumentId,
+        string reason,
+        string? additionalNote,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["ErrorMessage"] = "Vui lòng chọn lý do yêu cầu cập nhật CCCD.";
+            return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
+        }
+
+        var front = await _documentService.GetDocumentAsync(frontDocumentId, cancellationToken);
+        var back = await _documentService.GetDocumentAsync(backDocumentId, cancellationToken);
+        if (front is null || back is null ||
+            front.CustomerId != customerId || back.CustomerId != customerId ||
+            front.DocumentType != DocumentTypes.CitizenId ||
+            back.DocumentType != DocumentTypes.CitizenIdBack)
+        {
+            return NotFound();
+        }
+
+        var fullReason = reason.Trim();
+        if (!string.IsNullOrWhiteSpace(additionalNote))
+        {
+            fullReason = $"{fullReason}. {additionalNote.Trim()}";
+        }
+
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var errors = new List<string>();
+
+        foreach (var document in new[] { front, back })
+        {
+            if (document.Status is not (DocumentStatus.Pending or DocumentStatus.Verified))
+            {
+                continue;
+            }
+
+            var result = await _documentService.RejectAsync(
+                document.CustomerDocumentId,
+                adminId,
+                fullReason,
+                cancellationToken);
+            if (!result.Succeeded)
+            {
+                errors.AddRange(result.Errors);
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            TempData["ErrorMessage"] = string.Join("; ", errors.Distinct());
+        }
+        else
+        {
+            TempData["SuccessMessage"] =
+                "Đã yêu cầu khách hàng cập nhật lại toàn bộ thông tin và hai ảnh CCCD.";
+        }
 
         return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
     }
@@ -476,6 +585,49 @@ public sealed class AdminCustomersController : Controller
         }
 
         return requiredDocuments.All(document => document!.Status == DocumentStatus.Verified)
+            ? new ProfileState("Verified", "Đã xác minh")
+            : new ProfileState("Missing", "Chưa hoàn tất");
+    }
+
+    private static ProfileState ResolveProfileState(
+        IReadOnlyCollection<DocumentDto> documents)
+    {
+        var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
+        var drivingLicense = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+
+        if (citizenFront is null || citizenBack is null || drivingLicense is null)
+        {
+            return new ProfileState("Missing", "Chưa hoàn tất");
+        }
+
+        if (!citizenFront.HasRequiredData || !citizenBack.HasRequiredData || !drivingLicense.HasRequiredData)
+        {
+            return new ProfileState("Missing", "Thiếu thông tin KYC");
+        }
+
+        if (documents.Any(item => item.Status == DocumentStatus.Rejected))
+        {
+            return new ProfileState("Rejected", "Cần gửi lại");
+        }
+
+        if (documents.Any(item => item.Status == DocumentStatus.Pending))
+        {
+            return new ProfileState("Pending", "Chờ xác minh");
+        }
+
+        var cccdExpired = !citizenFront.ExpiryDate.HasValue ||
+                          citizenFront.ExpiryDate.Value.Date < DateTime.Today;
+        var licenseExpired = !drivingLicense.ExpiryDate.HasValue ||
+                             drivingLicense.ExpiryDate.Value.Date < DateTime.Today;
+        if (cccdExpired || licenseExpired)
+        {
+            return new ProfileState("Expired", "Giấy tờ hết hạn");
+        }
+
+        return citizenFront.Status == DocumentStatus.Verified &&
+               citizenBack.Status == DocumentStatus.Verified &&
+               drivingLicense.Status == DocumentStatus.Verified
             ? new ProfileState("Verified", "Đã xác minh")
             : new ProfileState("Missing", "Chưa hoàn tất");
     }
