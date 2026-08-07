@@ -9,6 +9,25 @@ public sealed record SubmitDocumentRequest(
     DateTime? ExpiryDate,
     string ImagePath);
 
+public sealed record SubmitCitizenIdRequest(
+    string FullNameOnDocument,
+    string DocumentNumber,
+    DateTime DateOfBirth,
+    string Gender,
+    DateTime IssuedDate,
+    DateTime ExpiryDate,
+    string PermanentAddress,
+    string FrontImagePath,
+    string BackImagePath);
+
+public sealed record SubmitDrivingLicenseRequest(
+    string FullNameOnDocument,
+    string DocumentNumber,
+    string LicenseClass,
+    DateTime IssuedDate,
+    DateTime ExpiryDate,
+    string ImagePath);
+
 public sealed record DocumentDto(
     int CustomerDocumentId,
     string CustomerId,
@@ -22,7 +41,14 @@ public sealed record DocumentDto(
     string? RejectionReason,
     string? VerifiedBy,
     DateTime? VerifiedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    string? FullNameOnDocument,
+    DateTime? DateOfBirth,
+    string? Gender,
+    DateTime? IssuedDate,
+    string? PermanentAddress,
+    string? LicenseClass,
+    bool HasRequiredData);
 
 public interface IDocumentService
 {
@@ -37,6 +63,14 @@ public interface IDocumentService
     Task<OperationResult> SubmitAsync(
         string customerId,
         SubmitDocumentRequest request,
+        CancellationToken cancellationToken = default);
+    Task<OperationResult> SubmitCitizenIdAsync(
+        string customerId,
+        SubmitCitizenIdRequest request,
+        CancellationToken cancellationToken = default);
+    Task<OperationResult> SubmitDrivingLicenseAsync(
+        string customerId,
+        SubmitDrivingLicenseRequest request,
         CancellationToken cancellationToken = default);
     Task<OperationResult> VerifyAsync(
         int documentId,
