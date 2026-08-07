@@ -1,9 +1,12 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using SmartCar.Application.Features.Brands;
+using SmartCar.Application.Features.Documents;
 using SmartCar.Application.Features.Reviews;
 using SmartCar.Application.Features.Vehicles;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Web.ViewModels;
 
@@ -15,15 +18,18 @@ public sealed class VehiclesController : Controller
     private readonly IVehicleService _vehicleService;
     private readonly IBrandService _brandService;
     private readonly IReviewService _reviewService;
+    private readonly IDocumentService _documentService;
 
     public VehiclesController(
         IVehicleService vehicleService,
         IBrandService brandService,
-        IReviewService reviewService)
+        IReviewService reviewService,
+        IDocumentService documentService)
     {
         _vehicleService = vehicleService;
         _brandService = brandService;
         _reviewService = reviewService;
+        _documentService = documentService;
     }
 
     [HttpGet]
@@ -94,11 +100,37 @@ public sealed class VehiclesController : Controller
             return NotFound();
         }
 
+        var selectedPickupDate = pickupDate ?? DateTime.Now.AddDays(1);
+        var selectedReturnDate = returnDate ?? DateTime.Now.AddDays(2);
+
         var reviews = await _reviewService.GetVehicleReviewsAsync(id, cancellationToken);
         ViewBag.Reviews = reviews;
         ViewBag.AverageRating = reviews.Count == 0 ? 0 : reviews.Average(review => review.Rating);
-        ViewBag.PickupDate = pickupDate ?? DateTime.Now.AddDays(1);
-        ViewBag.ReturnDate = returnDate ?? DateTime.Now.AddDays(2);
+        ViewBag.PickupDate = selectedPickupDate;
+        ViewBag.ReturnDate = selectedReturnDate;
+
+        ViewBag.KycVerified = false;
+        ViewBag.KycVerifiedCount = 0;
+
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
+        {
+            var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!string.IsNullOrWhiteSpace(customerId))
+            {
+                var documents = await _documentService.GetCustomerDocumentsAsync(
+                    customerId,
+                    cancellationToken);
+
+                var verifiedCount = documents.Count(document =>
+                    DocumentTypes.RequiredForRental.Contains(document.DocumentType) &&
+                    document.Status == DocumentStatus.Verified &&
+                    (!document.ExpiryDate.HasValue || document.ExpiryDate.Value.Date >= selectedReturnDate.Date));
+
+                ViewBag.KycVerifiedCount = verifiedCount;
+                ViewBag.KycVerified = verifiedCount == DocumentTypes.RequiredForRental.Count;
+            }
+        }
+
         return View(vehicle);
     }
 
