@@ -53,9 +53,6 @@ public sealed class CitizenIdVerificationViewModel
     [Display(Name = "Địa chỉ thường trú")]
     public string PermanentAddress { get; set; } = string.Empty;
 
-    // Giữ lại để tương thích dữ liệu cũ; không còn là trường KYC hiển thị cho khách.
-    public string TemporaryAddress { get; set; } = string.Empty;
-
     [Required(ErrorMessage = "Vui lòng chọn ảnh CCCD mặt trước.")]
     [Display(Name = "Ảnh CCCD mặt trước")]
     public IFormFile? FrontImage { get; set; }
