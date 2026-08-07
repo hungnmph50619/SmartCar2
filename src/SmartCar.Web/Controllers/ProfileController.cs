@@ -181,7 +181,7 @@ public sealed class ProfileController : Controller
                     model.IssuedDate!.Value,
                     model.ExpiryDate!.Value,
                     model.PermanentAddress,
-                    model.TemporaryAddress,
+                    model.PermanentAddress,
                     newFrontPath,
                     newBackPath),
                 cancellationToken);
