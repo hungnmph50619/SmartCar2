@@ -69,6 +69,9 @@ public sealed class ProfileController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Update(
         ProfileViewModel model,
+        int? returnVehicleId,
+        DateTime? pickupDate,
+        DateTime? returnDate,
         CancellationToken cancellationToken)
     {
         var user = await _userManager.GetUserAsync(User);
@@ -86,6 +89,11 @@ public sealed class ProfileController : Controller
 
         if (!ModelState.IsValid)
         {
+            await SetRentalReturnContextAsync(
+                returnVehicleId,
+                pickupDate,
+                returnDate,
+                cancellationToken);
             return View("Index", model);
         }
 
@@ -105,6 +113,11 @@ public sealed class ProfileController : Controller
                 ModelState.AddModelError(string.Empty, error.Description);
             }
 
+            await SetRentalReturnContextAsync(
+                returnVehicleId,
+                pickupDate,
+                returnDate,
+                cancellationToken);
             return View("Index", model);
         }
 
@@ -119,7 +132,13 @@ public sealed class ProfileController : Controller
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = "Đã cập nhật hồ sơ cá nhân.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), new
+        {
+            tab = "profile",
+            returnVehicleId,
+            pickupDate,
+            returnDate
+        });
     }
 
     [Authorize(Roles = RoleNames.Customer)]
