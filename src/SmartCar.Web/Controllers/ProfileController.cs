@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Documents;
+using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure.Identity;
 using SmartCar.Web.Services;
@@ -20,22 +21,28 @@ public sealed class ProfileController : Controller
     private readonly IAuditService _auditService;
     private readonly IDocumentService _documentService;
     private readonly ISecureDocumentStorage _documentStorage;
+    private readonly IVehicleService _vehicleService;
 
     public ProfileController(
         UserManager<ApplicationUser> userManager,
         IAuditService auditService,
         IDocumentService documentService,
-        ISecureDocumentStorage documentStorage)
+        ISecureDocumentStorage documentStorage,
+        IVehicleService vehicleService)
     {
         _userManager = userManager;
         _auditService = auditService;
         _documentService = documentService;
         _documentStorage = documentStorage;
+        _vehicleService = vehicleService;
     }
 
     [HttpGet]
     public async Task<IActionResult> Index(
         string? tab,
+        int? returnVehicleId,
+        DateTime? pickupDate,
+        DateTime? returnDate,
         CancellationToken cancellationToken)
     {
         var user = await _userManager.GetUserAsync(User);
@@ -48,6 +55,12 @@ public sealed class ProfileController : Controller
                         string.Equals(tab, "documents", StringComparison.OrdinalIgnoreCase)
             ? "documents"
             : "profile";
+
+        await SetRentalReturnContextAsync(
+            returnVehicleId,
+            pickupDate,
+            returnDate,
+            cancellationToken);
 
         return View(await BuildViewModelAsync(user, activeTab, cancellationToken));
     }
@@ -114,6 +127,9 @@ public sealed class ProfileController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SubmitDocument(
         [Bind(Prefix = "DocumentUpload")] DocumentUploadViewModel model,
+        int? returnVehicleId,
+        DateTime? pickupDate,
+        DateTime? returnDate,
         CancellationToken cancellationToken)
     {
         var user = await _userManager.GetUserAsync(User);
@@ -133,6 +149,12 @@ public sealed class ProfileController : Controller
 
         if (!ModelState.IsValid || model.Image is null)
         {
+            await SetRentalReturnContextAsync(
+                returnVehicleId,
+                pickupDate,
+                returnDate,
+                cancellationToken);
+
             var pageModel = await BuildViewModelAsync(
                 user,
                 "documents",
@@ -181,7 +203,35 @@ public sealed class ProfileController : Controller
                 "Đã gửi giấy tờ thành công. Hồ sơ đang chờ Quản trị viên xác minh.";
         }
 
-        return RedirectToAction(nameof(Index), new { tab = "documents" });
+        return RedirectToAction(nameof(Index), new
+        {
+            tab = "documents",
+            returnVehicleId,
+            pickupDate,
+            returnDate
+        });
+    }
+
+    private async Task SetRentalReturnContextAsync(
+        int? returnVehicleId,
+        DateTime? pickupDate,
+        DateTime? returnDate,
+        CancellationToken cancellationToken)
+    {
+        ViewBag.ReturnVehicleId = returnVehicleId;
+        ViewBag.ReturnPickupDate = pickupDate;
+        ViewBag.ReturnDate = returnDate;
+        ViewBag.ReturnVehicleName = null;
+
+        if (!returnVehicleId.HasValue)
+        {
+            return;
+        }
+
+        var vehicle = await _vehicleService.GetByIdAsync(
+            returnVehicleId.Value,
+            cancellationToken);
+        ViewBag.ReturnVehicleName = vehicle?.VehicleName;
     }
 
     private async Task<ProfileViewModel> BuildViewModelAsync(
