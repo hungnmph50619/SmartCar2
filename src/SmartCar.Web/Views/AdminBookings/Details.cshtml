@@ -13,8 +13,7 @@
     var customerCompletedBookingCount = ViewBag.CustomerCompletedBookingCount is int completedValue ? completedValue : 0;
     var customerCancelledBookingCount = ViewBag.CustomerCancelledBookingCount is int cancelledValue ? cancelledValue : 0;
     var customerNoShowCount = ViewBag.CustomerNoShowCount is int noShowValue ? noShowValue : 0;
-    var citizenIdFrontVerified = ViewBag.CitizenIdFrontVerified is bool frontValue && frontValue;
-    var citizenIdBackVerified = ViewBag.CitizenIdBackVerified is bool backValue && backValue;
+    var citizenIdentityVerified = ViewBag.CitizenIdentityVerified is bool citizenValue && citizenValue;
     var drivingLicenseVerified = ViewBag.DrivingLicenseVerified is bool licenseValue && licenseValue;
     var customerKycVerified = ViewBag.CustomerKycVerified is bool kycValue && kycValue;
 
@@ -22,7 +21,7 @@
     {
         BookingStatus.PendingConfirmation => (
             "Kiểm tra và quyết định đơn",
-            "Đối chiếu hồ sơ xác minh, lịch sử thuê xe, lịch xe và thông tin thuê. Sau đó xác nhận hoặc nhập lý do từ chối.",
+            "Đối chiếu hồ sơ KYC, lịch sử thuê xe, lịch xe và thông tin thuê. Sau đó xác nhận hoặc nhập lý do từ chối.",
             "warning"),
         BookingStatus.PendingPayment => (
             "Chờ khách hàng thanh toán",
@@ -100,8 +99,8 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                 <div>
                     <div class="text-uppercase small text-muted fw-semibold">Kiểm soát khách thuê</div>
-                    <h2 class="h5 mb-1">Hồ sơ & độ tin cậy khách hàng</h2>
-                    <p class="text-muted small mb-0">Dùng thông tin xác minh và lịch sử thuê để hỗ trợ quyết định duyệt đơn.</p>
+                    <h2 class="h5 mb-1">Hồ sơ KYC & độ tin cậy khách hàng</h2>
+                    <p class="text-muted small mb-0">KYC gồm 2 bước: xác minh danh tính bằng CCCD và xác minh giấy phép lái xe.</p>
                 </div>
                 <span class="badge @(customerKycVerified ? "bg-success" : "bg-danger") px-3 py-2">
                     @(customerKycVerified ? "Hồ sơ đã xác minh" : "Hồ sơ chưa đủ")
@@ -109,27 +108,19 @@
             </div>
 
             <div class="row g-3 mb-3">
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <div class="border rounded p-3 h-100">
-                        <div class="small text-muted">CCCD mặt trước</div>
-                        <strong class="@(citizenIdFrontVerified ? "text-success" : "text-danger")">
-                            @(citizenIdFrontVerified ? "✓ Đã xác minh" : "✕ Chưa hợp lệ")
+                        <div class="small text-muted">Danh tính CCCD</div>
+                        <strong class="@(citizenIdentityVerified ? "text-success" : "text-danger")">
+                            @(citizenIdentityVerified ? "✓ Đã xác minh thông tin + 2 ảnh" : "✕ Chưa hợp lệ")
                         </strong>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="border rounded p-3 h-100">
-                        <div class="small text-muted">CCCD mặt sau</div>
-                        <strong class="@(citizenIdBackVerified ? "text-success" : "text-danger")">
-                            @(citizenIdBackVerified ? "✓ Đã xác minh" : "✕ Chưa hợp lệ")
-                        </strong>
-                    </div>
-                </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <div class="border rounded p-3 h-100">
                         <div class="small text-muted">GPLX đến ngày trả</div>
                         <strong class="@(drivingLicenseVerified ? "text-success" : "text-danger")">
-                            @(drivingLicenseVerified ? "✓ Còn hiệu lực" : "✕ Chưa hợp lệ")
+                            @(drivingLicenseVerified ? "✓ Đã xác minh và còn hiệu lực" : "✕ Chưa hợp lệ")
                         </strong>
                     </div>
                 </div>
@@ -169,8 +160,9 @@
                 <a class="btn btn-sm btn-outline-primary"
                    asp-controller="AdminCustomers"
                    asp-action="Details"
-                   asp-route-id="@Model.CustomerId">
-                    Xem hồ sơ khách hàng
+                   asp-route-id="@Model.CustomerId"
+                   asp-route-tab="documents">
+                    Xem và đối chiếu KYC
                 </a>
             </div>
         </div>
@@ -179,7 +171,7 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Xác nhận yêu cầu</h2>
-                <p class="text-muted">Chỉ xác nhận sau khi CCCD hai mặt, GPLX và lịch xe đã hợp lệ đến ngày trả.</p>
+                <p class="text-muted">Chỉ xác nhận sau khi danh tính CCCD, GPLX và lịch xe đều hợp lệ đến ngày trả.</p>
                 <form asp-action="Confirm"
                       method="post"
                       class="mb-3"
