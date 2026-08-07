@@ -10,6 +10,11 @@
         DocumentTypes.RequiredForRental.Contains(item.DocumentType) &&
         item.Status == DocumentStatus.Verified &&
         (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today));
+
+    var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
+    var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
+    var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
+    var hasReturnContext = returnVehicleId.HasValue && returnPickupDate.HasValue && returnDate.HasValue;
 }
 
 <div class="profile-shell py-3">
@@ -32,12 +37,18 @@
         <nav class="nav nav-pills gap-2 mb-4" aria-label="Các phần của hồ sơ cá nhân">
             <a class="nav-link @(!showDocuments ? "active" : string.Empty)"
                asp-action="Index"
-               asp-route-tab="profile">
+               asp-route-tab="profile"
+               asp-route-returnVehicleId="@returnVehicleId"
+               asp-route-pickupDate="@(returnPickupDate?.ToString("O"))"
+               asp-route-returnDate="@(returnDate?.ToString("O"))">
                 Thông tin cá nhân
             </a>
             <a class="nav-link @(showDocuments ? "active" : string.Empty)"
                asp-action="Index"
-               asp-route-tab="documents">
+               asp-route-tab="documents"
+               asp-route-returnVehicleId="@returnVehicleId"
+               asp-route-pickupDate="@(returnPickupDate?.ToString("O"))"
+               asp-route-returnDate="@(returnDate?.ToString("O"))">
                 CCCD/GPLX
                 <span class="badge rounded-pill @(verifiedCount == DocumentTypes.RequiredForRental.Count ? "bg-success" : "bg-secondary") ms-1">
                     @verifiedCount/@DocumentTypes.RequiredForRental.Count
@@ -83,7 +94,10 @@
                             {
                                 <a class="btn btn-sm btn-outline-primary mt-3"
                                    asp-action="Index"
-                                   asp-route-tab="documents">
+                                   asp-route-tab="documents"
+                                   asp-route-returnVehicleId="@returnVehicleId"
+                                   asp-route-pickupDate="@(returnPickupDate?.ToString("O"))"
+                                   asp-route-returnDate="@(returnDate?.ToString("O"))">
                                     Hoàn thiện CCCD/GPLX
                                 </a>
                             }
@@ -101,6 +115,13 @@
                       method="post"
                       class="card card-body shadow-sm border-0 h-100"
                       data-loading-form>
+                    @if (hasReturnContext)
+                    {
+                        <input type="hidden" name="returnVehicleId" value="@returnVehicleId" />
+                        <input type="hidden" name="pickupDate" value="@returnPickupDate.Value.ToString("O")" />
+                        <input type="hidden" name="returnDate" value="@returnDate.Value.ToString("O")" />
+                    }
+
                     <div class="mb-4">
                         <h2 class="h5 mb-1">Cập nhật thông tin</h2>
                         <p class="text-muted mb-0">Giữ thông tin liên hệ chính xác để SmartCar có thể hỗ trợ giao nhận xe.</p>
