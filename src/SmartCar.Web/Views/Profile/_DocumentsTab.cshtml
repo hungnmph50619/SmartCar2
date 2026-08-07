@@ -23,12 +23,6 @@
         _ => type
     };
 
-    var verifiedCount = Model.Documents.Count(item =>
-        DocumentTypes.RequiredForRental.Contains(item.DocumentType) &&
-        item.Status == DocumentStatus.Verified &&
-        (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today));
-    var isFullyVerified = verifiedCount == DocumentTypes.RequiredForRental.Count;
-
     var citizenIdFront = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
     var citizenIdNumber = citizenIdFront?.DocumentNumber ?? string.Empty;
     var maskedCitizenIdNumber = MaskDocumentNumber(citizenIdNumber);
@@ -38,6 +32,15 @@
     var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
     var returnVehicleName = ViewBag.ReturnVehicleName as string;
     var hasReturnContext = returnVehicleId.HasValue && returnPickupDate.HasValue && returnDate.HasValue;
+    var returnPickupRoute = returnPickupDate?.ToString("O");
+    var returnDateRoute = returnDate?.ToString("O");
+    var requiredValidThrough = returnDate?.Date ?? DateTime.Today;
+
+    var verifiedCount = Model.Documents.Count(item =>
+        DocumentTypes.RequiredForRental.Contains(item.DocumentType) &&
+        item.Status == DocumentStatus.Verified &&
+        (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= requiredValidThrough));
+    var isFullyVerified = verifiedCount == DocumentTypes.RequiredForRental.Count;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
@@ -51,8 +54,8 @@
            asp-controller="Vehicles"
            asp-action="Details"
            asp-route-id="@returnVehicleId"
-           asp-route-pickupDate="@returnPickupDate.Value.ToString("O")"
-           asp-route-returnDate="@returnDate.Value.ToString("O")">
+           asp-route-pickupDate="@returnPickupRoute"
+           asp-route-returnDate="@returnDateRoute">
             @(isFullyVerified && !string.IsNullOrWhiteSpace(returnVehicleName)
                 ? $"Quay lại {returnVehicleName}"
                 : "Quay lại xe đang chọn")
@@ -95,7 +98,7 @@ else if (hasReturnContext)
         {
             var item = Model.Documents.FirstOrDefault(document => document.DocumentType == type);
             var itemVerified = item?.Status == DocumentStatus.Verified &&
-                               (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today);
+                               (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= requiredValidThrough);
             <div class="col-md-4">
                 <div class="border rounded p-3 h-100 @(itemVerified ? "border-success" : string.Empty)">
                     <div class="small text-muted">@(type == DocumentTypes.CitizenId ? "Bước 1" : type == DocumentTypes.CitizenIdBack ? "Bước 2" : "Bước 3")</div>
@@ -122,13 +125,17 @@ else if (hasReturnContext)
                 var document = Model.Documents.FirstOrDefault(item => item.DocumentType == type);
                 var expired = document?.ExpiryDate.HasValue == true &&
                               document.ExpiryDate.Value.Date < DateTime.Today;
+                var insufficientForSelectedRental = document?.Status == DocumentStatus.Verified &&
+                                                   document.ExpiryDate.HasValue &&
+                                                   document.ExpiryDate.Value.Date >= DateTime.Today &&
+                                                   document.ExpiryDate.Value.Date < requiredValidThrough;
                 var expiresSoon = document?.Status == DocumentStatus.Verified &&
                                   document.ExpiryDate.HasValue &&
-                                  document.ExpiryDate.Value.Date >= DateTime.Today &&
+                                  document.ExpiryDate.Value.Date >= requiredValidThrough &&
                                   document.ExpiryDate.Value.Date <= DateTime.Today.AddDays(30);
                 var badgeClass = document is null
                     ? "bg-secondary"
-                    : expired
+                    : expired || insufficientForSelectedRental
                         ? "bg-danger"
                         : expiresSoon
                             ? "bg-warning text-dark"
@@ -141,9 +148,11 @@ else if (hasReturnContext)
                     ? "Chưa gửi"
                     : expired
                         ? "Đã hết hạn"
-                        : expiresSoon
-                            ? "Sắp hết hạn"
-                            : document.Status.ToVietnamese();
+                        : insufficientForSelectedRental
+                            ? "Không đủ hạn cho chuyến này"
+                            : expiresSoon
+                                ? "Sắp hết hạn"
+                                : document.Status.ToVietnamese();
                 var displayName = GetDocumentName(type);
 
                 <div class="col-md-6">
@@ -204,6 +213,19 @@ else if (hasReturnContext)
                                     Cập nhật @displayName
                                 </button>
                             }
+                            else if (insufficientForSelectedRental)
+                            {
+                                <div class="alert alert-danger mt-3 mb-2">
+                                    <strong>GPLX không đủ hạn cho chuyến đang chọn.</strong>
+                                    Giấy phép phải còn hiệu lực ít nhất đến @requiredValidThrough.ToString("dd/MM/yyyy").
+                                </div>
+                                <button type="button"
+                                        class="btn btn-sm btn-danger w-100"
+                                        data-document-update-button
+                                        data-document-type="@type">
+                                    Cập nhật GPLX
+                                </button>
+                            }
                             else if (document.Status == DocumentStatus.Rejected)
                             {
                                 <div class="alert alert-danger mt-3 mb-2">
@@ -261,8 +283,8 @@ else if (hasReturnContext)
             @if (hasReturnContext)
             {
                 <input type="hidden" name="returnVehicleId" value="@returnVehicleId" />
-                <input type="hidden" name="pickupDate" value="@returnPickupDate.Value.ToString("O")" />
-                <input type="hidden" name="returnDate" value="@returnDate.Value.ToString("O")" />
+                <input type="hidden" name="pickupDate" value="@returnPickupRoute" />
+                <input type="hidden" name="returnDate" value="@returnDateRoute" />
             }
 
             <h2 class="h5 mb-1">Bổ sung hoặc cập nhật giấy tờ</h2>
