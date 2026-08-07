@@ -1,12 +1,14 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -16,13 +18,16 @@ public sealed class AdminBookingsController : Controller
 {
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
+    private readonly ApplicationDbContext _dbContext;
 
     public AdminBookingsController(
         IBookingService bookingService,
-        IAuditService auditService)
+        IAuditService auditService,
+        ApplicationDbContext dbContext)
     {
         _bookingService = bookingService;
         _auditService = auditService;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -38,7 +43,55 @@ public sealed class AdminBookingsController : Controller
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(id, cancellationToken);
-        return booking is null ? NotFound() : View(booking);
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        var customerCreatedAt = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == booking.CustomerId)
+            .Select(user => (DateTime?)user.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var customerBookingStatuses = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.CustomerId == booking.CustomerId)
+            .Select(item => item.Status)
+            .ToListAsync(cancellationToken);
+
+        var customerDocuments = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document => document.CustomerId == booking.CustomerId)
+            .Select(document => new
+            {
+                document.DocumentType,
+                document.Status,
+                document.ExpiryDate
+            })
+            .ToListAsync(cancellationToken);
+
+        bool IsVerified(string documentType) => customerDocuments.Any(document =>
+            document.DocumentType == documentType &&
+            document.Status == DocumentStatus.Verified &&
+            (!document.ExpiryDate.HasValue || document.ExpiryDate.Value.Date >= booking.ReturnDate.Date));
+
+        var citizenIdFrontVerified = IsVerified(DocumentTypes.CitizenId);
+        var citizenIdBackVerified = IsVerified(DocumentTypes.CitizenIdBack);
+        var drivingLicenseVerified = IsVerified(DocumentTypes.DrivingLicense);
+
+        ViewBag.CustomerCreatedAt = customerCreatedAt;
+        ViewBag.CustomerTotalBookingCount = customerBookingStatuses.Count;
+        ViewBag.CustomerCompletedBookingCount = customerBookingStatuses.Count(status => status == BookingStatus.Completed);
+        ViewBag.CustomerCancelledBookingCount = customerBookingStatuses.Count(status =>
+            status is BookingStatus.Cancelled or BookingStatus.Rejected);
+        ViewBag.CustomerNoShowCount = customerBookingStatuses.Count(status => status == BookingStatus.NoShow);
+        ViewBag.CitizenIdFrontVerified = citizenIdFrontVerified;
+        ViewBag.CitizenIdBackVerified = citizenIdBackVerified;
+        ViewBag.DrivingLicenseVerified = drivingLicenseVerified;
+        ViewBag.CustomerKycVerified = citizenIdFrontVerified && citizenIdBackVerified && drivingLicenseVerified;
+
+        return View(booking);
     }
 
     [HttpPost]
