@@ -70,6 +70,7 @@ public sealed class AdminBookingsController : Controller
         var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
         var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
         var drivingLicense = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+        var drivingLicenseBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
         var citizenVerified = citizenFront is not null &&
                               citizenBack is not null &&
@@ -81,8 +82,11 @@ public sealed class AdminBookingsController : Controller
                               citizenFront.ExpiryDate.Value.Date >= booking.ReturnDate.Date;
 
         var drivingLicenseVerified = drivingLicense is not null &&
+                                     drivingLicenseBack is not null &&
                                      drivingLicense.Status == DocumentStatus.Verified &&
+                                     drivingLicenseBack.Status == DocumentStatus.Verified &&
                                      drivingLicense.HasRequiredData &&
+                                     drivingLicenseBack.HasRequiredData &&
                                      drivingLicense.ExpiryDate.HasValue &&
                                      drivingLicense.ExpiryDate.Value.Date >= booking.ReturnDate.Date;
 
