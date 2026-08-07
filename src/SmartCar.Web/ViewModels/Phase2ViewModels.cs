@@ -53,6 +53,11 @@ public sealed class CitizenIdVerificationViewModel
     [Display(Name = "Địa chỉ thường trú")]
     public string PermanentAddress { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Vui lòng nhập địa chỉ tạm trú.")]
+    [StringLength(500, ErrorMessage = "Địa chỉ tạm trú không được vượt quá 500 ký tự.")]
+    [Display(Name = "Địa chỉ tạm trú hiện tại")]
+    public string TemporaryAddress { get; set; } = string.Empty;
+
     [Required(ErrorMessage = "Vui lòng chọn ảnh CCCD mặt trước.")]
     [Display(Name = "Ảnh CCCD mặt trước")]
     public IFormFile? FrontImage { get; set; }
@@ -87,9 +92,13 @@ public sealed class DrivingLicenseVerificationViewModel
     [Display(Name = "Ngày hết hạn")]
     public DateTime? ExpiryDate { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng chọn ảnh GPLX.")]
-    [Display(Name = "Ảnh GPLX")]
-    public IFormFile? Image { get; set; }
+    [Required(ErrorMessage = "Vui lòng chọn ảnh GPLX mặt trước.")]
+    [Display(Name = "Ảnh GPLX mặt trước")]
+    public IFormFile? FrontImage { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng chọn ảnh GPLX mặt sau.")]
+    [Display(Name = "Ảnh GPLX mặt sau")]
+    public IFormFile? BackImage { get; set; }
 }
 
 public sealed class RejectDocumentViewModel
