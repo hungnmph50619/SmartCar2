@@ -81,6 +81,7 @@ public static class DatabaseSeeder
                     CustomerId = demoCustomer.Id,
                     DocumentType = DocumentTypes.CitizenIdentityCard,
                     DocumentNumber = "001204000001",
+                    ExpiryDate = DateTime.Today.AddYears(10),
                     ImagePath = "/images/demo/document-placeholder.svg",
                     Status = DocumentStatus.Verified,
                     VerifiedBy = admin.Id,
@@ -105,8 +106,6 @@ public static class DatabaseSeeder
             await dbContext.SaveChangesAsync();
         }
 
-        // Các database demo cũ đã có CCCD + GPLX vẫn cần được bổ sung mặt sau CCCD
-        // để đáp ứng luồng KYC mới mà không cần xóa hoặc tạo lại database.
         if (!await dbContext.CustomerDocuments.AnyAsync(item =>
                 item.CustomerId == demoCustomer.Id &&
                 item.DocumentType == DocumentTypes.CitizenIdBack))
@@ -117,6 +116,7 @@ public static class DatabaseSeeder
                 CustomerId = demoCustomer.Id,
                 DocumentType = DocumentTypes.CitizenIdBack,
                 DocumentNumber = "001204000001",
+                ExpiryDate = DateTime.Today.AddYears(10),
                 ImagePath = "/images/demo/document-placeholder.svg",
                 Status = DocumentStatus.Verified,
                 VerifiedBy = admin.Id,
@@ -126,6 +126,50 @@ public static class DatabaseSeeder
             });
 
             await dbContext.SaveChangesAsync();
+        }
+
+        // Đồng bộ dữ liệu KYC chi tiết cho cả database demo cũ và database mới.
+        var demoDocuments = await dbContext.CustomerDocuments
+            .Where(item => item.CustomerId == demoCustomer.Id)
+            .ToListAsync();
+        var citizenFront = demoDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = demoDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
+        var drivingLicense = demoDocuments.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+
+        if (citizenFront is not null && citizenBack is not null)
+        {
+            citizenFront.ExpiryDate ??= DateTime.Today.AddYears(10);
+            citizenBack.ExpiryDate ??= citizenFront.ExpiryDate;
+            await dbContext.SaveChangesAsync();
+
+            var demoName = "Khách hàng Demo";
+            var demoBirthDate = new DateTime(1995, 1, 15);
+            var demoGender = "Nam";
+            var demoIssuedDate = DateTime.Today.AddYears(-2);
+            var demoAddress = "Hà Nội";
+
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE [CustomerDocuments]
+                SET [FullNameOnDocument] = {demoName},
+                    [DateOfBirth] = {demoBirthDate},
+                    [Gender] = {demoGender},
+                    [IssuedDate] = {demoIssuedDate},
+                    [PermanentAddress] = {demoAddress}
+                WHERE [CustomerDocumentId] IN ({citizenFront.CustomerDocumentId}, {citizenBack.CustomerDocumentId})");
+        }
+
+        if (drivingLicense is not null)
+        {
+            var demoName = "Khách hàng Demo";
+            var demoIssuedDate = DateTime.Today.AddYears(-3);
+            var demoLicenseClass = "B";
+
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($@"
+                UPDATE [CustomerDocuments]
+                SET [FullNameOnDocument] = {demoName},
+                    [IssuedDate] = {demoIssuedDate},
+                    [LicenseClass] = {demoLicenseClass}
+                WHERE [CustomerDocumentId] = {drivingLicense.CustomerDocumentId}");
         }
 
         if (!await dbContext.Promotions.AnyAsync())
