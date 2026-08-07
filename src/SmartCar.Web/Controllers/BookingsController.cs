@@ -41,13 +41,16 @@ public sealed class BookingsController : Controller
 
         if (!hasValidRentalDocuments)
         {
-            TempData["ErrorMessage"] =
-                "Bạn cần hoàn tất xác minh CCCD mặt trước, CCCD mặt sau và GPLX còn hiệu lực đến ngày trả xe trước khi gửi yêu cầu thuê.";
-            TempData["KycRequired"] = "true";
             return RedirectToAction(
                 "Index",
                 "Profile",
-                new { tab = "documents" });
+                new
+                {
+                    tab = "documents",
+                    returnVehicleId = model.VehicleId,
+                    pickupDate = model.PickupDate,
+                    returnDate = model.ReturnDate
+                });
         }
 
         var result = await _bookingService.CreateAsync(
