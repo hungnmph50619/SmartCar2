@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
     initializeVietnameseDateInputs();
+    initializeSameAddressToggle();
     initializeForms();
     initializeImageInputs();
     initializeAdminCustomerNavigation();
@@ -56,19 +57,16 @@ function initializeVietnameseDateInputs() {
             return;
         }
 
-        const syncToHidden = () => {
-            const value = displayInput.value.trim();
-            if (!value) {
-                hiddenInput.value = "";
-                displayInput.setCustomValidity("");
-                return true;
+        const parseValue = (value) => {
+            const trimmed = value.trim();
+            let match = /^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/.exec(trimmed);
+
+            if (!match && /^\d{8}$/.test(trimmed)) {
+                match = /^(\d{2})(\d{2})(\d{4})$/.exec(trimmed);
             }
 
-            const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
             if (!match) {
-                hiddenInput.value = "";
-                displayInput.setCustomValidity("Vui lòng nhập ngày theo định dạng dd/mm/yyyy.");
-                return false;
+                return null;
             }
 
             const day = Number(match[1]);
@@ -80,14 +78,45 @@ function initializeVietnameseDateInputs() {
                 date.getDate() === day;
 
             if (!isValid) {
+                return null;
+            }
+
+            return { day, month, year };
+        };
+
+        const syncToHidden = (showError) => {
+            const value = displayInput.value.trim();
+            if (!value) {
                 hiddenInput.value = "";
-                displayInput.setCustomValidity("Ngày không hợp lệ.");
+                displayInput.setCustomValidity("");
+                return true;
+            }
+
+            const parsed = parseValue(value);
+            if (!parsed) {
+                hiddenInput.value = "";
+                displayInput.setCustomValidity(showError
+                    ? "Vui lòng nhập ngày hợp lệ, ví dụ 28/7/2026 hoặc 28/07/2026."
+                    : "");
                 return false;
             }
 
+            const day = parsed.day.toString().padStart(2, "0");
+            const month = parsed.month.toString().padStart(2, "0");
+            const year = parsed.year.toString().padStart(4, "0");
+
             displayInput.setCustomValidity("");
-            hiddenInput.value = `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+            hiddenInput.value = `${year}-${month}-${day}`;
             return true;
+        };
+
+        const normalizeDisplay = () => {
+            const parsed = parseValue(displayInput.value);
+            if (!parsed) {
+                return;
+            }
+
+            displayInput.value = `${parsed.day.toString().padStart(2, "0")}/${parsed.month.toString().padStart(2, "0")}/${parsed.year}`;
         };
 
         if (!displayInput.value && hiddenInput.value) {
@@ -97,20 +126,57 @@ function initializeVietnameseDateInputs() {
             }
         }
 
-        displayInput.addEventListener("input", syncToHidden);
+        displayInput.addEventListener("input", () => syncToHidden(false));
         displayInput.addEventListener("blur", () => {
-            syncToHidden();
-            if (!displayInput.checkValidity()) {
+            const valid = syncToHidden(true);
+            if (valid) {
+                normalizeDisplay();
+            } else if (!displayInput.checkValidity()) {
                 displayInput.reportValidity();
             }
         });
 
         displayInput.form?.addEventListener("submit", (event) => {
-            if (!syncToHidden()) {
+            if (!syncToHidden(true)) {
                 event.preventDefault();
                 displayInput.reportValidity();
+                return;
+            }
+            normalizeDisplay();
+        });
+    });
+}
+
+function initializeSameAddressToggle() {
+    document.querySelectorAll("input[data-copy-address-from][data-copy-address-to]").forEach((toggle) => {
+        if (!(toggle instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const source = document.querySelector(toggle.dataset.copyAddressFrom);
+        const target = document.querySelector(toggle.dataset.copyAddressTo);
+        if (!(source instanceof HTMLInputElement) || !(target instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const copyAddress = () => {
+            if (toggle.checked) {
+                target.value = source.value;
+                target.readOnly = true;
+                target.dispatchEvent(new Event("input", { bubbles: true }));
+            } else {
+                target.readOnly = false;
+            }
+        };
+
+        toggle.addEventListener("change", copyAddress);
+        source.addEventListener("input", () => {
+            if (toggle.checked) {
+                target.value = source.value;
+                target.dispatchEvent(new Event("input", { bubbles: true }));
             }
         });
+        copyAddress();
     });
 }
 
