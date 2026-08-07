@@ -159,7 +159,7 @@ else if (hasReturnContext)
             <div>
                 <div class="text-uppercase small text-primary fw-semibold">Bước 1</div>
                 <h3 class="h4 fw-bold mb-1">Thông tin căn cước công dân</h3>
-                <p class="text-muted mb-0">Nhập đúng thông tin in trên CCCD, nơi cư trú hiện tại và tải cả hai mặt để đối chiếu.</p>
+                <p class="text-muted mb-0">Nhập đúng thông tin trên CCCD và tải cả hai mặt để đối chiếu.</p>
             </div>
             <span class="badge @StatusBadge(citizenFront?.Status, citizenVerified) px-3 py-2">@citizenStatus</span>
         </div>
@@ -235,21 +235,8 @@ else if (hasReturnContext)
                 </div>
                 <div class="col-md-8">
                     <label asp-for="CitizenIdVerification.PermanentAddress" class="form-label fw-semibold"></label>
-                    <input asp-for="CitizenIdVerification.PermanentAddress" id="citizen-permanent-address" class="form-control" autocomplete="street-address" />
+                    <input asp-for="CitizenIdVerification.PermanentAddress" class="form-control" autocomplete="street-address" />
                     <span asp-validation-for="CitizenIdVerification.PermanentAddress" class="text-danger small"></span>
-                </div>
-                <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-1">
-                        <label asp-for="CitizenIdVerification.TemporaryAddress" class="form-label fw-semibold mb-0"></label>
-                        <label class="form-check small mb-0">
-                            <input class="form-check-input" type="checkbox"
-                                   data-copy-address-from="#citizen-permanent-address"
-                                   data-copy-address-to="#citizen-temporary-address" />
-                            <span class="form-check-label">Tạm trú giống thường trú</span>
-                        </label>
-                    </div>
-                    <input asp-for="CitizenIdVerification.TemporaryAddress" id="citizen-temporary-address" class="form-control" autocomplete="street-address" />
-                    <span asp-validation-for="CitizenIdVerification.TemporaryAddress" class="text-danger small"></span>
                 </div>
             </div>
 
