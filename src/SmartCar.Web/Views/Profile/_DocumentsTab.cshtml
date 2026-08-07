@@ -14,19 +14,71 @@
             ? new string('*', trimmed.Length)
             : new string('*', trimmed.Length - 4) + trimmed[^4..];
     }
+
+    static string GetDocumentName(string type) => type switch
+    {
+        DocumentTypes.CitizenId => "CCCD mặt trước",
+        DocumentTypes.CitizenIdBack => "CCCD mặt sau",
+        DocumentTypes.DrivingLicense => "Giấy phép lái xe",
+        _ => type
+    };
+
+    var verifiedCount = Model.Documents.Count(item =>
+        DocumentTypes.RequiredForRental.Contains(item.DocumentType) &&
+        item.Status == DocumentStatus.Verified &&
+        (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today));
+    var isFullyVerified = verifiedCount == DocumentTypes.RequiredForRental.Count;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
     <div>
-        <h2 class="h4 mb-1">CCCD và GPLX</h2>
-        <p class="text-muted mb-0">Cả hai giấy tờ phải được xác minh và GPLX phải còn hiệu lực đến ngày trả xe.</p>
+        <h2 class="h4 mb-1">Xác minh danh tính & giấy phép lái xe</h2>
+        <p class="text-muted mb-0">Hoàn thành đủ 3 mục để có thể gửi yêu cầu thuê xe.</p>
     </div>
     <a class="btn btn-outline-primary" asp-controller="Vehicles" asp-action="Index">Tiếp tục tìm xe</a>
 </div>
 
+@if (TempData["KycRequired"] is not null)
+{
+    <div class="alert alert-warning border-warning shadow-sm" role="alert">
+        <strong>Bạn chưa thể gửi yêu cầu thuê xe.</strong>
+        Hãy hoàn tất các bước xác minh bên dưới. Sau khi Quản trị viên duyệt đủ hồ sơ, bạn có thể quay lại đặt xe.
+    </div>
+}
+
+<div class="card card-body shadow-sm mb-4 border-0">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <div class="text-uppercase small text-muted fw-semibold">Tiến độ xác minh</div>
+            <h3 class="h5 mb-0">@verifiedCount/@DocumentTypes.RequiredForRental.Count giấy tờ đã xác minh</h3>
+        </div>
+        <span class="badge @(isFullyVerified ? "bg-success" : "bg-warning text-dark") px-3 py-2">
+            @(isFullyVerified ? "Đủ điều kiện thuê xe" : "Chưa đủ điều kiện thuê xe")
+        </span>
+    </div>
+
+    <div class="row g-3">
+        @foreach (var type in DocumentTypes.RequiredForRental)
+        {
+            var item = Model.Documents.FirstOrDefault(document => document.DocumentType == type);
+            var itemVerified = item?.Status == DocumentStatus.Verified &&
+                               (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today);
+            <div class="col-md-4">
+                <div class="border rounded p-3 h-100 @(itemVerified ? "border-success" : string.Empty)">
+                    <div class="small text-muted">@(type == DocumentTypes.CitizenId ? "Bước 1" : type == DocumentTypes.CitizenIdBack ? "Bước 2" : "Bước 3")</div>
+                    <div class="fw-semibold">@GetDocumentName(type)</div>
+                    <div class="small mt-1 @(itemVerified ? "text-success" : "text-muted")">
+                        @(itemVerified ? "✓ Đã xác minh" : item is null ? "Chưa gửi" : item.Status.ToVietnamese())
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
 <div class="alert alert-info" role="alert">
-    <strong>Bước tiếp theo:</strong> Gửi đủ CCCD và GPLX. Nếu giấy tờ hết hạn hoặc Quản trị viên yêu cầu cập nhật,
-    hãy bổ sung thông tin và tải ảnh mới tại biểu mẫu bên cạnh.
+    <strong>Yêu cầu ảnh:</strong> ảnh rõ chữ, đủ bốn góc, không bị lóa hoặc che thông tin.
+    CCCD cần gửi riêng <strong>mặt trước</strong> và <strong>mặt sau</strong>. GPLX phải còn hiệu lực đến ngày trả xe.
 </div>
 
 <div class="row g-4">
@@ -59,27 +111,28 @@
                         : expiresSoon
                             ? "Sắp hết hạn"
                             : document.Status.ToVietnamese();
+                var displayName = GetDocumentName(type);
 
                 <div class="col-md-6">
                     <div class="card card-body h-100 shadow-sm">
                         <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
-                            <h3 class="h5 mb-0">@type</h3>
+                            <h3 class="h5 mb-0">@displayName</h3>
                             <span class="badge @badgeClass">@statusText</span>
                         </div>
 
                         @if (document is null)
                         {
-                            <p class="text-muted">Bạn chưa gửi @type. Hãy bổ sung để hoàn thiện điều kiện thuê xe.</p>
+                            <p class="text-muted">Bạn chưa gửi @displayName. Hãy bổ sung để hoàn thiện điều kiện thuê xe.</p>
                             <button type="button"
                                     class="btn btn-sm btn-outline-primary mt-auto"
                                     data-document-update-button
                                     data-document-type="@type">
-                                Bổ sung @type
+                                Bổ sung @displayName
                             </button>
                         }
                         else
                         {
-                            <div><strong>Số:</strong> @MaskDocumentNumber(document.DocumentNumber)</div>
+                            <div><strong>Số giấy tờ:</strong> @MaskDocumentNumber(document.DocumentNumber)</div>
                             @if (document.ExpiryDate.HasValue)
                             {
                                 <div><strong>Hết hạn:</strong> @document.ExpiryDate.Value.ToString("dd/MM/yyyy")</div>
@@ -88,7 +141,7 @@
                             <img src="@Url.Action("ViewImage", "Documents", new { id = document.CustomerDocumentId })"
                                  class="img-fluid rounded mt-3"
                                  style="height:180px;width:100%;object-fit:cover"
-                                 alt="Ảnh @type" />
+                                 alt="Ảnh @displayName" />
 
                             @if (document.Status == DocumentStatus.Pending)
                             {
@@ -106,7 +159,7 @@
                                         class="btn btn-sm btn-danger w-100"
                                         data-document-update-button
                                         data-document-type="@type">
-                                    Cập nhật @type
+                                    Cập nhật @displayName
                                 </button>
                             }
                             else if (document.Status == DocumentStatus.Rejected)
@@ -119,7 +172,7 @@
                                         class="btn btn-sm btn-danger w-100"
                                         data-document-update-button
                                         data-document-type="@type">
-                                    Sửa và gửi lại @type
+                                    Sửa và gửi lại @displayName
                                 </button>
                             }
                             else if (expiresSoon)
@@ -138,7 +191,7 @@
                             else if (document.Status == DocumentStatus.Verified)
                             {
                                 <div class="alert alert-success mt-3 mb-2 py-2">
-                                    Giấy tờ đã hợp lệ và có thể dùng để thuê xe.
+                                    Giấy tờ đã hợp lệ và được dùng trong hồ sơ thuê xe.
                                 </div>
                                 <button type="button"
                                         class="btn btn-sm btn-outline-primary w-100"
@@ -169,8 +222,9 @@
             <div class="mb-3">
                 <label asp-for="DocumentUpload.DocumentType" class="form-label fw-semibold">Loại giấy tờ</label>
                 <select asp-for="DocumentUpload.DocumentType" id="profile-document-type" class="form-select">
-                    <option value="@DocumentTypes.CitizenId">CCCD</option>
-                    <option value="@DocumentTypes.DrivingLicense">GPLX</option>
+                    <option value="@DocumentTypes.CitizenId">CCCD mặt trước</option>
+                    <option value="@DocumentTypes.CitizenIdBack">CCCD mặt sau</option>
+                    <option value="@DocumentTypes.DrivingLicense">Giấy phép lái xe</option>
                 </select>
             </div>
 
@@ -178,12 +232,13 @@
                 <label asp-for="DocumentUpload.DocumentNumber" class="form-label fw-semibold">Số giấy tờ</label>
                 <input asp-for="DocumentUpload.DocumentNumber" class="form-control" autocomplete="off" />
                 <span asp-validation-for="DocumentUpload.DocumentNumber" class="text-danger small"></span>
+                <div class="form-text">Với CCCD mặt trước và mặt sau, nhập cùng một số CCCD.</div>
             </div>
 
             <div class="mb-3">
                 <label asp-for="DocumentUpload.ExpiryDate" class="form-label fw-semibold">Ngày hết hạn</label>
                 <input asp-for="DocumentUpload.ExpiryDate" type="date" class="form-control" />
-                <div class="form-text">Bắt buộc với GPLX và phải còn hạn đến ngày trả xe.</div>
+                <div class="form-text">Chỉ bắt buộc với GPLX và phải còn hạn đến ngày trả xe.</div>
             </div>
 
             <div class="mb-3">
@@ -197,7 +252,7 @@
                        data-file-info-target="#profile-document-file-info" />
                 <span asp-validation-for="DocumentUpload.Image" class="text-danger small"></span>
                 <div class="form-text">
-                    JPG, PNG hoặc WEBP; tối đa 5 MB. Ảnh phải rõ chữ, đủ bốn góc và không bị lóa.
+                    JPG, PNG hoặc WEBP; tối đa 5 MB. Mỗi lần tải đúng một mặt/loại giấy tờ đã chọn.
                 </div>
                 <div id="profile-document-file-info" class="small text-muted mt-2 d-none"></div>
                 <div id="profile-document-image-preview" class="mt-3 d-none">
@@ -210,5 +265,9 @@
                 Lưu và gửi xác minh
             </button>
         </form>
+
+        <div class="alert alert-light border mt-3 mb-0 small">
+            <strong>Bảo mật:</strong> số giấy tờ được che trên hồ sơ khách hàng. Quản trị viên chỉ dùng ảnh để xác minh danh tính và điều kiện thuê xe.
+        </div>
     </div>
 </div>
