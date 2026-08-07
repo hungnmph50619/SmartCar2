@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Infrastructure;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
@@ -45,13 +46,15 @@ app.MapControllerRoute(
 try
 {
     using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await dbContext.Database.MigrateAsync();
     await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
 }
 catch (Exception ex)
 {
     app.Logger.LogWarning(
         ex,
-        "Chưa thể seed dữ liệu. Hãy tạo migration và cập nhật database theo README_FIRST.txt.");
+        "Chưa thể cập nhật hoặc seed database. Kiểm tra kết nối SQL Server và migration của SmartCar.");
 }
 
 app.Run();
