@@ -15,10 +15,26 @@
     var returnDateRoute = returnDate?.ToString("O");
     var requiredValidThrough = returnDate?.Date ?? DateTime.Today;
 
-    var verifiedCount = Model.Documents.Count(item =>
-        DocumentTypes.RequiredForRental.Contains(item.DocumentType) &&
-        item.Status == DocumentStatus.Verified &&
-        (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= requiredValidThrough));
+    var citizenFront = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
+    var citizenBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
+    var drivingLicense = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+
+    var citizenVerified = citizenFront is not null &&
+                          citizenBack is not null &&
+                          citizenFront.Status == DocumentStatus.Verified &&
+                          citizenBack.Status == DocumentStatus.Verified &&
+                          citizenFront.HasRequiredData &&
+                          citizenBack.HasRequiredData &&
+                          citizenFront.ExpiryDate.HasValue &&
+                          citizenFront.ExpiryDate.Value.Date >= requiredValidThrough;
+
+    var licenseVerified = drivingLicense is not null &&
+                          drivingLicense.Status == DocumentStatus.Verified &&
+                          drivingLicense.HasRequiredData &&
+                          drivingLicense.ExpiryDate.HasValue &&
+                          drivingLicense.ExpiryDate.Value.Date >= requiredValidThrough;
+
+    var verifiedSteps = (citizenVerified ? 1 : 0) + (licenseVerified ? 1 : 0);
 }
 
 <div class="profile-shell py-3">
@@ -53,9 +69,9 @@
                asp-route-returnVehicleId="@returnVehicleId"
                asp-route-pickupDate="@returnPickupRoute"
                asp-route-returnDate="@returnDateRoute">
-                CCCD/GPLX
-                <span class="badge rounded-pill @(verifiedCount == DocumentTypes.RequiredForRental.Count ? "bg-success" : "bg-secondary") ms-1">
-                    @verifiedCount/@DocumentTypes.RequiredForRental.Count
+                Xác minh CCCD/GPLX
+                <span class="badge rounded-pill @(verifiedSteps == 2 ? "bg-success" : "bg-secondary") ms-1">
+                    @verifiedSteps/2
                 </span>
             </a>
         </nav>
@@ -88,13 +104,13 @@
                             <div class="profile-detail mt-3">
                                 <span>Hồ sơ thuê xe</span>
                                 <strong>
-                                    @(verifiedCount == DocumentTypes.RequiredForRental.Count
+                                    @(verifiedSteps == 2
                                         ? "Đã xác minh đầy đủ"
-                                        : $"Đã xác minh {verifiedCount}/{DocumentTypes.RequiredForRental.Count} giấy tờ")
+                                        : $"Đã xác minh {verifiedSteps}/2 bước")
                                 </strong>
                             </div>
 
-                            @if (verifiedCount < DocumentTypes.RequiredForRental.Count)
+                            @if (verifiedSteps < 2)
                             {
                                 <a class="btn btn-sm btn-outline-primary mt-3"
                                    asp-action="Index"
@@ -102,7 +118,7 @@
                                    asp-route-returnVehicleId="@returnVehicleId"
                                    asp-route-pickupDate="@returnPickupRoute"
                                    asp-route-returnDate="@returnDateRoute">
-                                    Hoàn thiện CCCD/GPLX
+                                    Hoàn thiện xác minh
                                 </a>
                             }
                         }
