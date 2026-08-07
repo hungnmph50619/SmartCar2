@@ -18,6 +18,7 @@
     var citizenFront = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
     var citizenBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
     var drivingLicense = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+    var drivingLicenseBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
     var citizenVerified = citizenFront is not null &&
                           citizenBack is not null &&
@@ -29,8 +30,11 @@
                           citizenFront.ExpiryDate.Value.Date >= requiredValidThrough;
 
     var licenseVerified = drivingLicense is not null &&
+                          drivingLicenseBack is not null &&
                           drivingLicense.Status == DocumentStatus.Verified &&
+                          drivingLicenseBack.Status == DocumentStatus.Verified &&
                           drivingLicense.HasRequiredData &&
+                          drivingLicenseBack.HasRequiredData &&
                           drivingLicense.ExpiryDate.HasValue &&
                           drivingLicense.ExpiryDate.Value.Date >= requiredValidThrough;
 
