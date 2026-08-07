@@ -171,7 +171,137 @@ function initializeDocumentUpdateButtons() {
         return;
     }
 
+    const citizenIdFrontType = "CCCD";
+    const citizenIdBackType = "CCCD mặt sau";
+    const drivingLicenseType = "GPLX";
+    const citizenIdNumber = form.dataset.citizenIdNumber ?? "";
+    const maskedCitizenIdNumber = form.dataset.citizenIdMaskedNumber ?? "Chưa có";
+
     const numberInput = form.querySelector('input[name="DocumentUpload.DocumentNumber"]');
+    const numberGroup = document.getElementById("profile-document-number-group");
+    const numberSummary = document.getElementById("profile-document-number-summary");
+    const citizenIdSummary = numberSummary?.querySelector("[data-citizen-id-summary]") ?? null;
+    const expiryGroup = document.getElementById("profile-document-expiry-group");
+    const expiryDisplay = document.getElementById("profile-document-expiry-display");
+    const expiryValue = document.getElementById("profile-document-expiry-value");
+    const imageInput = form.querySelector('input[name="DocumentUpload.Image"]');
+    const submitButton = document.getElementById("profile-document-submit");
+    let previousType = typeSelect.value;
+
+    const setExpiryFromDisplay = () => {
+        if (!(expiryDisplay instanceof HTMLInputElement) || !(expiryValue instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const value = expiryDisplay.value.trim();
+        if (!value) {
+            expiryValue.value = "";
+            expiryDisplay.setCustomValidity("");
+            return;
+        }
+
+        const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value);
+        if (!match) {
+            expiryValue.value = "";
+            expiryDisplay.setCustomValidity("Vui lòng nhập ngày theo định dạng dd/mm/yyyy.");
+            return;
+        }
+
+        const day = Number(match[1]);
+        const month = Number(match[2]);
+        const year = Number(match[3]);
+        const date = new Date(year, month - 1, day);
+        const isValid = date.getFullYear() === year &&
+            date.getMonth() === month - 1 &&
+            date.getDate() === day;
+
+        if (!isValid) {
+            expiryValue.value = "";
+            expiryDisplay.setCustomValidity("Ngày hết hạn không hợp lệ.");
+            return;
+        }
+
+        expiryDisplay.setCustomValidity("");
+        expiryValue.value = `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+    };
+
+    const restoreExpiryDisplay = () => {
+        if (!(expiryDisplay instanceof HTMLInputElement) || !(expiryValue instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(expiryValue.value);
+        if (match) {
+            expiryDisplay.value = `${match[3]}/${match[2]}/${match[1]}`;
+        }
+    };
+
+    const syncDocumentFields = () => {
+        const type = typeSelect.value;
+        const isCitizenIdBack = type === citizenIdBackType;
+        const isDrivingLicense = type === drivingLicenseType;
+
+        numberGroup?.classList.toggle("d-none", isCitizenIdBack);
+        numberSummary?.classList.toggle("d-none", !isCitizenIdBack);
+        expiryGroup?.classList.toggle("d-none", !isDrivingLicense);
+
+        if (isCitizenIdBack && numberInput instanceof HTMLInputElement) {
+            numberInput.value = citizenIdNumber;
+        }
+
+        if (citizenIdSummary) {
+            citizenIdSummary.textContent = citizenIdNumber
+                ? maskedCitizenIdNumber
+                : "Chưa có CCCD mặt trước";
+        }
+
+        if (expiryDisplay instanceof HTMLInputElement) {
+            expiryDisplay.required = isDrivingLicense;
+            if (!isDrivingLicense) {
+                expiryDisplay.value = "";
+                expiryDisplay.setCustomValidity("");
+            }
+        }
+
+        if (expiryValue instanceof HTMLInputElement && !isDrivingLicense) {
+            expiryValue.value = "";
+        }
+
+        if (submitButton instanceof HTMLButtonElement) {
+            submitButton.disabled = isCitizenIdBack && !citizenIdNumber;
+        }
+    };
+
+    restoreExpiryDisplay();
+    syncDocumentFields();
+
+    typeSelect.addEventListener("change", () => {
+        const nextType = typeSelect.value;
+        if (nextType !== previousType &&
+            nextType !== citizenIdBackType &&
+            numberInput instanceof HTMLInputElement) {
+            numberInput.value = "";
+        }
+
+        previousType = nextType;
+        syncDocumentFields();
+    });
+
+    if (expiryDisplay instanceof HTMLInputElement) {
+        expiryDisplay.addEventListener("input", setExpiryFromDisplay);
+        expiryDisplay.addEventListener("blur", () => {
+            setExpiryFromDisplay();
+            if (!expiryDisplay.checkValidity()) {
+                expiryDisplay.reportValidity();
+            }
+        });
+    }
+
+    form.addEventListener("submit", () => {
+        if (typeSelect.value === drivingLicenseType) {
+            setExpiryFromDisplay();
+        }
+    });
 
     document.querySelectorAll("[data-document-update-button]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -183,7 +313,9 @@ function initializeDocumentUpdateButtons() {
 
             form.scrollIntoView({ behavior: "smooth", block: "start" });
             window.setTimeout(() => {
-                if (numberInput instanceof HTMLElement) {
+                if (typeSelect.value === citizenIdBackType && imageInput instanceof HTMLElement) {
+                    imageInput.focus({ preventScroll: true });
+                } else if (numberInput instanceof HTMLElement) {
                     numberInput.focus({ preventScroll: true });
                 }
             }, 450);
