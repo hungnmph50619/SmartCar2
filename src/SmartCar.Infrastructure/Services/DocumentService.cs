@@ -83,13 +83,46 @@ internal sealed class DocumentService : IDocumentService
         }
 
         var normalizedNumber = request.DocumentNumber.Trim().ToUpperInvariant();
-        var duplicate = await _dbContext.CustomerDocuments
-            .AsNoTracking()
-            .AnyAsync(item =>
-                item.CustomerId != customerId &&
-                item.DocumentType == request.DocumentType &&
-                item.DocumentNumber == normalizedNumber,
-                cancellationToken);
+        var isCitizenId = request.DocumentType is DocumentTypes.CitizenId or DocumentTypes.CitizenIdBack;
+
+        if (isCitizenId)
+        {
+            var pairedType = request.DocumentType == DocumentTypes.CitizenId
+                ? DocumentTypes.CitizenIdBack
+                : DocumentTypes.CitizenId;
+
+            var pairedNumber = await _dbContext.CustomerDocuments
+                .AsNoTracking()
+                .Where(item =>
+                    item.CustomerId == customerId &&
+                    item.DocumentType == pairedType)
+                .Select(item => item.DocumentNumber)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(pairedNumber) &&
+                !string.Equals(pairedNumber, normalizedNumber, StringComparison.OrdinalIgnoreCase))
+            {
+                return OperationResult.Failure(
+                    "Số CCCD mặt trước và mặt sau phải trùng nhau.");
+            }
+        }
+
+        var duplicate = isCitizenId
+            ? await _dbContext.CustomerDocuments
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.CustomerId != customerId &&
+                    (item.DocumentType == DocumentTypes.CitizenId ||
+                     item.DocumentType == DocumentTypes.CitizenIdBack) &&
+                    item.DocumentNumber == normalizedNumber,
+                    cancellationToken)
+            : await _dbContext.CustomerDocuments
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.CustomerId != customerId &&
+                    item.DocumentType == request.DocumentType &&
+                    item.DocumentNumber == normalizedNumber,
+                    cancellationToken);
 
         if (duplicate)
         {
