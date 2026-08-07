@@ -31,5 +31,11 @@ public sealed class ProfileViewModel
     public DocumentUploadViewModel DocumentUpload { get; set; } = new();
 
     [ValidateNever]
+    public CitizenIdVerificationViewModel CitizenIdVerification { get; set; } = new();
+
+    [ValidateNever]
+    public DrivingLicenseVerificationViewModel DrivingLicenseVerification { get; set; } = new();
+
+    [ValidateNever]
     public IReadOnlyList<DocumentDto> Documents { get; set; } = Array.Empty<DocumentDto>();
 }
