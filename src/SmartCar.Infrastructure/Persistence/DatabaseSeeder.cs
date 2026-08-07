@@ -105,6 +105,29 @@ public static class DatabaseSeeder
             await dbContext.SaveChangesAsync();
         }
 
+        // Các database demo cũ đã có CCCD + GPLX vẫn cần được bổ sung mặt sau CCCD
+        // để đáp ứng luồng KYC mới mà không cần xóa hoặc tạo lại database.
+        if (!await dbContext.CustomerDocuments.AnyAsync(item =>
+                item.CustomerId == demoCustomer.Id &&
+                item.DocumentType == DocumentTypes.CitizenIdBack))
+        {
+            var now = DateTime.UtcNow;
+            dbContext.CustomerDocuments.Add(new CustomerDocument
+            {
+                CustomerId = demoCustomer.Id,
+                DocumentType = DocumentTypes.CitizenIdBack,
+                DocumentNumber = "001204000001",
+                ImagePath = "/images/demo/document-placeholder.svg",
+                Status = DocumentStatus.Verified,
+                VerifiedBy = admin.Id,
+                VerifiedAt = now,
+                CreatedAt = now,
+                UpdatedAt = now
+            });
+
+            await dbContext.SaveChangesAsync();
+        }
+
         if (!await dbContext.Promotions.AnyAsync())
         {
             dbContext.Promotions.Add(new Promotion
