@@ -99,6 +99,13 @@ internal sealed class DocumentService : IDocumentService
                 .Select(item => item.DocumentNumber)
                 .FirstOrDefaultAsync(cancellationToken);
 
+            if (request.DocumentType == DocumentTypes.CitizenIdBack &&
+                string.IsNullOrWhiteSpace(pairedNumber))
+            {
+                return OperationResult.Failure(
+                    "Vui lòng gửi CCCD mặt trước trước khi tải ảnh CCCD mặt sau.");
+            }
+
             if (!string.IsNullOrWhiteSpace(pairedNumber) &&
                 !string.Equals(pairedNumber, normalizedNumber, StringComparison.OrdinalIgnoreCase))
             {
