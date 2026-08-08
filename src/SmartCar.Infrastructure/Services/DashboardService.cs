@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Dashboard;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 
@@ -22,6 +23,13 @@ internal sealed class DashboardService : IDashboardService
         var tomorrow = today.AddDays(1);
         var firstDayOfMonth = new DateTime(now.Year, now.Month, 1);
         var firstDayOfNextMonth = firstDayOfMonth.AddMonths(1);
+        var requiredKycTypes = new[]
+        {
+            DocumentTypes.CitizenId,
+            DocumentTypes.CitizenIdBack,
+            DocumentTypes.DrivingLicense,
+            DocumentTypes.DrivingLicenseBack
+        };
 
         var recentBookings = await _dbContext.Bookings
             .AsNoTracking()
@@ -54,6 +62,15 @@ internal sealed class DashboardService : IDashboardService
             })
             .ToListAsync(cancellationToken);
 
+        var pendingKycPackages = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.Status == DocumentStatus.Pending &&
+                requiredKycTypes.Contains(document.DocumentType))
+            .GroupBy(document => document.CustomerId)
+            .Where(group => group.Select(document => document.DocumentType).Distinct().Count() == requiredKycTypes.Length)
+            .CountAsync(cancellationToken);
+
         return new DashboardDto
         {
             TotalVehicles = await _dbContext.Vehicles.CountAsync(
@@ -74,6 +91,7 @@ internal sealed class DashboardService : IDashboardService
             PendingBookings = await _dbContext.Bookings.CountAsync(
                 booking => booking.Status == BookingStatus.PendingConfirmation,
                 cancellationToken),
+            PendingKycPackages = pendingKycPackages,
             TodayPickups = await _dbContext.Bookings.CountAsync(
                 booking =>
                     booking.PickupDate >= today &&
