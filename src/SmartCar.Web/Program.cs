@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Infrastructure;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Filters;
 using SmartCar.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,7 +14,10 @@ builder.Services.AddHttpClient<IEkycService, EkycService>(client =>
     client.Timeout = TimeSpan.FromSeconds(60);
 });
 builder.Services.AddSingleton<IEkycResultStore, FileEkycResultStore>();
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options =>
+{
+    options.Filters.Add(new DuplicateDocumentImagesFilter());
+});
 
 var app = builder.Build();
 

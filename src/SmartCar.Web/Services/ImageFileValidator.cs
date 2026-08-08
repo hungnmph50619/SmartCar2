@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http;
 
 namespace SmartCar.Web.Services;
@@ -57,6 +58,26 @@ public static class ImageFileValidator
         };
 
         return validSignature ? null : "Nội dung file không phải là ảnh hợp lệ.";
+    }
+
+    public static async Task<bool> HaveSameContentAsync(
+        IFormFile? first,
+        IFormFile? second,
+        CancellationToken cancellationToken = default)
+    {
+        if (first is null || second is null ||
+            first.Length <= 0 || second.Length <= 0 ||
+            first.Length != second.Length)
+        {
+            return false;
+        }
+
+        await using var firstStream = first.OpenReadStream();
+        await using var secondStream = second.OpenReadStream();
+
+        var firstHash = await SHA256.HashDataAsync(firstStream, cancellationToken);
+        var secondHash = await SHA256.HashDataAsync(secondStream, cancellationToken);
+        return CryptographicOperations.FixedTimeEquals(firstHash, secondHash);
     }
 
     public static string GetContentType(string fileName)
