@@ -5,8 +5,10 @@ namespace SmartCar.Web.Services;
 public sealed class EkycOptions
 {
     public string Mode { get; set; } = "Auto";
-    public string Provider { get; set; } = "FPT.AI";
-    public string BaseUrl { get; set; } = "https://api.fpt.ai/vision/ekyc/be-stag";
+    public string Provider { get; set; } = "FPT.AI Reader";
+    public string CitizenIdOcrUrl { get; set; } = "https://api.fpt.ai/vision/idr/vnm/";
+    public string DrivingLicenseOcrUrl { get; set; } = "https://api.fpt.ai/vision/dlr/vnm";
+    public string LivenessUrl { get; set; } = "https://api.fpt.ai/dmp/liveness/v3";
     public string ApiKey { get; set; } = string.Empty;
     public decimal FaceMatchThreshold { get; set; } = 80m;
 }
@@ -66,7 +68,7 @@ public interface IEkycService
         CancellationToken cancellationToken = default);
 
     Task<EkycFaceVerificationResult> VerifyFaceAsync(
-        string sessionId,
+        IFormFile citizenFrontImage,
         IFormFile selfieVideo,
         CancellationToken cancellationToken = default);
 }
