@@ -7,6 +7,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
@@ -22,6 +23,49 @@ public sealed class AdminKycController : Controller
     {
         _documentService = documentService;
         _dbContext = dbContext;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Review(
+        string customerId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return BadRequest();
+        }
+
+        var customer = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == customerId)
+            .Select(user => new { user.Id, user.FullName, user.Email })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (customer is null)
+        {
+            return NotFound();
+        }
+
+        var documents = await _documentService.GetCustomerDocumentsAsync(customerId, cancellationToken);
+        var requiredTypes = new[]
+        {
+            DocumentTypes.CitizenId,
+            DocumentTypes.CitizenIdBack,
+            DocumentTypes.DrivingLicense,
+            DocumentTypes.DrivingLicenseBack
+        };
+        if (!requiredTypes.All(type => documents.Any(item => item.DocumentType == type)))
+        {
+            TempData["ErrorMessage"] = "Khách hàng chưa gửi đủ toàn bộ hồ sơ KYC.";
+            return RedirectToAction("Details", "AdminCustomers", new { id = customerId, tab = "documents" });
+        }
+
+        return View(new AdminKycPackageReviewViewModel
+        {
+            CustomerId = customer.Id,
+            CustomerName = customer.FullName,
+            CustomerEmail = customer.Email ?? string.Empty,
+            Documents = documents
+        });
     }
 
     [HttpPost]
@@ -46,19 +90,19 @@ public sealed class AdminKycController : Controller
         if (package.Any(item => item is null))
         {
             TempData["ErrorMessage"] = "Khách hàng chưa gửi đủ CCCD và GPLX gồm cả mặt trước lẫn mặt sau.";
-            return RedirectToAction("Details", "AdminCustomers", new { id = customerId, tab = "documents" });
+            return RedirectToAction(nameof(Review), new { customerId });
         }
 
         if (package.Any(item => item!.Status != DocumentStatus.Pending))
         {
             TempData["ErrorMessage"] = "Chỉ có thể duyệt một lần khi toàn bộ CCCD và GPLX đều đang chờ xác minh.";
-            return RedirectToAction("Details", "AdminCustomers", new { id = customerId, tab = "documents" });
+            return RedirectToAction(nameof(Review), new { customerId });
         }
 
         if (package.Any(item => !item!.HasRequiredData))
         {
             TempData["ErrorMessage"] = "Hồ sơ KYC chưa có đủ dữ liệu bắt buộc để xác minh.";
-            return RedirectToAction("Details", "AdminCustomers", new { id = customerId, tab = "documents" });
+            return RedirectToAction(nameof(Review), new { customerId });
         }
 
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
@@ -81,11 +125,9 @@ public sealed class AdminKycController : Controller
         if (errors.Count > 0)
         {
             TempData["ErrorMessage"] = string.Join("; ", errors.Distinct());
-            return RedirectToAction("Details", "AdminCustomers", new { id = customerId, tab = "documents" });
+            return RedirectToAction(nameof(Review), new { customerId });
         }
 
-        // VerifyAsync creates one customer notification per stored side. Replace those with one
-        // clear notification for the whole KYC decision.
         var generatedCustomerNotifications = await _dbContext.Notifications
             .Where(item => item.UserId == customerId &&
                            item.CreatedAt >= startedAt &&
@@ -103,7 +145,6 @@ public sealed class AdminKycController : Controller
             Message = "CCCD và giấy phép lái xe của bạn đã được Quản trị viên đối chiếu và xác minh. Hồ sơ KYC đã hoàn tất."
         });
 
-        // The package is done, so clear the actionable pending notification for every admin.
         var packageTitle = $"Hồ sơ KYC chờ duyệt|{customerId}";
         var adminNotifications = await _dbContext.Notifications
             .Where(item => item.Title == packageTitle && !item.IsRead)
