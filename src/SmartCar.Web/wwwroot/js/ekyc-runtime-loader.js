@@ -52,6 +52,12 @@
         document.body.appendChild(script);
     });
 
+    // Hướng dẫn luồng KYC là script nhẹ, tải ngay để người dùng hiểu quy trình trước khi
+    // khởi tạo Tesseract/classifier/quality runtime nặng.
+    void loadScript('/js/kyc-page-ux.js').catch(error => {
+        console.warn('Không tải được hướng dẫn KYC:', error);
+    });
+
     const settleInstallers = async () => {
         await new Promise(resolve => setTimeout(resolve, 0));
         await nextFrame();

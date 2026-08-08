@@ -1,0 +1,148 @@
+@model SmartCar.Web.ViewModels.AdminKycPackageReviewViewModel
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
+@{
+    ViewData["Title"] = "Duyệt hồ sơ KYC";
+    var citizenFront = Model.Documents.First(item => item.DocumentType == DocumentTypes.CitizenId);
+    var citizenBack = Model.Documents.First(item => item.DocumentType == DocumentTypes.CitizenIdBack);
+    var licenseFront = Model.Documents.First(item => item.DocumentType == DocumentTypes.DrivingLicense);
+    var licenseBack = Model.Documents.First(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
+    var allPending = new[] { citizenFront, citizenBack, licenseFront, licenseBack }
+        .All(item => item.Status == DocumentStatus.Pending && item.HasRequiredData);
+
+    static string Mask(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "Chưa có";
+        var text = value.Trim();
+        return text.Length <= 4 ? new string('*', text.Length) : new string('*', text.Length - 4) + text[^4..];
+    }
+
+    string ImageUrl(int id) => Url.Action("ViewDocumentImage", "AdminCustomers", new { id }) ?? "#";
+}
+
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
+    <div>
+        <div class="text-uppercase small text-primary fw-semibold">HỒ SƠ KYC HOÀN CHỈNH</div>
+        <h1 class="h2 fw-bold mb-1">Duyệt CCCD + GPLX trong một lần</h1>
+        <p class="text-muted mb-0">@Model.CustomerName · @Model.CustomerEmail</p>
+    </div>
+    <a class="btn btn-outline-secondary"
+       asp-controller="AdminCustomers" asp-action="Details"
+       asp-route-id="@Model.CustomerId" asp-route-tab="documents">Mở trang khách hàng</a>
+</div>
+
+<div class="alert alert-info shadow-sm">
+    <strong>Quy trình duyệt:</strong> xem CCCD → xem GPLX → tích checklist cuối trang → bấm <strong>Duyệt toàn bộ hồ sơ KYC</strong>.
+    Nếu một giấy tờ có vấn đề, không duyệt toàn bộ; mở trang khách hàng để yêu cầu cập nhật đúng phần đó.
+</div>
+
+<section class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white p-4 pb-2 border-0">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="text-uppercase small text-primary fw-semibold">1/2 · CCCD</div>
+                <h2 class="h4 fw-bold mb-1">Căn cước công dân</h2>
+                <p class="text-muted mb-0">Đối chiếu dữ liệu khai báo với cả hai mặt CCCD.</p>
+            </div>
+            <span class="badge @(citizenFront.Status == DocumentStatus.Pending && citizenBack.Status == DocumentStatus.Pending ? "bg-warning text-dark" : "bg-secondary") px-3 py-2">
+                @(citizenFront.Status == DocumentStatus.Pending && citizenBack.Status == DocumentStatus.Pending ? "Chờ duyệt" : citizenFront.Status.ToString())
+            </span>
+        </div>
+    </div>
+    <div class="card-body p-4">
+        <div class="row g-3 mb-4">
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Họ và tên</span><strong>@(citizenFront.FullNameOnDocument ?? "Chưa cập nhật")</strong></div></div>
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Số CCCD</span><strong>@Mask(citizenFront.DocumentNumber)</strong></div></div>
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Ngày sinh</span><strong>@(citizenFront.DateOfBirth?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Giới tính</span><strong>@(citizenFront.Gender ?? "Chưa cập nhật")</strong></div></div>
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Ngày cấp</span><strong>@(citizenFront.IssuedDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
+            <div class="col-12"><div class="border rounded-3 p-3"><span class="small text-muted d-block">Nơi cư trú</span><strong>@(citizenFront.PermanentAddress ?? "Chưa cập nhật")</strong></div></div>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="fw-semibold mb-2">Mặt trước CCCD</div>
+                <a href="@ImageUrl(citizenFront.CustomerDocumentId)" target="_blank" rel="noopener" class="document-image-link">
+                    <img src="@ImageUrl(citizenFront.CustomerDocumentId)" alt="CCCD mặt trước" />
+                    <span>Mở ảnh kích thước đầy đủ</span>
+                </a>
+            </div>
+            <div class="col-md-6">
+                <div class="fw-semibold mb-2">Mặt sau CCCD</div>
+                <a href="@ImageUrl(citizenBack.CustomerDocumentId)" target="_blank" rel="noopener" class="document-image-link">
+                    <img src="@ImageUrl(citizenBack.CustomerDocumentId)" alt="CCCD mặt sau" />
+                    <span>Mở ảnh kích thước đầy đủ</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white p-4 pb-2 border-0">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="text-uppercase small text-primary fw-semibold">2/2 · GPLX</div>
+                <h2 class="h4 fw-bold mb-1">Giấy phép lái xe</h2>
+                <p class="text-muted mb-0">Đối chiếu số bằng, hạng bằng, thời hạn và cả hai mặt GPLX.</p>
+            </div>
+            <span class="badge @(licenseFront.Status == DocumentStatus.Pending && licenseBack.Status == DocumentStatus.Pending ? "bg-warning text-dark" : "bg-secondary") px-3 py-2">
+                @(licenseFront.Status == DocumentStatus.Pending && licenseBack.Status == DocumentStatus.Pending ? "Chờ duyệt" : licenseFront.Status.ToString())
+            </span>
+        </div>
+    </div>
+    <div class="card-body p-4">
+        <div class="row g-3 mb-4">
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Họ và tên</span><strong>@(licenseFront.FullNameOnDocument ?? "Chưa cập nhật")</strong></div></div>
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Số GPLX</span><strong>@licenseFront.DocumentNumber</strong></div></div>
+            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Hạng GPLX</span><strong>@(licenseFront.LicenseClass ?? "Chưa cập nhật")</strong></div></div>
+            <div class="col-md-6"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Ngày cấp</span><strong>@(licenseFront.IssuedDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
+            <div class="col-md-6"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(licenseFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="fw-semibold mb-2">Mặt trước GPLX</div>
+                <a href="@ImageUrl(licenseFront.CustomerDocumentId)" target="_blank" rel="noopener" class="document-image-link">
+                    <img src="@ImageUrl(licenseFront.CustomerDocumentId)" alt="GPLX mặt trước" />
+                    <span>Mở ảnh kích thước đầy đủ</span>
+                </a>
+            </div>
+            <div class="col-md-6">
+                <div class="fw-semibold mb-2">Mặt sau GPLX</div>
+                <a href="@ImageUrl(licenseBack.CustomerDocumentId)" target="_blank" rel="noopener" class="document-image-link">
+                    <img src="@ImageUrl(licenseBack.CustomerDocumentId)" alt="GPLX mặt sau" />
+                    <span>Mở ảnh kích thước đầy đủ</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="card border-success shadow-sm mb-4">
+    <div class="card-body p-4">
+        <h2 class="h4 fw-bold mb-2">Quyết định toàn bộ hồ sơ</h2>
+        @if (allPending)
+        {
+            <form asp-action="VerifyAll" method="post" data-loading-form data-confirm="Xác nhận toàn bộ CCCD và GPLX đều hợp lệ?">
+                <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                <fieldset class="document-checklist mb-3">
+                    <legend>Checklist bắt buộc</legend>
+                    <label><input class="form-check-input" type="checkbox" required /> CCCD: dữ liệu khớp hai mặt, ảnh rõ và còn hiệu lực.</label>
+                    <label><input class="form-check-input" type="checkbox" required /> GPLX: số bằng, hạng bằng, ngày cấp/hết hạn khớp ảnh và còn hiệu lực.</label>
+                    <label><input class="form-check-input" type="checkbox" required /> Đã xem đủ 4 ảnh và không thấy dấu hiệu chỉnh sửa bất thường.</label>
+                    <label><input class="form-check-input" type="checkbox" required /> Xác nhận hai giấy tờ thuộc cùng khách hàng.</label>
+                </fieldset>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-success" type="submit" data-loading-text="Đang duyệt toàn bộ KYC...">✓ Duyệt toàn bộ hồ sơ KYC</button>
+                    <a class="btn btn-outline-danger"
+                       asp-controller="AdminCustomers" asp-action="Details"
+                       asp-route-id="@Model.CustomerId" asp-route-tab="documents">Có vấn đề — yêu cầu cập nhật</a>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div class="alert alert-secondary mb-0">Hồ sơ này không còn ở trạng thái có thể duyệt toàn bộ. Hãy quay lại trang khách hàng để xem trạng thái từng giấy tờ.</div>
+        }
+    </div>
+</section>

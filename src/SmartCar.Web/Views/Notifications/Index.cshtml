@@ -26,14 +26,36 @@ else
     <div class="list-group shadow-sm">
     @foreach (var item in Model)
     {
+        var separatorIndex = item.Title.IndexOf('|');
+        var displayTitle = separatorIndex > 0 ? item.Title[..separatorIndex] : item.Title;
+        var kycCustomerId = displayTitle == "Hồ sơ KYC chờ duyệt" && separatorIndex > 0
+            ? item.Title[(separatorIndex + 1)..]
+            : null;
+        var isKycAction = !string.IsNullOrWhiteSpace(kycCustomerId);
+
         <div class="list-group-item @(item.IsRead ? "" : "list-group-item-primary")">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <h2 class="h6 mb-1">@item.Title</h2>
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div class="flex-grow-1">
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+                        <h2 class="h6 mb-0">@displayTitle</h2>
+                        @if (isKycAction)
+                        {
+                            <span class="badge bg-warning text-dark">Cần xử lý</span>
+                        }
+                    </div>
                     <p class="mb-1">@item.Message</p>
                     <small class="text-muted">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+
+                    @if (isKycAction)
+                    {
+                        <form asp-action="OpenKyc" method="post" class="mt-3">
+                            <input type="hidden" name="id" value="@item.NotificationId" />
+                            <input type="hidden" name="customerId" value="@kycCustomerId" />
+                            <button class="btn btn-sm btn-primary" type="submit">Mở hồ sơ KYC để duyệt</button>
+                        </form>
+                    }
                 </div>
-                @if (!item.IsRead)
+                @if (!item.IsRead && !isKycAction)
                 {
                     <form asp-action="MarkRead" method="post">
                         <input type="hidden" name="id" value="@item.NotificationId" />
