@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initializeSameAddressToggle();
     initializeForms();
     initializeImageInputs();
+    initializeKycEditToggles();
     initializeAdminCustomerNavigation();
 });
 
@@ -10,6 +11,11 @@ function initializeForms() {
     document.querySelectorAll("form[data-confirm], form[data-loading-form]").forEach((form) => {
         form.addEventListener("submit", (event) => {
             if (event.defaultPrevented || !form.checkValidity()) {
+                return;
+            }
+
+            if (!passesJQueryValidation(form)) {
+                event.preventDefault();
                 return;
             }
 
@@ -45,6 +51,20 @@ function initializeForms() {
     });
 }
 
+function passesJQueryValidation(form) {
+    const jq = window.jQuery;
+    if (!jq || !jq.validator) {
+        return true;
+    }
+
+    const wrapped = jq(form);
+    if (typeof wrapped.valid !== "function") {
+        return true;
+    }
+
+    return wrapped.valid();
+}
+
 function initializeVietnameseDateInputs() {
     document.querySelectorAll("input[data-vn-date-input]").forEach((displayInput) => {
         if (!(displayInput instanceof HTMLInputElement)) {
@@ -57,33 +77,6 @@ function initializeVietnameseDateInputs() {
             return;
         }
 
-        const parseValue = (value) => {
-            const trimmed = value.trim();
-            let match = /^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/.exec(trimmed);
-
-            if (!match && /^\d{8}$/.test(trimmed)) {
-                match = /^(\d{2})(\d{2})(\d{4})$/.exec(trimmed);
-            }
-
-            if (!match) {
-                return null;
-            }
-
-            const day = Number(match[1]);
-            const month = Number(match[2]);
-            const year = Number(match[3]);
-            const date = new Date(year, month - 1, day);
-            const isValid = date.getFullYear() === year &&
-                date.getMonth() === month - 1 &&
-                date.getDate() === day;
-
-            if (!isValid) {
-                return null;
-            }
-
-            return { day, month, year };
-        };
-
         const syncToHidden = (showError) => {
             const value = displayInput.value.trim();
             if (!value) {
@@ -92,7 +85,7 @@ function initializeVietnameseDateInputs() {
                 return true;
             }
 
-            const parsed = parseValue(value);
+            const parsed = parseVietnameseDate(value);
             if (!parsed) {
                 hiddenInput.value = "";
                 displayInput.setCustomValidity(showError
@@ -104,19 +97,20 @@ function initializeVietnameseDateInputs() {
             const day = parsed.day.toString().padStart(2, "0");
             const month = parsed.month.toString().padStart(2, "0");
             const year = parsed.year.toString().padStart(4, "0");
-
-            displayInput.setCustomValidity("");
             hiddenInput.value = `${year}-${month}-${day}`;
-            return true;
+
+            const businessError = getDateBusinessError(displayInput, parsed);
+            displayInput.setCustomValidity(showError && businessError ? businessError : "");
+            return !businessError;
         };
 
         const normalizeDisplay = () => {
-            const parsed = parseValue(displayInput.value);
+            const parsed = parseVietnameseDate(displayInput.value);
             if (!parsed) {
                 return;
             }
 
-            displayInput.value = `${parsed.day.toString().padStart(2, "0")}/${parsed.month.toString().padStart(2, "0")}/${parsed.year}`;
+            displayInput.value = formatVietnameseDate(parsed);
         };
 
         if (!displayInput.value && hiddenInput.value) {
@@ -145,6 +139,109 @@ function initializeVietnameseDateInputs() {
             normalizeDisplay();
         });
     });
+}
+
+function parseVietnameseDate(value) {
+    const trimmed = value.trim();
+    let match = /^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{4})$/.exec(trimmed);
+
+    if (!match && /^\d{8}$/.test(trimmed)) {
+        match = /^(\d{2})(\d{2})(\d{4})$/.exec(trimmed);
+    }
+
+    if (!match) {
+        return null;
+    }
+
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const date = new Date(year, month - 1, day);
+    const isValid = date.getFullYear() === year &&
+        date.getMonth() === month - 1 &&
+        date.getDate() === day;
+
+    return isValid ? { day, month, year } : null;
+}
+
+function parseIsoDate(value) {
+    if (!value) {
+        return null;
+    }
+
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+    if (!match) {
+        return null;
+    }
+
+    return {
+        year: Number(match[1]),
+        month: Number(match[2]),
+        day: Number(match[3])
+    };
+}
+
+function getDateBusinessError(input, parsed) {
+    const role = input.dataset.dateRole;
+    const documentLabel = input.dataset.documentLabel ?? "Giấy tờ";
+    const today = getTodayParts();
+
+    if (role === "birth") {
+        const latestAllowedBirthDate = {
+            day: today.day,
+            month: today.month,
+            year: today.year - 18
+        };
+
+        if (compareDateParts(parsed, latestAllowedBirthDate) > 0) {
+            return "Khách thuê xe phải đủ 18 tuổi.";
+        }
+    }
+
+    if (role === "issued" && compareDateParts(parsed, today) > 0) {
+        return "Ngày cấp không được sau ngày hiện tại.";
+    }
+
+    if (role === "expiry") {
+        if (compareDateParts(parsed, today) < 0) {
+            return `${documentLabel} đã hết hạn.`;
+        }
+
+        const issuedSelector = input.dataset.relatedIssued;
+        const issuedInput = issuedSelector ? document.querySelector(issuedSelector) : null;
+        if (issuedInput instanceof HTMLInputElement) {
+            const issuedDate = parseVietnameseDate(issuedInput.value);
+            if (issuedDate && compareDateParts(parsed, issuedDate) <= 0) {
+                return "Ngày hết hạn phải sau ngày cấp.";
+            }
+        }
+
+        const requiredThrough = parseIsoDate(input.dataset.minValidThrough ?? "");
+        if (requiredThrough && compareDateParts(parsed, requiredThrough) < 0) {
+            return `${documentLabel} phải còn hiệu lực ít nhất đến ngày ${formatVietnameseDate(requiredThrough)}.`;
+        }
+    }
+
+    return null;
+}
+
+function getTodayParts() {
+    const now = new Date();
+    return {
+        day: now.getDate(),
+        month: now.getMonth() + 1,
+        year: now.getFullYear()
+    };
+}
+
+function compareDateParts(left, right) {
+    const leftValue = left.year * 10000 + left.month * 100 + left.day;
+    const rightValue = right.year * 10000 + right.month * 100 + right.day;
+    return Math.sign(leftValue - rightValue);
+}
+
+function formatVietnameseDate(value) {
+    return `${value.day.toString().padStart(2, "0")}/${value.month.toString().padStart(2, "0")}/${value.year}`;
 }
 
 function initializeSameAddressToggle() {
@@ -182,6 +279,10 @@ function initializeSameAddressToggle() {
 
 function initializeImageInputs() {
     document.querySelectorAll("input[type='file'][data-image-input]").forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
         const previewSelector = input.dataset.previewTarget;
         const infoSelector = input.dataset.fileInfoTarget;
         const previewContainer = previewSelector ? document.querySelector(previewSelector) : null;
@@ -189,6 +290,9 @@ function initializeImageInputs() {
         const previewImage = previewContainer?.querySelector("img") ?? null;
         const previewList = previewContainer?.querySelector("[data-preview-list]") ?? null;
         const clearButton = previewContainer?.querySelector("[data-clear-image]") ?? null;
+        const maximumBytes = Number(input.dataset.maxBytes ?? 5 * 1024 * 1024);
+        const allowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+        const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
         let objectUrls = [];
 
         const releaseObjectUrls = () => {
@@ -196,11 +300,28 @@ function initializeImageInputs() {
             objectUrls = [];
         };
 
+        const resetInfoStyle = () => {
+            infoContainer?.classList.remove("text-danger");
+            infoContainer?.classList.add("text-muted");
+        };
+
+        const showFileError = (message) => {
+            input.setCustomValidity(message);
+            releaseObjectUrls();
+            previewContainer?.classList.add("d-none");
+            if (infoContainer) {
+                infoContainer.textContent = message;
+                infoContainer.classList.remove("d-none", "text-muted");
+                infoContainer.classList.add("text-danger");
+            }
+            input.reportValidity();
+        };
+
         const clearPreview = () => {
             releaseObjectUrls();
             input.value = "";
+            input.setCustomValidity("");
             previewContainer?.classList.add("d-none");
-            infoContainer?.classList.add("d-none");
 
             if (previewImage) {
                 previewImage.removeAttribute("src");
@@ -211,7 +332,9 @@ function initializeImageInputs() {
             }
 
             if (infoContainer) {
-                infoContainer.textContent = "";
+                infoContainer.textContent = "Chưa chọn ảnh";
+                infoContainer.classList.remove("d-none");
+                resetInfoStyle();
             }
         };
 
@@ -222,11 +345,24 @@ function initializeImageInputs() {
                 return;
             }
 
-            if (files.some((file) => !file.type.startsWith("image/"))) {
-                clearPreview();
+            const invalidFormat = files.find((file) => {
+                const lowerName = file.name.toLowerCase();
+                const hasAllowedExtension = allowedExtensions.some((extension) => lowerName.endsWith(extension));
+                const hasAllowedMimeType = !file.type || allowedMimeTypes.includes(file.type.toLowerCase());
+                return !hasAllowedExtension || !hasAllowedMimeType;
+            });
+            if (invalidFormat) {
+                showFileError("Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.");
                 return;
             }
 
+            const oversizedFile = files.find((file) => file.size > maximumBytes);
+            if (oversizedFile) {
+                showFileError(`Ảnh ${oversizedFile.name} vượt quá ${formatBytes(maximumBytes)}.`);
+                return;
+            }
+
+            input.setCustomValidity("");
             releaseObjectUrls();
             objectUrls = files.map((file) => URL.createObjectURL(file));
 
@@ -261,6 +397,7 @@ function initializeImageInputs() {
                     ? `${files[0].name} · ${formatBytes(files[0].size)}`
                     : `${files.length} ảnh · Tổng dung lượng ${formatBytes(totalSize)}`;
                 infoContainer.classList.remove("d-none");
+                resetInfoStyle();
             }
 
             previewContainer?.classList.remove("d-none");
@@ -268,6 +405,33 @@ function initializeImageInputs() {
 
         clearButton?.addEventListener("click", clearPreview);
         window.addEventListener("beforeunload", releaseObjectUrls, { once: true });
+    });
+}
+
+function initializeKycEditToggles() {
+    document.querySelectorAll("[data-edit-toggle]").forEach((toggle) => {
+        if (!(toggle instanceof HTMLElement)) {
+            return;
+        }
+
+        const targetSelector = toggle.dataset.editToggle;
+        const panel = targetSelector ? document.querySelector(targetSelector) : null;
+        if (!(panel instanceof HTMLElement)) {
+            return;
+        }
+
+        toggle.addEventListener("click", () => {
+            const willOpen = panel.classList.contains("d-none");
+            panel.classList.toggle("d-none", !willOpen);
+            toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+
+            if (willOpen) {
+                const firstControl = panel.querySelector("input:not([type='hidden']), select, textarea");
+                if (firstControl instanceof HTMLElement) {
+                    firstControl.focus();
+                }
+            }
+        });
     });
 }
 
