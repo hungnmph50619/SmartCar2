@@ -23,15 +23,6 @@
         ? currentUser.FullName
         : User.Identity?.Name ?? "Tài khoản";
     var avatarInitial = displayName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
-
-    var controllerName = ViewContext.RouteData.Values["controller"]?.ToString();
-    var actionName = ViewContext.RouteData.Values["action"]?.ToString();
-    var requestedProfileTab = Context.Request.Query["tab"].ToString();
-    var loadProfileKycAssets = string.Equals(controllerName, "Profile", StringComparison.OrdinalIgnoreCase) &&
-                               (string.Equals(requestedProfileTab, "documents", StringComparison.OrdinalIgnoreCase) ||
-                                !string.Equals(actionName, "Index", StringComparison.OrdinalIgnoreCase));
-    var loadAdminEkycSummary = string.Equals(controllerName, "AdminCustomers", StringComparison.OrdinalIgnoreCase) &&
-                               string.Equals(actionName, "Details", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -46,10 +37,6 @@
     <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux-final.css" asp-append-version="true" />
-    @if (loadProfileKycAssets)
-    {
-        <link rel="stylesheet" href="~/css/ekyc.css" asp-append-version="true" data-ekyc-styles />
-    }
 </head>
 <body>
     <header>
@@ -162,16 +149,6 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-
-    @if (loadProfileKycAssets)
-    {
-        <script src="~/js/ekyc.js" asp-append-version="true"></script>
-        <script src="~/js/ekyc-runtime-loader.js" asp-append-version="true"></script>
-    }
-    else if (loadAdminEkycSummary)
-    {
-        <script src="~/js/ekyc.js" asp-append-version="true" defer></script>
-    }
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>

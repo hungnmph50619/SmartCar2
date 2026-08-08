@@ -9,9 +9,6 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
-    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
-    <PackageReference Include="ZXing.Net.Bindings.ImageSharp.V2" Version="0.16.18" />
   </ItemGroup>
 
   <ItemGroup>
