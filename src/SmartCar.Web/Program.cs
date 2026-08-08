@@ -9,22 +9,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ISecureDocumentStorage, SecureDocumentStorage>();
-builder.Services.Configure<EkycOptions>(builder.Configuration.GetSection("Ekyc"));
-builder.Services.Configure<KycTestingOptions>(builder.Configuration.GetSection("KycTesting"));
-builder.Services.AddSingleton<KycTestingService>();
-builder.Services.AddHttpClient<IEkycService, EkycService>(client =>
-{
-    client.Timeout = TimeSpan.FromSeconds(60);
-});
-builder.Services.AddSingleton<IEkycResultStore, FileEkycResultStore>();
 builder.Services.AddScoped<KycAdminNotificationConsolidationFilter>();
-builder.Services.AddScoped<KycTestDataFilter>();
-builder.Services.AddScoped<StrictDocumentImageQualityFilter>();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
-    options.Filters.AddService<KycTestDataFilter>();
-    options.Filters.AddService<StrictDocumentImageQualityFilter>();
     options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
 });
 
