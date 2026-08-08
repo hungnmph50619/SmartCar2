@@ -1,0 +1,346 @@
+.ekyc-wizard {
+    border: 1px solid #d9e4f3;
+    border-radius: 18px;
+    background: #fff;
+    padding: 22px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 24px rgba(31, 72, 120, .06);
+}
+
+.ekyc-wizard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.ekyc-wizard-header h4 {
+    margin: 2px 0 4px;
+    font-size: 1.2rem;
+    font-weight: 750;
+}
+
+.ekyc-wizard-header p {
+    margin: 0;
+    color: #667085;
+    max-width: 760px;
+}
+
+.ekyc-eyebrow {
+    color: #0d6efd;
+    font-size: .75rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+}
+
+.ekyc-message {
+    padding: .7rem .9rem;
+    font-size: .93rem;
+}
+
+.ekyc-stepper {
+    display: grid;
+    grid-template-columns: minmax(90px, 1fr) minmax(30px, 1fr) minmax(90px, 1fr) minmax(30px, 1fr) minmax(90px, 1fr);
+    align-items: center;
+    margin: 18px 0 24px;
+}
+
+.ekyc-stepper-two {
+    grid-template-columns: minmax(110px, 1fr) minmax(60px, 2fr) minmax(110px, 1fr);
+}
+
+.ekyc-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: #98a2b3;
+    text-align: center;
+    font-size: .82rem;
+}
+
+.ekyc-step span {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid #d0d5dd;
+    background: #fff;
+    color: #667085;
+    font-weight: 800;
+}
+
+.ekyc-step.is-active,
+.ekyc-step.is-done {
+    color: #0d6efd;
+}
+
+.ekyc-step.is-active span {
+    border-color: #0d6efd;
+    background: #0d6efd;
+    color: #fff;
+    box-shadow: 0 0 0 5px rgba(13, 110, 253, .1);
+}
+
+.ekyc-step.is-done span {
+    border-color: #198754;
+    background: #198754;
+    color: #fff;
+}
+
+.ekyc-step.is-done span::before {
+    content: '✓';
+}
+
+.ekyc-step.is-done span {
+    font-size: 0;
+}
+
+.ekyc-step.is-done span::before {
+    font-size: .9rem;
+}
+
+.ekyc-step-line {
+    height: 2px;
+    background: #e4e7ec;
+    margin-top: -20px;
+}
+
+.ekyc-pane {
+    border: 1px solid #eaecf0;
+    border-radius: 16px;
+    padding: 20px;
+    background: #fbfcfe;
+}
+
+.ekyc-pane-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.ekyc-pane-number {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: #eaf2ff;
+    color: #0d6efd;
+    font-weight: 800;
+}
+
+.ekyc-pane-heading h5 {
+    margin: 0 0 3px;
+    font-size: 1.05rem;
+    font-weight: 750;
+}
+
+.ekyc-pane-heading p {
+    margin: 0;
+    color: #667085;
+    font-size: .92rem;
+}
+
+.ekyc-upload-column {
+    display: flex;
+}
+
+.ekyc-upload-card {
+    width: 100%;
+    border: 1px dashed #b8c8dc;
+    border-radius: 14px;
+    padding: 16px;
+    background: #fff;
+    min-height: 150px;
+}
+
+.ekyc-upload-card-title {
+    font-weight: 750;
+    margin-bottom: 10px;
+    color: #1d2939;
+}
+
+.ekyc-upload-card .form-label.fw-semibold,
+.ekyc-upload-card > .form-label {
+    display: none !important;
+}
+
+.ekyc-upload-card img {
+    background: #f8fafc;
+    max-height: 180px !important;
+}
+
+.ekyc-upload-card .btn {
+    min-width: 140px;
+}
+
+.ekyc-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+}
+
+.ekyc-actions .btn-primary,
+.ekyc-actions .btn-danger {
+    min-height: 42px;
+    font-weight: 700;
+}
+
+.ekyc-camera-shell,
+.ekyc-camera-placeholder {
+    width: min(100%, 390px);
+    aspect-ratio: 1 / 1;
+    border-radius: 20px;
+    overflow: hidden;
+    margin: 0 auto;
+    position: relative;
+}
+
+.ekyc-camera-shell {
+    background: #111827;
+}
+
+.ekyc-camera-shell video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+}
+
+.ekyc-face-guide {
+    position: absolute;
+    inset: 14% 24%;
+    border: 3px solid rgba(255,255,255,.9);
+    border-radius: 48% 48% 45% 45%;
+    box-shadow: 0 0 0 999px rgba(0,0,0,.18);
+    pointer-events: none;
+}
+
+.ekyc-camera-placeholder {
+    border: 1px dashed #98a2b3;
+    background: #f2f4f7;
+    color: #667085;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    text-align: center;
+    padding: 20px;
+}
+
+.ekyc-camera-icon {
+    width: 72px;
+    height: 72px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: #e7efff;
+    color: #0d6efd;
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.ekyc-face-tips {
+    border-radius: 14px;
+    padding: 15px 16px;
+    background: #f8fafc;
+    border: 1px solid #eaecf0;
+}
+
+.ekyc-face-tips ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+    color: #667085;
+}
+
+.ekyc-face-tips li + li {
+    margin-top: 5px;
+}
+
+.ekyc-camera-button {
+    color: #fff !important;
+}
+
+.ekyc-latest {
+    border: 1px solid #e4e7ec;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #f8fafc;
+}
+
+.ekyc-latest summary {
+    cursor: pointer;
+    font-weight: 700;
+    color: #344054;
+}
+
+.ekyc-license-wizard {
+    border-color: #e1e7ef;
+}
+
+[data-ekyc-form-fields] > .row,
+[data-license-form-fields] > .row {
+    margin-top: 0;
+}
+
+[data-ekyc-submit-host] .d-flex,
+[data-ekyc-manual-submit] .d-flex,
+[data-license-submit-host] .d-flex {
+    margin-top: 0 !important;
+}
+
+@media (max-width: 767.98px) {
+    .ekyc-wizard {
+        padding: 16px;
+        border-radius: 14px;
+    }
+
+    .ekyc-wizard-header {
+        flex-direction: column;
+        margin-bottom: 12px;
+    }
+
+    .ekyc-stepper {
+        grid-template-columns: 82px 1fr 82px 1fr 82px;
+    }
+
+    .ekyc-stepper-two {
+        grid-template-columns: 90px 1fr 90px;
+    }
+
+    .ekyc-step strong {
+        font-size: .72rem;
+    }
+
+    .ekyc-pane {
+        padding: 15px;
+    }
+
+    .ekyc-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .ekyc-actions .btn,
+    .ekyc-actions > div,
+    [data-ekyc-submit-host] .btn,
+    [data-license-submit-host] .btn {
+        width: 100%;
+    }
+
+    .ekyc-camera-shell,
+    .ekyc-camera-placeholder {
+        width: 100%;
+        max-width: 340px;
+    }
+}
