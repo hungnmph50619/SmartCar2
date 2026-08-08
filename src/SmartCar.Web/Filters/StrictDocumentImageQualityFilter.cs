@@ -3,12 +3,14 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using SmartCar.Web.Services;
 
 namespace SmartCar.Web.Filters;
 
 /// <summary>
 /// KYC quality gate shared by automatic reading and the final manual submit.
 /// QR/MRZ/OCR is never allowed to turn a poor document photo into an accepted one.
+/// In explicit Development KYC test mode this gate is bypassed only for sample-flow testing.
 /// </summary>
 public sealed class StrictDocumentImageQualityFilter : IAsyncActionFilter
 {
@@ -21,8 +23,21 @@ public sealed class StrictDocumentImageQualityFilter : IAsyncActionFilter
         "SubmitDrivingLicense"
     };
 
+    private readonly KycTestingService _testing;
+
+    public StrictDocumentImageQualityFilter(KycTestingService testing)
+    {
+        _testing = testing;
+    }
+
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
+        if (_testing.IsActive(context.HttpContext))
+        {
+            await next();
+            return;
+        }
+
         var action = context.ActionDescriptor.RouteValues.TryGetValue("action", out var actionName)
             ? actionName
             : null;

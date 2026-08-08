@@ -326,6 +326,20 @@
         </div>`;
     };
 
+    const renderTestMode = panel => {
+        const host = createHost(panel);
+        const badge = host.querySelector('[data-document-gate-badge]');
+        const body = host.querySelector('[data-document-gate-body]');
+        if (badge) {
+            badge.textContent = 'TEST';
+            badge.className = 'badge bg-warning text-dark';
+        }
+        if (body) {
+            body.className = 'small text-warning';
+            body.textContent = '🧪 Development Test Mode: loại giấy tờ và mặt trước/mặt sau được mô phỏng là hợp lệ để kiểm thử luồng.';
+        }
+    };
+
     const setPanelMessage = (panel, message, type = 'danger') => {
         const selector = panel.matches('[data-ekyc-panel="citizen"]') ? '[data-ekyc-message]' : '[data-license-message]';
         const box = panel.querySelector(selector);
@@ -340,6 +354,12 @@
         const frontFile = config.frontInput?.files?.[0];
         const backFile = config.backInput?.files?.[0];
         if (!frontFile || !backFile) return { passed: false, incomplete: true };
+
+        if (window.SmartCarKycTest?.active === true) {
+            panel.dataset.documentGate = 'pass';
+            renderTestMode(panel);
+            return { passed: true, testMode: true };
+        }
 
         render(panel, null, null, true);
         panel.dataset.documentGate = 'checking';
@@ -376,7 +396,9 @@
         const body = host.querySelector('[data-document-gate-body]');
         badge.textContent = 'Chưa kiểm tra';
         badge.className = 'badge bg-secondary';
-        body.textContent = 'SmartCar sẽ kiểm tra đúng loại giấy tờ, đúng mặt và tự xoay ảnh nếu cần.';
+        body.textContent = window.SmartCarKycTest?.active === true
+            ? '🧪 Development Test Mode sẽ mô phỏng loại giấy tờ/mặt giấy tờ khi bạn tiếp tục.'
+            : 'SmartCar sẽ kiểm tra đúng loại giấy tờ, đúng mặt và tự xoay ảnh nếu cần.';
     };
 
     const installPanel = panel => {
