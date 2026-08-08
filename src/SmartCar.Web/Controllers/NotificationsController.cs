@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Notifications;
+using SmartCar.Domain.Constants;
 
 namespace SmartCar.Web.Controllers;
 
@@ -44,6 +45,32 @@ public sealed class NotificationsController : Controller
 
         await _notificationService.MarkReadAsync(id, userId, cancellationToken);
         return RedirectToAction(nameof(Index));
+    }
+
+    [Authorize(Roles = RoleNames.Admin)]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> OpenKyc(
+        int id,
+        string customerId,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Challenge();
+        }
+
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return RedirectToAction(nameof(Index));
+        }
+
+        await _notificationService.MarkReadAsync(id, userId, cancellationToken);
+        return RedirectToAction(
+            "Details",
+            "AdminCustomers",
+            new { id = customerId, tab = "documents" });
     }
 
     [HttpPost]
