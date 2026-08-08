@@ -149,7 +149,7 @@
                     <path d="M16 3v4M8 3v4M3 10h18"></path>
                 </svg>
             </div>
-            <small id="homePickupHint" class="vn-datetime-hint">Ví dụ: 06/08/2026 09:00</small>
+            <small id="homePickupHint" class="vn-datetime-hint">Ví dụ: 09/08/2026 09:00</small>
             <span id="homePickupError" class="search-field-error" data-vn-datetime-error="pickup" role="alert"></span>
             <input type="hidden"
                    name="PickupDate"
@@ -184,9 +184,9 @@
             <label for="homeSeats" class="form-label fw-semibold">Số chỗ tối thiểu</label>
             <select id="homeSeats" name="Seats" class="form-select form-select-lg">
                 <option value="">Tất cả</option>
-                <option value="4">4 chỗ</option>
-                <option value="5">5 chỗ</option>
-                <option value="7">7 chỗ</option>
+                <option value="4">4+ chỗ</option>
+                <option value="5">5+ chỗ</option>
+                <option value="7">7+ chỗ</option>
             </select>
         </div>
         <div class="col-lg-2 col-md-6 search-submit-column">
@@ -200,6 +200,88 @@
                 </span>
             </button>
         </div>
+
+        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2 mt-1">
+            <button class="btn btn-sm btn-outline-primary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#homeAdvancedFilters"
+                    aria-expanded="false"
+                    aria-controls="homeAdvancedFilters">
+                ⚙ Bộ lọc nâng cao
+            </button>
+            <span class="small text-muted">Lọc thêm theo hãng, hộp số, nhiên liệu, giá và đời xe.</span>
+        </div>
+
+        <div class="col-12">
+            <div class="collapse" id="homeAdvancedFilters">
+                <div class="border rounded-4 bg-light p-3 p-md-4 mt-1">
+                    <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                        <strong>Bộ lọc nâng cao</strong>
+                        <span class="small text-muted">Có thể bỏ trống các tiêu chí không cần thiết</span>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-lg-4 col-md-6">
+                            <label for="homeBrand" class="form-label fw-semibold">Hãng xe</label>
+                            <select id="homeBrand" name="BrandId" asp-items="ViewBag.Brands" class="form-select">
+                                <option value="">Tất cả hãng</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-4 col-md-6">
+                            <label for="homeTransmission" class="form-label fw-semibold">Hộp số</label>
+                            <select id="homeTransmission" name="Transmission" class="form-select">
+                                <option value="">Tất cả</option>
+                                <option value="Tự động">Tự động</option>
+                                <option value="Số sàn">Số sàn</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-4 col-md-6">
+                            <label for="homeFuelType" class="form-label fw-semibold">Nhiên liệu</label>
+                            <select id="homeFuelType" name="FuelType" class="form-select">
+                                <option value="">Tất cả</option>
+                                <option value="Xăng">Xăng</option>
+                                <option value="Dầu">Dầu</option>
+                                <option value="Điện">Điện</option>
+                                <option value="Hybrid">Hybrid</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="homeMinPrice" class="form-label fw-semibold">Giá từ</label>
+                            <div class="input-group">
+                                <input id="homeMinPrice" name="MinDailyPrice" type="number" min="1" step="50000" class="form-control" placeholder="300000" />
+                                <span class="input-group-text">đ/ngày</span>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="homeMaxPrice" class="form-label fw-semibold">Giá đến</label>
+                            <div class="input-group">
+                                <input id="homeMaxPrice" name="MaxDailyPrice" type="number" min="1" step="50000" class="form-control" placeholder="1500000" />
+                                <span class="input-group-text">đ/ngày</span>
+                            </div>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="homeMinYear" class="form-label fw-semibold">Đời xe từ năm</label>
+                            <select id="homeMinYear" name="MinManufactureYear" class="form-select">
+                                <option value="">Tất cả</option>
+                                <option value="2024">2024 trở lên</option>
+                                <option value="2022">2022 trở lên</option>
+                                <option value="2020">2020 trở lên</option>
+                                <option value="2018">2018 trở lên</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="homeSort" class="form-label fw-semibold">Sắp xếp</label>
+                            <select id="homeSort" name="SortBy" class="form-select">
+                                <option value="price_asc">Giá thấp → cao</option>
+                                <option value="price_desc">Giá cao → thấp</option>
+                                <option value="year_desc">Xe đời mới nhất</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="col-12">
             <div class="home-search-error" data-search-error role="alert" aria-live="polite"></div>
         </div>
