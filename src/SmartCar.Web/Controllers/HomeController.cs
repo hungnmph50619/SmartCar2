@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using SmartCar.Application.Features.Brands;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Identity;
@@ -12,15 +14,18 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly IVehicleService _vehicleService;
+    private readonly IBrandService _brandService;
     private readonly UserManager<ApplicationUser> _userManager;
 
     public HomeController(
         ILogger<HomeController> logger,
         IVehicleService vehicleService,
+        IBrandService brandService,
         UserManager<ApplicationUser> userManager)
     {
         _logger = logger;
         _vehicleService = vehicleService;
+        _brandService = brandService;
         _userManager = userManager;
     }
 
@@ -32,6 +37,11 @@ public class HomeController : Controller
             .OrderBy(vehicle => vehicle.DailyPrice)
             .Take(3)
             .ToArray();
+
+        ViewBag.Brands = new SelectList(
+            await _brandService.GetActiveAsync(cancellationToken),
+            "BrandId",
+            "BrandName");
 
         if (User.Identity?.IsAuthenticated == true)
         {
