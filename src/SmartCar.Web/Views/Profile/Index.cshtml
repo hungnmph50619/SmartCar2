@@ -73,7 +73,7 @@
                asp-route-returnVehicleId="@returnVehicleId"
                asp-route-pickupDate="@returnPickupRoute"
                asp-route-returnDate="@returnDateRoute">
-                Xác minh CCCD/GPLX
+                Hồ sơ CCCD/GPLX
                 <span class="badge rounded-pill @(verifiedSteps == 2 ? "bg-success" : "bg-secondary") ms-1">
                     @verifiedSteps/2
                 </span>
@@ -109,8 +109,8 @@
                                 <span>Hồ sơ thuê xe</span>
                                 <strong>
                                     @(verifiedSteps == 2
-                                        ? "Đã xác minh đầy đủ"
-                                        : $"Đã xác minh {verifiedSteps}/2 bước")
+                                        ? "Đã duyệt đầy đủ"
+                                        : $"Đã duyệt {verifiedSteps}/2 giấy tờ")
                                 </strong>
                             </div>
 
@@ -122,7 +122,7 @@
                                    asp-route-returnVehicleId="@returnVehicleId"
                                    asp-route-pickupDate="@returnPickupRoute"
                                    asp-route-returnDate="@returnDateRoute">
-                                    Hoàn thiện xác minh
+                                    Hoàn thiện hồ sơ giấy tờ
                                 </a>
                             }
                         }
