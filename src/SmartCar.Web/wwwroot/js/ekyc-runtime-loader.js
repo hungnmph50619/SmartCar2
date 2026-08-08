@@ -52,10 +52,13 @@
         document.body.appendChild(script);
     });
 
-    // Hướng dẫn luồng KYC là script nhẹ, tải ngay để người dùng hiểu quy trình trước khi
-    // khởi tạo Tesseract/classifier/quality runtime nặng.
+    // Các script hướng dẫn/Test Mode đều nhẹ, tải ngay. Runtime OCR/classifier nặng
+    // vẫn chỉ được khởi tạo sau khi người dùng thực sự bấm một hành động KYC.
     void loadScript('/js/kyc-page-ux.js').catch(error => {
         console.warn('Không tải được hướng dẫn KYC:', error);
+    });
+    void loadScript('/js/kyc-test-mode.js').catch(error => {
+        console.warn('Không tải được chế độ kiểm thử KYC:', error);
     });
 
     const settleInstallers = async () => {
