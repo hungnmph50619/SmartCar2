@@ -10,14 +10,15 @@ namespace SmartCar.Web.Controllers;
 /// to the ImageSharp binding instead of the generic ZXing base reader.
 ///
 /// CCCD photos are often taken from farther away, so the QR can look clear to a
-/// person while each QR module only has a few source pixels.  The adapter keeps
-/// ZXing as the decoder, but adds a bounded local preprocessing pass: tighter
-/// crops, upscaling, grayscale/contrast and several binary thresholds.
+/// person while each QR module only has a few source pixels. The adapter keeps
+/// ZXing as the fast decoder, adds bounded local preprocessing, then invokes the
+/// heavier WeChat QR detector/super-resolution fallback at most once per reader.
 /// </summary>
 internal sealed class BarcodeReader<TPixel> : ZXing.ImageSharp.BarcodeReader<TPixel>
     where TPixel : unmanaged, IPixel<TPixel>
 {
     private const long MaximumTightScanPixels = 1_400_000;
+    private bool _weChatFallbackAttempted;
 
     public new Result? Decode(Image<TPixel> image)
     {
@@ -44,18 +45,29 @@ internal sealed class BarcodeReader<TPixel> : ZXing.ImageSharp.BarcodeReader<TPi
         // Only do the tighter sliding-window scan on the original-sized image.
         // CitizenQrController already retries larger 62% tiles afterwards; doing
         // another nested scan on those enlarged tiles would waste CPU.
-        if ((long)rgba.Width * rgba.Height > MaximumTightScanPixels)
+        if ((long)rgba.Width * rgba.Height <= MaximumTightScanPixels)
         {
-            return null;
+            foreach (var tile in BuildQrCandidateTiles(rgba.Width, rgba.Height))
+            {
+                using var cropped = rgba.Clone(context => context.Crop(tile));
+                var decoded = TryDecodeVariants(rgbaReader, cropped);
+                if (HasText(decoded))
+                {
+                    return decoded;
+                }
+            }
         }
 
-        foreach (var tile in BuildQrCandidateTiles(rgba.Width, rgba.Height))
+        // The controller reuses one reader while trying several large tiles.
+        // Run the expensive OpenCV fallback only once so a failed QR does not
+        // trigger repeated CNN inference/model loading for every tile.
+        if (!_weChatFallbackAttempted)
         {
-            using var cropped = rgba.Clone(context => context.Crop(tile));
-            var decoded = TryDecodeVariants(rgbaReader, cropped);
-            if (HasText(decoded))
+            _weChatFallbackAttempted = true;
+            var weChatDecoded = WeChatQrFallbackDecoder.TryDecode(rgba);
+            if (HasText(weChatDecoded))
             {
-                return decoded;
+                return weChatDecoded;
             }
         }
 
@@ -98,7 +110,7 @@ internal sealed class BarcodeReader<TPixel> : ZXing.ImageSharp.BarcodeReader<TPi
         }
 
         // Different phones/exposures place the useful black/white split at
-        // different luminance levels.  A few fixed thresholds are cheap and
+        // different luminance levels. A few fixed thresholds are cheap and
         // substantially more robust than relying on one global binarization.
         foreach (var threshold in new[] { 105, 140, 175 })
         {
