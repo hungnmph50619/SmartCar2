@@ -16,7 +16,7 @@ namespace SmartCar.Web.Controllers;
 public sealed class EkycController : Controller
 {
     private const long MaximumDocumentImageBytes = 5 * 1024 * 1024;
-    private const long MaximumSelfieVideoBytes = 20 * 1024 * 1024;
+    private const long MaximumSelfieVideoBytes = 10 * 1024 * 1024;
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IEkycService _ekycService;
@@ -183,7 +183,7 @@ public sealed class EkycController : Controller
         }
 
         var faceResult = await _ekycService.VerifyFaceAsync(
-            model.EkycSessionId,
+            model.FrontImage,
             model.SelfieVideo,
             cancellationToken);
         if (!faceResult.Succeeded)
@@ -388,7 +388,7 @@ public sealed class EkycController : Controller
 
         if (video.Length > MaximumSelfieVideoBytes)
         {
-            return "Video khuôn mặt vượt quá 20 MB. Vui lòng quay video ngắn khoảng 3–5 giây.";
+            return "Video khuôn mặt vượt quá 10 MB. Vui lòng quay video ngắn khoảng 5 giây.";
         }
 
         var extension = Path.GetExtension(video.FileName).ToLowerInvariant();
@@ -509,7 +509,7 @@ public sealed class EkycController : Controller
     }
 
     private static string DigitsOnly(string value) =>
-        new(value.Where(char.IsDigit).ToArray());
+        new string(value.Where(char.IsDigit).ToArray());
 
     private static string NormalizeText(string value)
     {
