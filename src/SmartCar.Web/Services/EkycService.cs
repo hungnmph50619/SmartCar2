@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
@@ -34,22 +33,22 @@ public sealed class EkycService : IEkycService
         IFormFile frontImage,
         IFormFile backImage,
         CancellationToken cancellationToken = default) =>
-        ReadDocumentAsync(frontImage, backImage, "idr", cancellationToken);
+        ReadCitizenIdInternalAsync(frontImage, backImage, cancellationToken);
 
     public Task<EkycOcrResult> ReadDrivingLicenseAsync(
         IFormFile frontImage,
         IFormFile backImage,
         CancellationToken cancellationToken = default) =>
-        ReadDocumentAsync(frontImage, backImage, "dlr", cancellationToken);
+        ReadDrivingLicenseInternalAsync(frontImage, backImage, cancellationToken);
 
     public async Task<EkycFaceVerificationResult> VerifyFaceAsync(
-        string sessionId,
+        IFormFile citizenFrontImage,
         IFormFile selfieVideo,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(sessionId))
+        if (citizenFrontImage.Length <= 0)
         {
-            return FaceFailure("Không tìm thấy phiên eKYC. Vui lòng đọc lại CCCD.");
+            return FaceFailure("Ảnh CCCD mặt trước trống. Vui lòng chọn lại ảnh.");
         }
 
         if (selfieVideo.Length <= 0)
@@ -59,11 +58,6 @@ public sealed class EkycService : IEkycService
 
         if (IsDemoMode)
         {
-            if (!sessionId.StartsWith("demo-", StringComparison.OrdinalIgnoreCase))
-            {
-                return FaceFailure("Phiên eKYC demo không hợp lệ.");
-            }
-
             return new EkycFaceVerificationResult(
                 true,
                 true,
@@ -71,7 +65,7 @@ public sealed class EkycService : IEkycService
                 true,
                 true,
                 95m,
-                "Chế độ demo: luồng quay khuôn mặt đã hoàn tất. Kết quả này chỉ dùng để trình diễn và vẫn cần Quản trị viên duyệt.",
+                "Chế độ demo: luồng quay khuôn mặt đã hoàn tất. Kết quả liveness/face match là mô phỏng và vẫn cần Quản trị viên duyệt.",
                 DateTime.UtcNow);
         }
 
@@ -82,30 +76,22 @@ public sealed class EkycService : IEkycService
 
         try
         {
-            using var content = new MultipartFormDataContent();
-            var videoContent = new StreamContent(selfieVideo.OpenReadStream());
-            videoContent.Headers.ContentType = MediaTypeHeaderValue.Parse(
-                string.IsNullOrWhiteSpace(selfieVideo.ContentType)
-                    ? "application/octet-stream"
-                    : selfieVideo.ContentType);
-            content.Add(videoContent, "video", Path.GetFileName(selfieVideo.FileName));
+            using var form = new MultipartFormDataContent();
+            AddFile(form, selfieVideo, "video");
+            AddFile(form, citizenFrontImage, "cmnd");
 
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                BuildUrl("face/liveness"))
+            using var request = new HttpRequestMessage(HttpMethod.Post, _options.LivenessUrl)
             {
-                Content = content
+                Content = form
             };
-            AddProviderHeaders(request, sessionId);
-            request.Headers.TryAddWithoutValidation("auto", "False");
-            request.Headers.TryAddWithoutValidation("lang", "vi");
+            request.Headers.TryAddWithoutValidation("api-key", _options.ApiKey);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
             var payload = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning(
-                    "FPT eKYC face verification failed with HTTP {StatusCode}: {Payload}",
+                    "FPT Reader liveness failed with HTTP {StatusCode}: {Payload}",
                     response.StatusCode,
                     TrimForLog(payload));
                 return FaceFailure("Nhà cung cấp eKYC chưa thể xác minh khuôn mặt. Vui lòng thử lại.");
@@ -113,28 +99,33 @@ public sealed class EkycService : IEkycService
 
             using var json = JsonDocument.Parse(payload);
             var root = json.RootElement;
-            var code = GetString(root, "code");
-            var message = GetString(root, "message") ?? "Không nhận được kết quả xác minh khuôn mặt.";
+            var code = GetScalar(root, "code");
+            var message = GetScalar(root, "message") ?? "Không nhận được kết quả xác minh khuôn mặt.";
 
-            bool? isLive = null;
-            if (root.TryGetProperty("liveness", out var liveness))
+            bool? isLive;
+            if (root.TryGetProperty("liveness", out var liveness) && liveness.ValueKind == JsonValueKind.Object)
             {
-                isLive = ParseBoolean(GetString(liveness, "is_live"));
+                isLive = ParseBoolean(GetScalar(liveness, "is_live"));
+            }
+            else
+            {
+                isLive = ParseBoolean(GetScalar(root, "is_live"));
             }
 
             bool? faceMatched = null;
             decimal? similarity = null;
-            if (root.TryGetProperty("face_match", out var faceMatch))
+            if (root.TryGetProperty("face_match", out var faceMatch) && faceMatch.ValueKind == JsonValueKind.Object)
             {
-                faceMatched = ParseBoolean(GetString(faceMatch, "isMatch"));
-                similarity = ParseDecimal(GetString(faceMatch, "similarity"));
+                faceMatched = ParseBoolean(GetScalar(faceMatch, "isMatch"));
+                similarity = ParseDecimal(GetScalar(faceMatch, "similarity"));
             }
 
             var threshold = _options.FaceMatchThreshold <= 0 ? 80m : _options.FaceMatchThreshold;
             var succeeded = code == "200" &&
                             isLive == true &&
                             faceMatched == true &&
-                            (!similarity.HasValue || similarity.Value >= threshold);
+                            similarity.HasValue &&
+                            similarity.Value >= threshold;
 
             return new EkycFaceVerificationResult(
                 succeeded,
@@ -144,41 +135,25 @@ public sealed class EkycService : IEkycService
                 faceMatched,
                 similarity,
                 succeeded
-                    ? "Đã kiểm tra người thật và đối chiếu khuôn mặt với CCCD."
+                    ? "Đã kiểm tra người thật và đối chiếu khuôn mặt với ảnh trên CCCD."
                     : message,
                 DateTime.UtcNow);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Không thể gọi FPT eKYC để kiểm tra khuôn mặt.");
+            _logger.LogError(ex, "Không thể gọi FPT Reader liveness/face match.");
             return FaceFailure("Không thể kết nối dịch vụ eKYC. Vui lòng thử lại hoặc dùng xác minh thủ công.");
         }
     }
 
-    private async Task<EkycOcrResult> ReadDocumentAsync(
+    private async Task<EkycOcrResult> ReadCitizenIdInternalAsync(
         IFormFile frontImage,
         IFormFile backImage,
-        string documentType,
         CancellationToken cancellationToken)
     {
         if (IsDemoMode)
         {
-            return new EkycOcrResult(
-                true,
-                true,
-                ProviderLabel,
-                $"demo-{Guid.NewGuid():N}",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "Chế độ demo: đã tạo phiên eKYC nhưng không đọc dữ liệu thật từ ảnh. Hãy nhập thông tin thủ công; video khuôn mặt sẽ chỉ được mô phỏng kết quả.",
-                DateTime.UtcNow);
+            return DemoOcrResult();
         }
 
         if (string.IsNullOrWhiteSpace(_options.ApiKey))
@@ -188,141 +163,211 @@ public sealed class EkycService : IEkycService
 
         try
         {
-            var sessionId = await InitializeSessionAsync(cancellationToken);
-            if (string.IsNullOrWhiteSpace(sessionId))
+            var front = await ReadImageAsync(
+                frontImage,
+                _options.CitizenIdOcrUrl,
+                cancellationToken);
+            if (!front.Succeeded)
             {
-                return OcrFailure("Không thể khởi tạo phiên eKYC.");
+                return OcrFailure($"CCCD mặt trước: {front.Message}");
             }
 
-            using var form = new MultipartFormDataContent();
-            AddImage(form, frontImage, "files");
-            AddImage(form, backImage, "files");
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, BuildUrl("ocr"))
+            var back = await ReadImageAsync(
+                backImage,
+                _options.CitizenIdOcrUrl,
+                cancellationToken);
+            if (!back.Succeeded)
             {
-                Content = form
-            };
-            AddProviderHeaders(request, sessionId);
-            request.Headers.TryAddWithoutValidation("document-type", documentType);
-            request.Headers.TryAddWithoutValidation("lang", "vi");
-
-            using var response = await _httpClient.SendAsync(request, cancellationToken);
-            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning(
-                    "FPT eKYC OCR failed with HTTP {StatusCode}: {Payload}",
-                    response.StatusCode,
-                    TrimForLog(payload));
-                return OcrFailure("Nhà cung cấp eKYC chưa thể đọc giấy tờ. Vui lòng chụp lại ảnh rõ hơn.");
+                return OcrFailure($"CCCD mặt sau: {back.Message}");
             }
 
-            using var json = JsonDocument.Parse(payload);
-            var root = json.RootElement;
-            var errorCode = GetString(root, "errorCode");
-            if (errorCode is not ("0" or null))
-            {
-                return OcrFailure(GetString(root, "errorMessage") ?? "Không đọc được thông tin trên giấy tờ.");
-            }
-
-            var values = new Dictionary<string, (string? Value, decimal? Score)>(StringComparer.OrdinalIgnoreCase);
-            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in data.EnumerateArray())
-                {
-                    var key = GetString(item, "key");
-                    if (string.IsNullOrWhiteSpace(key))
-                    {
-                        continue;
-                    }
-
-                    values[key] = (GetString(item, "value"), ParseDecimal(GetString(item, "score")));
-                }
-            }
-
-            string? Find(params string[] keys)
-            {
-                foreach (var key in keys)
-                {
-                    if (values.TryGetValue(key, out var item) && !string.IsNullOrWhiteSpace(item.Value))
-                    {
-                        return item.Value.Trim();
-                    }
-                }
-                return null;
-            }
-
-            var confidenceValues = values.Values
-                .Where(item => item.Score.HasValue)
-                .Select(item => item.Score!.Value)
-                .ToArray();
-            var confidence = confidenceValues.Length == 0
-                ? (decimal?)null
-                : Math.Round(confidenceValues.Average(), 2);
-
-            var gender = NormalizeGender(Find("Sex", "Gender"));
-
+            var confidence = AverageProbability(front, back);
             return new EkycOcrResult(
                 true,
                 false,
                 ProviderLabel,
-                sessionId,
-                Find("ID", "Id", "Document ID", "License No", "License Number", "No"),
-                Find("Name", "Full Name", "FullName"),
-                ParseDate(Find("Date of birth", "DOB", "Birth Date")),
-                gender,
-                ParseDate(Find("Issue Date", "Issued Date", "Date of issue")),
-                ParseDate(Find("Expired Date", "Expiry Date", "Date of expiry")),
-                Find("Address", "Permanent Address", "Residence"),
-                Find("Class", "License Class", "Rank", "Category"),
+                $"fpt-{Guid.NewGuid():N}",
+                Find(front, back, "id"),
+                Find(front, back, "name"),
+                ParseDate(Find(front, back, "dob")),
+                NormalizeGender(Find(front, back, "sex")),
+                ParseDate(Find(back, front, "issue_date", "date")),
+                ParseDate(Find(front, back, "doe")),
+                Find(front, back, "address"),
+                null,
                 confidence,
-                "Đã đọc thông tin giấy tờ bằng OCR. Vui lòng kiểm tra lại trước khi gửi.",
+                "Đã đọc CCCD bằng FPT.AI Reader. Vui lòng kiểm tra lại dữ liệu trước khi quay khuôn mặt.",
                 DateTime.UtcNow);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Không thể gọi FPT eKYC OCR cho document type {DocumentType}.", documentType);
-            return OcrFailure("Không thể kết nối dịch vụ eKYC. Vui lòng thử lại hoặc dùng xác minh thủ công.");
+            _logger.LogError(ex, "Không thể gọi FPT Reader OCR cho CCCD.");
+            return OcrFailure("Không thể kết nối dịch vụ OCR CCCD. Vui lòng thử lại hoặc dùng xác minh thủ công.");
         }
     }
 
-    private async Task<string?> InitializeSessionAsync(CancellationToken cancellationToken)
+    private async Task<EkycOcrResult> ReadDrivingLicenseInternalAsync(
+        IFormFile frontImage,
+        IFormFile backImage,
+        CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, BuildUrl("session/init"))
+        if (IsDemoMode)
         {
-            Content = JsonContent.Create(new
+            return DemoOcrResult();
+        }
+
+        if (string.IsNullOrWhiteSpace(_options.ApiKey))
+        {
+            return OcrFailure("Chưa cấu hình API key của nhà cung cấp eKYC.");
+        }
+
+        try
+        {
+            var front = await ReadImageAsync(
+                frontImage,
+                _options.DrivingLicenseOcrUrl,
+                cancellationToken);
+            if (!front.Succeeded)
             {
-                memory = "0",
-                nfc_support = "false"
-            })
+                return OcrFailure($"GPLX mặt trước: {front.Message}");
+            }
+
+            var back = await ReadImageAsync(
+                backImage,
+                _options.DrivingLicenseOcrUrl,
+                cancellationToken);
+            if (!back.Succeeded)
+            {
+                return OcrFailure($"GPLX mặt sau: {back.Message}");
+            }
+
+            var confidence = AverageProbability(front, back);
+            return new EkycOcrResult(
+                true,
+                false,
+                ProviderLabel,
+                $"fpt-dlr-{Guid.NewGuid():N}",
+                Find(front, back, "id"),
+                Find(front, back, "name"),
+                ParseDate(Find(front, back, "dob")),
+                null,
+                ParseDate(Find(front, back, "date", "issue_date")),
+                ParseDate(Find(front, back, "doe")),
+                Find(front, back, "address"),
+                NormalizeLicenseClass(Find(front, back, "class")),
+                confidence,
+                "Đã đọc GPLX bằng FPT.AI Reader. Vui lòng kiểm tra lại dữ liệu trước khi gửi.",
+                DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Không thể gọi FPT Reader OCR cho GPLX.");
+            return OcrFailure("Không thể kết nối dịch vụ OCR GPLX. Vui lòng thử lại hoặc nhập thủ công.");
+        }
+    }
+
+    private async Task<ParsedOcrImage> ReadImageAsync(
+        IFormFile image,
+        string endpoint,
+        CancellationToken cancellationToken)
+    {
+        using var form = new MultipartFormDataContent();
+        AddFile(form, image, "image");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = form
         };
         request.Headers.TryAddWithoutValidation("api-key", _options.ApiKey);
-        request.Headers.TryAddWithoutValidation("device-type", "web-sdk");
-        request.Headers.TryAddWithoutValidation("client_uuid", Guid.NewGuid().ToString("D"));
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         var payload = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             _logger.LogWarning(
-                "FPT eKYC init session failed with HTTP {StatusCode}: {Payload}",
+                "FPT Reader OCR failed with HTTP {StatusCode}: {Payload}",
                 response.StatusCode,
                 TrimForLog(payload));
-            return null;
+            return ParsedOcrImage.Failure("Dịch vụ OCR trả về lỗi kết nối.");
         }
 
         using var json = JsonDocument.Parse(payload);
-        return GetString(json.RootElement, "session-id");
+        var root = json.RootElement;
+        var errorCode = GetScalar(root, "errorCode");
+        if (!string.Equals(errorCode, "0", StringComparison.OrdinalIgnoreCase))
+        {
+            return ParsedOcrImage.Failure(
+                GetScalar(root, "errorMessage") ?? "Không đọc được giấy tờ từ ảnh đã chọn.");
+        }
+
+        if (!root.TryGetProperty("data", out var data) ||
+            data.ValueKind != JsonValueKind.Array ||
+            data.GetArrayLength() == 0 ||
+            data[0].ValueKind != JsonValueKind.Object)
+        {
+            return ParsedOcrImage.Failure("OCR không trả về dữ liệu giấy tờ.");
+        }
+
+        var fields = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var probabilities = new List<decimal>();
+
+        foreach (var property in data[0].EnumerateObject())
+        {
+            if (property.Name.EndsWith("_prob", StringComparison.OrdinalIgnoreCase))
+            {
+                var probability = ParseDecimal(ElementToString(property.Value));
+                if (probability.HasValue)
+                {
+                    probabilities.Add(probability.Value);
+                }
+                continue;
+            }
+
+            var value = ElementToString(property.Value);
+            if (!string.IsNullOrWhiteSpace(value) &&
+                !string.Equals(value, "N/A", StringComparison.OrdinalIgnoreCase))
+            {
+                fields[property.Name] = value.Trim();
+            }
+        }
+
+        return new ParsedOcrImage(true, string.Empty, fields, probabilities);
     }
 
-    private void AddProviderHeaders(HttpRequestMessage request, string sessionId)
+    private static string? Find(
+        ParsedOcrImage primary,
+        ParsedOcrImage secondary,
+        params string[] keys)
     {
-        request.Headers.TryAddWithoutValidation("api-key", _options.ApiKey);
-        request.Headers.TryAddWithoutValidation("session-id", sessionId);
-        request.Headers.TryAddWithoutValidation("device-type", "web-sdk");
+        foreach (var key in keys)
+        {
+            if (primary.Fields.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+
+            if (secondary.Fields.TryGetValue(key, out value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
 
-    private static void AddImage(MultipartFormDataContent form, IFormFile file, string fieldName)
+    private static decimal? AverageProbability(params ParsedOcrImage[] images)
+    {
+        var values = images
+            .SelectMany(image => image.Probabilities)
+            .Where(value => value >= 0)
+            .ToArray();
+
+        return values.Length == 0
+            ? null
+            : Math.Round(values.Average(), 2);
+    }
+
+    private static void AddFile(MultipartFormDataContent form, IFormFile file, string fieldName)
     {
         var content = new StreamContent(file.OpenReadStream());
         content.Headers.ContentType = MediaTypeHeaderValue.Parse(
@@ -332,8 +377,23 @@ public sealed class EkycService : IEkycService
         form.Add(content, fieldName, Path.GetFileName(file.FileName));
     }
 
-    private string BuildUrl(string relativePath) =>
-        $"{_options.BaseUrl.TrimEnd('/')}/{relativePath.TrimStart('/')}";
+    private EkycOcrResult DemoOcrResult() =>
+        new(
+            true,
+            true,
+            ProviderLabel,
+            $"demo-{Guid.NewGuid():N}",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "Chế độ demo: đã tạo phiên eKYC nhưng không đọc dữ liệu thật từ ảnh. Hãy nhập thông tin thủ công; kết quả khuôn mặt sau đó cũng chỉ là mô phỏng.",
+            DateTime.UtcNow);
 
     private EkycOcrResult OcrFailure(string message) =>
         new(
@@ -364,22 +424,28 @@ public sealed class EkycService : IEkycService
             message,
             DateTime.UtcNow);
 
-    private static string? GetString(JsonElement element, string propertyName)
+    private static string? GetScalar(JsonElement element, string propertyName)
     {
         if (!element.TryGetProperty(propertyName, out var property))
         {
             return null;
         }
 
-        return property.ValueKind switch
+        return ElementToString(property);
+    }
+
+    private static string? ElementToString(JsonElement element) =>
+        element.ValueKind switch
         {
-            JsonValueKind.String => property.GetString(),
-            JsonValueKind.Number => property.GetRawText(),
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.GetRawText(),
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",
+            JsonValueKind.Array => element.GetArrayLength() == 0
+                ? null
+                : ElementToString(element[0]),
             _ => null
         };
-    }
 
     private static bool? ParseBoolean(string? value)
     {
@@ -415,7 +481,8 @@ public sealed class EkycService : IEkycService
 
     private static DateTime? ParseDate(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (string.IsNullOrWhiteSpace(value) ||
+            string.Equals(value, "N/A", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
@@ -455,6 +522,33 @@ public sealed class EkycService : IEkycService
         };
     }
 
+    private static string? NormalizeLicenseClass(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var firstClass = value
+            .Split(new[] { ',', ';', '/', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+        return firstClass?.Trim().ToUpperInvariant();
+    }
+
     private static string TrimForLog(string value) =>
         value.Length <= 800 ? value : value[..800];
+
+    private sealed record ParsedOcrImage(
+        bool Succeeded,
+        string Message,
+        IReadOnlyDictionary<string, string?> Fields,
+        IReadOnlyList<decimal> Probabilities)
+    {
+        public static ParsedOcrImage Failure(string message) =>
+            new(
+                false,
+                message,
+                new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase),
+                Array.Empty<decimal>());
+    }
 }
