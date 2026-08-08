@@ -20,6 +20,8 @@
     let runtimeReady = false;
     const replaying = new WeakSet();
 
+    const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+
     const loadScript = src => new Promise((resolve, reject) => {
         const existing = document.querySelector(`script[data-ekyc-runtime-src="${src}"]`);
         if (existing?.dataset.loaded === 'true') {
@@ -46,7 +48,7 @@
 
     const settleInstallers = async () => {
         await new Promise(resolve => setTimeout(resolve, 0));
-        await new Promise(resolve => requestAnimationFrame(() => resolve()));
+        await nextFrame();
     };
 
     const ensureRuntime = () => {
@@ -55,6 +57,8 @@
             runtimePromise = (async () => {
                 for (const src of runtimeScripts) {
                     await loadScript(src);
+                    // Nhường main thread giữa các module để trình duyệt vẫn có cơ hội vẽ UI.
+                    await nextFrame();
                 }
                 await settleInstallers();
                 runtimeReady = true;
@@ -67,29 +71,21 @@
         return runtimePromise;
     };
 
-    const isKycFileInput = element => element instanceof HTMLInputElement &&
-        ['citizen-front-file', 'citizen-back-file', 'license-front-file', 'license-back-file'].includes(element.id);
-
     const isKycAction = element => element?.closest?.(
         '[data-ekyc-ocr], [data-ekyc-manual], [data-license-ocr], [data-license-manual], ' +
         '[data-ekyc-camera-start], [data-ekyc-record], [data-ekyc-video-upload], [data-ekyc-next-face]'
     );
 
-    document.addEventListener('change', event => {
-        const input = event.target;
-        if (!isKycFileInput(input) || runtimeReady || replaying.has(input)) return;
+    const preparingLabel = action => {
+        if (action.matches('[data-ekyc-ocr]')) return 'Đang chuẩn bị đọc CCCD...';
+        if (action.matches('[data-license-ocr]')) return 'Đang chuẩn bị đọc GPLX...';
+        if (action.matches('[data-ekyc-manual], [data-license-manual]')) return 'Đang mở nhập thủ công...';
+        return 'Đang chuẩn bị...';
+    };
 
-        // Không chặn preview nhẹ của ekyc.js. Runtime nặng tải song song sau khi người dùng thực sự chọn ảnh.
-        void ensureRuntime()
-            .then(() => {
-                if (!input.files?.length) return;
-                replaying.add(input);
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                replaying.delete(input);
-            })
-            .catch(error => console.error('Không thể khởi tạo bộ xác minh giấy tờ:', error));
-    }, true);
-
+    // Quan trọng: KHÔNG khởi tạo OCR/quality/classifier khi người dùng chỉ chọn ảnh.
+    // ekyc.js vẫn xử lý tên file + preview ngay lập tức. Runtime nặng chỉ được tải
+    // khi người dùng chủ động bấm đọc/xác minh hoặc chuyển sang luồng cần runtime.
     document.addEventListener('click', event => {
         if (runtimeReady) return;
         const action = isKycAction(event.target);
@@ -97,18 +93,25 @@
 
         event.preventDefault();
         event.stopImmediatePropagation();
-        const wasDisabled = action.disabled;
-        action.disabled = true;
 
-        void ensureRuntime()
+        const wasDisabled = action.disabled;
+        const oldText = action.textContent;
+        action.disabled = true;
+        action.textContent = preparingLabel(action);
+
+        // Cho browser render trạng thái "đang chuẩn bị" trước khi nạp các module xử lý ảnh.
+        void nextFrame()
+            .then(() => ensureRuntime())
             .then(() => {
                 action.disabled = wasDisabled;
+                action.textContent = oldText;
                 replaying.add(action);
                 action.click();
                 replaying.delete(action);
             })
             .catch(error => {
                 action.disabled = wasDisabled;
+                action.textContent = oldText;
                 console.error('Không thể khởi tạo bộ xác minh giấy tờ:', error);
                 const panel = action.closest('[data-ekyc-panel="citizen"], [data-ekyc-panel="license"]');
                 const message = panel?.querySelector('[data-ekyc-message], [data-license-message]');
