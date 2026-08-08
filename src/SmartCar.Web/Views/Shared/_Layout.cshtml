@@ -46,6 +46,10 @@
     <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux-final.css" asp-append-version="true" />
+    @if (loadProfileKycAssets)
+    {
+        <link rel="stylesheet" href="~/css/ekyc.css" asp-append-version="true" data-ekyc-styles />
+    }
 </head>
 <body>
     <header>
@@ -161,21 +165,8 @@
 
     @if (loadProfileKycAssets)
     {
-        <script src="~/js/ekyc-tesseract-loader.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-guards.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-gate-click-compat.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-manual-attachments.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-cccd-qr-mrz.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-document-gate.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-template-pipeline-v3.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-pipeline-compat.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-image-quality-local.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-gplx-manual-bridge.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-gplx-local-ocr.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-cccd-field-level.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-quality-copy.js" asp-append-version="true" defer></script>
-        <script src="~/js/ekyc-cccd-qr-ui.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc.js" asp-append-version="true"></script>
+        <script src="~/js/ekyc-runtime-loader.js" asp-append-version="true"></script>
     }
     else if (loadAdminEkycSummary)
     {
