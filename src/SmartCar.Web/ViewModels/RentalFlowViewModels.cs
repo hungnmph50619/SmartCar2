@@ -82,10 +82,29 @@ public sealed class VehicleSearchViewModel
     [Display(Name = "Ngày giờ trả xe")]
     public DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(2);
 
+    [Range(1, int.MaxValue, ErrorMessage = "Hãng xe không hợp lệ.")]
     public int? BrandId { get; set; }
+
+    [Range(1, 100, ErrorMessage = "Số chỗ tối thiểu phải từ 1 đến 100.")]
     public int? Seats { get; set; }
+
+    [RegularExpression(@"^(Tự động|Số sàn)$", ErrorMessage = "Hộp số không hợp lệ.")]
     public string? Transmission { get; set; }
+
+    [RegularExpression(@"^(Xăng|Dầu|Điện|Hybrid)$", ErrorMessage = "Loại nhiên liệu không hợp lệ.")]
+    public string? FuelType { get; set; }
+
+    [Range(1, 1000000000, ErrorMessage = "Giá thuê tối thiểu phải lớn hơn 0.")]
+    public decimal? MinDailyPrice { get; set; }
+
+    [Range(1, 1000000000, ErrorMessage = "Giá thuê tối đa phải lớn hơn 0.")]
     public decimal? MaxDailyPrice { get; set; }
+
+    [Range(1980, 2100, ErrorMessage = "Năm sản xuất tối thiểu không hợp lệ.")]
+    public int? MinManufactureYear { get; set; }
+
+    [RegularExpression(@"^(price_asc|price_desc|year_desc)$", ErrorMessage = "Kiểu sắp xếp không hợp lệ.")]
+    public string? SortBy { get; set; } = "price_asc";
 }
 
 public sealed class CreateBookingViewModel
@@ -147,6 +166,8 @@ public sealed class ReturnViewModel
 public sealed class AddChargeViewModel
 {
     public int BookingId { get; set; }
+
+    [Required]
     public AdditionalChargeType ChargeType { get; set; } = AdditionalChargeType.Other;
 
     [Required]
