@@ -23,6 +23,15 @@
         ? currentUser.FullName
         : User.Identity?.Name ?? "Tài khoản";
     var avatarInitial = displayName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
+
+    var controllerName = ViewContext.RouteData.Values["controller"]?.ToString();
+    var actionName = ViewContext.RouteData.Values["action"]?.ToString();
+    var requestedProfileTab = Context.Request.Query["tab"].ToString();
+    var loadProfileKycAssets = string.Equals(controllerName, "Profile", StringComparison.OrdinalIgnoreCase) &&
+                               (string.Equals(requestedProfileTab, "documents", StringComparison.OrdinalIgnoreCase) ||
+                                !string.Equals(actionName, "Index", StringComparison.OrdinalIgnoreCase));
+    var loadAdminEkycSummary = string.Equals(controllerName, "AdminCustomers", StringComparison.OrdinalIgnoreCase) &&
+                               string.Equals(actionName, "Details", StringComparison.OrdinalIgnoreCase);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -149,21 +158,30 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-guards.js" asp-append-version="true"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.0/dist/tesseract.min.js"></script>
-    <script src="~/js/ekyc-gate-click-compat.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-manual-attachments.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-cccd-qr-mrz.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-document-gate.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-template-pipeline-v3.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-pipeline-compat.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-image-quality-local.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-gplx-manual-bridge.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-gplx-local-ocr.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-cccd-field-level.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-quality-copy.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-cccd-qr-ui.js" asp-append-version="true"></script>
+
+    @if (loadProfileKycAssets)
+    {
+        <script src="~/js/ekyc-tesseract-loader.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-guards.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-gate-click-compat.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-manual-attachments.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-cccd-qr-mrz.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-document-gate.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-template-pipeline-v3.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-pipeline-compat.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-image-quality-local.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-gplx-manual-bridge.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-gplx-local-ocr.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-cccd-field-level.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-quality-copy.js" asp-append-version="true" defer></script>
+        <script src="~/js/ekyc-cccd-qr-ui.js" asp-append-version="true" defer></script>
+    }
+    else if (loadAdminEkycSummary)
+    {
+        <script src="~/js/ekyc.js" asp-append-version="true" defer></script>
+    }
+
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
