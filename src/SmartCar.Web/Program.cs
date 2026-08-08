@@ -14,10 +14,12 @@ builder.Services.AddHttpClient<IEkycService, EkycService>(client =>
     client.Timeout = TimeSpan.FromSeconds(60);
 });
 builder.Services.AddSingleton<IEkycResultStore, FileEkycResultStore>();
+builder.Services.AddScoped<KycAdminNotificationConsolidationFilter>();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
     options.Filters.Add(new StrictDocumentImageQualityFilter());
+    options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
 });
 
 var app = builder.Build();
