@@ -1,4 +1,4 @@
-using SmartCar.Application.Common;
+﻿using SmartCar.Application.Common;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Application.Features.Vehicles;
@@ -17,6 +17,7 @@ public sealed class VehicleDto
     public string FuelType { get; init; } = string.Empty;
     public string? Color { get; init; }
     public decimal DailyPrice { get; init; }
+    public string? PickupAddress { get; init; }
     public int CurrentMileage { get; init; }
     public VehicleStatus Status { get; init; }
     public string? Description { get; init; }
@@ -37,7 +38,8 @@ public sealed record VehicleSearchRequest(
     int? BrandId = null,
     int? Seats = null,
     string? Transmission = null,
-    decimal? MaxDailyPrice = null);
+    decimal? MaxDailyPrice = null,
+    string? PickupAddress = null);
 
 public sealed record CreateVehicleRequest(
     int BrandId,
@@ -51,6 +53,7 @@ public sealed record CreateVehicleRequest(
     string? Color,
     decimal DailyPrice,
     int CurrentMileage,
+    string? PickupAddress,
     string? Description);
 
 public sealed record UpdateVehicleRequest(
@@ -66,6 +69,7 @@ public sealed record UpdateVehicleRequest(
     string? Color,
     decimal DailyPrice,
     int CurrentMileage,
+    string? PickupAddress,
     string? Description,
     byte[] RowVersion);
 

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using SmartCar.Application.Features.Brands;
@@ -68,6 +68,7 @@ public sealed class AdminVehiclesController : Controller
                 viewModel.Color,
                 viewModel.DailyPrice,
                 viewModel.CurrentMileage,
+                viewModel.PickupAddress,
                 viewModel.Description),
             cancellationToken);
 
@@ -164,6 +165,7 @@ public sealed class AdminVehiclesController : Controller
                 viewModel.Color,
                 viewModel.DailyPrice,
                 viewModel.CurrentMileage,
+                viewModel.PickupAddress,
                 viewModel.Description,
                 rowVersion),
             cancellationToken);

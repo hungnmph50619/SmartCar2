@@ -1,4 +1,4 @@
-using SmartCar.Domain.Enums;
+﻿using SmartCar.Domain.Enums;
 
 namespace SmartCar.Domain.Entities;
 
@@ -15,6 +15,7 @@ public class Vehicle
     public string FuelType { get; set; } = string.Empty;
     public string? Color { get; set; }
     public decimal DailyPrice { get; set; }
+    public string? PickupAddress { get; set; }
     public int CurrentMileage { get; set; }
     public VehicleStatus Status { get; set; } = VehicleStatus.Available;
     public string? Description { get; set; }

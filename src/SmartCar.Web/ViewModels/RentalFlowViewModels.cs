@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 using SmartCar.Domain.Enums;
 
@@ -17,6 +17,11 @@ public sealed class BrandFormViewModel
 public sealed class VehicleFormViewModel
 {
     public int VehicleId { get; set; }
+
+    [Required( ErrorMessage = "Vui lòng nhập địa điểm nhận xe.")]
+    [StringLength(250)]
+    [Display(Name = "Địa điểm nhận xe")]
+    public string PickupAddress { get; set; } = string.Empty;
 
     [Required]
     [Display(Name = "Hãng xe")]
@@ -74,6 +79,9 @@ public sealed class VehicleFormViewModel
 
 public sealed class VehicleSearchViewModel
 {
+    [StringLength(250)]
+    [Display(Name = "Địa điểm nhận xe")]
+    public string? PickupAddress { get; set; }
     [Required]
     [Display(Name = "Ngày giờ nhận xe")]
     public DateTime PickupDate { get; set; } = DateTime.Now.AddDays(1);
@@ -109,8 +117,14 @@ public sealed class VehicleSearchViewModel
 
 public sealed class CreateBookingViewModel
 {
+    [Range(
+        1,
+        int.MaxValue,
+        ErrorMessage = "Xe không hợp lệ.")]
     public int VehicleId { get; set; }
+
     public DateTime PickupDate { get; set; }
+
     public DateTime ReturnDate { get; set; }
 }
 

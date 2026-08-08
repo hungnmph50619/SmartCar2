@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Entities;
@@ -54,7 +54,6 @@ internal sealed class VehicleService : IVehicleService
         {
             return Array.Empty<VehicleDto>();
         }
-
         var query = VehicleQuery()
             .Where(vehicle => vehicle.Status == VehicleStatus.Available)
             .Where(vehicle => !vehicle.Bookings.Any(booking =>
@@ -76,6 +75,17 @@ internal sealed class VehicleService : IVehicleService
                 document.ExpiryDate.HasValue &&
                 document.ExpiryDate.Value >= request.ReturnDate));
 
+        if (!string.IsNullOrWhiteSpace(
+        request.PickupAddress))
+        {
+            var pickupAddress =
+                request.PickupAddress.Trim();
+
+            query = query.Where(vehicle =>
+                vehicle.PickupAddress != null &&
+                vehicle.PickupAddress.Contains(
+                    pickupAddress));
+        }
         if (request.BrandId.HasValue)
         {
             query = query.Where(vehicle => vehicle.BrandId == request.BrandId.Value);
@@ -403,6 +413,7 @@ internal sealed class VehicleService : IVehicleService
         FuelType = vehicle.FuelType,
         Color = vehicle.Color,
         DailyPrice = vehicle.DailyPrice,
+        PickupAddress = vehicle.PickupAddress,
         CurrentMileage = vehicle.CurrentMileage,
         Status = vehicle.Status,
         Description = vehicle.Description,

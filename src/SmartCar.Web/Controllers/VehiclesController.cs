@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -76,7 +76,8 @@ public sealed class VehiclesController : Controller
                 model.BrandId,
                 model.Seats,
                 model.Transmission,
-                model.MaxDailyPrice),
+                model.MaxDailyPrice,
+                model.PickupAddress),
             cancellationToken);
 
         IEnumerable<VehicleDto> filteredVehicles = vehicles;

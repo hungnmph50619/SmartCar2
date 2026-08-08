@@ -1,4 +1,4 @@
-@model SmartCar.Application.Features.Vehicles.VehicleDto
+﻿@model SmartCar.Application.Features.Vehicles.VehicleDto
 @using SmartCar.Application.Features.Reviews
 @using SmartCar.Domain.Constants
 @{
@@ -54,6 +54,7 @@
             <hr />
             <div class="mb-2"><strong>Nhận xe:</strong> @pickupDate.ToString("dd/MM/yyyy HH:mm")</div>
             <div class="mb-2"><strong>Trả xe:</strong> @returnDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div class="mb-2"><strong>Địa điểm nhận xe:</strong> @(string.IsNullOrWhiteSpace(Model.PickupAddress) ? "Chưa cập nhật" : Model.PickupAddress)</div>
             <div class="mb-2"><strong>Số ngày tính phí:</strong> @numberOfDays</div>
             <div class="fs-4 fw-bold text-primary mb-3">Dự kiến: @estimatedAmount.ToString("N0") đ</div>
 
@@ -64,12 +65,25 @@
                     <div class="alert alert-success py-2 mb-3">
                         <strong>✓ Tài khoản đã xác minh.</strong> Bạn đủ điều kiện gửi yêu cầu thuê xe này.
                     </div>
-                    <form asp-controller="Bookings" asp-action="Create" method="post" data-loading-form>
-                        <input type="hidden" name="VehicleId" value="@Model.VehicleId" />
-                        <input type="hidden" name="PickupDate" value="@pickupDate.ToString("O")" />
-                        <input type="hidden" name="ReturnDate" value="@returnDate.ToString("O")" />
-                        <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">
-                            Gửi yêu cầu thuê xe
+                    <form asp-controller="Bookings"
+                          asp-action="Confirm"
+                          method="get">
+
+                        <input type="hidden"
+                               name="vehicleId"
+                               value="@Model.VehicleId" />
+
+                        <input type="hidden"
+                               name="pickupDate"
+                               value="@pickupDate.ToString("O")" />
+
+                        <input type="hidden"
+                               name="returnDate"
+                               value="@returnDate.ToString("O")" />
+
+                        <button class="btn btn-primary btn-lg w-100"
+                                type="submit" data-loading-text="Đang gửi yêu cầu...">
+                            Tiếp tục đặt xe
                         </button>
                     </form>
                 }

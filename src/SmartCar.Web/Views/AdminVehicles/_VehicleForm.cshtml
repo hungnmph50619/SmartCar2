@@ -1,4 +1,4 @@
-@model SmartCar.Web.ViewModels.VehicleFormViewModel
+﻿@model SmartCar.Web.ViewModels.VehicleFormViewModel
 
 <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3"></div>
 <input asp-for="VehicleId" type="hidden" />
@@ -73,6 +73,18 @@
             <span class="input-group-text">km</span>
         </div>
         <span asp-validation-for="CurrentMileage" class="text-danger small"></span>
+    </div>
+    <div class="col-12">
+        <label asp-for="PickupAddress"
+               class="form-label fw-semibold">
+        </label>
+        <input asp-for="PickupAddress"
+               class="form-control"
+               placeholder="Ví dụ: Thanh Xuân, Hà Nội" />
+        <span asp-validation-for="PickupAddress"
+              class="text-danger small">
+        </span>
+
     </div>
     <div class="col-12">
         <label asp-for="Description" class="form-label fw-semibold"></label>

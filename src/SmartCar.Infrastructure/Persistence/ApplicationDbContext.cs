@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Domain.Entities;
 using SmartCar.Infrastructure.Identity;
@@ -55,6 +55,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(vehicle => vehicle.VehicleId);
             entity.Property(vehicle => vehicle.VehicleName).HasMaxLength(150).IsRequired();
+            entity.Property(vehicle =>vehicle.PickupAddress).HasMaxLength(250);
             entity.Property(vehicle => vehicle.Model).HasMaxLength(100);
             entity.Property(vehicle => vehicle.LicensePlate).HasMaxLength(20).IsRequired();
             entity.Property(vehicle => vehicle.Transmission).HasMaxLength(30).IsRequired();

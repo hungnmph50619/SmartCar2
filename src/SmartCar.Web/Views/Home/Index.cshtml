@@ -1,4 +1,4 @@
-@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
+﻿@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
 @using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Trang chủ";
@@ -132,6 +132,20 @@
           class="row g-3 align-items-start"
           data-vehicle-search-form
           novalidate>
+        <div class="col-lg-4 col-md-6">
+
+            <label for="homePickupAddress"
+                   class="form-label fw-semibold">
+                Địa điểm nhận xe
+            </label>
+
+            <input id="homePickupAddress"
+                   type="text"
+                   name="PickupAddress"
+                   class="form-control form-control-lg"
+                   placeholder="Ví dụ: Hà Nội" />
+
+        </div>
         <div class="col-lg-4 col-md-6">
             <label for="homePickupDisplay" class="form-label fw-semibold">Ngày giờ nhận xe</label>
             <div class="vn-datetime-control">
