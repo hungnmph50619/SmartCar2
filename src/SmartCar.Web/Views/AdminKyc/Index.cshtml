@@ -1,0 +1,74 @@
+@model SmartCar.Web.ViewModels.AdminKycQueueViewModel
+@{
+    ViewData["Title"] = "KYC chờ duyệt";
+}
+
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
+    <div>
+        <div class="text-uppercase small text-primary fw-semibold">HÀNG ĐỢI CÔNG VIỆC</div>
+        <h1 class="h2 fw-bold mb-1">Hồ sơ KYC chờ duyệt</h1>
+        <p class="text-muted mb-0">Chỉ hiển thị khách đã gửi đủ CCCD và GPLX. Mỗi hồ sơ được xử lý một lần.</p>
+    </div>
+    <span class="badge @(Model.Items.Count > 0 ? "bg-warning text-dark" : "bg-success") fs-6 px-3 py-2">
+        @Model.Items.Count hồ sơ cần xử lý
+    </span>
+</div>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-5 text-center">
+            <div class="display-6 mb-3">✓</div>
+            <h2 class="h4 fw-bold">Không có hồ sơ KYC đang chờ</h2>
+            <p class="text-muted mb-0">Khi khách hàng gửi đủ CCCD và GPLX, hồ sơ sẽ tự xuất hiện tại đây.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 p-4 pb-2">
+            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                <div>
+                    <h2 class="h5 fw-bold mb-1">Cần quản trị viên xử lý</h2>
+                    <p class="text-muted mb-0">Ưu tiên hồ sơ gửi lâu hơn hoặc mở trực tiếp hồ sơ cần duyệt.</p>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Khách hàng</th>
+                        <th>Liên hệ</th>
+                        <th>Thời điểm đủ hồ sơ</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@item.CustomerName</div>
+                            <small class="text-muted">@item.CustomerEmail</small>
+                        </td>
+                        <td>@(string.IsNullOrWhiteSpace(item.CustomerPhone) ? "Chưa cập nhật" : item.CustomerPhone)</td>
+                        <td>
+                            <div>@item.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                            <small class="text-muted">Đã gửi đủ 4 ảnh giấy tờ</small>
+                        </td>
+                        <td><span class="badge bg-warning text-dark">Mới gửi · Chờ duyệt</span></td>
+                        <td class="text-end">
+                            <a class="btn btn-primary btn-sm"
+                               asp-action="Review"
+                               asp-route-customerId="@item.CustomerId">Xem và duyệt KYC</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
