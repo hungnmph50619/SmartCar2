@@ -49,9 +49,9 @@ public sealed class CitizenIdVerificationViewModel
     [Display(Name = "Ngày hết hạn")]
     public DateTime? ExpiryDate { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng nhập địa chỉ thường trú.")]
-    [StringLength(500, ErrorMessage = "Địa chỉ thường trú không được vượt quá 500 ký tự.")]
-    [Display(Name = "Địa chỉ thường trú")]
+    [Required(ErrorMessage = "Vui lòng nhập nơi cư trú trên CCCD.")]
+    [StringLength(500, ErrorMessage = "Nơi cư trú không được vượt quá 500 ký tự.")]
+    [Display(Name = "Nơi cư trú trên CCCD")]
     public string PermanentAddress { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng chọn ảnh CCCD mặt trước.")]
