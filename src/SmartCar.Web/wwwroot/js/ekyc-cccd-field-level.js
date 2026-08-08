@@ -11,11 +11,24 @@
         .replace(/\s+/g, ' ')
         .trim();
 
+    const exactKey = value => (value || '')
+        .normalize('NFC')
+        .toUpperCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+
     const fingerprint = file => file
         ? `${file.name}|${file.size}|${file.lastModified}|${file.type}`
         : '';
 
-    const hasVietnameseMarks = value => /[À-ỹĐđ]/u.test(value || '');
+    const vietnameseMarkCount = value => {
+        const text = value || '';
+        const combining = (text.normalize('NFD').match(/[\u0300-\u036f]/g) || []).length;
+        const dStroke = (text.match(/[Đđ]/g) || []).length;
+        return combining + dStroke;
+    };
+
+    const hasVietnameseMarks = value => vietnameseMarkCount(value) > 0;
 
     const splitLines = text => (text || '')
         .split(/\r?\n/)
@@ -48,7 +61,7 @@
             source.height - y,
             Math.max(1, Math.round(source.height * region.height))
         );
-        const scale = Math.min(3.2, maxLong / Math.max(width, height));
+        const scale = Math.min(3.4, maxLong / Math.max(width, height));
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(width * scale));
         canvas.height = Math.max(1, Math.round(height * scale));
@@ -60,7 +73,9 @@
         return canvas;
     };
 
-    const makeVariant = (source, binary = false) => {
+    const makeVariant = (source, mode = 'contrast') => {
+        if (mode === 'original') return source;
+
         const canvas = document.createElement('canvas');
         canvas.width = source.width;
         canvas.height = source.height;
@@ -78,9 +93,9 @@
 
         for (let i = 0; i < data.length; i += 4) {
             const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-            const value = binary
+            const value = mode === 'binary'
                 ? (gray >= threshold ? 255 : 0)
-                : Math.max(0, Math.min(255, (gray - 128) * 1.55 + 128));
+                : Math.max(0, Math.min(255, (gray - 128) * 1.45 + 128));
             data[i] = value;
             data[i + 1] = value;
             data[i + 2] = value;
@@ -125,18 +140,19 @@
         return letters / Math.max(1, cleaned.length) >= 0.72;
     };
 
-    const nameScore = (value, confidence = 0) => {
+    const nameScore = (value, confidence = 0, mrzName = '') => {
         const cleaned = cleanName(value);
         if (!isLikelyName(cleaned)) return -1000;
-        let score = Math.min(55, cleaned.length);
-        score += Math.min(30, confidence * 0.3);
-        if (hasVietnameseMarks(cleaned)) score += 26;
-        if (cleaned === cleaned.toUpperCase()) score += 6;
+        let score = Math.min(45, cleaned.length);
+        score += Math.min(28, confidence * 0.28);
+        score += Math.min(40, vietnameseMarkCount(cleaned) * 8);
+        if (cleaned === cleaned.toUpperCase()) score += 5;
+        if (mrzName && normalize(cleaned) === mrzName) score += 75;
         if (cleaned.split(/\s+/).some(repeatedNoiseToken)) score -= 80;
         return score;
     };
 
-    const nameCandidates = (text, confidence) => {
+    const nameCandidates = (text, confidence, source, mrzName = '') => {
         const lines = splitLines(text);
         const values = [];
         const labelIndex = lines.findIndex(line =>
@@ -150,15 +166,38 @@
                 .trim();
             if (inline) values.push(inline);
             for (let offset = 1; offset <= 2; offset += 1) {
-                if (lines[labelIndex + offset]?.original) {
-                    values.push(lines[labelIndex + offset].original);
-                }
+                if (lines[labelIndex + offset]?.original) values.push(lines[labelIndex + offset].original);
             }
         }
         lines.forEach(line => values.push(line.original));
 
         return [...new Set(values.map(cleanName).filter(isLikelyName))]
-            .map(value => ({ value, confidence, score: nameScore(value, confidence) }));
+            .map(value => ({
+                value,
+                confidence,
+                source,
+                score: nameScore(value, confidence, mrzName)
+            }));
+    };
+
+    const parseMrzName = text => {
+        const lines = (text || '')
+            .toUpperCase()
+            .split(/\r?\n/)
+            .map(line => line.replace(/[^A-Z<]/g, '').trim())
+            .filter(Boolean);
+
+        const candidate = lines
+            .filter(line => line.includes('<') && !line.includes('VNM'))
+            .sort((a, b) => b.length - a.length)[0];
+        if (!candidate) return '';
+
+        const name = candidate
+            .replace(/<+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const words = name.split(' ').filter(Boolean);
+        return words.length >= 2 ? normalize(name) : '';
     };
 
     const cleanAddress = value => (value || '')
@@ -166,7 +205,7 @@
         .replace(/^.*?Place\s+of\s+residence\s*[:：/-]*/iu, '')
         .replace(/\b(?:Có\s+giá\s+trị\s+đến|Date\s+of\s+expiry)\b.*$/iu, '')
         .replace(/\b[0-3]?\d[\/\-.][01]?\d[\/\-.](?:19|20)\d{2}\b/g, ' ')
-        .replace(/[<>|_=]+/g, ' ')
+        .replace(/[<>|_=~“”"'`]+/g, ' ')
         .replace(/\s*,\s*/g, ', ')
         .replace(/\s+/g, ' ')
         .replace(/[,;:\s/.-]+$/g, '')
@@ -183,8 +222,7 @@
     const addressHasNoise = value => {
         const raw = value || '';
         const normalized = normalize(raw);
-        return /[|<>_=]/.test(raw) ||
-            /\b(?:19|20)\d{2}\b/.test(raw) ||
+        return /[|<>_=~“”"'`]/.test(raw) ||
             normalized.includes('CO GIA TRI') ||
             normalized.includes('DATE OF EXPIRY') ||
             normalized.includes('IDVNM') ||
@@ -202,20 +240,50 @@
         return true;
     };
 
-    const addressScore = (value, confidence = 0) => {
+    const extractOriginSnippets = text => {
+        const lines = splitLines(text);
+        const snippets = [];
+        const labelIndex = lines.findIndex(line =>
+            line.normalized.includes('QUE QUAN') || line.normalized.includes('PLACE OF ORIGIN'));
+
+        if (labelIndex >= 0) {
+            for (let offset = 0; offset <= 2; offset += 1) {
+                const line = lines[labelIndex + offset];
+                if (!line) break;
+                if (offset > 0 && (line.normalized.includes('NOI') || line.normalized.includes('RESIDENCE'))) break;
+                const cleaned = cleanAddress(line.original
+                    .replace(/^.*?Quê\s+quán\s*[:：/-]*/iu, '')
+                    .replace(/^.*?Place\s+of\s+origin\s*[:：/-]*/iu, ''));
+                if (cleaned.length >= 6) snippets.push(normalize(cleaned));
+            }
+        }
+        return [...new Set(snippets)];
+    };
+
+    const overlapsOrigin = (value, originSnippets) => {
+        const normalized = normalize(value);
+        return originSnippets.some(snippet =>
+            snippet.length >= 6 &&
+            (normalized.startsWith(snippet) || normalized.includes(snippet)));
+    };
+
+    const addressScore = (value, confidence = 0, anchored = false, originSnippets = []) => {
         const cleaned = cleanAddress(value);
         if (!isLikelyAddress(cleaned)) return -1000;
-        let score = Math.min(80, cleaned.length * 0.8);
-        score += Math.min(25, confidence * 0.25);
-        score += Math.min(28, (cleaned.match(/,/g) || []).length * 7);
-        if (hasVietnameseMarks(cleaned)) score += 12;
-        if (/\b(?:Thị trấn|Thành phố|TP\.?|Phường|Xã|Quận|Huyện|Tỉnh)\b/iu.test(cleaned)) {
-            score += 10;
-        }
+        if (overlapsOrigin(cleaned, originSnippets)) return -1000;
+
+        const words = cleaned.split(/\s+/).filter(Boolean);
+        let score = Math.min(28, confidence * 0.28);
+        score += anchored ? 36 : 12;
+        score += Math.min(18, words.length * 1.8);
+        score += Math.min(12, (cleaned.match(/,/g) || []).length * 4);
+        if (hasVietnameseMarks(cleaned)) score += 10;
+        if (/\b(?:Thị trấn|Thành phố|TP\.?|Phường|Xã|Quận|Huyện|Tỉnh)\b/iu.test(cleaned)) score += 16;
+        if (/\b\d{4}\b/.test(cleaned)) score -= 25;
         return score;
     };
 
-    const addressCandidates = (text, confidence) => {
+    const addressCandidates = (text, confidence, source, allowValueOnly, originSnippets = []) => {
         const lines = splitLines(text);
         const values = [];
         const labelIndex = lines.findIndex(line => {
@@ -236,20 +304,34 @@
                 const part = cleanAddress(next.original);
                 if (isLikelyAddress(part)) parts.push(part);
             }
-            if (parts.length) values.push(parts.join(', '));
+            if (parts.length) values.push({ value: parts.join(', '), anchored: true });
         }
 
-        const fallback = lines
-            .filter(line => !addressStop(line.normalized))
-            .map(line => cleanAddress(line.original))
-            .filter(isLikelyAddress);
-        if (fallback.length) {
-            values.push(fallback.slice(-3).join(', '));
-            values.push(fallback.slice(-2).join(', '));
+        if (allowValueOnly && labelIndex < 0) {
+            const parts = lines
+                .filter(line => !addressStop(line.normalized))
+                .map(line => cleanAddress(line.original))
+                .filter(isLikelyAddress);
+            if (parts.length) values.push({ value: parts.join(', '), anchored: false });
+            if (parts.length > 1) values.push({ value: parts.slice(-2).join(', '), anchored: false });
         }
 
-        return [...new Set(values.map(cleanAddress).filter(isLikelyAddress))]
-            .map(value => ({ value, confidence, score: addressScore(value, confidence) }));
+        const deduped = new Map();
+        values.forEach(item => {
+            const cleaned = cleanAddress(item.value);
+            if (!isLikelyAddress(cleaned) || overlapsOrigin(cleaned, originSnippets)) return;
+            const key = exactKey(cleaned);
+            const candidate = {
+                value: cleaned,
+                confidence,
+                source,
+                anchored: item.anchored,
+                score: addressScore(cleaned, confidence, item.anchored, originSnippets)
+            };
+            const previous = deduped.get(key);
+            if (!previous || candidate.score > previous.score) deduped.set(key, candidate);
+        });
+        return [...deduped.values()];
     };
 
     const recognize = async (worker, canvas, psm = 6) => {
@@ -264,19 +346,37 @@
         const output = await worker.recognize(canvas);
         return {
             text: output?.data?.text || '',
-            confidence: Number.isFinite(output?.data?.confidence)
-                ? output.data.confidence
-                : 0
+            confidence: Number.isFinite(output?.data?.confidence) ? output.data.confidence : 0
         };
     };
 
     const best = candidates =>
         [...candidates].sort((a, b) => b.score - a.score)[0] || null;
 
-    const agreementCount = (candidates, selected) => {
+    const exactAgreementCount = (candidates, selected) => {
+        if (!selected) return 0;
+        const target = exactKey(selected.value);
+        return candidates.filter(candidate => exactKey(candidate.value) === target).length;
+    };
+
+    const normalizedAgreementCount = (candidates, selected) => {
         if (!selected) return 0;
         const target = normalize(selected.value);
         return candidates.filter(candidate => normalize(candidate.value) === target).length;
+    };
+
+    const chooseBestName = (candidates, mrzName) => {
+        if (!candidates.length) return null;
+        const mrzMatches = mrzName
+            ? candidates.filter(candidate => normalize(candidate.value) === mrzName)
+            : [];
+        const pool = mrzMatches.length ? mrzMatches : candidates;
+
+        return [...pool].sort((a, b) => {
+            const markDiff = vietnameseMarkCount(b.value) - vietnameseMarkCount(a.value);
+            if (markDiff !== 0 && normalize(a.value) === normalize(b.value)) return markDiff;
+            return b.score - a.score;
+        })[0] || null;
     };
 
     const setFieldStatus = (selector, high, message) => {
@@ -298,9 +398,7 @@
         const date = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
         return date.getFullYear() === Number(match[3]) &&
             date.getMonth() === Number(match[2]) - 1 &&
-            date.getDate() === Number(match[1])
-            ? date
-            : null;
+            date.getDate() === Number(match[1]) ? date : null;
     };
 
     const summarize = (panel, nameHigh, addressHigh) => {
@@ -342,83 +440,125 @@
 
         const state = panel.querySelector('[data-ekyc-ocr-state]');
         if (state) {
-            state.textContent = `✓ Đã nhận diện ${detectedCount}/7 trường · ${highCount}/7 trường có độ tin cậy cao.` +
-                (needs.length
-                    ? ` Cần đối chiếu: ${needs.join(', ')}.`
-                    : ' Hãy đối chiếu nhanh trước khi tiếp tục.');
-            state.className = `small ${highCount >= 6 ? 'text-success' : 'text-warning'} mb-3`;
+            if (needs.length) {
+                state.textContent = `⚠ Đã nhận diện ${detectedCount}/7 trường · ${highCount}/7 trường có độ tin cậy cao. Cần đối chiếu: ${needs.join(', ')}.`;
+                state.className = 'small text-warning mb-3';
+            } else {
+                state.textContent = `✓ Đã nhận diện ${detectedCount}/7 trường · 7/7 trường có độ tin cậy cao. Hãy đối chiếu nhanh trước khi tiếp tục.`;
+                state.className = 'small text-success mb-3';
+            }
+        }
+
+        const nextButton = panel.querySelector('[data-ekyc-next-face]');
+        if (nextButton) {
+            nextButton.textContent = needs.length
+                ? 'Tôi đã kiểm tra, tiếp tục →'
+                : 'Thông tin đúng, tiếp tục →';
         }
     };
 
     const refine = async panel => {
         if (running || panel.dataset.localTestOcr !== 'on') return;
         const front = document.getElementById('citizen-front-file')?.files?.[0];
-        if (!front || !window.Tesseract?.createWorker ||
-            !window.SmartCarDocumentVision?.prepareForOcr) return;
+        const back = document.getElementById('citizen-back-file')?.files?.[0];
+        if (!front || !window.Tesseract?.createWorker || !window.SmartCarDocumentVision?.prepareForOcr) return;
 
-        const key = `${fingerprint(front)}|${getValue('[name="CitizenIdVerification.FullNameOnDocument"]')}|${getValue('[name="CitizenIdVerification.PermanentAddress"]')}`;
+        const key = `${fingerprint(front)}|${fingerprint(back)}|${getValue('[name="CitizenIdVerification.FullNameOnDocument"]')}|${getValue('[name="CitizenIdVerification.PermanentAddress"]')}`;
         if (!key || key === lastRunKey) return;
         running = true;
         lastRunKey = key;
 
         const state = panel.querySelector('[data-ekyc-ocr-state]');
         if (state) {
-            state.textContent = 'Đang OCR riêng họ tên và nơi cư trú để tăng độ chính xác...';
+            state.textContent = 'Đang kiểm tra riêng họ tên và nơi cư trú...';
             state.className = 'small text-muted mb-3';
         }
 
         let worker = null;
         try {
-            const prepared = await window.SmartCarDocumentVision.prepareForOcr(front);
+            const preparedFront = await window.SmartCarDocumentVision.prepareForOcr(front);
+            const preparedBack = back
+                ? await window.SmartCarDocumentVision.prepareForOcr(back)
+                : null;
 
-            const nameBroad = cropCanvas(prepared.canvas, {
-                x: 0.25, y: 0.48, width: 0.73, height: 0.18
+            const nameBroad = cropCanvas(preparedFront.canvas, {
+                x: 0.25, y: 0.47, width: 0.73, height: 0.18
+            }, 1700);
+            const nameTight = cropCanvas(preparedFront.canvas, {
+                x: 0.27, y: 0.53, width: 0.71, height: 0.12
+            }, 1700);
+
+            // Vùng quê quán chỉ được OCR nội bộ để loại nhầm, không lưu/hiển thị thành trường dữ liệu.
+            const originRegion = cropCanvas(preparedFront.canvas, {
+                x: 0.25, y: 0.64, width: 0.73, height: 0.17
             }, 1600);
-            const nameTight = cropCanvas(prepared.canvas, {
-                x: 0.27, y: 0.54, width: 0.71, height: 0.11
-            }, 1500);
-            const addressBroad = cropCanvas(prepared.canvas, {
-                x: 0.24, y: 0.73, width: 0.75, height: 0.24
+
+            // Bắt đầu thấp hơn vùng quê quán để không trộn hai trường liền kề.
+            const residenceBroad = cropCanvas(preparedFront.canvas, {
+                x: 0.24, y: 0.76, width: 0.75, height: 0.23
+            }, 2000);
+            const residenceTight = cropCanvas(preparedFront.canvas, {
+                x: 0.28, y: 0.82, width: 0.70, height: 0.16
             }, 1900);
-            const addressTight = cropCanvas(prepared.canvas, {
-                x: 0.28, y: 0.80, width: 0.70, height: 0.17
-            }, 1800);
+
+            const mrzRegion = preparedBack
+                ? cropCanvas(preparedBack.canvas, {
+                    x: 0.05, y: 0.66, width: 0.90, height: 0.32
+                }, 1900)
+                : null;
 
             worker = await window.Tesseract.createWorker(['vie', 'eng'], 1);
 
-            const nameA = await recognize(worker, makeVariant(nameBroad, false), 6);
-            const nameB = await recognize(worker, makeVariant(nameTight, true), 6);
-            const addressA = await recognize(worker, makeVariant(addressBroad, false), 6);
-            const addressB = await recognize(worker, makeVariant(addressTight, true), 6);
+            let mrzName = '';
+            if (mrzRegion) {
+                const mrz = await recognize(worker, makeVariant(mrzRegion, 'binary'), 6);
+                mrzName = parseMrzName(mrz.text);
+            }
+
+            const nameA = await recognize(worker, makeVariant(nameBroad, 'original'), 6);
+            const nameB = await recognize(worker, makeVariant(nameTight, 'contrast'), 7);
+            const nameC = await recognize(worker, makeVariant(nameTight, 'binary'), 7);
+
+            const originOcr = await recognize(worker, makeVariant(originRegion, 'contrast'), 6);
+            const originSnippets = extractOriginSnippets(originOcr.text);
+
+            const addressA = await recognize(worker, makeVariant(residenceBroad, 'contrast'), 6);
+            const addressB = await recognize(worker, makeVariant(residenceTight, 'original'), 6);
+            const addressC = await recognize(worker, makeVariant(residenceTight, 'binary'), 6);
 
             const currentName = getValue('[name="CitizenIdVerification.FullNameOnDocument"]');
             const currentAddress = getValue('[name="CitizenIdVerification.PermanentAddress"]');
 
             const names = [
-                ...nameCandidates(nameA.text, nameA.confidence),
-                ...nameCandidates(nameB.text, nameB.confidence)
+                ...nameCandidates(nameA.text, nameA.confidence, 'broad-original', mrzName),
+                ...nameCandidates(nameB.text, nameB.confidence, 'tight-contrast', mrzName),
+                ...nameCandidates(nameC.text, nameC.confidence, 'tight-binary', mrzName)
             ];
             if (isLikelyName(currentName)) {
                 names.push({
                     value: cleanName(currentName),
-                    confidence: 45,
-                    score: nameScore(currentName, 45)
+                    confidence: 40,
+                    source: 'initial',
+                    score: nameScore(currentName, 40, mrzName)
                 });
             }
 
             const addresses = [
-                ...addressCandidates(addressA.text, addressA.confidence),
-                ...addressCandidates(addressB.text, addressB.confidence)
+                ...addressCandidates(addressA.text, addressA.confidence, 'residence-label', false, originSnippets),
+                ...addressCandidates(addressB.text, addressB.confidence, 'residence-tight-original', true, originSnippets),
+                ...addressCandidates(addressC.text, addressC.confidence, 'residence-tight-binary', true, originSnippets)
             ];
-            if (isLikelyAddress(currentAddress)) {
+            if (isLikelyAddress(currentAddress) && !overlapsOrigin(currentAddress, originSnippets)) {
                 addresses.push({
                     value: cleanAddress(currentAddress),
-                    confidence: 40,
-                    score: addressScore(currentAddress, 40)
+                    confidence: 35,
+                    source: 'initial',
+                    anchored: false,
+                    score: addressScore(currentAddress, 35, false, originSnippets)
                 });
             }
 
-            const selectedName = best(names);
+            const selectedName = chooseBestName(names, mrzName);
             const selectedAddress = best(addresses);
 
             if (selectedName?.value) {
@@ -428,12 +568,13 @@
                 writeValue('[name="CitizenIdVerification.PermanentAddress"]', selectedAddress.value);
             }
 
+            // Với họ tên phải khớp chính xác cả dấu ở ít nhất 2 lần OCR; không dùng normalize bỏ dấu để tính "ổn định".
             const nameHigh = Boolean(
                 selectedName &&
                 isLikelyName(selectedName.value) &&
                 selectedName.confidence >= 55 &&
-                hasVietnameseMarks(selectedName.value) &&
-                agreementCount(names, selectedName) >= 2
+                exactAgreementCount(names, selectedName) >= 2 &&
+                (!mrzName || normalize(selectedName.value) === mrzName)
             );
 
             const addressHigh = Boolean(
@@ -441,23 +582,28 @@
                 isLikelyAddress(selectedAddress.value) &&
                 selectedAddress.confidence >= 55 &&
                 !addressHasNoise(selectedAddress.value) &&
-                agreementCount(addresses, selectedAddress) >= 2 &&
-                !/[,;:\-]\s*$/.test(selectedAddress.value)
+                !overlapsOrigin(selectedAddress.value, originSnippets) &&
+                exactAgreementCount(addresses, selectedAddress) >= 2
             );
+
+            const nameNormalizedAgreement = normalizedAgreementCount(names, selectedName);
+            const nameMessage = nameHigh
+                ? 'Họ tên được OCR nhiều lần và khớp chính xác cả dấu.'
+                : nameNormalizedAgreement >= 2
+                    ? 'Các lần OCR nhận cùng tên nhưng chưa thống nhất dấu tiếng Việt. Hãy đối chiếu trực tiếp với CCCD.'
+                    : 'Họ tên chưa ổn định giữa các lần OCR. Hãy đối chiếu trực tiếp với CCCD.';
 
             setFieldStatus(
                 '[name="CitizenIdVerification.FullNameOnDocument"]',
                 nameHigh,
-                nameHigh
-                    ? 'Họ tên được OCR riêng và kết quả ổn định.'
-                    : 'Họ tên có thể mất dấu hoặc sai ký tự. Hãy đối chiếu trực tiếp với CCCD.'
+                nameMessage
             );
             setFieldStatus(
                 '[name="CitizenIdVerification.PermanentAddress"]',
                 addressHigh,
                 addressHigh
-                    ? 'Nơi cư trú được OCR riêng và kết quả ổn định.'
-                    : 'Nơi cư trú có thể thiếu đầu/cuối dòng hoặc còn ký tự sai. Hãy đối chiếu trực tiếp với CCCD.'
+                    ? 'Nơi cư trú được OCR riêng, không trộn với quê quán và kết quả ổn định.'
+                    : 'Nơi cư trú chưa đủ ổn định hoặc có thể thiếu đầu/cuối dòng. Hãy đối chiếu trực tiếp với CCCD.'
             );
 
             summarize(panel, nameHigh, addressHigh);
