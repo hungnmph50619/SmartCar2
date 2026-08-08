@@ -4,12 +4,18 @@
         '/js/ekyc-guards.js',
         '/js/ekyc-gate-click-compat.js',
         '/js/ekyc-manual-attachments.js',
+        // Chất lượng ảnh là cổng đầu tiên: ảnh không đạt thì không chạy classifier/QR/MRZ/OCR.
+        '/js/ekyc-image-quality-local.js',
+        '/js/ekyc-strict-quality-gate.js',
+        // CCCD dùng QR + MRZ sau khi Quality Gate đã pass.
         '/js/ekyc-cccd-qr-mrz.js',
+        // Document Gate đứng sau Quality Gate để tránh OCR/classifier ảnh rác.
         '/js/ekyc-document-gate.js',
         '/js/ekyc-template-pipeline-v3.js',
         '/js/ekyc-pipeline-compat.js',
-        '/js/ekyc-image-quality-local.js',
         '/js/ekyc-gplx-manual-bridge.js',
+        // GPLX: QR trước, OCR chỉ bổ sung trường còn thiếu.
+        '/js/ekyc-gplx-qr-assist.js',
         '/js/ekyc-gplx-local-ocr.js',
         '/js/ekyc-cccd-field-level.js',
         '/js/ekyc-quality-copy.js',
