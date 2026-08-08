@@ -22,18 +22,21 @@
 
 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
     <div>
-        <div class="text-uppercase small text-primary fw-semibold">HỒ SƠ KYC HOÀN CHỈNH</div>
+        <div class="text-uppercase small text-primary fw-semibold">HỒ SƠ KYC MỚI · CHỜ DUYỆT</div>
         <h1 class="h2 fw-bold mb-1">Duyệt CCCD + GPLX trong một lần</h1>
         <p class="text-muted mb-0">@Model.CustomerName · @Model.CustomerEmail</p>
     </div>
-    <a class="btn btn-outline-secondary"
-       asp-controller="AdminCustomers" asp-action="Details"
-       asp-route-id="@Model.CustomerId" asp-route-tab="documents">Mở trang khách hàng</a>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-primary" asp-action="Index">← Hàng đợi KYC</a>
+        <a class="btn btn-outline-secondary"
+           asp-controller="AdminCustomers" asp-action="Details"
+           asp-route-id="@Model.CustomerId" asp-route-tab="documents">Mở trang khách hàng</a>
+    </div>
 </div>
 
-<div class="alert alert-info shadow-sm">
-    <strong>Quy trình duyệt:</strong> xem CCCD → xem GPLX → tích checklist cuối trang → bấm <strong>Duyệt toàn bộ hồ sơ KYC</strong>.
-    Nếu một giấy tờ có vấn đề, không duyệt toàn bộ; mở trang khách hàng để yêu cầu cập nhật đúng phần đó.
+<div class="alert alert-warning shadow-sm">
+    <strong>Việc cần làm:</strong> xem đủ 4 ảnh, đối chiếu thông tin CCCD và GPLX rồi chọn một trong hai quyết định ở cuối trang:
+    <strong>Duyệt toàn bộ</strong> hoặc <strong>Yêu cầu cập nhật</strong>. Hồ sơ chỉ rời hàng đợi sau khi bạn ra quyết định.
 </div>
 
 <section class="card border-0 shadow-sm mb-4">
@@ -120,29 +123,49 @@
 
 <section class="card border-success shadow-sm mb-4">
     <div class="card-body p-4">
-        <h2 class="h4 fw-bold mb-2">Quyết định toàn bộ hồ sơ</h2>
+        <h2 class="h4 fw-bold mb-2">Ra quyết định cho hồ sơ</h2>
+        <p class="text-muted">Một quyết định xử lý toàn bộ CCCD + GPLX. Sau khi duyệt hoặc yêu cầu cập nhật, hồ sơ sẽ được gỡ khỏi hàng đợi KYC.</p>
         @if (allPending)
         {
-            <form asp-action="VerifyAll" method="post" data-loading-form data-confirm="Xác nhận toàn bộ CCCD và GPLX đều hợp lệ?">
+            <form asp-action="VerifyAll" method="post" class="mb-4" data-loading-form data-confirm="Xác nhận toàn bộ CCCD và GPLX đều hợp lệ?">
                 <input type="hidden" name="customerId" value="@Model.CustomerId" />
                 <fieldset class="document-checklist mb-3">
-                    <legend>Checklist bắt buộc</legend>
-                    <label><input class="form-check-input" type="checkbox" required /> CCCD: dữ liệu khớp hai mặt, ảnh rõ và còn hiệu lực.</label>
-                    <label><input class="form-check-input" type="checkbox" required /> GPLX: số bằng, hạng bằng, ngày cấp/hết hạn khớp ảnh và còn hiệu lực.</label>
-                    <label><input class="form-check-input" type="checkbox" required /> Đã xem đủ 4 ảnh và không thấy dấu hiệu chỉnh sửa bất thường.</label>
+                    <legend>Checklist bắt buộc trước khi duyệt</legend>
+                    <label><input class="form-check-input" type="checkbox" required /> CCCD: thông tin khai báo khớp với hai ảnh và giấy tờ còn hiệu lực.</label>
+                    <label><input class="form-check-input" type="checkbox" required /> GPLX: số bằng, hạng bằng, ngày cấp/hết hạn khớp với ảnh và còn hiệu lực.</label>
+                    <label><input class="form-check-input" type="checkbox" required /> Đã xem đủ 4 ảnh, ảnh rõ và không thấy dấu hiệu chỉnh sửa bất thường.</label>
                     <label><input class="form-check-input" type="checkbox" required /> Xác nhận hai giấy tờ thuộc cùng khách hàng.</label>
                 </fieldset>
-                <div class="d-flex gap-2 flex-wrap">
-                    <button class="btn btn-success" type="submit" data-loading-text="Đang duyệt toàn bộ KYC...">✓ Duyệt toàn bộ hồ sơ KYC</button>
-                    <a class="btn btn-outline-danger"
-                       asp-controller="AdminCustomers" asp-action="Details"
-                       asp-route-id="@Model.CustomerId" asp-route-tab="documents">Có vấn đề — yêu cầu cập nhật</a>
-                </div>
+                <button class="btn btn-success" type="submit" data-loading-text="Đang duyệt toàn bộ KYC...">✓ Duyệt toàn bộ hồ sơ KYC</button>
             </form>
+
+            <div class="border-top pt-4">
+                <h3 class="h6 fw-bold text-danger">Hồ sơ có vấn đề?</h3>
+                <p class="small text-muted">Ghi rõ lý do để khách hàng biết cần sửa gì. Hệ thống sẽ yêu cầu gửi lại hồ sơ KYC.</p>
+                <form asp-action="RequestResubmission" method="post" data-loading-form data-confirm="Yêu cầu khách hàng cập nhật lại toàn bộ hồ sơ KYC?">
+                    <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="kycReason">Lý do yêu cầu cập nhật <span class="text-danger">*</span></label>
+                        <select class="form-select" id="kycReason" name="reason" required>
+                            <option value="">-- Chọn lý do --</option>
+                            <option>Thông tin khai báo không khớp với ảnh giấy tờ</option>
+                            <option>Ảnh giấy tờ không rõ, bị lóa hoặc thiếu thông tin</option>
+                            <option>Giấy tờ hết hạn hoặc không đủ hiệu lực cho thời gian thuê</option>
+                            <option>Không xác định được giấy tờ thuộc cùng khách hàng</option>
+                            <option>Khác</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="kycAdditionalNote">Ghi chú thêm</label>
+                        <textarea class="form-control" id="kycAdditionalNote" name="additionalNote" rows="3" maxlength="500" placeholder="Ví dụ: Ảnh GPLX mặt sau bị mờ, vui lòng chụp lại rõ hơn."></textarea>
+                    </div>
+                    <button class="btn btn-outline-danger" type="submit" data-loading-text="Đang gửi yêu cầu cập nhật...">Yêu cầu cập nhật hồ sơ</button>
+                </form>
+            </div>
         }
         else
         {
-            <div class="alert alert-secondary mb-0">Hồ sơ này không còn ở trạng thái có thể duyệt toàn bộ. Hãy quay lại trang khách hàng để xem trạng thái từng giấy tờ.</div>
+            <div class="alert alert-secondary mb-0">Hồ sơ này không còn ở trạng thái có thể xử lý toàn bộ. Hãy quay lại hàng đợi KYC để chọn hồ sơ khác.</div>
         }
     </div>
 </section>
