@@ -1,32 +1,47 @@
 # eKYC Image Quality Gate
 
-SmartCar kiểm tra chất lượng ảnh giấy tờ **ngay trên trình duyệt** trước khi cho OCR hoặc chuyển sang nhập thủ công. Mục tiêu là loại ảnh xấu sớm, tránh xử lý/OCR/request không cần thiết và giúp Admin nhận được ảnh đủ rõ để đối chiếu.
+SmartCar kiểm tra chất lượng ảnh giấy tờ **ngay trên trình duyệt** trước khi cho OCR hoặc chuyển sang nhập thủ công. Mục tiêu là loại ảnh xấu sớm, tránh OCR/request không cần thiết và giúp OCR chỉ xử lý phần giấy tờ thay vì toàn bộ nền ảnh.
 
-## Các kiểm tra hiện tại
-
-- Độ phân giải tối thiểu: cạnh ngắn >= 400 px và cạnh dài >= 700 px.
-- Độ nét: dùng phương sai Laplacian trên ảnh đã thu nhỏ để phát hiện mờ/nhòe.
-- Độ sáng: kiểm tra độ sáng trung bình và tỷ lệ pixel quá tối.
-- Cháy sáng/lóa: kiểm tra tỷ lệ pixel gần trắng và vùng sáng cục bộ lớn.
-- Mức chi tiết: dùng mật độ cạnh làm heuristic để phát hiện ảnh có quá ít nội dung/giấy tờ quá nhỏ trong khung.
-- Hai mặt trùng nhau vẫn được chặn bởi `ekyc-guards.js` bằng SHA-256.
-
-Các ngưỡng nằm trong `wwwroot/js/ekyc-image-quality.js` và nên được hiệu chỉnh bằng bộ ảnh test thực tế của đồ án. Đây là heuristic nhằm cải thiện UX, không phải mô hình đánh giá chất lượng ảnh chuẩn ngân hàng.
-
-## Luồng
+## Pipeline hiện tại
 
 1. Người dùng chọn mặt trước và mặt sau.
-2. Browser phân tích ảnh bằng Canvas; không gọi server/API ngoài.
-3. Nếu một ảnh không đạt, OCR và xác minh thủ công đều bị chặn cho tới khi chọn ảnh khác.
-4. Nếu hai ảnh đạt, mới cho phép tiếp tục OCR.
-5. Sau OCR CCCD local, nếu đọc dưới 4/7 trường hoặc không có số CCCD 12 chữ số, nút sang bước khuôn mặt bị khóa và người dùng được yêu cầu chọn ảnh rõ hơn.
+2. Nếu ảnh đã là ảnh thẻ trực tiếp với tỉ lệ gần ID-1, SmartCar dùng toàn bộ ảnh.
+3. Nếu ảnh là ảnh chụp có nền, SmartCar tải OpenCV.js từ tài liệu chính thức của OpenCV và chạy **ngay trong browser** để tìm vùng hình chữ nhật giống thẻ ID.
+4. Hệ thống cắt nền, chỉnh phối cảnh và đưa riêng vùng giấy tờ về khung chuẩn trước khi đánh giá chất lượng.
+5. Chỉ khi vùng giấy tờ đạt chất lượng mới cho OCR chạy.
+6. Tesseract.js OCR trên ảnh đã cắt/chỉnh. Nếu còn thiếu dữ liệu, SmartCar có thể OCR thêm một số vùng chữ quan trọng như thông tin mặt trước, ngày cấp và MRZ. Các lần đọc bổ sung này vẫn chạy local, không gọi API OCR tính phí.
+7. Parser kiểm tra tính hợp lý của từng trường trước khi điền form; dữ liệu nghi ngờ được để trống thay vì coi là OCR thành công.
+
+## Các kiểm tra ảnh
+
+- Tìm được vùng giấy tờ/4 cạnh đủ rõ.
+- Số pixel thực tế của vùng thẻ đủ lớn: cạnh ngắn khoảng >= 320 px, cạnh dài >= 520 px.
+- Giấy tờ phải chiếm đủ diện tích ảnh: dưới khoảng 14% bị chặn; dưới khoảng 26% có cảnh báo chụp gần hơn.
+- Độ nét được tính **trên vùng thẻ đã cắt**, không còn bị nền gỗ/vân bàn làm chỉ số sắc nét cao giả.
+- Độ sáng, tỷ lệ pixel quá tối, cháy sáng và lóa được tính trên vùng thẻ.
+- Mật độ cạnh được tính trên vùng thẻ để đánh giá chữ/chi tiết có đủ rõ cho OCR hay không.
+- Hai mặt trùng nhau vẫn được chặn bởi `ekyc-guards.js` bằng SHA-256.
+
+Các ngưỡng nằm trong `wwwroot/js/ekyc-image-quality.js` và cần được tune bằng bộ ảnh test của đồ án. Đây là heuristic phục vụ UX/đồ án, không phải bộ tiêu chuẩn eKYC ngân hàng.
+
+## Kiểm tra dữ liệu sau OCR
+
+- Số CCCD phải đúng 12 chữ số.
+- Họ tên phải là chuỗi tên hợp lý, không nhận một ký tự/số như `3` thành họ tên.
+- Ngày sinh phải là ngày hợp lệ và phù hợp độ tuổi khách thuê.
+- Ngày cấp không được ở tương lai.
+- Ngày hết hạn phải là ngày hợp lệ và sau ngày cấp.
+- Địa chỉ phải là chuỗi văn bản hợp lý, không lấy MRZ hoặc nhãn `Có giá trị đến` làm địa chỉ.
+- MRZ mặt sau được kiểm tra check digit theo trọng số 7-3-1 trước khi dùng để đối chiếu ngày sinh/ngày hết hạn. Nhờ đó lỗi OCR kiểu đọc `2032` thành `2052` sẽ bị loại nếu check digit không khớp.
+
+UI dùng cụm `OCR cục bộ đọc hợp lệ X/7 trường`; X là số trường vượt qua validation, không chỉ là số giá trị Tesseract đã trả về.
 
 ## Lợi ích về request
 
-Quality gate chạy trước handler OCR nên ảnh mờ/tối/lóa/độ phân giải thấp không đi vào `/Ekyc/PreviewCitizenId` hoặc endpoint OCR provider. Khi sau này bật provider tính phí, lớp này giúp giảm request vô ích.
+Ảnh xấu bị chặn trước handler OCR/provider. Khi sau này bật FPT/VNPT hoặc provider tính phí, lớp này giúp giảm request vô ích. OpenCV.js và Tesseract.js có thể được tải từ CDN, nhưng **ảnh giấy tờ không được gửi tới OpenCV/Tesseract server**; việc phân tích ảnh diễn ra trong browser.
 
 ## Lưu ý
 
-- Mật độ cạnh chỉ là heuristic cho việc giấy tờ quá nhỏ/ít chi tiết, không phải nhận dạng chính xác bốn cạnh thẻ.
-- Không coi quality gate là xác thực CCCD thật.
+- Không coi quality gate hoặc OCR local là xác thực CCCD với cơ sở dữ liệu nhà nước.
 - Với đồ án, vẫn ưu tiên CCCD mô phỏng có watermark `SMARTCAR TEST DOCUMENT / KHÔNG CÓ GIÁ TRỊ`.
+- Ảnh chụp nên để đủ 4 cạnh, nền tương phản và giấy tờ chiếm phần lớn khung hình để OCR ổn định nhất.
