@@ -5,7 +5,7 @@ SmartCar hỗ trợ luồng eKYC cho khách hàng gồm:
 1. Chụp/tải CCCD mặt trước và mặt sau.
 2. OCR tự động đọc thông tin CCCD.
 3. Quay video selfie khoảng 5 giây.
-4. Kiểm tra liveness và face match với khuôn mặt trên CCCD.
+4. Kiểm tra liveness và face match giữa video với ảnh CCCD mặt trước.
 5. Gửi hồ sơ về trạng thái chờ Quản trị viên duyệt lần cuối.
 6. GPLX có thể dùng OCR để tự điền thông tin trước khi gửi.
 
@@ -20,7 +20,7 @@ SmartCar hỗ trợ luồng eKYC cho khách hàng gồm:
 - Kết quả liveness/face match được ghi rõ là mô phỏng.
 - Hồ sơ vẫn ở trạng thái chờ Quản trị viên duyệt.
 
-## Bật FPT.AI eKYC thật
+## Bật FPT.AI Reader thật
 
 Không commit API key vào GitHub. Cấu hình bằng biến môi trường hoặc secret trên máy chạy ứng dụng.
 
@@ -29,17 +29,30 @@ PowerShell:
 ```powershell
 $env:Ekyc__Mode="Fpt"
 $env:Ekyc__ApiKey="YOUR_FPT_AI_API_KEY"
-$env:Ekyc__BaseUrl="https://api.fpt.ai/vision/ekyc/be-stag"
 dotnet run --project src/SmartCar.Web
 ```
 
-Staging mặc định:
+Các endpoint mặc định đang dùng theo tài liệu FPT.AI Reader:
 
 ```text
-https://api.fpt.ai/vision/ekyc/be-stag
+CCCD OCR:  https://api.fpt.ai/vision/idr/vnm/
+GPLX OCR:  https://api.fpt.ai/vision/dlr/vnm
+Liveness:  https://api.fpt.ai/dmp/liveness/v3
 ```
 
-Khi được cấp quyền production, đổi BaseUrl theo tài liệu/tài khoản của nhà cung cấp. Không tự chuyển production trước khi credential được cấp đúng môi trường.
+Có thể override từng endpoint bằng:
+
+```powershell
+$env:Ekyc__CitizenIdOcrUrl="..."
+$env:Ekyc__DrivingLicenseOcrUrl="..."
+$env:Ekyc__LivenessUrl="..."
+```
+
+Luồng liveness gửi `video` selfie cùng ảnh CCCD mặt trước (`cmnd`) để FPT Reader vừa kiểm tra người thật vừa trả kết quả face match.
+
+## Yêu cầu media
+
+SmartCar giới hạn ảnh giấy tờ tối đa 5 MB/ảnh. Video selfie tối đa 10 MB và giao diện quay khoảng 5 giây. Khi dùng provider thật, nên quay đủ sáng, nhìn thẳng, chỉ có một khuôn mặt và để khuôn mặt chiếm phần đáng kể trong khung hình.
 
 ## Bảo mật dữ liệu
 
@@ -55,7 +68,7 @@ Phiên bản này **không auto-verify CCCD**. Dù AI đạt, CCCD vẫn đượ
 
 ## Threshold
 
-`Ekyc:FaceMatchThreshold` mặc định là `80`. Có thể điều chỉnh theo tài liệu/khuyến nghị của provider sau khi test dữ liệu thực tế.
+`Ekyc:FaceMatchThreshold` mặc định là `80`. Có thể điều chỉnh sau khi test dữ liệu thực tế và đối chiếu khuyến nghị của provider.
 
 ## Fallback thủ công
 
