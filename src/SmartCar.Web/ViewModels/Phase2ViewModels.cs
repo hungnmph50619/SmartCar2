@@ -36,6 +36,7 @@ public sealed class CitizenIdVerificationViewModel
     public DateTime? DateOfBirth { get; set; }
 
     [Required(ErrorMessage = "Vui lòng chọn giới tính.")]
+    [RegularExpression(@"^(Nam|Nữ|Khác)$", ErrorMessage = "Giới tính không hợp lệ.")]
     [StringLength(20)]
     [Display(Name = "Giới tính")]
     public string Gender { get; set; } = string.Empty;
@@ -70,11 +71,14 @@ public sealed class DrivingLicenseVerificationViewModel
     public string FullNameOnDocument { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số GPLX.")]
-    [StringLength(50, MinimumLength = 4, ErrorMessage = "Số GPLX phải có từ 4 đến 50 ký tự.")]
+    [RegularExpression(@"^[A-Za-z0-9]{4,20}$", ErrorMessage = "Số GPLX chỉ gồm chữ và số, từ 4 đến 20 ký tự, không có khoảng trắng.")]
     [Display(Name = "Số GPLX")]
     public string DocumentNumber { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng nhập hạng GPLX.")]
+    [Required(ErrorMessage = "Vui lòng chọn hạng GPLX.")]
+    [RegularExpression(
+        @"^(B|C1|C|D1|D2|D|BE|C1E|CE|D1E|D2E|DE|B1|B2|E|FB2|FC|FD|FE)$",
+        ErrorMessage = "Hạng GPLX không hợp lệ đối với xe ô tô.")]
     [StringLength(20, ErrorMessage = "Hạng GPLX không được vượt quá 20 ký tự.")]
     [Display(Name = "Hạng GPLX")]
     public string LicenseClass { get; set; } = string.Empty;
