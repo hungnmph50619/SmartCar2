@@ -67,10 +67,7 @@ public sealed class NotificationsController : Controller
         }
 
         await _notificationService.MarkReadAsync(id, userId, cancellationToken);
-        return RedirectToAction(
-            "Details",
-            "AdminCustomers",
-            new { id = customerId, tab = "documents" });
+        return RedirectToAction("Review", "AdminKyc", new { customerId });
     }
 
     [HttpPost]
