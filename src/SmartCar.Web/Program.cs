@@ -17,6 +17,7 @@ builder.Services.AddSingleton<IEkycResultStore, FileEkycResultStore>();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
+    options.Filters.Add(new StrictDocumentImageQualityFilter());
 });
 
 var app = builder.Build();
