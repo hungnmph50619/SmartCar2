@@ -1,5 +1,11 @@
 (() => {
     const textIncludes = (element, value) => (element?.textContent || '').toLowerCase().includes(value.toLowerCase());
+    const setText = (element, value) => {
+        if (element && element.textContent !== value) element.textContent = value;
+    };
+    const setClass = (element, value) => {
+        if (element && element.className !== value) element.className = value;
+    };
 
     const findLicenseSection = () => {
         const panel = document.querySelector('[data-ekyc-panel="license"]');
@@ -44,32 +50,29 @@
         const message = panel.querySelector('[data-license-message]');
         if (message && /ảnh chưa đạt|chưa cho gửi hồ sơ|chụp lại ảnh/i.test(message.textContent || '')) {
             message.classList.add('d-none');
-            message.textContent = '';
+            if (message.textContent) message.textContent = '';
         }
 
         const strictHost = panel.querySelector('[data-strict-quality-host]');
         if (strictHost) {
             const badge = strictHost.querySelector('[data-strict-quality-badge]');
             const body = strictHost.querySelector('[data-strict-quality-body]');
-            if (badge) {
-                badge.textContent = frontChosen || backChosen ? 'Chưa đủ ảnh' : 'Chưa kiểm tra';
-                badge.className = `badge ${frontChosen || backChosen ? 'bg-warning text-dark' : 'bg-secondary'}`;
-            }
+            const hasOne = frontChosen || backChosen;
+            setText(badge, hasOne ? 'Chưa đủ ảnh' : 'Chưa kiểm tra');
+            setClass(badge, `badge ${hasOne ? 'bg-warning text-dark' : 'bg-secondary'}`);
             if (body) {
-                body.className = 'small text-muted';
-                body.textContent = frontChosen || backChosen
+                setClass(body, 'small text-muted');
+                setText(body, hasOne
                     ? 'Đã chọn 1/2 ảnh. Hãy chọn nốt mặt còn lại trước khi kiểm tra chất lượng.'
-                    : 'Chọn đủ mặt trước và mặt sau. SmartCar chỉ kiểm tra chất lượng sau khi bạn đã chọn ảnh.';
+                    : 'Chọn đủ mặt trước và mặt sau. SmartCar chỉ kiểm tra chất lượng sau khi bạn đã chọn ảnh.');
             }
         }
 
         const qualityHost = panel.querySelector('[data-image-quality-host], [data-quality-host]');
         if (qualityHost && !frontChosen && !backChosen) {
             const badge = qualityHost.querySelector('.badge');
-            if (badge) {
-                badge.textContent = 'Chưa kiểm tra';
-                badge.className = 'badge bg-secondary';
-            }
+            setText(badge, 'Chưa kiểm tra');
+            setClass(badge, 'badge bg-secondary');
         }
     };
 
@@ -139,8 +142,15 @@
 
         const licensePanel = document.querySelector('[data-ekyc-panel="license"]');
         if (licensePanel) {
-            new MutationObserver(() => resetEmptyLicenseStates())
-                .observe(licensePanel, { childList: true, subtree: true, characterData: true });
+            let queued = false;
+            new MutationObserver(() => {
+                if (queued) return;
+                queued = true;
+                requestAnimationFrame(() => {
+                    queued = false;
+                    resetEmptyLicenseStates();
+                });
+            }).observe(licensePanel, { childList: true, subtree: true, characterData: true });
         }
         document.getElementById('license-front-file')?.addEventListener('change', resetEmptyLicenseStates);
         document.getElementById('license-back-file')?.addEventListener('change', resetEmptyLicenseStates);
