@@ -71,10 +71,17 @@
         }
 
         if (result.passed) {
-            badge.textContent = 'Đạt';
-            badge.className = 'badge bg-success';
-            body.className = 'small text-success';
-            body.textContent = '✓ Cả hai ảnh đạt điều kiện. SmartCar mới tiếp tục nhận diện giấy tờ và đọc QR/MRZ/OCR.';
+            if (result.testMode) {
+                badge.textContent = 'TEST';
+                badge.className = 'badge bg-warning text-dark';
+                body.className = 'small text-warning';
+                body.textContent = '🧪 Development Test Mode: bỏ qua đánh giá chất lượng ảnh để kiểm thử luồng. Chế độ bình thường vẫn kiểm tra ảnh nghiêm ngặt.';
+            } else {
+                badge.textContent = 'Đạt';
+                badge.className = 'badge bg-success';
+                body.className = 'small text-success';
+                body.textContent = '✓ Cả hai ảnh đạt điều kiện. SmartCar mới tiếp tục nhận diện giấy tờ và đọc QR/MRZ/OCR.';
+            }
             return;
         }
 
@@ -134,6 +141,14 @@
             const result = { passed: false, errors };
             panel.dataset.strictQuality = 'fail';
             panel.dataset.imageQuality = 'fail';
+            render(panel, result);
+            return result;
+        }
+
+        if (window.SmartCarKycTest?.active === true) {
+            const result = { passed: true, errors: [], testMode: true };
+            panel.dataset.strictQuality = 'pass';
+            panel.dataset.imageQuality = 'pass';
             render(panel, result);
             return result;
         }
@@ -224,7 +239,9 @@
             }
             if (body) {
                 body.className = 'small text-muted';
-                body.textContent = 'Ảnh mới sẽ được kiểm tra trước khi SmartCar đọc dữ liệu hoặc cho gửi hồ sơ.';
+                body.textContent = window.SmartCarKycTest?.active === true
+                    ? '🧪 Ảnh mẫu sẽ được chấp nhận trong Development Test Mode để kiểm thử luồng.'
+                    : 'Ảnh mới sẽ được kiểm tra trước khi SmartCar đọc dữ liệu hoặc cho gửi hồ sơ.';
             }
         }
     });
