@@ -7,6 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<ISecureDocumentStorage, SecureDocumentStorage>();
+builder.Services.Configure<EkycOptions>(builder.Configuration.GetSection("Ekyc"));
+builder.Services.AddHttpClient<IEkycService, EkycService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+});
+builder.Services.AddSingleton<IEkycResultStore, FileEkycResultStore>();
 builder.Services.AddControllersWithViews();
 
 var app = builder.Build();

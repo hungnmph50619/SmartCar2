@@ -61,6 +61,11 @@ public sealed class CitizenIdVerificationViewModel
     [Required(ErrorMessage = "Vui lòng chọn ảnh CCCD mặt sau.")]
     [Display(Name = "Ảnh CCCD mặt sau")]
     public IFormFile? BackImage { get; set; }
+
+    public string? EkycSessionId { get; set; }
+
+    [Display(Name = "Video khuôn mặt")]
+    public IFormFile? SelfieVideo { get; set; }
 }
 
 public sealed class DrivingLicenseVerificationViewModel
