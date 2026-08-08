@@ -21,14 +21,20 @@
 
         const provider = panel.querySelector('[data-ekyc-provider]');
         if (provider) {
-            provider.textContent = 'QR + MRZ · LOCAL';
-            provider.className = 'badge bg-info text-dark';
+            provider.textContent = window.SmartCarKycTest?.active === true ? 'KYC TEST · DEVELOPMENT' : 'QR + MRZ · LOCAL';
+            provider.className = window.SmartCarKycTest?.active === true
+                ? 'badge bg-warning text-dark'
+                : 'badge bg-info text-dark';
         }
 
         const notice = panel.querySelector('[data-ekyc-demo-notice]');
         if (notice) {
-            notice.className = 'alert alert-info py-2 small mb-3';
-            notice.innerHTML = '<strong>Đọc CCCD trên máy:</strong> thông tin được lấy từ mã QR mặt trước và đối chiếu với dòng MRZ mặt sau. Không dùng OCR toàn bộ CCCD và không đối soát với cơ sở dữ liệu nhà nước.';
+            notice.className = window.SmartCarKycTest?.active === true
+                ? 'alert alert-warning py-2 small mb-3'
+                : 'alert alert-info py-2 small mb-3';
+            notice.innerHTML = window.SmartCarKycTest?.active === true
+                ? '<strong>🧪 Development Test Mode:</strong> dữ liệu CCCD/QR/MRZ được mô phỏng để nhóm kiểm thử luồng. Đây không phải xác thực giấy tờ thật.'
+                : '<strong>Đọc CCCD trên máy:</strong> thông tin được lấy từ mã QR mặt trước và đối chiếu với dòng MRZ mặt sau. Không dùng OCR toàn bộ CCCD và không đối soát với cơ sở dữ liệu nhà nước.';
         }
         return true;
     };
@@ -259,10 +265,11 @@
         }
         const success = mode === 'success';
         const danger = mode === 'danger';
+        const testMode = window.SmartCarKycTest?.active === true;
         host.innerHTML = `<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
             <strong>Đọc dữ liệu CCCD</strong>
-            <span class="badge ${success ? 'bg-success' : danger ? 'bg-danger' : 'bg-secondary'}">${success ? 'QR + MRZ khớp' : danger ? 'Không đọc được' : 'Đang đọc'}</span>
-        </div><div class="small mt-2 ${success ? 'text-success' : danger ? 'text-danger' : 'text-muted'}">${detail}</div>`;
+            <span class="badge ${success ? (testMode ? 'bg-warning text-dark' : 'bg-success') : danger ? 'bg-danger' : 'bg-secondary'}">${success ? (testMode ? 'TEST DATA' : 'QR + MRZ khớp') : danger ? 'Không đọc được' : 'Đang đọc'}</span>
+        </div><div class="small mt-2 ${success ? (testMode ? 'text-warning' : 'text-success') : danger ? 'text-danger' : 'text-muted'}">${detail}</div>`;
     };
 
     const runQrMrz = async (panel, button) => {
@@ -274,20 +281,29 @@
             return;
         }
 
+        const testMode = window.SmartCarKycTest?.active === true;
         busy = true;
         button.disabled = true;
         const oldText = button.textContent;
-        button.textContent = 'Đang đọc QR + MRZ...';
+        button.textContent = testMode ? 'Đang nạp CCCD mẫu...' : 'Đang đọc QR + MRZ...';
         clearMessage(panel);
-        renderQrMrzStatus(panel, 'loading', 'Đang giải mã QR mặt trước và đọc riêng vùng MRZ mặt sau...');
+        renderQrMrzStatus(
+            panel,
+            'loading',
+            testMode
+                ? 'Đang nạp dữ liệu CCCD mẫu Development...'
+                : 'Đang giải mã QR mặt trước và đọc riêng vùng MRZ mặt sau...'
+        );
 
         try {
-            const [frontQuality, backQuality] = await Promise.all([qualityOk(front), qualityOk(back)]);
+            const [frontQuality, backQuality] = testMode
+                ? [true, true]
+                : await Promise.all([qualityOk(front), qualityOk(back)]);
             if (!frontQuality || !backQuality) {
                 throw new Error('Ảnh chưa đủ rõ để đọc QR/MRZ. Hãy chụp gần hơn, tránh lóa và để trọn 4 góc giấy tờ.');
             }
 
-            const mrzText = await readMrzText(back);
+            const mrzText = testMode ? 'SMARTCAR_TEST_MRZ' : await readMrzText(back);
             if (!mrzText) {
                 const error = new Error('Không đọc được MRZ mặt sau. Hãy chụp gần hơn để 3 dòng ký tự ở cuối thẻ rõ nét; nếu vẫn không đọc được, hãy nhập thủ công.');
                 error.code = 'MRZ_NOT_READABLE';
@@ -315,11 +331,19 @@
 
             const state = panel.querySelector('[data-ekyc-ocr-state]');
             if (state) {
-                state.textContent = '✓ Đã lấy thông tin từ QR mặt trước và đối chiếu MRZ mặt sau. Hãy kiểm tra lại trước khi tiếp tục.';
-                state.className = 'small text-success mb-3';
+                state.textContent = result.testMode
+                    ? '🧪 Đã nạp dữ liệu CCCD mẫu Development. Hãy tiếp tục để kiểm thử luồng.'
+                    : '✓ Đã lấy thông tin từ QR mặt trước và đối chiếu MRZ mặt sau. Hãy kiểm tra lại trước khi tiếp tục.';
+                state.className = `small ${result.testMode ? 'text-warning' : 'text-success'} mb-3`;
             }
-            renderQrMrzStatus(panel, 'success', 'QR mặt trước và MRZ mặt sau có thông tin khớp nhau. SmartCar đã tự điền dữ liệu có cấu trúc; hồ sơ vẫn cần Quản trị viên duyệt.');
-            showMessage(panel, result.message || 'Đã đọc QR + MRZ. Vui lòng kiểm tra thông tin.', 'success');
+            renderQrMrzStatus(
+                panel,
+                'success',
+                result.testMode
+                    ? '🧪 Dữ liệu CCCD mẫu đã được nạp để kiểm thử luồng Development. Không phải kết quả xác thực giấy tờ thật.'
+                    : 'QR mặt trước và MRZ mặt sau có thông tin khớp nhau. SmartCar đã tự điền dữ liệu có cấu trúc; hồ sơ vẫn cần Quản trị viên duyệt.'
+            );
+            showMessage(panel, result.message || 'Đã đọc QR + MRZ. Vui lòng kiểm tra thông tin.', result.testMode ? 'warning' : 'success');
             showStep(panel, 2);
         } catch (error) {
             const session = panel.querySelector('[data-ekyc-session]');
@@ -349,7 +373,7 @@
         if (manual) {
             const panel = manual.closest('[data-ekyc-panel="citizen"]');
             if (!panel) return;
-            // Manual không cần chạy classifier OCR giấy tờ cũ; quality gate vẫn được giữ.
+            // Manual không cần chạy classifier OCR giấy tờ cũ; quality gate vẫn được giữ ở Normal Mode.
             panel.dataset.documentGateBypass = 'true';
         }
     }, true);
