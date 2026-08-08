@@ -37,6 +37,8 @@ public sealed class VehiclesController : Controller
         [FromQuery] VehicleSearchViewModel model,
         CancellationToken cancellationToken)
     {
+        model.SortBy = string.IsNullOrWhiteSpace(model.SortBy) ? "price_asc" : model.SortBy;
+
         await LoadBrandsAsync(model.BrandId, cancellationToken);
         ViewBag.Search = model;
 
@@ -51,14 +53,15 @@ public sealed class VehiclesController : Controller
             ModelState.AddModelError(nameof(model.ReturnDate), "Ngày giờ trả xe phải sau ngày giờ nhận xe.");
         }
 
-        if (model.Seats is <= 0)
+        if (model.MinDailyPrice.HasValue && model.MaxDailyPrice.HasValue &&
+            model.MinDailyPrice.Value > model.MaxDailyPrice.Value)
         {
-            ModelState.AddModelError(nameof(model.Seats), "Số chỗ tối thiểu phải lớn hơn 0.");
+            ModelState.AddModelError(nameof(model.MaxDailyPrice), "Giá tối đa phải lớn hơn hoặc bằng giá tối thiểu.");
         }
 
-        if (model.MaxDailyPrice is <= 0)
+        if (model.MinManufactureYear.HasValue && model.MinManufactureYear.Value > DateTime.Now.Year)
         {
-            ModelState.AddModelError(nameof(model.MaxDailyPrice), "Giá thuê tối đa phải lớn hơn 0.");
+            ModelState.AddModelError(nameof(model.MinManufactureYear), "Năm sản xuất tối thiểu không được lớn hơn năm hiện tại.");
         }
 
         if (!ModelState.IsValid)
@@ -76,7 +79,40 @@ public sealed class VehiclesController : Controller
                 model.MaxDailyPrice),
             cancellationToken);
 
-        return View(vehicles);
+        IEnumerable<VehicleDto> filteredVehicles = vehicles;
+
+        if (!string.IsNullOrWhiteSpace(model.FuelType))
+        {
+            filteredVehicles = filteredVehicles.Where(vehicle =>
+                string.Equals(vehicle.FuelType, model.FuelType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (model.MinDailyPrice.HasValue)
+        {
+            filteredVehicles = filteredVehicles.Where(vehicle =>
+                vehicle.DailyPrice >= model.MinDailyPrice.Value);
+        }
+
+        if (model.MinManufactureYear.HasValue)
+        {
+            filteredVehicles = filteredVehicles.Where(vehicle =>
+                vehicle.ManufactureYear >= model.MinManufactureYear.Value);
+        }
+
+        filteredVehicles = model.SortBy switch
+        {
+            "price_desc" => filteredVehicles
+                .OrderByDescending(vehicle => vehicle.DailyPrice)
+                .ThenByDescending(vehicle => vehicle.ManufactureYear),
+            "year_desc" => filteredVehicles
+                .OrderByDescending(vehicle => vehicle.ManufactureYear)
+                .ThenBy(vehicle => vehicle.DailyPrice),
+            _ => filteredVehicles
+                .OrderBy(vehicle => vehicle.DailyPrice)
+                .ThenByDescending(vehicle => vehicle.ManufactureYear)
+        };
+
+        return View(filteredVehicles.ToArray());
     }
 
     [HttpGet]
