@@ -9,6 +9,7 @@ namespace SmartCar.Web.Controllers;
 [Authorize]
 public sealed class NotificationsController : Controller
 {
+    private const string KycWorkPrefix = "Hồ sơ KYC chờ duyệt|";
     private readonly INotificationService _notificationService;
 
     public NotificationsController(INotificationService notificationService)
@@ -76,8 +77,24 @@ public sealed class NotificationsController : Controller
             return Challenge();
         }
 
-        await _notificationService.MarkAllReadAsync(userId, cancellationToken);
-        TempData["SuccessMessage"] = "Đã đánh dấu tất cả thông báo là đã đọc.";
+        if (User.IsInRole(RoleNames.Admin))
+        {
+            var notifications = await _notificationService.GetAsync(userId, cancellationToken);
+            foreach (var item in notifications.Where(item =>
+                         !item.IsRead &&
+                         !item.Title.StartsWith(KycWorkPrefix, StringComparison.Ordinal)))
+            {
+                await _notificationService.MarkReadAsync(item.NotificationId, userId, cancellationToken);
+            }
+
+            TempData["SuccessMessage"] = "Đã đánh dấu các thông báo thông thường là đã đọc. Hồ sơ KYC chờ duyệt vẫn được giữ cho đến khi xử lý.";
+        }
+        else
+        {
+            await _notificationService.MarkAllReadAsync(userId, cancellationToken);
+            TempData["SuccessMessage"] = "Đã đánh dấu tất cả thông báo là đã đọc.";
+        }
+
         return RedirectToAction(nameof(Index));
     }
 }
