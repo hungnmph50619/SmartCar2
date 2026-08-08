@@ -1,12 +1,18 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
 @using SmartCar.Application.Features.Notifications
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
 @using SmartCar.Infrastructure.Identity
+@using SmartCar.Infrastructure.Persistence
 @inject UserManager<ApplicationUser> UserManager
 @inject INotificationService NotificationService
+@inject ApplicationDbContext AdminDbContext
 @{
     ApplicationUser? currentUser = null;
     var unreadNotificationCount = 0;
+    var pendingKycCount = 0;
 
     if (User.Identity?.IsAuthenticated == true)
     {
@@ -17,6 +23,26 @@
         {
             unreadNotificationCount = await NotificationService.GetUnreadCountAsync(currentUserId);
         }
+
+        if (User.IsInRole(RoleNames.Admin))
+        {
+            var requiredKycTypes = new[]
+            {
+                DocumentTypes.CitizenId,
+                DocumentTypes.CitizenIdBack,
+                DocumentTypes.DrivingLicense,
+                DocumentTypes.DrivingLicenseBack
+            };
+
+            pendingKycCount = await AdminDbContext.CustomerDocuments
+                .AsNoTracking()
+                .Where(document =>
+                    document.Status == DocumentStatus.Pending &&
+                    requiredKycTypes.Contains(document.DocumentType))
+                .GroupBy(document => document.CustomerId)
+                .Where(group => group.Select(document => document.DocumentType).Distinct().Count() == requiredKycTypes.Length)
+                .CountAsync();
+        }
     }
 
     var displayName = !string.IsNullOrWhiteSpace(currentUser?.FullName)
@@ -26,7 +52,7 @@
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
 
     var bookingActive = new[] { "AdminBookings", "AdminBookingOperations", "Handovers", "Returns" }.Contains(currentController);
-    var customerActive = currentController == "AdminDocuments";
+    var customerActive = new[] { "AdminCustomers", "AdminDocuments", "AdminKyc" }.Contains(currentController);
     var vehicleActive = new[] { "AdminVehicles", "Brands", "VehicleDocuments", "Maintenance", "Incidents" }.Contains(currentController);
     var businessActive = new[] { "Promotions", "Reports" }.Contains(currentController);
     var systemActive = new[] { "Notifications", "AuditLogs", "Profile" }.Contains(currentController);
@@ -85,10 +111,19 @@
 
                 <div class="admin-nav-section">
                     <div class="admin-nav-heading">Khách hàng</div>
-                    <a class="admin-nav-link @(customerActive ? "active" : string.Empty)"
-                       asp-controller="AdminDocuments" asp-action="Index">
+                    <a class="admin-nav-link @(currentController == "AdminCustomers" ? "active" : string.Empty)"
+                       asp-controller="AdminCustomers" asp-action="Index">
+                        <span class="admin-nav-icon">◎</span>
+                        <span>Quản lý khách hàng</span>
+                    </a>
+                    <a class="admin-nav-link @(currentController is "AdminKyc" or "AdminDocuments" ? "active" : string.Empty)"
+                       asp-controller="AdminKyc" asp-action="Index">
                         <span class="admin-nav-icon">✓</span>
-                        <span>Xác minh CCCD/GPLX</span>
+                        <span>KYC chờ duyệt</span>
+                        @if (pendingKycCount > 0)
+                        {
+                            <span class="badge rounded-pill text-bg-warning ms-auto">@(pendingKycCount > 99 ? "99+" : pendingKycCount)</span>
+                        }
                     </a>
                 </div>
 
@@ -175,6 +210,15 @@
                 </div>
 
                 <div class="admin-topbar-actions">
+                    @if (pendingKycCount > 0)
+                    {
+                        <a class="admin-topbar-link" asp-controller="AdminKyc" asp-action="Index" aria-label="KYC chờ duyệt">
+                            <span aria-hidden="true">✓</span>
+                            <span>KYC chờ duyệt</span>
+                            <span class="admin-notification-count bg-warning text-dark">@(pendingKycCount > 99 ? "99+" : pendingKycCount)</span>
+                        </a>
+                    }
+
                     <a class="admin-topbar-link" asp-controller="Notifications" asp-action="Index" aria-label="Thông báo">
                         <span aria-hidden="true">◇</span>
                         <span>Thông báo</span>
