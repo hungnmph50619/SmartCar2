@@ -10,6 +10,7 @@ public sealed class DashboardDto
     public int InspectionVehicles { get; init; }
     public int MaintenanceVehicles { get; init; }
     public int PendingBookings { get; init; }
+    public int PendingKycPackages { get; init; }
     public int TodayPickups { get; init; }
     public int TodayReturns { get; init; }
     public int ActiveRentals { get; init; }
