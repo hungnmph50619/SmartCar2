@@ -1,9 +1,13 @@
+using System.Globalization;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Audits;
+using SmartCar.Application.Features.Documents;
+using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure.Identity;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
@@ -20,17 +24,23 @@ public sealed class ProfileSettingsController : Controller
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IWebHostEnvironment _environment;
     private readonly IAuditService _auditService;
+    private readonly IUserBankAccountService _bankAccountService;
+    private readonly IDocumentService _documentService;
 
     public ProfileSettingsController(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         IWebHostEnvironment environment,
-        IAuditService auditService)
+        IAuditService auditService,
+        IUserBankAccountService bankAccountService,
+        IDocumentService documentService)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _environment = environment;
         _auditService = auditService;
+        _bankAccountService = bankAccountService;
+        _documentService = documentService;
     }
 
     [HttpPost]
@@ -108,6 +118,79 @@ public sealed class ProfileSettingsController : Controller
             DeletePhysicalAvatar(newAvatarPath);
             throw;
         }
+    }
+
+    [Authorize(Roles = RoleNames.Customer)]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveBankAccount(
+        BankAccountViewModel model,
+        int? returnVehicleId,
+        DateTime? pickupDate,
+        DateTime? returnDate,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return Challenge();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            var errors = ModelState.Values
+                .SelectMany(value => value.Errors)
+                .Select(error => error.ErrorMessage)
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .Distinct()
+                .ToList();
+            TempData["ErrorMessage"] = errors.Count > 0
+                ? string.Join("; ", errors)
+                : "Vui lòng kiểm tra lại thông tin tài khoản ngân hàng.";
+            return RedirectToProfile("banking", returnVehicleId, pickupDate, returnDate);
+        }
+
+        try
+        {
+            await _bankAccountService.SaveDefaultAsync(
+                user.Id,
+                model.BankCode,
+                model.AccountNumber,
+                model.AccountHolderName,
+                cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            TempData["ErrorMessage"] = ex.Message;
+            return RedirectToProfile("banking", returnVehicleId, pickupDate, returnDate);
+        }
+
+        var documents = await _documentService.GetCustomerDocumentsAsync(user.Id, cancellationToken);
+        var citizenName = documents
+            .FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId)
+            ?.FullNameOnDocument;
+        var referenceName = string.IsNullOrWhiteSpace(citizenName) ? user.FullName : citizenName;
+        var holderMatches = string.Equals(
+            NormalizePersonName(referenceName ?? string.Empty),
+            NormalizePersonName(model.AccountHolderName),
+            StringComparison.Ordinal);
+
+        await _auditService.WriteAsync(
+            user.Id,
+            "UpdateBankAccount",
+            "UserBankAccount",
+            user.Id,
+            $"Cập nhật tài khoản nhận hoàn tiền tại ngân hàng {model.BankCode}; số tài khoản kết thúc bằng {LastFour(model.AccountNumber)}.",
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
+
+        TempData["SuccessMessage"] = "Đã lưu tài khoản ngân hàng mặc định để nhận các khoản hoàn tiền từ SmartCar.";
+        if (!holderMatches)
+        {
+            TempData["WarningMessage"] = "Tên chủ tài khoản ngân hàng chưa khớp với tên trên hồ sơ CCCD. Hệ thống vẫn lưu nhưng quản trị viên có thể yêu cầu bạn kiểm tra lại trước khi hoàn tiền.";
+        }
+
+        return RedirectToProfile("banking", returnVehicleId, pickupDate, returnDate);
     }
 
     [HttpPost]
@@ -215,5 +298,22 @@ public sealed class ProfileSettingsController : Controller
         {
             System.IO.File.Delete(fullPath);
         }
+    }
+
+    private static string NormalizePersonName(string value)
+    {
+        var decomposed = value.Trim().Normalize(NormalizationForm.FormD);
+        var characters = decomposed
+            .Where(character =>
+                CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark &&
+                char.IsLetterOrDigit(character))
+            .Select(char.ToUpperInvariant);
+        return new string(characters.ToArray());
+    }
+
+    private static string LastFour(string accountNumber)
+    {
+        var digits = new string(accountNumber.Where(char.IsDigit).ToArray());
+        return digits.Length <= 4 ? digits : digits[^4..];
     }
 }
