@@ -15,9 +15,9 @@ public sealed class ProfileViewModel
     [Display(Name = "Email")]
     public string Email { get; set; } = string.Empty;
 
-    [Phone(ErrorMessage = "Số điện thoại không đúng định dạng.")]
-    [StringLength(20, ErrorMessage = "Số điện thoại không được vượt quá 20 ký tự.")]
-    [Display(Name = "Số điện thoại")]
+    [Required(ErrorMessage = "Vui lòng nhập số điện thoại liên hệ.")]
+    [RegularExpression(@"^(0|\+84)[0-9]{9}$", ErrorMessage = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0, hoặc dùng mã quốc gia +84.")]
+    [Display(Name = "Số điện thoại liên hệ")]
     public string PhoneNumber { get; set; } = string.Empty;
 
     [StringLength(300, ErrorMessage = "Địa chỉ không được vượt quá 300 ký tự.")]
