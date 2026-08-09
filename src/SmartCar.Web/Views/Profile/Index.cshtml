@@ -1,11 +1,20 @@
 @model SmartCar.Web.ViewModels.ProfileViewModel
+@using Microsoft.AspNetCore.Identity
 @using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
+@using SmartCar.Infrastructure.Identity
+@inject UserManager<ApplicationUser> UserManager
 @{
     ViewData["Title"] = "Hồ sơ cá nhân";
+
+    var currentUser = await UserManager.GetUserAsync(User);
     var avatarInitial = Model.FullName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
+    var avatarPath = currentUser?.AvatarPath;
     var isCustomer = User.IsInRole(RoleNames.Customer);
-    var showDocuments = isCustomer && Model.ActiveTab == "documents";
+    var requestedTab = Context.Request.Query["tab"].ToString();
+    var showSecurity = string.Equals(requestedTab, "security", StringComparison.OrdinalIgnoreCase);
+    var showDocuments = isCustomer && !showSecurity && Model.ActiveTab == "documents";
+    var showProfile = !showDocuments && !showSecurity;
 
     var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
     var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
@@ -20,25 +29,68 @@
     var drivingLicense = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
     var drivingLicenseBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
-    var citizenVerified = citizenFront is not null &&
-                          citizenBack is not null &&
-                          citizenFront.Status == DocumentStatus.Verified &&
-                          citizenBack.Status == DocumentStatus.Verified &&
-                          citizenFront.HasRequiredData &&
-                          citizenBack.HasRequiredData &&
-                          citizenFront.ExpiryDate.HasValue &&
+    var citizenVerifiedByAdmin = citizenFront is not null &&
+                                 citizenBack is not null &&
+                                 citizenFront.Status == DocumentStatus.Verified &&
+                                 citizenBack.Status == DocumentStatus.Verified &&
+                                 citizenFront.HasRequiredData &&
+                                 citizenBack.HasRequiredData;
+    var citizenVerified = citizenVerifiedByAdmin &&
+                          citizenFront!.ExpiryDate.HasValue &&
                           citizenFront.ExpiryDate.Value.Date >= requiredValidThrough;
+    var citizenPending = citizenFront?.Status == DocumentStatus.Pending || citizenBack?.Status == DocumentStatus.Pending;
+    var citizenRejected = citizenFront?.Status == DocumentStatus.Rejected || citizenBack?.Status == DocumentStatus.Rejected;
+    var citizenNeedsRenewal = citizenVerifiedByAdmin && !citizenVerified;
 
-    var licenseVerified = drivingLicense is not null &&
-                          drivingLicenseBack is not null &&
-                          drivingLicense.Status == DocumentStatus.Verified &&
-                          drivingLicenseBack.Status == DocumentStatus.Verified &&
-                          drivingLicense.HasRequiredData &&
-                          drivingLicenseBack.HasRequiredData &&
-                          drivingLicense.ExpiryDate.HasValue &&
+    var licenseVerifiedByAdmin = drivingLicense is not null &&
+                                 drivingLicenseBack is not null &&
+                                 drivingLicense.Status == DocumentStatus.Verified &&
+                                 drivingLicenseBack.Status == DocumentStatus.Verified &&
+                                 drivingLicense.HasRequiredData &&
+                                 drivingLicenseBack.HasRequiredData;
+    var licenseVerified = licenseVerifiedByAdmin &&
+                          drivingLicense!.ExpiryDate.HasValue &&
                           drivingLicense.ExpiryDate.Value.Date >= requiredValidThrough;
+    var licensePending = drivingLicense?.Status == DocumentStatus.Pending || drivingLicenseBack?.Status == DocumentStatus.Pending;
+    var licenseRejected = drivingLicense?.Status == DocumentStatus.Rejected || drivingLicenseBack?.Status == DocumentStatus.Rejected;
+    var licenseNeedsRenewal = licenseVerifiedByAdmin && !licenseVerified;
 
+    string StepStatus(bool verified, bool rejected, bool pending, bool needsRenewal) =>
+        verified ? "Đã xác minh" :
+        rejected || needsRenewal ? "Cần cập nhật" :
+        pending ? "Chờ xác minh" :
+        "Chưa gửi";
+
+    string StepBadgeClass(string status) => status switch
+    {
+        "Đã xác minh" => "bg-success",
+        "Chờ xác minh" => "bg-warning text-dark",
+        "Cần cập nhật" => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    var citizenStatus = StepStatus(citizenVerified, citizenRejected, citizenPending, citizenNeedsRenewal);
+    var licenseStatus = StepStatus(licenseVerified, licenseRejected, licensePending, licenseNeedsRenewal);
     var verifiedSteps = (citizenVerified ? 1 : 0) + (licenseVerified ? 1 : 0);
+    var isFullyVerified = verifiedSteps == 2;
+    var hasKycProblem = citizenRejected || licenseRejected || citizenNeedsRenewal || licenseNeedsRenewal;
+    var hasPendingKyc = citizenPending || licensePending;
+    var overallKycStatus = isFullyVerified
+        ? "Đã xác minh"
+        : hasKycProblem
+            ? "Cần cập nhật"
+            : hasPendingKyc
+                ? "Đang chờ xác minh"
+                : "Chưa xác minh";
+    var overallKycBadge = isFullyVerified
+        ? "bg-success"
+        : hasKycProblem
+            ? "bg-danger"
+            : hasPendingKyc
+                ? "bg-warning text-dark"
+                : "bg-secondary";
+    var rejectionReason = citizenFront?.RejectionReason ?? citizenBack?.RejectionReason ??
+                          drivingLicense?.RejectionReason ?? drivingLicenseBack?.RejectionReason;
 }
 
 <div class="profile-shell py-3">
@@ -46,7 +98,7 @@
         <div>
             <span class="section-eyebrow">TÀI KHOẢN SMARTCAR</span>
             <h1 class="h2 fw-bold mb-1">Hồ sơ cá nhân</h1>
-            <p class="text-muted mb-0">Quản lý thông tin liên hệ và hồ sơ giấy tờ dùng khi thuê xe.</p>
+            <p class="text-muted mb-0">Quản lý thông tin liên hệ, hồ sơ giấy tờ và bảo mật tài khoản.</p>
         </div>
         @if (isCustomer)
         {
@@ -56,17 +108,17 @@
         }
     </div>
 
-    @if (isCustomer)
-    {
-        <nav class="nav nav-pills gap-2 mb-4" aria-label="Các phần của hồ sơ cá nhân">
-            <a class="nav-link @(!showDocuments ? "active" : string.Empty)"
-               asp-action="Index"
-               asp-route-tab="profile"
-               asp-route-returnVehicleId="@returnVehicleId"
-               asp-route-pickupDate="@returnPickupRoute"
-               asp-route-returnDate="@returnDateRoute">
-                Thông tin cá nhân
-            </a>
+    <nav class="nav nav-pills gap-2 mb-4 profile-tabs" aria-label="Các phần của hồ sơ cá nhân">
+        <a class="nav-link @(showProfile ? "active" : string.Empty)"
+           asp-action="Index"
+           asp-route-tab="profile"
+           asp-route-returnVehicleId="@returnVehicleId"
+           asp-route-pickupDate="@returnPickupRoute"
+           asp-route-returnDate="@returnDateRoute">
+            Thông tin cá nhân
+        </a>
+        @if (isCustomer)
+        {
             <a class="nav-link @(showDocuments ? "active" : string.Empty)"
                asp-action="Index"
                asp-route-tab="documents"
@@ -78,24 +130,150 @@
                     @verifiedSteps/2
                 </span>
             </a>
-        </nav>
-    }
+        }
+        <a class="nav-link @(showSecurity ? "active" : string.Empty)"
+           asp-action="Index"
+           asp-route-tab="security"
+           asp-route-returnVehicleId="@returnVehicleId"
+           asp-route-pickupDate="@returnPickupRoute"
+           asp-route-returnDate="@returnDateRoute">
+            Bảo mật
+        </a>
+    </nav>
 
     @if (showDocuments)
     {
         <partial name="_DocumentsTab" model="Model" />
     }
+    else if (showSecurity)
+    {
+        <div class="row g-4 align-items-stretch">
+            <div class="col-lg-4">
+                <section class="profile-card h-100">
+                    <div class="profile-header flex-column align-items-start">
+                        <div class="security-icon" aria-hidden="true">🔒</div>
+                        <div>
+                            <h2 class="h4 fw-bold mb-1">Bảo mật tài khoản</h2>
+                            <p class="text-muted mb-0">Thay đổi mật khẩu định kỳ để bảo vệ tài khoản SmartCar.</p>
+                        </div>
+                    </div>
+                    <div class="profile-body">
+                        <div class="security-tip">
+                            <strong>Mật khẩu SmartCar cần:</strong>
+                            <span>Ít nhất 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.</span>
+                        </div>
+                        <div class="security-tip mt-3">
+                            <strong>Sau khi đổi mật khẩu</strong>
+                            <span>Phiên đăng nhập hiện tại vẫn được giữ để bạn tiếp tục sử dụng hệ thống.</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <div class="col-lg-8">
+                <form asp-controller="ProfileSettings"
+                      asp-action="ChangePassword"
+                      method="post"
+                      class="card card-body shadow-sm border-0 h-100 profile-form-card"
+                      data-loading-form>
+                    @if (hasReturnContext)
+                    {
+                        <input type="hidden" name="returnVehicleId" value="@returnVehicleId" />
+                        <input type="hidden" name="pickupDate" value="@returnPickupRoute" />
+                        <input type="hidden" name="returnDate" value="@returnDateRoute" />
+                    }
+
+                    <div class="mb-4">
+                        <h2 class="h5 mb-1">Đổi mật khẩu</h2>
+                        <p class="text-muted mb-0">Bạn cần xác nhận mật khẩu hiện tại trước khi đặt mật khẩu mới.</p>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="currentPassword" class="form-label fw-semibold">Mật khẩu hiện tại</label>
+                            <input id="currentPassword"
+                                   name="CurrentPassword"
+                                   type="password"
+                                   class="form-control"
+                                   autocomplete="current-password"
+                                   required />
+                        </div>
+                        <div class="col-md-6">
+                            <label for="newPassword" class="form-label fw-semibold">Mật khẩu mới</label>
+                            <input id="newPassword"
+                                   name="NewPassword"
+                                   type="password"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   minlength="8"
+                                   required />
+                        </div>
+                        <div class="col-md-6">
+                            <label for="confirmPassword" class="form-label fw-semibold">Xác nhận mật khẩu mới</label>
+                            <input id="confirmPassword"
+                                   name="ConfirmPassword"
+                                   type="password"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   minlength="8"
+                                   required />
+                        </div>
+                    </div>
+
+                    <div class="mt-4 d-flex justify-content-end">
+                        <button class="btn btn-primary" type="submit" data-loading-text="Đang đổi mật khẩu...">
+                            Đổi mật khẩu
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    }
     else
     {
-        <div class="row g-4">
+        <div class="row g-4 align-items-stretch">
             <div class="col-lg-4">
                 <section class="profile-card h-100">
                     <div class="profile-header flex-column text-center">
-                        <div class="profile-avatar mb-3" aria-hidden="true">@avatarInitial</div>
+                        @if (!string.IsNullOrWhiteSpace(avatarPath))
+                        {
+                            <img src="@avatarPath" alt="Ảnh đại diện của @Model.FullName" class="profile-avatar profile-avatar-photo mb-3" />
+                        }
+                        else
+                        {
+                            <div class="profile-avatar mb-3" aria-hidden="true">@avatarInitial</div>
+                        }
                         <div>
                             <h2 class="h4 fw-bold mb-1">@Model.FullName</h2>
                             <p class="text-muted mb-0">@Model.Email</p>
                         </div>
+
+                        <form asp-controller="ProfileSettings"
+                              asp-action="UploadAvatar"
+                              method="post"
+                              enctype="multipart/form-data"
+                              class="avatar-upload-form mt-3 w-100"
+                              data-loading-form>
+                            @if (hasReturnContext)
+                            {
+                                <input type="hidden" name="returnVehicleId" value="@returnVehicleId" />
+                                <input type="hidden" name="pickupDate" value="@returnPickupRoute" />
+                                <input type="hidden" name="returnDate" value="@returnDateRoute" />
+                            }
+                            <label class="btn btn-sm btn-outline-primary avatar-file-button mb-0" for="avatarFile">
+                                Chọn ảnh đại diện
+                            </label>
+                            <input id="avatarFile"
+                                   name="avatar"
+                                   type="file"
+                                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                                   class="visually-hidden"
+                                   data-avatar-input />
+                            <button class="btn btn-sm btn-primary" type="submit" data-avatar-submit disabled data-loading-text="Đang lưu ảnh...">
+                                Lưu ảnh
+                            </button>
+                            <small class="text-muted d-block mt-2" data-avatar-file-name>JPG, PNG, WEBP · tối đa 2 MB</small>
+                        </form>
                     </div>
                     <div class="profile-body">
                         <div class="profile-detail">
@@ -105,26 +283,38 @@
 
                         @if (isCustomer)
                         {
-                            <div class="profile-detail mt-3">
-                                <span>Hồ sơ thuê xe</span>
-                                <strong>
-                                    @(verifiedSteps == 2
-                                        ? "Đã duyệt đầy đủ"
-                                        : $"Đã duyệt {verifiedSteps}/2 giấy tờ")
-                                </strong>
+                            <div class="profile-kyc-summary mt-3">
+                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                    <span class="small text-muted fw-semibold text-uppercase">Xác minh danh tính</span>
+                                    <span class="badge @overallKycBadge">@overallKycStatus</span>
+                                </div>
+                                <div class="profile-kyc-row">
+                                    <span>CCCD</span>
+                                    <span class="badge @StepBadgeClass(citizenStatus)">@citizenStatus</span>
+                                </div>
+                                <div class="profile-kyc-row">
+                                    <span>GPLX</span>
+                                    <span class="badge @StepBadgeClass(licenseStatus)">@licenseStatus</span>
+                                </div>
+                                <div class="small text-muted mt-2">@verifiedSteps/2 loại giấy tờ đủ điều kiện thuê xe.</div>
+
+                                @if (!string.IsNullOrWhiteSpace(rejectionReason) && hasKycProblem)
+                                {
+                                    <div class="profile-kyc-reason mt-3">
+                                        <strong>Lý do cần cập nhật:</strong>
+                                        <span>@rejectionReason</span>
+                                    </div>
+                                }
                             </div>
 
-                            @if (verifiedSteps < 2)
-                            {
-                                <a class="btn btn-sm btn-outline-primary mt-3"
-                                   asp-action="Index"
-                                   asp-route-tab="documents"
-                                   asp-route-returnVehicleId="@returnVehicleId"
-                                   asp-route-pickupDate="@returnPickupRoute"
-                                   asp-route-returnDate="@returnDateRoute">
-                                    Hoàn thiện hồ sơ giấy tờ
-                                </a>
-                            }
+                            <a class="btn @(isFullyVerified ? "btn-outline-primary" : "btn-primary") w-100 mt-3"
+                               asp-action="Index"
+                               asp-route-tab="documents"
+                               asp-route-returnVehicleId="@returnVehicleId"
+                               asp-route-pickupDate="@returnPickupRoute"
+                               asp-route-returnDate="@returnDateRoute">
+                                @(isFullyVerified ? "Xem hồ sơ CCCD / GPLX" : hasKycProblem ? "Cập nhật hồ sơ giấy tờ" : "Xác minh CCCD / GPLX")
+                            </a>
                         }
 
                         <p class="small text-muted mt-3 mb-0">
@@ -137,7 +327,7 @@
             <div class="col-lg-8">
                 <form asp-action="Update"
                       method="post"
-                      class="card card-body shadow-sm border-0 h-100"
+                      class="card card-body shadow-sm border-0 h-100 profile-form-card"
                       data-loading-form>
                     @if (hasReturnContext)
                     {
@@ -175,7 +365,7 @@
                         </div>
                     </div>
 
-                    <div class="mt-4">
+                    <div class="mt-4 d-flex justify-content-end">
                         <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu hồ sơ...">
                             Lưu thay đổi
                         </button>
@@ -188,4 +378,24 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const avatarInput = document.querySelector('[data-avatar-input]');
+            const avatarSubmit = document.querySelector('[data-avatar-submit]');
+            const avatarFileName = document.querySelector('[data-avatar-file-name]');
+
+            if (!avatarInput || !avatarSubmit || !avatarFileName) return;
+
+            avatarInput.addEventListener('change', () => {
+                const file = avatarInput.files && avatarInput.files.length > 0
+                    ? avatarInput.files[0]
+                    : null;
+
+                avatarSubmit.disabled = !file;
+                avatarFileName.textContent = file
+                    ? file.name
+                    : 'JPG, PNG, WEBP · tối đa 2 MB';
+            });
+        })();
+    </script>
 }
