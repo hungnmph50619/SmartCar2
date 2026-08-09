@@ -1,4 +1,7 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using SmartCar.Application.Features.Audits;
+using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Filters;
@@ -46,6 +49,44 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Ảnh CCCD/GPLX là dữ liệu nhạy cảm. Khi Quản trị viên xem ảnh thông qua
+// endpoint có phân quyền, ghi lại thao tác để có thể truy vết khi cần.
+app.Use(async (context, next) =>
+{
+    await next();
+
+    var isDocumentImageRequest = string.Equals(
+        context.Request.Path.Value,
+        "/AdminCustomers/ViewDocumentImage",
+        StringComparison.OrdinalIgnoreCase);
+
+    if (!isDocumentImageRequest ||
+        context.Response.StatusCode != StatusCodes.Status200OK ||
+        !context.User.IsInRole(RoleNames.Admin) ||
+        !int.TryParse(context.Request.Query["id"], out var documentId))
+    {
+        return;
+    }
+
+    try
+    {
+        var auditService = context.RequestServices.GetRequiredService<IAuditService>();
+        var adminId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await auditService.WriteAsync(
+            adminId,
+            "ViewKycDocumentImage",
+            "CustomerDocument",
+            documentId.ToString(),
+            "Quản trị viên xem ảnh CCCD/GPLX để đối chiếu hồ sơ xác minh.",
+            ipAddress: context.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: context.RequestAborted);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Không thể ghi Audit Log khi xem ảnh giấy tờ {DocumentId}.", documentId);
+    }
+});
 
 app.MapControllerRoute(
     name: "default",
