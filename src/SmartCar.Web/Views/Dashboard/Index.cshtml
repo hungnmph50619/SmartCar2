@@ -8,12 +8,12 @@
 <div class="admin-dashboard-header">
     <div>
         <h1>Tổng quan quản trị</h1>
-        <p>Theo dõi tình trạng đội xe, đơn thuê, hồ sơ KYC cần xử lý và doanh thu SmartCar.</p>
+        <p>Theo dõi tình trạng đội xe, đơn thuê, hồ sơ xác minh giấy tờ cần xử lý và doanh thu SmartCar.</p>
     </div>
     <div class="admin-dashboard-actions">
         @if (Model.PendingKycPackages > 0)
         {
-            <a class="btn btn-warning" asp-controller="AdminKyc" asp-action="Index">KYC chờ duyệt (@Model.PendingKycPackages)</a>
+            <a class="btn btn-warning" asp-controller="AdminKyc" asp-action="Index">Hồ sơ xác minh chờ duyệt (@Model.PendingKycPackages)</a>
         }
         <a class="btn btn-outline-primary" asp-controller="AdminBookings" asp-action="Index">Quản lý đơn thuê</a>
         <a class="btn btn-primary" asp-controller="AdminVehicles" asp-action="Index">Quản lý xe</a>
@@ -24,10 +24,10 @@
 {
     <div class="alert alert-warning d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 shadow-sm mb-4" role="alert">
         <div>
-            <div class="fw-bold">Có @Model.PendingKycPackages hồ sơ KYC đang chờ quản trị viên duyệt.</div>
+            <div class="fw-bold">Có @Model.PendingKycPackages hồ sơ xác minh đang chờ quản trị viên duyệt.</div>
             <div class="small">Khách hàng đã gửi đủ CCCD và GPLX. Đây là công việc cần xử lý, không chỉ là thông báo để đọc.</div>
         </div>
-        <a class="btn btn-dark flex-shrink-0" asp-controller="AdminKyc" asp-action="Index">Mở hàng đợi KYC →</a>
+        <a class="btn btn-dark flex-shrink-0" asp-controller="AdminKyc" asp-action="Index">Mở hàng đợi xác minh →</a>
     </div>
 }
 
@@ -66,7 +66,7 @@
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3">
         <a class="admin-stat-card is-orange" asp-controller="AdminKyc" asp-action="Index">
-            <div class="admin-stat-label">KYC chờ duyệt</div>
+            <div class="admin-stat-label">Hồ sơ xác minh chờ duyệt</div>
             <div class="admin-stat-value">@Model.PendingKycPackages</div>
             <div class="admin-stat-hint">Xem CCCD + GPLX cần xử lý →</div>
         </a>
