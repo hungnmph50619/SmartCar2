@@ -2,7 +2,7 @@
 @using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 @{
-    ViewData["Title"] = "Duyệt hồ sơ KYC";
+    ViewData["Title"] = "Duyệt hồ sơ xác minh";
     var citizenFront = Model.Documents.First(item => item.DocumentType == DocumentTypes.CitizenId);
     var citizenBack = Model.Documents.First(item => item.DocumentType == DocumentTypes.CitizenIdBack);
     var licenseFront = Model.Documents.First(item => item.DocumentType == DocumentTypes.DrivingLicense);
@@ -10,176 +10,228 @@
     var allPending = new[] { citizenFront, citizenBack, licenseFront, licenseBack }
         .All(item => item.Status == DocumentStatus.Pending && item.HasRequiredData);
 
-    static string Mask(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return "Chưa có";
-        var text = value.Trim();
-        return text.Length <= 4 ? new string('*', text.Length) : new string('*', text.Length - 4) + text[^4..];
-    }
-
     string ImageUrl(int id) => Url.Action("ViewDocumentImage", "AdminCustomers", new { id }) ?? "#";
 }
 
-<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
-    <div>
-        <div class="text-uppercase small text-primary fw-semibold">HỒ SƠ KYC MỚI · CHỜ DUYỆT</div>
-        <h1 class="h2 fw-bold mb-1">Duyệt CCCD + GPLX trong một lần</h1>
-        <p class="text-muted mb-0">@Model.CustomerName · @Model.CustomerEmail</p>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-outline-primary" asp-action="Index">← Hàng đợi KYC</a>
-        <a class="btn btn-outline-secondary"
-           asp-controller="AdminCustomers" asp-action="Details"
-           asp-route-id="@Model.CustomerId" asp-route-tab="documents">Mở trang khách hàng</a>
-    </div>
-</div>
+<link rel="stylesheet" href="~/css/admin-kyc.css" asp-append-version="true" />
 
-<div class="alert alert-warning shadow-sm">
-    <strong>Việc cần làm:</strong> xem đủ 4 ảnh, xác nhận CCCD và GPLX thuộc cùng người, đối chiếu các thông tin cần thiết rồi chọn
-    <strong>Duyệt toàn bộ</strong> hoặc <strong>Yêu cầu cập nhật</strong> ở cuối trang.
-</div>
-
-<div class="card border-primary shadow-sm mb-4">
-    <div class="card-body p-4 d-flex flex-column flex-md-row justify-content-between gap-3">
+<div class="admin-kyc-review">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
         <div>
-            <div class="text-uppercase small text-muted fw-semibold">Chủ hồ sơ theo CCCD</div>
-            <div class="h5 fw-bold mb-1">@(citizenFront.FullNameOnDocument ?? Model.CustomerName)</div>
-            <div class="small text-muted">Khách không nhập lại họ tên GPLX. Quản trị viên đối chiếu trực tiếp tên trên ảnh GPLX với tên trên CCCD.</div>
+            <div class="text-uppercase small text-primary fw-semibold">HỒ SƠ XÁC MINH MỚI · CHỜ DUYỆT</div>
+            <h1 class="h2 fw-bold mb-1">Đối chiếu CCCD + GPLX</h1>
+            <p class="text-muted mb-0">@Model.CustomerName · @Model.CustomerEmail</p>
         </div>
-        <div class="text-md-end">
-            <div class="small text-muted">Tài khoản</div>
-            <strong>@Model.CustomerEmail</strong>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-primary" asp-action="Index">← Hàng đợi xác minh</a>
+            <a class="btn btn-outline-secondary"
+               asp-controller="AdminCustomers" asp-action="Details"
+               asp-route-id="@Model.CustomerId" asp-route-tab="documents">Mở trang khách hàng</a>
+        </div>
+    </div>
+
+    <div class="alert alert-warning shadow-sm mb-4">
+        <strong>Cách xử lý:</strong> xem đủ 4 ảnh, đối chiếu thông tin khách khai báo, xác nhận CCCD và GPLX thuộc cùng người và hạng GPLX phù hợp xe ô tô. Sau đó ra <strong>một quyết định</strong> cho toàn bộ hồ sơ.
+    </div>
+
+    <section class="kyc-review-summary p-4 mb-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-lg-8">
+                <div class="text-uppercase small text-muted fw-semibold">Chủ hồ sơ theo CCCD</div>
+                <div class="h5 fw-bold mb-1">@(citizenFront.FullNameOnDocument ?? Model.CustomerName)</div>
+                <div class="small text-muted">Tên trên GPLX không do khách nhập lại. Quản trị viên đối chiếu trực tiếp tên trên ảnh GPLX với tên trên CCCD.</div>
+            </div>
+            <div class="col-lg-4 text-lg-end">
+                <div class="small text-muted">Tài khoản SmartCar</div>
+                <strong>@Model.CustomerEmail</strong>
+            </div>
+        </div>
+    </section>
+
+    <div class="row g-4 align-items-start">
+        <div class="col-xl-8">
+            <section class="card kyc-document-card mb-4">
+                <div class="card-header bg-white border-0 p-4 pb-2">
+                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                        <div>
+                            <div class="text-uppercase small text-primary fw-semibold">1/2 · CĂN CƯỚC CÔNG DÂN</div>
+                            <h2 class="h4 fw-bold mb-1">Đối chiếu CCCD</h2>
+                            <p class="text-muted mb-0">Số CCCD được hiển thị đầy đủ ở màn hình duyệt có phân quyền để quản trị viên đối chiếu chính xác với ảnh.</p>
+                        </div>
+                        <span class="badge @(citizenFront.Status == DocumentStatus.Pending && citizenBack.Status == DocumentStatus.Pending ? "bg-warning text-dark" : "bg-secondary") px-3 py-2">
+                            @(citizenFront.Status == DocumentStatus.Pending && citizenBack.Status == DocumentStatus.Pending ? "Chờ duyệt" : citizenFront.Status.ToString())
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="kyc-data-grid mb-4">
+                        <div class="kyc-data-item"><span>Họ và tên</span><strong>@(citizenFront.FullNameOnDocument ?? "Chưa cập nhật")</strong></div>
+                        <div class="kyc-data-item"><span>Số CCCD</span><strong>@citizenFront.DocumentNumber</strong></div>
+                        <div class="kyc-data-item"><span>Ngày sinh</span><strong>@(citizenFront.DateOfBirth?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div>
+                        <div class="kyc-data-item"><span>Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div>
+                        <div class="kyc-data-item is-wide"><span>Nơi cư trú</span><strong>@(citizenFront.PermanentAddress ?? "Chưa cập nhật")</strong></div>
+                    </div>
+
+                    <div class="kyc-thumbnail-grid">
+                        <article class="kyc-thumbnail">
+                            <button type="button"
+                                    class="kyc-thumbnail-button"
+                                    data-kyc-image
+                                    data-image-src="@ImageUrl(citizenFront.CustomerDocumentId)"
+                                    data-image-title="CCCD mặt trước">
+                                <span class="kyc-thumbnail-image-wrap">
+                                    <img src="@ImageUrl(citizenFront.CustomerDocumentId)" alt="CCCD mặt trước" />
+                                </span>
+                                <span class="kyc-thumbnail-meta"><strong>CCCD mặt trước</strong><span>Phóng to / xoay ↗</span></span>
+                            </button>
+                        </article>
+                        <article class="kyc-thumbnail">
+                            <button type="button"
+                                    class="kyc-thumbnail-button"
+                                    data-kyc-image
+                                    data-image-src="@ImageUrl(citizenBack.CustomerDocumentId)"
+                                    data-image-title="CCCD mặt sau">
+                                <span class="kyc-thumbnail-image-wrap">
+                                    <img src="@ImageUrl(citizenBack.CustomerDocumentId)" alt="CCCD mặt sau" />
+                                </span>
+                                <span class="kyc-thumbnail-meta"><strong>CCCD mặt sau</strong><span>Phóng to / xoay ↗</span></span>
+                            </button>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card kyc-document-card mb-4">
+                <div class="card-header bg-white border-0 p-4 pb-2">
+                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                        <div>
+                            <div class="text-uppercase small text-primary fw-semibold">2/2 · GIẤY PHÉP LÁI XE</div>
+                            <h2 class="h4 fw-bold mb-1">Đối chiếu GPLX</h2>
+                            <p class="text-muted mb-0">Kiểm tra tên chủ giấy phép trên ảnh với CCCD, số GPLX, hạng GPLX và ngày hết hạn.</p>
+                        </div>
+                        <span class="badge @(licenseFront.Status == DocumentStatus.Pending && licenseBack.Status == DocumentStatus.Pending ? "bg-warning text-dark" : "bg-secondary") px-3 py-2">
+                            @(licenseFront.Status == DocumentStatus.Pending && licenseBack.Status == DocumentStatus.Pending ? "Chờ duyệt" : licenseFront.Status.ToString())
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <div class="kyc-data-grid mb-4">
+                        <div class="kyc-data-item"><span>Chủ hồ sơ theo CCCD</span><strong>@(citizenFront.FullNameOnDocument ?? Model.CustomerName)</strong></div>
+                        <div class="kyc-data-item"><span>Số GPLX</span><strong>@licenseFront.DocumentNumber</strong></div>
+                        <div class="kyc-data-item"><span>Hạng GPLX</span><strong>@(licenseFront.LicenseClass ?? "Chưa cập nhật")</strong></div>
+                        <div class="kyc-data-item"><span>Ngày hết hạn</span><strong>@(licenseFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div>
+                        <div class="kyc-data-item is-wide"><span>Cần đối chiếu trên ảnh</span><strong>Họ tên trên GPLX phải cùng người với CCCD và hạng GPLX phải phù hợp để điều khiển xe ô tô.</strong></div>
+                    </div>
+
+                    <div class="kyc-thumbnail-grid">
+                        <article class="kyc-thumbnail">
+                            <button type="button"
+                                    class="kyc-thumbnail-button"
+                                    data-kyc-image
+                                    data-image-src="@ImageUrl(licenseFront.CustomerDocumentId)"
+                                    data-image-title="GPLX mặt trước">
+                                <span class="kyc-thumbnail-image-wrap">
+                                    <img src="@ImageUrl(licenseFront.CustomerDocumentId)" alt="GPLX mặt trước" />
+                                </span>
+                                <span class="kyc-thumbnail-meta"><strong>GPLX mặt trước</strong><span>Phóng to / xoay ↗</span></span>
+                            </button>
+                        </article>
+                        <article class="kyc-thumbnail">
+                            <button type="button"
+                                    class="kyc-thumbnail-button"
+                                    data-kyc-image
+                                    data-image-src="@ImageUrl(licenseBack.CustomerDocumentId)"
+                                    data-image-title="GPLX mặt sau">
+                                <span class="kyc-thumbnail-image-wrap">
+                                    <img src="@ImageUrl(licenseBack.CustomerDocumentId)" alt="GPLX mặt sau" />
+                                </span>
+                                <span class="kyc-thumbnail-meta"><strong>GPLX mặt sau</strong><span>Phóng to / xoay ↗</span></span>
+                            </button>
+                        </article>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-xl-4">
+            <aside class="kyc-decision-panel p-4">
+                <div class="text-uppercase small text-success fw-semibold">QUYẾT ĐỊNH HỒ SƠ</div>
+                <h2 class="h4 fw-bold mb-2">Xác minh một lần</h2>
+                <p class="small text-muted mb-4">Checklist này luôn nằm gần khu vực thao tác trên màn hình lớn để quản trị viên không phải cuộn xuống cuối một trang rất dài.</p>
+
+                @if (allPending)
+                {
+                    <form asp-action="VerifyAll" method="post" class="mb-4" data-loading-form data-confirm="Xác nhận toàn bộ CCCD và GPLX đều hợp lệ?">
+                        <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                        <fieldset class="document-checklist mb-3">
+                            <legend>Checklist bắt buộc</legend>
+                            <label><input class="form-check-input" type="checkbox" required /> CCCD: họ tên, số CCCD, ngày sinh, hạn sử dụng và nơi cư trú khớp với ảnh.</label>
+                            <label><input class="form-check-input" type="checkbox" required /> GPLX: họ tên trên ảnh thuộc cùng người với CCCD; số bằng, hạng bằng và hạn sử dụng khớp với ảnh.</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Hạng GPLX cho phép điều khiển xe ô tô phù hợp với dịch vụ SmartCar.</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Đã xem đủ 4 ảnh; ảnh đủ rõ để đối chiếu và không thấy dấu hiệu chỉnh sửa bất thường.</label>
+                        </fieldset>
+                        <button class="btn btn-success w-100" type="submit" data-loading-text="Đang duyệt hồ sơ...">✓ Duyệt toàn bộ hồ sơ</button>
+                    </form>
+
+                    <div class="border-top pt-4">
+                        <h3 class="h6 fw-bold text-danger">Hồ sơ có vấn đề?</h3>
+                        <p class="small text-muted">Chọn lý do để khách biết chính xác cần sửa gì. Toàn bộ hồ sơ sẽ chuyển sang trạng thái cần cập nhật.</p>
+                        <form asp-action="RequestResubmission" method="post" data-loading-form data-confirm="Yêu cầu khách hàng cập nhật lại toàn bộ hồ sơ xác minh?">
+                            <input type="hidden" name="customerId" value="@Model.CustomerId" />
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="kycReason">Lý do yêu cầu cập nhật <span class="text-danger">*</span></label>
+                                <select class="form-select" id="kycReason" name="reason" required>
+                                    <option value="">-- Chọn lý do --</option>
+                                    <option>Thông tin khai báo không khớp với ảnh giấy tờ</option>
+                                    <option>Họ tên trên GPLX không khớp với CCCD</option>
+                                    <option>Hạng GPLX không phù hợp để điều khiển xe ô tô</option>
+                                    <option>Ảnh giấy tờ không rõ, bị lóa hoặc thiếu thông tin</option>
+                                    <option>Giấy tờ hết hạn hoặc không đủ hiệu lực cho thời gian thuê</option>
+                                    <option>Không xác định được giấy tờ thuộc cùng khách hàng</option>
+                                    <option>Khác</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" for="kycAdditionalNote">Ghi chú thêm</label>
+                                <textarea class="form-control" id="kycAdditionalNote" name="additionalNote" rows="4" maxlength="500" placeholder="Ví dụ: Ảnh GPLX mặt sau bị mờ hoặc tên trên GPLX khác CCCD."></textarea>
+                            </div>
+                            <button class="btn btn-outline-danger w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">Yêu cầu cập nhật hồ sơ</button>
+                        </form>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-secondary mb-0">Hồ sơ này không còn ở trạng thái có thể xử lý. Hãy quay lại hàng đợi xác minh.</div>
+                }
+            </aside>
         </div>
     </div>
 </div>
 
-<section class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white p-4 pb-2 border-0">
-        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-            <div>
-                <div class="text-uppercase small text-primary fw-semibold">1/2 · CCCD</div>
-                <h2 class="h4 fw-bold mb-1">Căn cước công dân</h2>
-                <p class="text-muted mb-0">Đối chiếu họ tên, số CCCD, ngày sinh, thời hạn và nơi cư trú với ảnh giấy tờ.</p>
+<div class="modal fade kyc-image-modal" id="kycImageModal" tabindex="-1" aria-labelledby="kycImageModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="kycImageModalTitle">Ảnh giấy tờ</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
             </div>
-            <span class="badge @(citizenFront.Status == DocumentStatus.Pending && citizenBack.Status == DocumentStatus.Pending ? "bg-warning text-dark" : "bg-secondary") px-3 py-2">
-                @(citizenFront.Status == DocumentStatus.Pending && citizenBack.Status == DocumentStatus.Pending ? "Chờ duyệt" : citizenFront.Status.ToString())
-            </span>
-        </div>
-    </div>
-    <div class="card-body p-4">
-        <div class="row g-3 mb-4">
-            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Họ và tên</span><strong>@(citizenFront.FullNameOnDocument ?? "Chưa cập nhật")</strong></div></div>
-            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Số CCCD</span><strong>@Mask(citizenFront.DocumentNumber)</strong></div></div>
-            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Ngày sinh</span><strong>@(citizenFront.DateOfBirth?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
-            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
-            <div class="col-md-8"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Nơi cư trú</span><strong>@(citizenFront.PermanentAddress ?? "Chưa cập nhật")</strong></div></div>
-        </div>
-        <div class="row g-4">
-            <div class="col-md-6">
-                <div class="fw-semibold mb-2">Mặt trước CCCD</div>
-                <a href="@ImageUrl(citizenFront.CustomerDocumentId)" target="_blank" rel="noopener" class="document-image-link">
-                    <img src="@ImageUrl(citizenFront.CustomerDocumentId)" alt="CCCD mặt trước" />
-                    <span>Mở ảnh kích thước đầy đủ</span>
-                </a>
+            <div class="modal-body p-0">
+                <div class="kyc-image-stage">
+                    <img id="kycImageModalImage" alt="Ảnh giấy tờ" />
+                </div>
             </div>
-            <div class="col-md-6">
-                <div class="fw-semibold mb-2">Mặt sau CCCD</div>
-                <a href="@ImageUrl(citizenBack.CustomerDocumentId)" target="_blank" rel="noopener" class="document-image-link">
-                    <img src="@ImageUrl(citizenBack.CustomerDocumentId)" alt="CCCD mặt sau" />
-                    <span>Mở ảnh kích thước đầy đủ</span>
-                </a>
+            <div class="modal-footer justify-content-between">
+                <div class="kyc-image-toolbar">
+                    <button type="button" class="btn btn-outline-secondary" data-rotate-left>↶ Xoay trái</button>
+                    <button type="button" class="btn btn-outline-secondary" data-rotate-right>↷ Xoay phải</button>
+                    <button type="button" class="btn btn-outline-secondary" data-rotate-reset>Đặt lại</button>
+                </div>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Đóng</button>
             </div>
         </div>
     </div>
-</section>
+</div>
 
-<section class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white p-4 pb-2 border-0">
-        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-            <div>
-                <div class="text-uppercase small text-primary fw-semibold">2/2 · GPLX</div>
-                <h2 class="h4 fw-bold mb-1">Giấy phép lái xe</h2>
-                <p class="text-muted mb-0">Đối chiếu tên chủ giấy phép trên ảnh với CCCD, sau đó kiểm tra số GPLX, hạng GPLX và ngày hết hạn.</p>
-            </div>
-            <span class="badge @(licenseFront.Status == DocumentStatus.Pending && licenseBack.Status == DocumentStatus.Pending ? "bg-warning text-dark" : "bg-secondary") px-3 py-2">
-                @(licenseFront.Status == DocumentStatus.Pending && licenseBack.Status == DocumentStatus.Pending ? "Chờ duyệt" : licenseFront.Status.ToString())
-            </span>
-        </div>
-    </div>
-    <div class="card-body p-4">
-        <div class="row g-3 mb-4">
-            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Chủ hồ sơ</span><strong>@(citizenFront.FullNameOnDocument ?? Model.CustomerName)</strong></div></div>
-            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Số GPLX</span><strong>@licenseFront.DocumentNumber</strong></div></div>
-            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Hạng GPLX</span><strong>@(licenseFront.LicenseClass ?? "Chưa cập nhật")</strong></div></div>
-            <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(licenseFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
-            <div class="col-md-8"><div class="border rounded-3 p-3 h-100"><span class="small text-muted d-block">Cần đối chiếu trên ảnh</span><strong>Họ tên GPLX phải cùng người với CCCD và hạng GPLX phải phù hợp xe ô tô.</strong></div></div>
-        </div>
-        <div class="row g-4">
-            <div class="col-md-6">
-                <div class="fw-semibold mb-2">Mặt trước GPLX</div>
-                <a href="@ImageUrl(licenseFront.CustomerDocumentId)" target="_blank" rel="noopener" class="document-image-link">
-                    <img src="@ImageUrl(licenseFront.CustomerDocumentId)" alt="GPLX mặt trước" />
-                    <span>Mở ảnh kích thước đầy đủ</span>
-                </a>
-            </div>
-            <div class="col-md-6">
-                <div class="fw-semibold mb-2">Mặt sau GPLX</div>
-                <a href="@ImageUrl(licenseBack.CustomerDocumentId)" target="_blank" rel="noopener" class="document-image-link">
-                    <img src="@ImageUrl(licenseBack.CustomerDocumentId)" alt="GPLX mặt sau" />
-                    <span>Mở ảnh kích thước đầy đủ</span>
-                </a>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="card border-success shadow-sm mb-4">
-    <div class="card-body p-4">
-        <h2 class="h4 fw-bold mb-2">Ra quyết định cho hồ sơ</h2>
-        <p class="text-muted">Một quyết định xử lý toàn bộ CCCD + GPLX. Sau khi duyệt hoặc yêu cầu cập nhật, hồ sơ sẽ được gỡ khỏi hàng đợi KYC.</p>
-        @if (allPending)
-        {
-            <form asp-action="VerifyAll" method="post" class="mb-4" data-loading-form data-confirm="Xác nhận toàn bộ CCCD và GPLX đều hợp lệ?">
-                <input type="hidden" name="customerId" value="@Model.CustomerId" />
-                <fieldset class="document-checklist mb-3">
-                    <legend>Checklist bắt buộc trước khi duyệt</legend>
-                    <label><input class="form-check-input" type="checkbox" required /> CCCD: họ tên, số CCCD, ngày sinh, ngày hết hạn và nơi cư trú khớp với ảnh.</label>
-                    <label><input class="form-check-input" type="checkbox" required /> GPLX: họ tên trên ảnh thuộc cùng người với CCCD; số bằng, hạng bằng và ngày hết hạn khớp với ảnh.</label>
-                    <label><input class="form-check-input" type="checkbox" required /> Hạng GPLX cho phép điều khiển xe ô tô phù hợp với dịch vụ SmartCar.</label>
-                    <label><input class="form-check-input" type="checkbox" required /> Đã xem đủ 4 ảnh, ảnh rõ và không thấy dấu hiệu chỉnh sửa bất thường.</label>
-                </fieldset>
-                <button class="btn btn-success" type="submit" data-loading-text="Đang duyệt toàn bộ KYC...">✓ Duyệt toàn bộ hồ sơ KYC</button>
-            </form>
-
-            <div class="border-top pt-4">
-                <h3 class="h6 fw-bold text-danger">Hồ sơ có vấn đề?</h3>
-                <p class="small text-muted">Ghi rõ lý do để khách hàng biết cần sửa gì. Hệ thống sẽ yêu cầu gửi lại toàn bộ hồ sơ KYC.</p>
-                <form asp-action="RequestResubmission" method="post" data-loading-form data-confirm="Yêu cầu khách hàng cập nhật lại toàn bộ hồ sơ KYC?">
-                    <input type="hidden" name="customerId" value="@Model.CustomerId" />
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold" for="kycReason">Lý do yêu cầu cập nhật <span class="text-danger">*</span></label>
-                        <select class="form-select" id="kycReason" name="reason" required>
-                            <option value="">-- Chọn lý do --</option>
-                            <option>Thông tin khai báo không khớp với ảnh giấy tờ</option>
-                            <option>Họ tên trên GPLX không khớp với CCCD</option>
-                            <option>Hạng GPLX không phù hợp để điều khiển xe ô tô</option>
-                            <option>Ảnh giấy tờ không rõ, bị lóa hoặc thiếu thông tin</option>
-                            <option>Giấy tờ hết hạn hoặc không đủ hiệu lực cho thời gian thuê</option>
-                            <option>Không xác định được giấy tờ thuộc cùng khách hàng</option>
-                            <option>Khác</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="kycAdditionalNote">Ghi chú thêm</label>
-                        <textarea class="form-control" id="kycAdditionalNote" name="additionalNote" rows="3" maxlength="500" placeholder="Ví dụ: Họ tên trên GPLX khác CCCD hoặc ảnh GPLX mặt sau bị mờ."></textarea>
-                    </div>
-                    <button class="btn btn-outline-danger" type="submit" data-loading-text="Đang gửi yêu cầu cập nhật...">Yêu cầu cập nhật hồ sơ</button>
-                </form>
-            </div>
-        }
-        else
-        {
-            <div class="alert alert-secondary mb-0">Hồ sơ này không còn ở trạng thái có thể xử lý toàn bộ. Hãy quay lại hàng đợi KYC để chọn hồ sơ khác.</div>
-        }
-    </div>
-</section>
+@section Scripts {
+    <script src="~/js/admin-kyc-review.js" asp-append-version="true"></script>
+}
