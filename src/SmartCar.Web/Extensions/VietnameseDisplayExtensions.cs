@@ -131,6 +131,7 @@ public static class VietnameseDisplayExtensions
         "ChangeStatus" => "Đổi trạng thái",
         "Submit" => "Gửi xác minh",
         "Verify" => "Xác minh",
+        "VerifyAll" => "Duyệt hồ sơ xác minh",
         "Reject" => "Từ chối",
         "RequestResubmission" => "Yêu cầu gửi lại giấy tờ",
         "RequestUpdate" => "Yêu cầu cập nhật giấy tờ",
@@ -140,6 +141,7 @@ public static class VietnameseDisplayExtensions
         "Confirm" => "Xác nhận đơn",
         "MarkReady" => "Đánh dấu sẵn sàng",
         "Pay" => "Thanh toán",
+        "Refund" => "Hoàn tiền",
         "CustomerCancel" => "Khách hàng hủy đơn",
         "AdminCancel" => "Quản trị viên hủy đơn",
         "MarkNoShow" => "Ghi nhận không đến nhận xe",
@@ -152,6 +154,10 @@ public static class VietnameseDisplayExtensions
         "RemovePromotion" => "Gỡ khuyến mãi",
         "StartInvestigation" => "Bắt đầu xử lý",
         "Resolve" => "Hoàn tất xử lý",
+        "UpdateAvatar" => "Đổi ảnh đại diện",
+        "ChangePassword" => "Đổi mật khẩu",
+        "UpdateBankAccount" => "Cập nhật tài khoản ngân hàng",
+        "ViewKycDocumentImage" => "Xem ảnh giấy tờ xác minh",
         null or "" => "Không xác định",
         _ => value
     };
@@ -170,6 +176,8 @@ public static class VietnameseDisplayExtensions
         "Vehicle" => "Xe",
         "MaintenanceRecord" => "Phiếu bảo trì",
         "UserProfile" => "Hồ sơ người dùng",
+        "UserAccount" => "Tài khoản người dùng",
+        "UserBankAccount" => "Tài khoản ngân hàng",
         null or "" => "Không xác định",
         _ => value
     };
