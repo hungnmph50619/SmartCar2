@@ -119,7 +119,7 @@
                     <a class="admin-nav-link @(currentController is "AdminKyc" or "AdminDocuments" ? "active" : string.Empty)"
                        asp-controller="AdminKyc" asp-action="Index">
                         <span class="admin-nav-icon">✓</span>
-                        <span>KYC chờ duyệt</span>
+                        <span>Xác minh giấy tờ</span>
                         @if (pendingKycCount > 0)
                         {
                             <span class="badge rounded-pill text-bg-warning ms-auto">@(pendingKycCount > 99 ? "99+" : pendingKycCount)</span>
@@ -212,9 +212,9 @@
                 <div class="admin-topbar-actions">
                     @if (pendingKycCount > 0)
                     {
-                        <a class="admin-topbar-link" asp-controller="AdminKyc" asp-action="Index" aria-label="KYC chờ duyệt">
+                        <a class="admin-topbar-link" asp-controller="AdminKyc" asp-action="Index" aria-label="Hồ sơ xác minh chờ duyệt">
                             <span aria-hidden="true">✓</span>
-                            <span>KYC chờ duyệt</span>
+                            <span>Hồ sơ xác minh</span>
                             <span class="admin-notification-count bg-warning text-dark">@(pendingKycCount > 99 ? "99+" : pendingKycCount)</span>
                         </a>
                     }
