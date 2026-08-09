@@ -302,7 +302,10 @@ public sealed class ProfileSettingsController : Controller
 
     private static string NormalizePersonName(string value)
     {
-        var decomposed = value.Trim().Normalize(NormalizationForm.FormD);
+        var vietnameseNormalized = value
+            .Replace('Đ', 'D')
+            .Replace('đ', 'd');
+        var decomposed = vietnameseNormalized.Trim().Normalize(NormalizationForm.FormD);
         var characters = decomposed
             .Where(character =>
                 CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark &&
