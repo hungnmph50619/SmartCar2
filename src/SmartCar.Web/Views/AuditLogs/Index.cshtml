@@ -76,7 +76,7 @@
 
                 <div class="col-md-6 col-xl-2">
                     <label class="form-label fw-semibold" for="auditAction">Hành động</label>
-                    <select id="auditAction" name="action" class="form-select">
+                    <select id="auditAction" name="auditAction" class="form-select">
                         <option value="">Tất cả</option>
                         @foreach (var option in result.Actions)
                         {
@@ -276,7 +276,7 @@
                                asp-action="Index"
                                asp-route-search="@Model.Search"
                                asp-route-userId="@Model.UserId"
-                               asp-route-action="@Model.Action"
+                               asp-route-auditAction="@Model.Action"
                                asp-route-entityName="@Model.EntityName"
                                asp-route-fromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
                                asp-route-toDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
@@ -291,7 +291,7 @@
                                    asp-action="Index"
                                    asp-route-search="@Model.Search"
                                    asp-route-userId="@Model.UserId"
-                                   asp-route-action="@Model.Action"
+                                   asp-route-auditAction="@Model.Action"
                                    asp-route-entityName="@Model.EntityName"
                                    asp-route-fromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
                                    asp-route-toDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
@@ -305,7 +305,7 @@
                                asp-action="Index"
                                asp-route-search="@Model.Search"
                                asp-route-userId="@Model.UserId"
-                               asp-route-action="@Model.Action"
+                               asp-route-auditAction="@Model.Action"
                                asp-route-entityName="@Model.EntityName"
                                asp-route-fromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
                                asp-route-toDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
