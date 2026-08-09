@@ -26,7 +26,7 @@ public sealed class AuditLogsController : Controller
     public async Task<IActionResult> Index(
         string? search,
         string? userId,
-        string? action,
+        string? auditAction,
         string? entityName,
         DateTime? fromDate,
         DateTime? toDate,
@@ -46,7 +46,7 @@ public sealed class AuditLogsController : Controller
             new AuditLogQuery(
                 Search: search,
                 UserId: userId,
-                Action: action,
+                Action: auditAction,
                 EntityName: entityName,
                 FromDate: ToUtc(normalizedFrom),
                 ToDate: ToUtc(normalizedTo?.AddDays(1)),
@@ -58,7 +58,7 @@ public sealed class AuditLogsController : Controller
         {
             Search = search?.Trim(),
             UserId = userId,
-            Action = action,
+            Action = auditAction,
             EntityName = entityName,
             FromDate = normalizedFrom,
             ToDate = normalizedTo,
