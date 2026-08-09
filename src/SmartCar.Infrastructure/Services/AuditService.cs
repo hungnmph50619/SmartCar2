@@ -123,16 +123,16 @@ internal sealed class AuditService : IAuditService
             .ToListAsync(cancellationToken);
 
         var userIds = userCounts.Select(item => item.UserId).ToList();
-        var userNames = await _dbContext.Users
+        var userRows = await _dbContext.Users
             .AsNoTracking()
             .Where(user => userIds.Contains(user.Id))
             .Select(user => new { user.Id, user.FullName, user.Email })
-            .ToDictionaryAsync(
-                user => user.Id,
-                user => string.IsNullOrWhiteSpace(user.FullName)
-                    ? user.Email ?? user.Id
-                    : user.FullName,
-                cancellationToken);
+            .ToListAsync(cancellationToken);
+        var userNames = userRows.ToDictionary(
+            user => user.Id,
+            user => string.IsNullOrWhiteSpace(user.FullName)
+                ? user.Email ?? user.Id
+                : user.FullName);
 
         var users = userCounts
             .Select(item => new AuditUserFilterOption(
@@ -149,19 +149,25 @@ internal sealed class AuditService : IAuditService
             users.Insert(0, new AuditUserFilterOption(SystemUserFilter, "Hệ thống", systemCount));
         }
 
-        var actions = await _dbContext.AuditLogs
+        var actionRows = await _dbContext.AuditLogs
             .AsNoTracking()
             .GroupBy(log => log.Action)
-            .Select(group => new AuditValueFilterOption(group.Key, group.Count()))
+            .Select(group => new { Value = group.Key, Count = group.Count() })
             .OrderBy(option => option.Value)
             .ToListAsync(cancellationToken);
+        var actions = actionRows
+            .Select(option => new AuditValueFilterOption(option.Value, option.Count))
+            .ToList();
 
-        var entities = await _dbContext.AuditLogs
+        var entityRows = await _dbContext.AuditLogs
             .AsNoTracking()
             .GroupBy(log => log.EntityName)
-            .Select(group => new AuditValueFilterOption(group.Key, group.Count()))
+            .Select(group => new { Value = group.Key, Count = group.Count() })
             .OrderBy(option => option.Value)
             .ToListAsync(cancellationToken);
+        var entities = entityRows
+            .Select(option => new AuditValueFilterOption(option.Value, option.Count))
+            .ToList();
 
         return new AuditLogSearchResult(
             items,
