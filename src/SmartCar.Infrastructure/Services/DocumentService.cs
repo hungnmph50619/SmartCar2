@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
@@ -7,6 +7,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace SmartCar.Infrastructure.Services;
 
@@ -167,7 +168,7 @@ internal sealed class DocumentService : IDocumentService
                 request.DateOfBirth.Date,
                 request.Gender.Trim(),
                 request.IssuedDate.Date,
-                request.PermanentAddress.Trim(),
+                null,
                 null,
                 cancellationToken);
         }
@@ -184,7 +185,7 @@ internal sealed class DocumentService : IDocumentService
             "Submit",
             nameof(CustomerDocument),
             front.CustomerDocumentId.ToString(),
-            "Gửi hồ sơ CCCD gồm thông tin khai báo, địa chỉ thường trú và hai ảnh để xác minh.",
+            "Gửi hồ sơ CCCD gồm thông tin khai báo và hai ảnh để xác minh.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -333,7 +334,7 @@ internal sealed class DocumentService : IDocumentService
         var metadata = await ReadKycMetadataAsync(document.CustomerDocumentId, cancellationToken);
         if (verified && !HasRequiredData(document, metadata))
         {
-            return OperationResult.Failure("Giấy tờ chưa có đủ thông tin KYC để xác minh.");
+            return OperationResult.Failure("Giấy tờ chưa có đủ thông tin cần thiết để xác minh.");
         }
 
         var previousStatus = document.Status;
@@ -433,7 +434,6 @@ internal sealed class DocumentService : IDocumentService
         if (string.IsNullOrWhiteSpace(request.FullNameOnDocument) ||
             string.IsNullOrWhiteSpace(request.DocumentNumber) ||
             string.IsNullOrWhiteSpace(request.Gender) ||
-            string.IsNullOrWhiteSpace(request.PermanentAddress) ||
             string.IsNullOrWhiteSpace(request.FrontImagePath) ||
             string.IsNullOrWhiteSpace(request.BackImagePath))
         {
@@ -524,6 +524,7 @@ internal sealed class DocumentService : IDocumentService
     {
         var connection = _dbContext.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
+
         if (shouldClose)
         {
             await connection.OpenAsync(cancellationToken);
@@ -532,17 +533,33 @@ internal sealed class DocumentService : IDocumentService
         try
         {
             await using var command = connection.CreateCommand();
+
+            // Nếu DbContext hiện đang nằm trong transaction,
+            // command này phải tham gia cùng transaction đó.
+            if (_dbContext.Database.CurrentTransaction is { } currentTransaction)
+            {
+                command.Transaction = currentTransaction.GetDbTransaction();
+            }
+
             command.CommandText = @"
-                SELECT [FullNameOnDocument], [DateOfBirth], [Gender], [IssuedDate], [PermanentAddress], [LicenseClass]
-                FROM [CustomerDocuments]
-                WHERE [CustomerDocumentId] = @documentId";
+            SELECT
+                [FullNameOnDocument],
+                [DateOfBirth],
+                [Gender],
+                [IssuedDate],
+                [PermanentAddress],
+                [LicenseClass]
+            FROM [CustomerDocuments]
+            WHERE [CustomerDocumentId] = @documentId";
 
             var parameter = command.CreateParameter();
             parameter.ParameterName = "@documentId";
             parameter.Value = documentId;
             command.Parameters.Add(parameter);
 
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            await using var reader =
+                await command.ExecuteReaderAsync(cancellationToken);
+
             if (!await reader.ReadAsync(cancellationToken))
             {
                 return KycMetadata.Empty;
@@ -573,8 +590,7 @@ internal sealed class DocumentService : IDocumentService
                 !string.IsNullOrWhiteSpace(document.ImagePath) &&
                 document.ExpiryDate.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.FullNameOnDocument) &&
-                metadata.DateOfBirth.HasValue &&
-                !string.IsNullOrWhiteSpace(metadata.PermanentAddress),
+                metadata.DateOfBirth.HasValue,
             DocumentTypes.CitizenIdBack =>
                 !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
                 !string.IsNullOrWhiteSpace(document.ImagePath),

@@ -1,13 +1,49 @@
-using SmartCar.Application.Common;
+﻿using SmartCar.Application.Common;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Application.Features.Payments;
 
+public sealed record AdminPaymentListItemDto(
+    int PaymentId,
+    int BookingId,
+    string CustomerId,
+    string CustomerName,
+    string VehicleName,
+    string LicensePlate,
+    PaymentType Type,
+    decimal Amount,
+    string Method,
+    PaymentStatus Status,
+    DateTime? PaidAt,
+    string? TransactionCode);
+
 public interface IPaymentService
 {
-    Task<OperationResult> SimulatePaymentAsync(
+    Task<IReadOnlyList<AdminPaymentListItemDto>> GetAdminPaymentsAsync(
+        PaymentStatus? status = null,
+        PaymentType? type = null,
+        CancellationToken cancellationToken = default);
+
+
+    Task<OperationResult> SubmitQrPaymentAsync(
         int bookingId,
         string customerId,
         PaymentType paymentType,
+        CancellationToken cancellationToken = default);
+
+    Task<OperationResult> ConfirmQrPaymentAsync(
+        int paymentId,
+        string adminId,
+        CancellationToken cancellationToken = default);
+
+    Task<OperationResult> RejectQrPaymentAsync(
+        int paymentId,
+        string adminId,
+        CancellationToken cancellationToken = default);
+
+    Task<OperationResult> ConfirmRefundAsync(
+        int paymentId,
+        string adminId,
+        string? transactionCode,
         CancellationToken cancellationToken = default);
 }

@@ -1,3 +1,4 @@
+﻿using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Extensions;
@@ -5,6 +6,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+
 
 namespace SmartCar.Infrastructure.Services;
 
@@ -94,7 +96,30 @@ internal sealed class ExtensionService : IExtensionService
         {
             return OperationResult.Failure("Đơn đang có một yêu cầu gia hạn chưa hoàn tất.");
         }
+        var conflictingBooking = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(other =>
+                other.VehicleId == booking.VehicleId &&
+                other.BookingId != booking.BookingId &&
+                BlockingStatuses.Contains(other.Status) &&
+                booking.ReturnDate < other.ReturnDate &&
+                request.RequestedReturnDate > other.PickupDate)
+            .OrderBy(other => other.PickupDate)
+            .Select(other => new
+            {
+                other.BookingId,
+                other.PickupDate,
+                other.ReturnDate
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
+        if (conflictingBooking is not null)
+        {
+            return OperationResult.Failure(
+                $"Không thể gia hạn đến {request.RequestedReturnDate:dd/MM/yyyy HH:mm}. " +
+                $"Xe đã có đơn #{conflictingBooking.BookingId} " +
+                $"bắt đầu lúc {conflictingBooking.PickupDate:dd/MM/yyyy HH:mm}.");
+        }
         var additionalDays = Math.Max(
             1,
             (int)Math.Ceiling((request.RequestedReturnDate - booking.ReturnDate).TotalHours / 24d));
@@ -125,7 +150,10 @@ internal sealed class ExtensionService : IExtensionService
         string adminId,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction =
+            await _dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
 
         var extension = await _dbContext.BookingExtensions
             .Include(item => item.Booking)
@@ -142,18 +170,29 @@ internal sealed class ExtensionService : IExtensionService
         {
             return OperationResult.Failure("Yêu cầu gia hạn không còn hợp lệ để duyệt.");
         }
+        var conflictingBooking = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(other =>
+                other.VehicleId == extension.Booking.VehicleId &&
+                other.BookingId != extension.BookingId &&
+                BlockingStatuses.Contains(other.Status) &&
+                extension.OriginalReturnDate < other.ReturnDate &&
+                extension.RequestedReturnDate > other.PickupDate)
+            .OrderBy(other => other.PickupDate)
+            .Select(other => new
+            {
+                other.BookingId,
+                other.PickupDate,
+                other.ReturnDate
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var hasConflict = await _dbContext.Bookings.AnyAsync(other =>
-            other.VehicleId == extension.Booking.VehicleId &&
-            other.BookingId != extension.BookingId &&
-            BlockingStatuses.Contains(other.Status) &&
-            extension.OriginalReturnDate < other.ReturnDate &&
-            extension.RequestedReturnDate > other.PickupDate,
-            cancellationToken);
-
-        if (hasConflict)
+        if (conflictingBooking is not null)
         {
-            return OperationResult.Failure("Không thể gia hạn vì xe đã có lịch thuê kế tiếp bị trùng.");
+            return OperationResult.Failure(
+                $"Không thể gia hạn đến {extension.RequestedReturnDate:dd/MM/yyyy HH:mm}. " +
+                $"Xe đã được giữ cho đơn #{conflictingBooking.BookingId} " +
+                $"từ {conflictingBooking.PickupDate:dd/MM/yyyy HH:mm}.");
         }
 
         extension.Status = BookingExtensionStatus.Approved;
@@ -168,7 +207,7 @@ internal sealed class ExtensionService : IExtensionService
         {
             Type = PaymentType.Extension,
             Amount = extension.AdditionalAmount,
-            Method = "Mô phỏng",
+            Method = PaymentMethods.NotSelected,
             Status = PaymentStatus.Pending
         });
 

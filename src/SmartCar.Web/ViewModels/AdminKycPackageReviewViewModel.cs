@@ -22,4 +22,6 @@ public sealed class AdminKycQueueItemViewModel
     public string CustomerEmail { get; set; } = string.Empty;
     public string? CustomerPhone { get; set; }
     public DateTime SubmittedAt { get; set; }
+    public bool IsFullPackage { get; set; }
+    public string PendingDocumentText { get; set; } = "Giấy tờ";
 }

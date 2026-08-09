@@ -1,4 +1,4 @@
-@model SmartCar.Web.ViewModels.ReturnViewModel
+﻿@model SmartCar.Web.ViewModels.ReturnViewModel
 @{
     ViewData["Title"] = "Biên bản trả xe";
 }
@@ -62,8 +62,9 @@
                    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                    class="form-control"
                    data-image-input
-                   data-preview-target="#return-image-preview"
-                   data-file-info-target="#return-file-info" />
+                   data-max-files="10"
+                   data-preview-target="#vehicle-image-preview"
+                   data-file-info-target="#vehicle-file-info" />
             <span asp-validation-for="Images" class="text-danger small"></span>
             <div class="form-text">Tải từ 1 đến 10 ảnh, mỗi ảnh tối đa 5 MB. Chụp cùng góc với ảnh bàn giao và bổ sung ảnh cận cảnh nếu có hư hỏng.</div>
             <div id="return-file-info" class="small text-muted mt-2 d-none"></div>

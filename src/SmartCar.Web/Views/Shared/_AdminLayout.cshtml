@@ -1,4 +1,4 @@
-@using System.Security.Claims
+﻿@using System.Security.Claims
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using SmartCar.Application.Features.Notifications
@@ -6,22 +6,33 @@
 @using SmartCar.Domain.Enums
 @using SmartCar.Infrastructure.Identity
 @using SmartCar.Infrastructure.Persistence
+
 @inject UserManager<ApplicationUser> UserManager
 @inject INotificationService NotificationService
 @inject ApplicationDbContext AdminDbContext
+
 @{
     ApplicationUser? currentUser = null;
+
     var unreadNotificationCount = 0;
     var pendingKycCount = 0;
 
     if (User.Identity?.IsAuthenticated == true)
     {
-        currentUser = await UserManager.GetUserAsync(User);
-        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        currentUser =
+            await UserManager.GetUserAsync(User);
 
-        if (!string.IsNullOrWhiteSpace(currentUserId))
+        var currentUserId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
+        if (!string.IsNullOrWhiteSpace(
+            currentUserId))
         {
-            unreadNotificationCount = await NotificationService.GetUnreadCountAsync(currentUserId);
+            unreadNotificationCount =
+                await NotificationService
+                    .GetUnreadCountAsync(
+                        currentUserId);
         }
 
         if (User.IsInRole(RoleNames.Admin))
@@ -34,275 +45,718 @@
                 DocumentTypes.DrivingLicenseBack
             };
 
-            pendingKycCount = await AdminDbContext.CustomerDocuments
-                .AsNoTracking()
-                .Where(document =>
-                    document.Status == DocumentStatus.Pending &&
-                    requiredKycTypes.Contains(document.DocumentType))
-                .GroupBy(document => document.CustomerId)
-                .Where(group => group.Select(document => document.DocumentType).Distinct().Count() == requiredKycTypes.Length)
-                .CountAsync();
+            pendingKycCount =
+                await AdminDbContext
+                    .CustomerDocuments
+                    .AsNoTracking()
+                    .Where(document =>
+                        document.Status ==
+                            DocumentStatus.Pending &&
+                        requiredKycTypes.Contains(
+                            document.DocumentType))
+                    .GroupBy(document =>
+                        document.CustomerId)
+                    .Where(group =>
+                        group
+                            .Select(document =>
+                                document.DocumentType)
+                            .Distinct()
+                            .Count()
+                        ==
+                        requiredKycTypes.Length)
+                    .CountAsync();
         }
     }
 
-    var displayName = !string.IsNullOrWhiteSpace(currentUser?.FullName)
-        ? currentUser.FullName
-        : User.Identity?.Name ?? "Quản trị viên";
-    var avatarInitial = displayName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
-    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var displayName =
+        !string.IsNullOrWhiteSpace(
+            currentUser?.FullName)
+            ? currentUser.FullName
+            : User.Identity?.Name
+              ?? "Quản trị viên";
 
-    var bookingActive = new[] { "AdminBookings", "AdminBookingOperations", "Handovers", "Returns" }.Contains(currentController);
-    var customerActive = new[] { "AdminCustomers", "AdminDocuments", "AdminKyc" }.Contains(currentController);
-    var vehicleActive = new[] { "AdminVehicles", "Brands", "VehicleDocuments", "Maintenance", "Incidents" }.Contains(currentController);
-    var businessActive = new[] { "Promotions", "Reports" }.Contains(currentController);
-    var systemActive = new[] { "Notifications", "AuditLogs", "Profile" }.Contains(currentController);
+    var avatarInitial =
+        displayName
+            .Trim()
+            .FirstOrDefault()
+            .ToString()
+            .ToUpperInvariant();
+
+    var currentController =
+        ViewContext
+            .RouteData
+            .Values["controller"]
+            ?.ToString()
+        ?? string.Empty;
+
+    var bookingActive =
+        new[]
+        {
+            "AdminBookings",
+            "AdminBookingOperations",
+            "Handovers",
+            "Returns"
+        }
+        .Contains(currentController);
 }
+
 <!DOCTYPE html>
+
 <html lang="vi">
+
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Quản trị SmartCar</title>
-    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/SmartCar.Web.styles.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/css/admin-layout.css" asp-append-version="true" />
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0" />
+
+    <title>
+        @ViewData["Title"] - Quản trị SmartCar
+    </title>
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <link rel="stylesheet"
+          href="~/css/site.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/css/blue-theme.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/SmartCar.Web.styles.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/css/admin-layout.css"
+          asp-append-version="true" />
 </head>
+
 <body class="admin-body">
+
     <div class="admin-shell">
-        <aside class="admin-sidebar" id="adminSidebar" aria-label="Trình đơn quản trị">
-            <a class="admin-brand" asp-controller="Dashboard" asp-action="Index">
-                <span class="admin-brand-mark">S</span>
+
+        <aside class="admin-sidebar"
+               id="adminSidebar"
+               aria-label="Trình đơn quản trị">
+
+            <a class="admin-brand"
+               asp-controller="Dashboard"
+               asp-action="Index">
+
+                <span class="admin-brand-mark">
+                    S
+                </span>
+
                 <span class="admin-brand-copy">
-                    <strong>SmartCar</strong>
-                    <small>Khu vực quản trị</small>
+                    <strong>
+                        SmartCar
+                    </strong>
+
+                    <small>
+                        Khu vực quản trị
+                    </small>
                 </span>
             </a>
 
             <div class="admin-sidebar-scroll">
+
+                @* =================================================
+                   TỔNG QUAN
+                   ================================================= *@
+
                 <div class="admin-nav-section">
-                    <div class="admin-nav-heading">Tổng quan</div>
+
+                    <div class="admin-nav-heading">
+                        Tổng quan
+                    </div>
+
                     <a class="admin-nav-link @(currentController == "Dashboard" ? "active" : string.Empty)"
-                       asp-controller="Dashboard" asp-action="Index">
-                        <span class="admin-nav-icon">⌂</span>
-                        <span>Tổng quan quản trị</span>
+                       asp-controller="Dashboard"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ⌂
+                        </span>
+
+                        <span>
+                            Tổng quan quản trị
+                        </span>
+
                     </a>
+
                 </div>
 
+                @* =================================================
+                   ĐƠN THUÊ
+                   ================================================= *@
+
                 <div class="admin-nav-section">
-                    <div class="admin-nav-heading">Đơn thuê</div>
+
+                    <div class="admin-nav-heading">
+                        Đơn thuê
+                    </div>
+
                     <a class="admin-nav-link @(bookingActive ? "active" : string.Empty)"
-                       asp-controller="AdminBookings" asp-action="Index">
-                        <span class="admin-nav-icon">▤</span>
-                        <span>Tất cả đơn thuê</span>
+                       asp-controller="AdminBookings"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ▤
+                        </span>
+
+                        <span>
+                            Tất cả đơn thuê
+                        </span>
+
                     </a>
+
                     <a class="admin-nav-link"
-                       asp-controller="AdminBookings" asp-action="Index" asp-route-status="PendingConfirmation">
-                        <span class="admin-nav-icon">◷</span>
-                        <span>Đơn chờ xác nhận</span>
+                       asp-controller="AdminBookings"
+                       asp-action="Index"
+                       asp-route-status="PendingConfirmation">
+
+                        <span class="admin-nav-icon">
+                            ◷
+                        </span>
+
+                        <span>
+                            Đơn chờ xác nhận
+                        </span>
+
                     </a>
+
                     <a class="admin-nav-link @(currentController == "AdminExtensions" ? "active" : string.Empty)"
-                       asp-controller="AdminExtensions" asp-action="Index">
-                        <span class="admin-nav-icon">↻</span>
-                        <span>Yêu cầu gia hạn</span>
+                       asp-controller="AdminExtensions"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ↻
+                        </span>
+
+                        <span>
+                            Yêu cầu gia hạn
+                        </span>
+
                     </a>
+
                 </div>
 
+                @* =================================================
+                   KHÁCH HÀNG
+                   ================================================= *@
+
                 <div class="admin-nav-section">
-                    <div class="admin-nav-heading">Khách hàng</div>
+
+                    <div class="admin-nav-heading">
+                        Khách hàng
+                    </div>
+
                     <a class="admin-nav-link @(currentController == "AdminCustomers" ? "active" : string.Empty)"
-                       asp-controller="AdminCustomers" asp-action="Index">
-                        <span class="admin-nav-icon">◎</span>
-                        <span>Quản lý khách hàng</span>
+                       asp-controller="AdminCustomers"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ◎
+                        </span>
+
+                        <span>
+                            Quản lý khách hàng
+                        </span>
+
                     </a>
+
                     <a class="admin-nav-link @(currentController is "AdminKyc" or "AdminDocuments" ? "active" : string.Empty)"
-                       asp-controller="AdminKyc" asp-action="Index">
-                        <span class="admin-nav-icon">✓</span>
-                        <span>Xác minh giấy tờ</span>
+                       asp-controller="AdminKyc"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ✓
+                        </span>
+
+                        <span>
+                            Xác minh giấy tờ
+                        </span>
+
                         @if (pendingKycCount > 0)
                         {
-                            <span class="badge rounded-pill text-bg-warning ms-auto">@(pendingKycCount > 99 ? "99+" : pendingKycCount)</span>
+                            <span class="badge rounded-pill text-bg-warning ms-auto">
+                                @(pendingKycCount > 99
+                                    ? "99+"
+                                    : pendingKycCount)
+                            </span>
                         }
+
                     </a>
+
                 </div>
 
+                @* =================================================
+                   XE
+                   ================================================= *@
+
                 <div class="admin-nav-section">
-                    <div class="admin-nav-heading">Quản lý xe</div>
+
+                    <div class="admin-nav-heading">
+                        Quản lý xe
+                    </div>
+
                     <a class="admin-nav-link @(currentController == "AdminVehicles" ? "active" : string.Empty)"
-                       asp-controller="AdminVehicles" asp-action="Index">
-                        <span class="admin-nav-icon">◆</span>
-                        <span>Danh sách xe</span>
+                       asp-controller="AdminVehicles"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ◆
+                        </span>
+
+                        <span>
+                            Danh sách xe
+                        </span>
+
                     </a>
+
                     <a class="admin-nav-link @(currentController == "Brands" ? "active" : string.Empty)"
-                       asp-controller="Brands" asp-action="Index">
-                        <span class="admin-nav-icon">B</span>
-                        <span>Hãng xe</span>
+                       asp-controller="Brands"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            B
+                        </span>
+
+                        <span>
+                            Hãng xe
+                        </span>
+
                     </a>
+
                     <a class="admin-nav-link @(currentController == "VehicleDocuments" ? "active" : string.Empty)"
-                       asp-controller="VehicleDocuments" asp-action="Index">
-                        <span class="admin-nav-icon">▧</span>
-                        <span>Giấy tờ pháp lý xe</span>
+                       asp-controller="VehicleDocuments"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ▧
+                        </span>
+
+                        <span>
+                            Giấy tờ pháp lý xe
+                        </span>
+
                     </a>
+
                     <a class="admin-nav-link @(currentController == "Maintenance" ? "active" : string.Empty)"
-                       asp-controller="Maintenance" asp-action="Index">
-                        <span class="admin-nav-icon">⚙</span>
-                        <span>Bảo trì xe</span>
+                       asp-controller="Maintenance"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ⚙
+                        </span>
+
+                        <span>
+                            Bảo trì xe
+                        </span>
+
                     </a>
+
                     <a class="admin-nav-link @(currentController == "Incidents" ? "active" : string.Empty)"
-                       asp-controller="Incidents" asp-action="Index">
-                        <span class="admin-nav-icon">!</span>
-                        <span>Sự cố và vi phạm</span>
+                       asp-controller="Incidents"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            !
+                        </span>
+
+                        <span>
+                            Sự cố và vi phạm
+                        </span>
+
                     </a>
+
                 </div>
 
+                @* =================================================
+                   KINH DOANH
+                   ================================================= *@
+
                 <div class="admin-nav-section">
-                    <div class="admin-nav-heading">Kinh doanh và báo cáo</div>
-                    <a class="admin-nav-link @(currentController == "Promotions" ? "active" : string.Empty)"
-                       asp-controller="Promotions" asp-action="Index">
-                        <span class="admin-nav-icon">%</span>
-                        <span>Khuyến mãi</span>
+
+                    <div class="admin-nav-heading">
+                        Kinh doanh và báo cáo
+                    </div>
+
+                    <a class="admin-nav-link @(currentController == "AdminPayments" ? "active" : string.Empty)"
+                       asp-controller="AdminPayments"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ₫
+                        </span>
+
+                        <span>
+                            Thanh toán
+                        </span>
+
                     </a>
+
                     <a class="admin-nav-link @(currentController == "Reports" ? "active" : string.Empty)"
-                       asp-controller="Reports" asp-action="Index">
-                        <span class="admin-nav-icon">▥</span>
-                        <span>Hiệu suất và lợi nhuận</span>
+                       asp-controller="Reports"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ▥
+                        </span>
+
+                        <span>
+                            Hiệu suất và lợi nhuận
+                        </span>
+
                     </a>
+
                 </div>
 
+                @* =================================================
+                   HỆ THỐNG
+                   ================================================= *@
+
                 <div class="admin-nav-section">
-                    <div class="admin-nav-heading">Hệ thống</div>
+
+                    <div class="admin-nav-heading">
+                        Hệ thống
+                    </div>
+
                     <a class="admin-nav-link @(currentController == "Notifications" ? "active" : string.Empty)"
-                       asp-controller="Notifications" asp-action="Index">
-                        <span class="admin-nav-icon">◇</span>
-                        <span>Thông báo</span>
+                       asp-controller="Notifications"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ◇
+                        </span>
+
+                        <span>
+                            Thông báo
+                        </span>
+
                         @if (unreadNotificationCount > 0)
                         {
-                            <span class="badge rounded-pill text-bg-danger ms-auto">@(unreadNotificationCount > 99 ? "99+" : unreadNotificationCount)</span>
+                            <span class="badge rounded-pill text-bg-danger ms-auto">
+                                @(unreadNotificationCount > 99
+                                    ? "99+"
+                                    : unreadNotificationCount)
+                            </span>
                         }
+
                     </a>
+
                     <a class="admin-nav-link @(currentController == "AuditLogs" ? "active" : string.Empty)"
-                       asp-controller="AuditLogs" asp-action="Index">
-                        <span class="admin-nav-icon">≡</span>
-                        <span>Nhật ký thao tác</span>
+                       asp-controller="AuditLogs"
+                       asp-action="Index">
+
+                        <span class="admin-nav-icon">
+                            ≡
+                        </span>
+
+                        <span>
+                            Nhật ký thao tác
+                        </span>
+
                     </a>
+
                 </div>
+
             </div>
+
         </aside>
 
-        <div class="admin-sidebar-backdrop" id="adminSidebarBackdrop"></div>
+        <div class="admin-sidebar-backdrop"
+             id="adminSidebarBackdrop">
+        </div>
 
         <section class="admin-workspace">
+
             <header class="admin-topbar">
+
                 <div class="admin-topbar-left">
-                    <button class="admin-sidebar-toggle" id="adminSidebarToggle" type="button" aria-label="Mở trình đơn quản trị">☰</button>
+
+                    <button class="admin-sidebar-toggle"
+                            id="adminSidebarToggle"
+                            type="button"
+                            aria-label="Mở trình đơn quản trị">
+                        ☰
+                    </button>
+
                     <div class="admin-page-heading">
-                        <small>Khu vực quản trị</small>
-                        <strong>@(ViewData["Title"] ?? "SmartCar")</strong>
+
+                        <small>
+                            Khu vực quản trị
+                        </small>
+
+                        <strong>
+                            @(ViewData["Title"] ?? "SmartCar")
+                        </strong>
+
                     </div>
+
                 </div>
 
                 <div class="admin-topbar-actions">
+
                     @if (pendingKycCount > 0)
                     {
-                        <a class="admin-topbar-link" asp-controller="AdminKyc" asp-action="Index" aria-label="Hồ sơ xác minh chờ duyệt">
-                            <span aria-hidden="true">✓</span>
-                            <span>Hồ sơ xác minh</span>
-                            <span class="admin-notification-count bg-warning text-dark">@(pendingKycCount > 99 ? "99+" : pendingKycCount)</span>
+                        <a class="admin-topbar-link"
+                           asp-controller="AdminKyc"
+                           asp-action="Index"
+                           aria-label="Hồ sơ xác minh chờ duyệt">
+
+                            <span aria-hidden="true">
+                                ✓
+                            </span>
+
+                            <span>
+                                Hồ sơ xác minh
+                            </span>
+
+                            <span class="admin-notification-count bg-warning text-dark">
+                                @(pendingKycCount > 99
+                                    ? "99+"
+                                    : pendingKycCount)
+                            </span>
+
                         </a>
                     }
 
-                    <a class="admin-topbar-link" asp-controller="Notifications" asp-action="Index" aria-label="Thông báo">
-                        <span aria-hidden="true">◇</span>
-                        <span>Thông báo</span>
+                    <a class="admin-topbar-link"
+                       asp-controller="Notifications"
+                       asp-action="Index"
+                       aria-label="Thông báo">
+
+                        <span aria-hidden="true">
+                            ◇
+                        </span>
+
+                        <span>
+                            Thông báo
+                        </span>
+
                         @if (unreadNotificationCount > 0)
                         {
-                            <span class="admin-notification-count">@(unreadNotificationCount > 99 ? "99+" : unreadNotificationCount)</span>
+                            <span class="admin-notification-count">
+                                @(unreadNotificationCount > 99
+                                    ? "99+"
+                                    : unreadNotificationCount)
+                            </span>
                         }
+
                     </a>
 
                     <div class="dropdown">
+
                         <a class="admin-user-toggle dropdown-toggle"
                            href="#"
                            role="button"
                            data-bs-toggle="dropdown"
                            aria-expanded="false">
-                            <span class="admin-user-avatar">@avatarInitial</span>
-                            <span class="admin-user-name">@displayName</span>
+
+                            <span class="admin-user-avatar">
+                                @avatarInitial
+                            </span>
+
+                            <span class="admin-user-name">
+                                @displayName
+                            </span>
+
                         </a>
+
                         <ul class="dropdown-menu dropdown-menu-end admin-user-menu">
+
                             <li class="admin-user-summary">
-                                <strong>@displayName</strong>
-                                <small>@currentUser?.Email</small>
+
+                                <strong>
+                                    @displayName
+                                </strong>
+
+                                <small>
+                                    @currentUser?.Email
+                                </small>
+
                             </li>
-                            <li><hr class="dropdown-divider" /></li>
-                            <li><a class="dropdown-item" asp-controller="Profile" asp-action="Index">Hồ sơ tài khoản</a></li>
-                            <li><hr class="dropdown-divider" /></li>
+
                             <li>
-                                <form asp-controller="Account" asp-action="Logout" method="post">
-                                    <button type="submit" class="dropdown-item text-danger">Đăng xuất</button>
-                                </form>
+                                <hr class="dropdown-divider" />
                             </li>
+
+                            <li>
+                                <a class="dropdown-item"
+                                   asp-controller="Profile"
+                                   asp-action="Index">
+                                    Hồ sơ tài khoản
+                                </a>
+                            </li>
+
+                            <li>
+                                <hr class="dropdown-divider" />
+                            </li>
+
+                            <li>
+
+                                <form asp-controller="Account"
+                                      asp-action="Logout"
+                                      method="post">
+
+                                    <button type="submit"
+                                            class="dropdown-item text-danger">
+                                        Đăng xuất
+                                    </button>
+
+                                </form>
+
+                            </li>
+
                         </ul>
+
                     </div>
+
                 </div>
+
             </header>
 
-            <main class="admin-content" role="main">
-                @if (TempData["SuccessMessage"] is string successMessage)
+            <main class="admin-content"
+                  role="main">
+
+                @if (
+                    TempData["SuccessMessage"]
+                    is string successMessage)
                 {
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <div class="alert alert-success alert-dismissible fade show"
+                         role="alert">
+
                         @successMessage
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button>
+
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="alert"
+                                aria-label="Đóng thông báo">
+                        </button>
+
                     </div>
                 }
-                @if (TempData["ErrorMessage"] is string errorMessage)
+
+                @if (
+                    TempData["ErrorMessage"]
+                    is string errorMessage)
                 {
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <div class="alert alert-danger alert-dismissible fade show"
+                         role="alert">
+
                         @errorMessage
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button>
+
+                        <button type="button"
+                                class="btn-close"
+                                data-bs-dismiss="alert"
+                                aria-label="Đóng thông báo">
+                        </button>
+
                     </div>
                 }
 
                 @RenderBody()
+
             </main>
 
-            <footer class="admin-footer">&copy; 2026 SmartCar — Khu vực quản trị</footer>
+            <footer class="admin-footer">
+                &copy; 2026 SmartCar — Khu vực quản trị
+            </footer>
+
         </section>
+
     </div>
 
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-    <script>
-        (() => {
-            const sidebar = document.getElementById('adminSidebar');
-            const toggle = document.getElementById('adminSidebarToggle');
-            const backdrop = document.getElementById('adminSidebarBackdrop');
-
-            const closeSidebar = () => {
-                sidebar?.classList.remove('open');
-                backdrop?.classList.remove('show');
-            };
-
-            toggle?.addEventListener('click', () => {
-                sidebar?.classList.toggle('open');
-                backdrop?.classList.toggle('show');
-            });
-
-            backdrop?.addEventListener('click', closeSidebar);
-
-            sidebar?.querySelectorAll('a').forEach(link => {
-                link.addEventListener('click', () => {
-                    if (window.innerWidth < 992) closeSidebar();
-                });
-            });
-
-            window.addEventListener('resize', () => {
-                if (window.innerWidth >= 992) closeSidebar();
-            });
-        })();
+    <script src="~/lib/jquery/dist/jquery.min.js">
     </script>
-    @await RenderSectionAsync("Scripts", required: false)
+
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js">
+    </script>
+
+    <script src="~/js/site.js"
+            asp-append-version="true">
+    </script>
+
+    <script src="~/js/ui-terminology.js"
+            asp-append-version="true">
+    </script>
+
+    <script>
+            (() => {
+
+                const sidebar =
+                    document.getElementById(
+                        'adminSidebar');
+
+                const toggle =
+                    document.getElementById(
+                        'adminSidebarToggle');
+
+                const backdrop =
+                    document.getElementById(
+                        'adminSidebarBackdrop');
+
+                const closeSidebar = () => {
+                    sidebar?.classList.remove(
+                        'open');
+
+                    backdrop?.classList.remove(
+                        'show');
+                };
+
+                toggle?.addEventListener(
+                    'click',
+                    () => {
+
+                        sidebar?.classList.toggle(
+                            'open');
+
+                        backdrop?.classList.toggle(
+                            'show');
+                    });
+
+                backdrop?.addEventListener(
+                    'click',
+                    closeSidebar);
+
+                sidebar
+                    ?.querySelectorAll('a')
+                    .forEach(link => {
+
+                        link.addEventListener(
+                            'click',
+                            () => {
+
+                                if (
+                                    window.innerWidth < 992)
+                                {
+                                    closeSidebar();
+                                }
+                            });
+                    });
+
+                window.addEventListener(
+                    'resize',
+                    () => {
+
+                        if (
+                            window.innerWidth >= 992)
+                        {
+                            closeSidebar();
+                        }
+                    });
+
+            })();
+    </script>
+
+    @await RenderSectionAsync(
+        "Scripts",
+        required: false)
+
 </body>
+
 </html>

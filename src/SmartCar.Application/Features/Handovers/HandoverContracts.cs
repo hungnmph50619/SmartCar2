@@ -1,4 +1,4 @@
-using SmartCar.Application.Common;
+﻿using SmartCar.Application.Common;
 
 namespace SmartCar.Application.Features.Handovers;
 
@@ -11,6 +11,12 @@ public sealed record CreateHandoverRequest(
     string? InteriorCondition,
     string? Accessories,
     string? ImagePaths,
+    int IncludedKilometers,
+    decimal ExcessKmFeePerKm,
+    decimal LateReturnFeeMultiplier,
+    string TrafficFineTerms,
+    string DamageCompensationTerms,
+    bool PenaltyPolicyAccepted,
     string? Notes);
 
 public interface IHandoverService

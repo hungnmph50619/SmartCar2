@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Entities;
@@ -56,7 +56,9 @@ internal sealed class VehicleService : IVehicleService
         }
 
         var query = VehicleQuery()
-            .Where(vehicle => vehicle.Status == VehicleStatus.Available)
+            .Where(vehicle =>
+                vehicle.Status == VehicleStatus.Available ||
+                vehicle.Status == VehicleStatus.Rented)
             .Where(vehicle => !vehicle.Bookings.Any(booking =>
                 BlockingBookingStatuses.Contains(booking.Status) &&
                 request.PickupDate < booking.ReturnDate &&

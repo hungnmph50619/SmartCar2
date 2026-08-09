@@ -1,6 +1,7 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 using SmartCar.Domain.Enums;
+using SmartCar.Web.Validation;
 
 namespace SmartCar.Web.ViewModels;
 
@@ -109,9 +110,30 @@ public sealed class VehicleSearchViewModel
 
 public sealed class CreateBookingViewModel
 {
+    [Range(1, int.MaxValue, ErrorMessage = "Xe không hợp lệ.")]
     public int VehicleId { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng chọn thời gian nhận xe.")]
     public DateTime PickupDate { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng chọn thời gian trả xe.")]
     public DateTime ReturnDate { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng chọn phương thức nhận xe.")]
+    public VehiclePickupMethod PickupMethod { get; set; }
+        = VehiclePickupMethod.StorePickup;
+
+    [StringLength(
+        500,
+        ErrorMessage = "Địa chỉ giao xe tối đa 500 ký tự.")]
+    public string? DeliveryAddress { get; set; }
+
+    // Tọa độ nhận từ JavaScript dưới dạng chuỗi dùng dấu chấm
+    // (ví dụ: 21.0381298). Controller sẽ parse bằng
+    // CultureInfo.InvariantCulture để không phụ thuộc culture Windows/vi-VN.
+    public string? DeliveryLatitude { get; set; }
+
+    public string? DeliveryLongitude { get; set; }
 }
 
 public sealed class RejectBookingViewModel
@@ -125,41 +147,108 @@ public sealed class RejectBookingViewModel
 
 public sealed class HandoverViewModel
 {
+    [Range(1, int.MaxValue)]
     public int BookingId { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập thời gian giao xe.")]
     public DateTime HandoverAt { get; set; } = DateTime.Now;
 
-    [Range(0, int.MaxValue)]
+    [Range(
+        0,
+        int.MaxValue,
+        ErrorMessage = "Số km không hợp lệ.")]
     public int Mileage { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi giao xe.")]
+    [Required(
+        ErrorMessage = "Vui lòng nhập mức nhiên liệu khi giao xe.")]
+    [StringLength(30)]
     public string FuelLevel { get; set; } = string.Empty;
+
+    [StringLength(1500)]
     public string? ExteriorCondition { get; set; }
+
+    [StringLength(1500)]
     public string? InteriorCondition { get; set; }
+
+    [StringLength(1000)]
     public string? Accessories { get; set; }
 
     [Display(Name = "Ảnh bàn giao")]
     public List<IFormFile> Images { get; set; } = new();
 
+    [Range(0, int.MaxValue)]
+    public int IncludedKilometers { get; set; }
+
+    [Range(
+        1,
+        1000000,
+        ErrorMessage = "Phí vượt km phải lớn hơn 0.")]
+    public decimal ExcessKmFeePerKm { get; set; }
+
+    [Range(
+        1,
+        10,
+        ErrorMessage = "Hệ số phí trả muộn không hợp lệ.")]
+    public decimal LateReturnFeeMultiplier { get; set; }
+
+    [Required]
+    [StringLength(1500)]
+    public string TrafficFineTerms { get; set; }
+        = string.Empty;
+
+    [Required]
+    [StringLength(1500)]
+    public string DamageCompensationTerms { get; set; }
+        = string.Empty;
+
+    [MustBeTrue(
+        ErrorMessage =
+            "Cần xác nhận đã thông báo và khách đã đồng ý chính sách phí/phạt trước khi giao xe.")]
+    public bool PenaltyPolicyAccepted { get; set; }
+
+    [StringLength(1500)]
     public string? Notes { get; set; }
 }
 
 public sealed class ReturnViewModel
 {
+    [Range(
+        1,
+        int.MaxValue,
+        ErrorMessage = "Đơn thuê không hợp lệ.")]
     public int BookingId { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập thời gian trả xe.")]
     public DateTime ReturnedAt { get; set; } = DateTime.Now;
 
     [Range(0, int.MaxValue)]
     public int Mileage { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi trả xe.")]
+    [Required(
+        ErrorMessage = "Vui lòng nhập mức nhiên liệu khi trả xe.")]
+    [StringLength(
+        30,
+        ErrorMessage = "Mức nhiên liệu tối đa 30 ký tự.")]
     public string FuelLevel { get; set; } = string.Empty;
+
+    [StringLength(
+        1500,
+        ErrorMessage = "Mô tả ngoại thất tối đa 1500 ký tự.")]
     public string? ExteriorCondition { get; set; }
+
+    [StringLength(
+        1500,
+        ErrorMessage = "Mô tả nội thất tối đa 1500 ký tự.")]
     public string? InteriorCondition { get; set; }
+
     public bool HasDamage { get; set; }
 
     [Display(Name = "Ảnh khi trả xe")]
     public List<IFormFile> Images { get; set; } = new();
 
+    [StringLength(
+        1500,
+        ErrorMessage = "Ghi chú tối đa 1500 ký tự.")]
     public string? Notes { get; set; }
 }
 

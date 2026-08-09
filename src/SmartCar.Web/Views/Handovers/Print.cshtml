@@ -1,0 +1,167 @@
+﻿@model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Enums
+@{
+    Layout = null;
+    var handover = Model.Handover!;
+    var pickupMethod = Model.PickupMethod == VehiclePickupMethod.Delivery
+        ? $"Giao xe tận nơi: {Model.DeliveryAddress}"
+        : "Nhận xe trực tiếp tại cửa hàng";
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Biên bản giao xe #@Model.BookingId</title>
+    <style>
+            body {
+                font-family: Arial, sans-serif;
+                color: #111;
+                margin: 24px;
+                font-size: 14px;
+            }
+
+            h1 {
+                text-align: center;
+                font-size: 22px;
+                margin-bottom: 6px;
+            }
+
+            .sub {
+                text-align: center;
+                color: #555;
+                margin-bottom: 24px;
+            }
+
+            .grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px 24px;
+            }
+
+            .section {
+                margin-top: 22px;
+            }
+
+                .section h2 {
+                    font-size: 16px;
+                    border-bottom: 1px solid #aaa;
+                    padding-bottom: 6px;
+                }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            th, td {
+                border: 1px solid #bbb;
+                padding: 8px;
+                vertical-align: top;
+                text-align: left;
+            }
+
+            .images {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+
+                .images img {
+                    width: 100%;
+                    max-height: 320px;
+                    object-fit: contain;
+                    border: 1px solid #ccc;
+                }
+
+            .signatures {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 80px;
+                margin-top: 45px;
+                text-align: center;
+            }
+
+            .no-print {
+                margin-bottom: 18px;
+                display: flex;
+                gap: 8px;
+            }
+
+            @@media print {
+                .no-print {
+                    display: none !important;
+                }
+
+                body {
+                    margin: 12mm;
+                }
+            }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <button type="button" onclick="window.print()">In biên bản</button>
+        <button type="button" onclick="window.close()">Đóng</button>
+    </div>
+
+    <h1>BIÊN BẢN GIAO XE</h1>
+    <div class="sub">SmartCar · Đơn thuê #@Model.BookingId</div>
+
+    <div class="grid">
+        <div><strong>Khách hàng:</strong> @Model.CustomerName</div>
+        <div><strong>SĐT:</strong> @Model.CustomerPhone</div>
+        <div><strong>Xe:</strong> @Model.VehicleName</div>
+        <div><strong>Biển số:</strong> @Model.LicensePlate</div>
+        <div><strong>Thời gian giao:</strong> @handover.HandoverAt.ToString("dd/MM/yyyy HH:mm")</div>
+        <div><strong>Dự kiến trả:</strong> @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+        <div><strong>Phương thức nhận:</strong> @pickupMethod</div>
+        <div><strong>Số km khi giao:</strong> @handover.Mileage.ToString("N0") km</div>
+    </div>
+
+    <div class="section">
+        <h2>Tình trạng xe khi giao</h2>
+        <table>
+            <tr><th style="width:25%">Nhiên liệu</th><td>@handover.FuelLevel</td></tr>
+            <tr><th>Ngoại thất</th><td>@(handover.ExteriorCondition ?? "Không ghi nhận bất thường")</td></tr>
+            <tr><th>Nội thất</th><td>@(handover.InteriorCondition ?? "Không ghi nhận bất thường")</td></tr>
+            <tr><th>Phụ kiện</th><td>@(handover.Accessories ?? "Không ghi chú")</td></tr>
+            <tr><th>Ghi chú</th><td>@(handover.Notes ?? "Không có")</td></tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Chính sách phí/phạt đã thông báo trước</h2>
+        <table>
+            <tr><th style="width:25%">Định mức kilomet</th><td>@handover.IncludedKilometers.ToString("N0") km/chuyến</td></tr>
+            <tr><th>Phí vượt kilomet</th><td>@handover.ExcessKmFeePerKm.ToString("N0") đ/km vượt định mức</td></tr>
+            <tr><th>Phí trả xe muộn</th><td>@handover.LateReturnFeeMultiplier.ToString("0.##") x giá thuê/ngày cho mỗi ngày tính phí phát sinh</td></tr>
+            <tr><th>Phạt giao thông</th><td>@handover.TrafficFineTerms</td></tr>
+            <tr><th>Hư hỏng / bồi thường</th><td>@handover.DamageCompensationTerms</td></tr>
+        </table>
+        <p><strong>Xác nhận đã thông báo và khách đồng ý:</strong> @(handover.PenaltyPolicyAccepted ? "Có" : "Không")</p>
+    </div>
+
+    <div class="section">
+        <h2>Ảnh bàn giao</h2>
+        @if (handover.ImagePaths.Count == 0)
+        {
+            <p>Không có ảnh.</p>
+        }
+        else
+        {
+            <div class="images">
+                @foreach (var path in handover.ImagePaths)
+                {
+                    <img src="@path" alt="Ảnh tình trạng xe khi giao" />
+                }
+            </div>
+        }
+    </div>
+
+    <div class="signatures">
+        <div><strong>ĐẠI DIỆN SMARTCAR</strong><br /><br /><br /><br /><br />(Ký và ghi rõ họ tên)</div>
+        <div><strong>KHÁCH HÀNG</strong><br /><br /><br /><br /><br />(Ký và ghi rõ họ tên)</div>
+    </div>
+</body>
+</html>

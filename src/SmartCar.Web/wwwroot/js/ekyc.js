@@ -16,7 +16,7 @@
         if (!response.ok) {
             const errors = Array.isArray(payload?.errors)
                 ? payload.errors
-                : [payload?.message || 'Không thể xử lý yêu cầu eKYC.'];
+                : [payload?.message || 'Không thể xử lý yêu cầu xác minh giấy tờ điện tử.'];
             const error = new Error(errors.join(' '));
             error.errors = errors;
             throw error;
@@ -117,7 +117,7 @@
                     <div class="col-sm-6">Khớp khuôn mặt: <strong>${latest.faceMatched === true ? 'Đạt' : latest.faceMatched === false ? 'Không đạt' : 'Chưa kiểm tra'}</strong></div>
                     <div class="col-sm-6">Độ tương đồng: <strong>${face}</strong></div>
                 </div>
-                <div class="small text-muted mt-2">${latest.provider || 'eKYC'}${latest.isDemo ? ' · Chế độ trình diễn' : ''}${checkedAt ? ` · ${checkedAt}` : ''}</div>
+                <div class="small text-muted mt-2">${latest.provider || 'Xác minh giấy tờ điện tử'}${latest.isDemo ? ' · Chế độ trình diễn' : ''}${checkedAt ? ` · ${checkedAt}` : ''}</div>
             </details>`;
     };
 
@@ -382,7 +382,7 @@
             const status = await jsonRequest('/Ekyc/Status');
             const badge = panel.querySelector('[data-ekyc-provider]');
             if (badge) {
-                badge.textContent = status.isDemo ? 'Chế độ trình diễn' : (status.provider || 'eKYC');
+                badge.textContent = status.isDemo ? 'Chế độ trình diễn' : (status.provider || 'Xác minh giấy tờ điện tử');
                 badge.className = `badge ${status.isDemo ? 'bg-warning text-dark' : 'bg-success'}`;
             }
             const demoNotice = panel.querySelector('[data-ekyc-demo-notice]');
@@ -589,7 +589,7 @@
                     body: new FormData(form),
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                setMessage(panel, result.message || 'Đã gửi hồ sơ eKYC.', 'success');
+                setMessage(panel, result.message || 'Đã gửi hồ sơ xác minh giấy tờ điện tử.', 'success');
                 window.location.assign(result.redirectUrl || '/Profile?tab=documents');
             } catch (error) {
                 setMessage(panel, error.message, 'danger');
@@ -739,7 +739,7 @@
             card.innerHTML = `
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-                        <div><div class="small text-uppercase text-primary fw-bold">Kết quả eKYC hỗ trợ duyệt</div><h3 class="h5 fw-bold mb-1">OCR + Liveness + Face Match</h3><div class="small text-muted">${result.provider}${result.isDemo ? ' · Chế độ trình diễn' : ''}</div></div>
+                        <div><div class="small text-uppercase text-primary fw-bold">Kết quả xác minh điện tử hỗ trợ duyệt</div><h3 class="h5 fw-bold mb-1">OCR + Liveness + Face Match</h3><div class="small text-muted">${result.provider}${result.isDemo ? ' · Chế độ trình diễn' : ''}</div></div>
                         <span class="badge ${result.livenessPassed === true && result.faceMatched === true && !result.isDemo ? 'bg-success' : 'bg-warning text-dark'}">${result.isDemo ? 'Kết quả mô phỏng' : result.livenessPassed === true && result.faceMatched === true ? 'AI đạt' : 'Cần kiểm tra'}</span>
                     </div>
                     <div class="row g-3">

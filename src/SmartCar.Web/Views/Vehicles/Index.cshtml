@@ -1,4 +1,4 @@
-@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
+﻿@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using SmartCar.Web.ViewModels
 @{
@@ -49,6 +49,7 @@
         background: #f5f9ff;
         font-size: .82rem;
         font-weight: 700;
+        text-decoration: none;
     }
 
     .vehicle-filter-chip:hover {
@@ -70,10 +71,34 @@
         font-size: .85rem;
     }
 
+    .vehicle-result-card {
+        position: relative;
+        cursor: pointer;
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    .vehicle-result-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, .1) !important;
+    }
+
+    .vehicle-result-card:focus-within {
+        outline: 3px solid rgba(13, 110, 253, .18);
+        outline-offset: 2px;
+    }
+
+    .vehicle-result-status {
+        font-size: .72rem;
+    }
+
     @@media (min-width: 992px) {
         .vehicle-filter-sticky {
             position: sticky;
             top: 92px;
+            max-height: calc(100vh - 112px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
         }
     }
 </style>
@@ -190,9 +215,9 @@
                         }
                     </div>
 
-                    <form method="get" action="@searchAction">
-                        <input type="hidden" name="PickupDate" value="@search.PickupDate.ToString("yyyy-MM-ddTHH:mm")" />
-                        <input type="hidden" name="ReturnDate" value="@search.ReturnDate.ToString("yyyy-MM-ddTHH:mm")" />
+                    <form method="get" action="@searchAction" data-vehicle-filter-form>
+                        <input type="hidden" name="PickupDate" value="@search.PickupDate.ToString("yyyy-MM-ddTHH:mm")" data-filter-period="pickup" />
+                        <input type="hidden" name="ReturnDate" value="@search.ReturnDate.ToString("yyyy-MM-ddTHH:mm")" data-filter-period="return" />
 
                         <div class="mb-3">
                             <label for="filterBrand" class="form-label fw-semibold">Hãng xe</label>
@@ -264,8 +289,11 @@
                             </select>
                         </div>
 
-                        <button class="btn btn-primary w-100 mb-2" type="submit">Áp dụng bộ lọc</button>
-                        <a href="@resetFiltersUrl#vehicle-results" class="btn btn-outline-secondary w-100">Xóa bộ lọc</a>
+                        <button class="btn btn-primary w-100 @(hasAdvancedFilters ? "mb-2" : string.Empty)" type="submit">Áp dụng bộ lọc</button>
+                        @if (hasAdvancedFilters)
+                        {
+                            <a href="@resetFiltersUrl#vehicle-results" class="btn btn-outline-secondary w-100">Xóa bộ lọc</a>
+                        }
                     </form>
                 </div>
             </div>
@@ -279,7 +307,7 @@
                     <div>
                         @if (Model.Count > 0)
                         {
-                            <strong>Đã tìm thấy @Model.Count xe phù hợp.</strong>
+                            <strong>Xe sẵn sàng trong thời gian bạn đã chọn.</strong>
                             <div>Từ <strong>@search.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong> đến <strong>@search.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong>.</div>
                         }
                         else
@@ -296,13 +324,10 @@
                     <span class="section-eyebrow">@(hasSearch ? "KẾT QUẢ TÌM KIẾM" : "XE ĐANG SẴN SÀNG")</span>
                     <h2 class="h4 mb-0">@Model.Count xe phù hợp</h2>
                 </div>
-                <div class="d-flex align-items-center gap-2">
-                    @if (hasAdvancedFilters)
-                    {
-                        <span class="small text-muted">@activeFilterCount bộ lọc đang áp dụng</span>
-                    }
-                    <span class="vehicle-result-count">@Model.Count xe</span>
-                </div>
+                @if (hasAdvancedFilters)
+                {
+                    <span class="small text-muted">@activeFilterCount bộ lọc đang áp dụng</span>
+                }
             </div>
 
             @if (hasAdvancedFilters)
@@ -311,43 +336,43 @@
                     @if (search.BrandId.HasValue)
                     {
                         <a class="vehicle-filter-chip" href="@Url.Action("Index", "Vehicles", new { PickupDate = search.PickupDate, ReturnDate = search.ReturnDate, Seats = search.Seats, Transmission = search.Transmission, FuelType = search.FuelType, MinDailyPrice = search.MinDailyPrice, MaxDailyPrice = search.MaxDailyPrice, MinManufactureYear = search.MinManufactureYear, SortBy = search.SortBy })#vehicle-results">
-                            @(selectedBrandName ?? "Hãng xe") <span class="chip-close">×</span>
+                            @(selectedBrandName ?? "Hãng xe") <span class="chip-close" aria-hidden="true">×</span>
                         </a>
                     }
                     @if (search.Seats.HasValue)
                     {
                         <a class="vehicle-filter-chip" href="@Url.Action("Index", "Vehicles", new { PickupDate = search.PickupDate, ReturnDate = search.ReturnDate, BrandId = search.BrandId, Transmission = search.Transmission, FuelType = search.FuelType, MinDailyPrice = search.MinDailyPrice, MaxDailyPrice = search.MaxDailyPrice, MinManufactureYear = search.MinManufactureYear, SortBy = search.SortBy })#vehicle-results">
-                            @search.Seats+ chỗ <span class="chip-close">×</span>
+                            @search.Seats+ chỗ <span class="chip-close" aria-hidden="true">×</span>
                         </a>
                     }
                     @if (!string.IsNullOrWhiteSpace(search.Transmission))
                     {
                         <a class="vehicle-filter-chip" href="@Url.Action("Index", "Vehicles", new { PickupDate = search.PickupDate, ReturnDate = search.ReturnDate, BrandId = search.BrandId, Seats = search.Seats, FuelType = search.FuelType, MinDailyPrice = search.MinDailyPrice, MaxDailyPrice = search.MaxDailyPrice, MinManufactureYear = search.MinManufactureYear, SortBy = search.SortBy })#vehicle-results">
-                            @search.Transmission <span class="chip-close">×</span>
+                            @search.Transmission <span class="chip-close" aria-hidden="true">×</span>
                         </a>
                     }
                     @if (!string.IsNullOrWhiteSpace(search.FuelType))
                     {
                         <a class="vehicle-filter-chip" href="@Url.Action("Index", "Vehicles", new { PickupDate = search.PickupDate, ReturnDate = search.ReturnDate, BrandId = search.BrandId, Seats = search.Seats, Transmission = search.Transmission, MinDailyPrice = search.MinDailyPrice, MaxDailyPrice = search.MaxDailyPrice, MinManufactureYear = search.MinManufactureYear, SortBy = search.SortBy })#vehicle-results">
-                            @search.FuelType <span class="chip-close">×</span>
+                            @search.FuelType <span class="chip-close" aria-hidden="true">×</span>
                         </a>
                     }
                     @if (search.MinDailyPrice.HasValue)
                     {
                         <a class="vehicle-filter-chip" href="@Url.Action("Index", "Vehicles", new { PickupDate = search.PickupDate, ReturnDate = search.ReturnDate, BrandId = search.BrandId, Seats = search.Seats, Transmission = search.Transmission, FuelType = search.FuelType, MaxDailyPrice = search.MaxDailyPrice, MinManufactureYear = search.MinManufactureYear, SortBy = search.SortBy })#vehicle-results">
-                            Từ @search.MinDailyPrice.Value.ToString("N0") đ <span class="chip-close">×</span>
+                            Từ @search.MinDailyPrice.Value.ToString("N0") đ <span class="chip-close" aria-hidden="true">×</span>
                         </a>
                     }
                     @if (search.MaxDailyPrice.HasValue)
                     {
                         <a class="vehicle-filter-chip" href="@Url.Action("Index", "Vehicles", new { PickupDate = search.PickupDate, ReturnDate = search.ReturnDate, BrandId = search.BrandId, Seats = search.Seats, Transmission = search.Transmission, FuelType = search.FuelType, MinDailyPrice = search.MinDailyPrice, MinManufactureYear = search.MinManufactureYear, SortBy = search.SortBy })#vehicle-results">
-                            ≤ @search.MaxDailyPrice.Value.ToString("N0") đ <span class="chip-close">×</span>
+                            ≤ @search.MaxDailyPrice.Value.ToString("N0") đ <span class="chip-close" aria-hidden="true">×</span>
                         </a>
                     }
                     @if (search.MinManufactureYear.HasValue)
                     {
                         <a class="vehicle-filter-chip" href="@Url.Action("Index", "Vehicles", new { PickupDate = search.PickupDate, ReturnDate = search.ReturnDate, BrandId = search.BrandId, Seats = search.Seats, Transmission = search.Transmission, FuelType = search.FuelType, MinDailyPrice = search.MinDailyPrice, MaxDailyPrice = search.MaxDailyPrice, SortBy = search.SortBy })#vehicle-results">
-                            Đời @search.MinManufactureYear+ <span class="chip-close">×</span>
+                            Đời @search.MinManufactureYear+ <span class="chip-close" aria-hidden="true">×</span>
                         </a>
                     }
                     <a href="@resetFiltersUrl#vehicle-results" class="small fw-semibold ms-1">Xóa tất cả</a>
@@ -372,7 +397,7 @@
                     @foreach (var vehicle in Model)
                     {
                         <div class="col-xl-4 col-md-6">
-                            <div class="card h-100 shadow-sm border-0 vehicle-result-card">
+                            <article class="card h-100 shadow-sm border-0 vehicle-result-card">
                                 @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
                                 {
                                     <img src="@vehicle.PrimaryImagePath" class="card-img-top vehicle-result-image" alt="@vehicle.VehicleName" />
@@ -401,15 +426,16 @@
                                     </div>
                                 </div>
                                 <div class="card-footer bg-white border-0 pb-3">
-                                    <a class="btn btn-outline-primary w-100"
+                                    <a class="btn btn-outline-primary w-100 stretched-link"
                                        asp-action="Details"
                                        asp-route-id="@vehicle.VehicleId"
-                                       asp-route-pickupDate="@search.PickupDate"
-                                       asp-route-returnDate="@search.ReturnDate">
+                                       asp-route-pickupDate="@search.PickupDate.ToString("O")"
+                                       asp-route-returnDate="@search.ReturnDate.ToString("O")"
+                                       aria-label="Xem chi tiết @vehicle.VehicleName">
                                         Xem chi tiết xe
                                     </a>
                                 </div>
-                            </div>
+                            </article>
                         </div>
                     }
                 </div>
