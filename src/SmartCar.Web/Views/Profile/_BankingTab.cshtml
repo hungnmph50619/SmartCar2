@@ -8,7 +8,10 @@
 @{
     static string NormalizeName(string value)
     {
-        var decomposed = value.Trim().Normalize(NormalizationForm.FormD);
+        var vietnameseNormalized = value
+            .Replace('Đ', 'D')
+            .Replace('đ', 'd');
+        var decomposed = vietnameseNormalized.Trim().Normalize(NormalizationForm.FormD);
         var characters = decomposed
             .Where(character =>
                 CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark &&
@@ -31,6 +34,11 @@
             NormalizeName(referenceName),
             NormalizeName(bankAccount.AccountHolderName),
             StringComparison.Ordinal);
+
+    var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
+    var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
+    var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
+    var hasReturnContext = returnVehicleId.HasValue && returnPickupDate.HasValue && returnDate.HasValue;
 }
 
 <div class="row g-4 align-items-start">
@@ -92,6 +100,13 @@
               method="post"
               class="card card-body shadow-sm border-0 profile-form-card"
               data-loading-form>
+            @if (hasReturnContext)
+            {
+                <input type="hidden" name="returnVehicleId" value="@returnVehicleId" />
+                <input type="hidden" name="pickupDate" value="@returnPickupDate?.ToString("O")" />
+                <input type="hidden" name="returnDate" value="@returnDate?.ToString("O")" />
+            }
+
             <div class="mb-4">
                 <h2 class="h5 mb-1">@(bankAccount is null ? "Thêm tài khoản ngân hàng" : "Cập nhật tài khoản ngân hàng")</h2>
                 <p class="text-muted mb-0">Tên chủ tài khoản nên trùng với họ tên trên CCCD đã gửi để hạn chế sai sót khi hoàn tiền.</p>
