@@ -104,7 +104,14 @@
                         <option value="">-- Chọn ngân hàng --</option>
                         @foreach (var bank in BankAccountService.Banks)
                         {
-                            <option value="@bank.Code" selected="@(bankAccount?.BankCode == bank.Code)">@bank.Name</option>
+                            if (bankAccount?.BankCode == bank.Code)
+                            {
+                                <option value="@bank.Code" selected>@bank.Name</option>
+                            }
+                            else
+                            {
+                                <option value="@bank.Code">@bank.Name</option>
+                            }
                         }
                     </select>
                 </div>
