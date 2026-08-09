@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using SmartCar.Application.Features.Documents;
+using SmartCar.Web.Services;
 
 namespace SmartCar.Web.ViewModels;
 
@@ -38,4 +39,34 @@ public sealed class ProfileViewModel
 
     [ValidateNever]
     public IReadOnlyList<DocumentDto> Documents { get; set; } = Array.Empty<DocumentDto>();
+
+    [ValidateNever]
+    public BankAccountViewModel BankAccount { get; set; } = new();
+
+    [ValidateNever]
+    public IReadOnlyList<BankOption> AvailableBanks { get; set; } = Array.Empty<BankOption>();
+
+    public bool? BankHolderMatchesKyc { get; set; }
+}
+
+public sealed class BankAccountViewModel
+{
+    [Required(ErrorMessage = "Vui lòng chọn ngân hàng.")]
+    [StringLength(20)]
+    [Display(Name = "Ngân hàng")]
+    public string BankCode { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập số tài khoản.")]
+    [RegularExpression(@"^[0-9]{6,20}$", ErrorMessage = "Số tài khoản phải gồm từ 6 đến 20 chữ số.")]
+    [Display(Name = "Số tài khoản")]
+    public string AccountNumber { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập tên chủ tài khoản.")]
+    [StringLength(150, ErrorMessage = "Tên chủ tài khoản không được vượt quá 150 ký tự.")]
+    [Display(Name = "Chủ tài khoản")]
+    public string AccountHolderName { get; set; } = string.Empty;
+
+    public string BankName { get; set; } = string.Empty;
+    public string MaskedAccountNumber { get; set; } = string.Empty;
+    public bool HasSavedAccount { get; set; }
 }
