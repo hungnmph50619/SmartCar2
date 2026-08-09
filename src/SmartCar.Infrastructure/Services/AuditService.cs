@@ -48,9 +48,12 @@ internal sealed class AuditService : IAuditService
     {
         take = Math.Clamp(take, 1, 1000);
 
-        return await Project(_dbContext.AuditLogs.AsNoTracking())
+        var recentLogs = _dbContext.AuditLogs
+            .AsNoTracking()
             .OrderByDescending(log => log.CreatedAt)
-            .Take(take)
+            .Take(take);
+
+        return await Project(recentLogs)
             .ToListAsync(cancellationToken);
     }
 
@@ -73,7 +76,7 @@ internal sealed class AuditService : IAuditService
                 (log.IpAddress != null && log.IpAddress.Contains(keyword)) ||
                 (log.UserId != null && _dbContext.Users.Any(user =>
                     user.Id == log.UserId &&
-                    (user.FullName.Contains(keyword) ||
+                    ((user.FullName != null && user.FullName.Contains(keyword)) ||
                      (user.Email != null && user.Email.Contains(keyword))))));
         }
 
@@ -108,10 +111,14 @@ internal sealed class AuditService : IAuditService
         var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
         page = Math.Min(page, totalPages);
 
-        var items = await Project(logs)
+        // Sắp xếp/phân trang trên entity trước khi project sang DTO.
+        // Làm như vậy để EF Core không phải dịch OrderBy trên biểu thức DTO có thông tin người dùng.
+        var pagedLogs = logs
             .OrderByDescending(log => log.CreatedAt)
             .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+            .Take(pageSize);
+
+        var items = await Project(pagedLogs)
             .ToListAsync(cancellationToken);
 
         var userCounts = await _dbContext.AuditLogs
@@ -182,19 +189,20 @@ internal sealed class AuditService : IAuditService
     public Task<AuditLogDto?> GetByIdAsync(
         long auditLogId,
         CancellationToken cancellationToken = default) =>
-        Project(_dbContext.AuditLogs.AsNoTracking().Where(log => log.AuditLogId == auditLogId))
+        Project(_dbContext.AuditLogs
+                .AsNoTracking()
+                .Where(log => log.AuditLogId == auditLogId))
             .FirstOrDefaultAsync(cancellationToken);
 
     private IQueryable<AuditLogDto> Project(IQueryable<AuditLog> logs) =>
-        logs.Select(log => new AuditLogDto(
+        from log in logs
+        join user in _dbContext.Users.AsNoTracking()
+            on log.UserId equals user.Id into userGroup
+        from user in userGroup.DefaultIfEmpty()
+        select new AuditLogDto(
             log.AuditLogId,
             log.UserId,
-            log.UserId == null
-                ? null
-                : _dbContext.Users
-                    .Where(user => user.Id == log.UserId)
-                    .Select(user => user.FullName)
-                    .FirstOrDefault(),
+            user == null ? null : user.FullName,
             log.Action,
             log.EntityName,
             log.EntityId,
@@ -202,7 +210,7 @@ internal sealed class AuditService : IAuditService
             log.OldValues,
             log.NewValues,
             log.IpAddress,
-            log.CreatedAt));
+            log.CreatedAt);
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
