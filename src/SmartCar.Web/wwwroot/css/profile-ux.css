@@ -1,0 +1,152 @@
+.profile-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.profile-tabs {
+  flex-wrap: wrap;
+}
+
+.profile-form-card {
+  border-radius: 22px;
+  padding: 1.75rem;
+}
+
+.profile-avatar {
+  display: grid;
+  flex: 0 0 86px;
+  width: 86px;
+  height: 86px;
+  place-items: center;
+  border-radius: 24px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--smartcar-blue), #3c8df1);
+  font-size: 1.8rem;
+  font-weight: 850;
+  box-shadow: 0 12px 28px rgba(22, 103, 217, 0.2);
+}
+
+.profile-avatar-photo {
+  display: block;
+  object-fit: cover;
+  background: #eef5ff;
+}
+
+.avatar-upload-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.avatar-upload-form small {
+  flex-basis: 100%;
+}
+
+.profile-kyc-summary {
+  padding: 1rem;
+  border: 1px solid var(--smartcar-border);
+  border-radius: 14px;
+  background: #f9fbfd;
+}
+
+.profile-kyc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.62rem 0;
+  border-top: 1px solid #e8eef5;
+}
+
+.profile-kyc-row:first-of-type {
+  border-top: 0;
+}
+
+.profile-kyc-row > span:first-child {
+  color: var(--smartcar-navy);
+  font-weight: 700;
+}
+
+.profile-kyc-reason {
+  padding: 0.75rem;
+  border-radius: 10px;
+  color: #8f1f17;
+  background: #fff1ef;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.profile-kyc-reason strong,
+.profile-kyc-reason span {
+  display: block;
+}
+
+.security-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 16px;
+  background: #eaf3ff;
+  font-size: 1.45rem;
+}
+
+.security-tip {
+  padding: 1rem;
+  border: 1px solid var(--smartcar-border);
+  border-radius: 14px;
+  background: #f9fbfd;
+}
+
+.security-tip strong,
+.security-tip span {
+  display: block;
+}
+
+.security-tip strong {
+  margin-bottom: 0.3rem;
+  color: var(--smartcar-navy);
+}
+
+.security-tip span {
+  color: var(--smartcar-muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.user-avatar-photo {
+  object-fit: cover;
+  padding: 0;
+  background: #eef5ff;
+}
+
+@media (max-width: 991.98px) {
+  .profile-shell {
+    max-width: 840px;
+  }
+
+  .profile-form-card {
+    padding: 1.4rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .profile-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .profile-tabs .nav-link {
+    text-align: center;
+  }
+
+  .avatar-upload-form {
+    align-items: stretch;
+  }
+
+  .avatar-upload-form .btn {
+    flex: 1 1 auto;
+  }
+}
