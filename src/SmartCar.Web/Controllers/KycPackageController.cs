@@ -59,6 +59,13 @@ public sealed class KycPackageController : Controller
         }
 
         await ValidatePackageAsync(model, returnDate, cancellationToken);
+        if (!model.ConfirmSamePerson)
+        {
+            ModelState.AddModelError(
+                nameof(KycPackageSubmitViewModel.ConfirmSamePerson),
+                "Bạn cần xác nhận CCCD và GPLX thuộc cùng một người trước khi gửi hồ sơ.");
+        }
+
         if (!ModelState.IsValid)
         {
             TempData["ErrorMessage"] = BuildModelStateErrorMessage();
@@ -69,6 +76,7 @@ public sealed class KycPackageController : Controller
         var license = model.DrivingLicenseVerification;
         var citizenNumber = citizen.DocumentNumber.Trim();
         var licenseNumber = license.DocumentNumber.Trim().ToUpperInvariant();
+        var holderName = NormalizePersonName(citizen.FullNameOnDocument);
 
         var citizenDuplicate = await _dbContext.CustomerDocuments
             .AsNoTracking()
@@ -147,23 +155,25 @@ public sealed class KycPackageController : Controller
             {
                 await UpdateKycMetadataAsync(
                     document.CustomerDocumentId,
-                    citizen.FullNameOnDocument.Trim(),
+                    holderName,
                     citizen.DateOfBirth!.Value.Date,
-                    citizen.Gender.Trim(),
-                    citizen.IssuedDate!.Value.Date,
+                    null,
+                    null,
                     citizen.PermanentAddress.Trim(),
                     null,
                     cancellationToken);
             }
 
+            // GPLX dùng cùng chủ hồ sơ với CCCD. Khách không phải nhập lại họ tên;
+            // Quản trị viên đối chiếu trực tiếp tên trên ảnh GPLX với CCCD.
             foreach (var document in new[] { licenseFront, licenseBack })
             {
                 await UpdateKycMetadataAsync(
                     document.CustomerDocumentId,
-                    license.FullNameOnDocument.Trim(),
+                    holderName,
                     null,
                     null,
-                    license.IssuedDate!.Value.Date,
+                    null,
                     null,
                     license.LicenseClass.Trim().ToUpperInvariant(),
                     cancellationToken);
@@ -180,7 +190,7 @@ public sealed class KycPackageController : Controller
                 "SubmitKycPackage",
                 nameof(CustomerDocument),
                 user.Id,
-                "Gửi một lần toàn bộ hồ sơ KYC gồm CCCD và GPLX, mỗi loại có mặt trước và mặt sau.",
+                "Gửi một lần toàn bộ hồ sơ KYC gồm CCCD và GPLX, mỗi loại có mặt trước và mặt sau; người dùng xác nhận hai giấy tờ thuộc cùng một người.",
                 ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken: cancellationToken);
 
@@ -227,19 +237,15 @@ public sealed class KycPackageController : Controller
             ModelState.AddModelError("CitizenIdVerification.DateOfBirth", "Khách thuê xe phải đủ 18 tuổi.");
         }
 
-        ValidateDocumentDates(
+        ValidateExpiryDate(
             "CCCD",
-            "CitizenIdVerification.IssuedDate",
             "CitizenIdVerification.ExpiryDate",
-            citizen.IssuedDate,
             citizen.ExpiryDate,
             returnDate);
 
-        ValidateDocumentDates(
+        ValidateExpiryDate(
             "GPLX",
-            "DrivingLicenseVerification.IssuedDate",
             "DrivingLicenseVerification.ExpiryDate",
-            license.IssuedDate,
             license.ExpiryDate,
             returnDate);
     }
@@ -260,27 +266,15 @@ public sealed class KycPackageController : Controller
         }
     }
 
-    private void ValidateDocumentDates(
+    private void ValidateExpiryDate(
         string documentName,
-        string issuedDateKey,
         string expiryDateKey,
-        DateTime? issuedDate,
         DateTime? expiryDate,
         DateTime? returnDate)
     {
-        if (issuedDate.HasValue && issuedDate.Value.Date > DateTime.Today)
-        {
-            ModelState.AddModelError(issuedDateKey, $"Ngày cấp {documentName} không được sau ngày hiện tại.");
-        }
-
         if (expiryDate.HasValue && expiryDate.Value.Date < DateTime.Today)
         {
             ModelState.AddModelError(expiryDateKey, $"{documentName} đã hết hạn.");
-        }
-
-        if (issuedDate.HasValue && expiryDate.HasValue && expiryDate.Value.Date <= issuedDate.Value.Date)
-        {
-            ModelState.AddModelError(expiryDateKey, $"Ngày hết hạn {documentName} phải sau ngày cấp.");
         }
 
         if (returnDate.HasValue && expiryDate.HasValue && expiryDate.Value.Date < returnDate.Value.Date)
@@ -433,6 +427,11 @@ public sealed class KycPackageController : Controller
             ? string.Join("; ", errors)
             : "Vui lòng kiểm tra lại toàn bộ thông tin CCCD, GPLX và 4 ảnh giấy tờ.";
     }
+
+    private static string NormalizePersonName(string value) =>
+        string.Join(' ', value
+            .Trim()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
     private IActionResult RedirectToProfile(
         int? returnVehicleId,
