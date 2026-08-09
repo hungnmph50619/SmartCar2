@@ -1,9 +1,10 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Domain.Constants;
 
 namespace SmartCar.Infrastructure.Services;
 
@@ -289,7 +290,7 @@ internal sealed class ReturnService : IReturnService
                 {
                     Type = PaymentType.AdditionalCharge,
                     Amount = booking.AdditionalAmount,
-                    Method = "Mo phong",
+                    Method = PaymentMethods.NotSelected,
                     Status = PaymentStatus.Pending
                 });
             }

@@ -1,10 +1,11 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Domain.Constants;
 
 namespace SmartCar.Infrastructure.Services;
 
@@ -132,12 +133,51 @@ internal sealed class BookingOperationService : IBookingOperationService
                 payment.Type is PaymentType.Rental or PaymentType.Extension)
             .Sum(payment => payment.Amount);
 
-        var refundAmount = isAdmin ? paidAmount : 0m;
-        var refundReason = isAdmin
-            ? "Quản trị viên hủy đơn trước khi giao xe: hoàn 100% số tiền khách đã thanh toán."
-            : paidAmount > 0
-                ? "Khách hàng chủ động hủy sau khi thanh toán: không hoàn tiền."
-                : "Đơn chưa phát sinh thanh toán nên không có khoản hoàn tiền.";
+        decimal refundAmount;
+        string refundReason;
+
+        if (paidAmount <= 0)
+        {
+            refundAmount = 0;
+
+            refundReason =
+                "Đơn chưa phát sinh thanh toán nên không có khoản hoàn tiền.";
+        }
+        else if (isAdmin)
+        {
+            refundAmount = paidAmount;
+
+            refundReason =
+                "SmartCar chủ động hủy trước khi giao xe: hoàn 100% số tiền đã thanh toán.";
+        }
+        else
+        {
+            var hoursBeforePickup =
+                (booking.PickupDate - DateTime.Now).TotalHours;
+
+            if (hoursBeforePickup >= 48)
+            {
+                refundAmount = paidAmount;
+
+                refundReason =
+                    "Khách hủy trước thời gian nhận xe từ 48 giờ trở lên: hoàn 100%.";
+            }
+            else if (hoursBeforePickup >= 24)
+            {
+                refundAmount =
+                    Math.Round(paidAmount * 0.5m, 0);
+
+                refundReason =
+                    "Khách hủy trước thời gian nhận xe từ 24 đến dưới 48 giờ: hoàn 50%.";
+            }
+            else
+            {
+                refundAmount = 0;
+
+                refundReason =
+                    "Khách hủy trước thời gian nhận xe dưới 24 giờ: không hoàn tiền.";
+            }
+        }
 
         booking.Status = BookingStatus.Cancelled;
         booking.CancelReason = request.Reason.Trim();
@@ -150,16 +190,18 @@ internal sealed class BookingOperationService : IBookingOperationService
             booking.Vehicle,
             cancellationToken: cancellationToken);
 
-        if (refundAmount > 0 && !booking.Payments.Any(payment => payment.Type == PaymentType.Refund))
+        if (refundAmount > 0 &&
+            !booking.Payments.Any(payment =>
+                payment.Type == PaymentType.Refund))
         {
             booking.Payments.Add(new Payment
             {
                 Type = PaymentType.Refund,
                 Amount = refundAmount,
-                Method = "Mô phỏng",
-                Status = PaymentStatus.Paid,
-                PaidAt = DateTime.UtcNow,
-                TransactionCode = $"RF{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}"
+                Method = PaymentMethods.BankTransferRefund,
+                Status = PaymentStatus.AwaitingRefund,
+                PaidAt = null,
+                TransactionCode = null
             });
 
             if (!string.IsNullOrWhiteSpace(booking.PromotionCode))
@@ -179,8 +221,9 @@ internal sealed class BookingOperationService : IBookingOperationService
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã được hủy",
             Message = refundAmount > 0
-                ? $"Đơn #{booking.BookingId} đã hủy. Số tiền hoàn: {refundAmount:N0} đồng."
-                : $"Đơn #{booking.BookingId} đã hủy và không được hoàn tiền."
+                ? $"Đơn #{booking.BookingId} đã hủy. " +
+                  $"Khoản hoàn {refundAmount:N0} đồng đã được tạo và đang chờ xử lý."
+                : $"Đơn #{booking.BookingId} đã hủy và không phát sinh khoản hoàn tiền."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);

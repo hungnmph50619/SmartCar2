@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -139,6 +139,20 @@ public sealed class BookingsController : Controller
         }
 
         ViewBag.SmartCarSupportPhone = GetSupportPhone();
+
+        ViewBag.PaymentBankName =
+            _configuration["PaymentQr:BankName"] ?? "MB Bank";
+
+        ViewBag.PaymentAccountNumber =
+            _configuration["PaymentQr:AccountNumber"] ?? "0123456789";
+
+        ViewBag.PaymentAccountHolder =
+            _configuration["PaymentQr:AccountHolder"] ?? "SMARTCAR";
+
+        ViewBag.PaymentQrImagePath =
+            _configuration["PaymentQr:QrImagePath"]
+            ?? "/images/payment/bank-qr.png";
+
         return View(booking);
     }
 

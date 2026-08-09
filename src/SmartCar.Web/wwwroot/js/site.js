@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", () => {
+﻿document.addEventListener("DOMContentLoaded", () => {
     initializeVietnameseDateInputs();
     initializeSameAddressToggle();
     initializeForms();
@@ -285,18 +285,42 @@ function initializeImageInputs() {
 
         const previewSelector = input.dataset.previewTarget;
         const infoSelector = input.dataset.fileInfoTarget;
-        const previewContainer = previewSelector ? document.querySelector(previewSelector) : null;
-        const infoContainer = infoSelector ? document.querySelector(infoSelector) : null;
-        const previewImage = previewContainer?.querySelector("img") ?? null;
-        const previewList = previewContainer?.querySelector("[data-preview-list]") ?? null;
-        const clearButton = previewContainer?.querySelector("[data-clear-image]") ?? null;
-        const maximumBytes = Number(input.dataset.maxBytes ?? 5 * 1024 * 1024);
-        const allowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
-        const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+
+        const previewContainer =
+            previewSelector ? document.querySelector(previewSelector) : null;
+
+        const infoContainer =
+            infoSelector ? document.querySelector(infoSelector) : null;
+
+        const previewImage =
+            previewContainer?.querySelector("img") ?? null;
+
+        const previewList =
+            previewContainer?.querySelector("[data-preview-list]") ?? null;
+
+        const clearButton =
+            previewContainer?.querySelector("[data-clear-image]") ?? null;
+
+        const maximumBytes =
+            Number(input.dataset.maxBytes ?? 5 * 1024 * 1024);
+
+        const maximumFiles =
+            Number(input.dataset.maxFiles ?? (input.multiple ? 10 : 1));
+
+        const allowedExtensions =
+            [".jpg", ".jpeg", ".png", ".webp"];
+
+        const allowedMimeTypes =
+            ["image/jpeg", "image/png", "image/webp"];
+
+        let selectedFiles = [];
         let objectUrls = [];
 
         const releaseObjectUrls = () => {
-            objectUrls.forEach((url) => URL.revokeObjectURL(url));
+            objectUrls.forEach((url) => {
+                URL.revokeObjectURL(url);
+            });
+
             objectUrls = [];
         };
 
@@ -307,104 +331,272 @@ function initializeImageInputs() {
 
         const showFileError = (message) => {
             input.setCustomValidity(message);
-            releaseObjectUrls();
-            previewContainer?.classList.add("d-none");
+
             if (infoContainer) {
                 infoContainer.textContent = message;
-                infoContainer.classList.remove("d-none", "text-muted");
+                infoContainer.classList.remove(
+                    "d-none",
+                    "text-muted");
+
                 infoContainer.classList.add("text-danger");
             }
+
             input.reportValidity();
         };
 
-        const clearPreview = () => {
-            releaseObjectUrls();
-            input.value = "";
+        const fileKey = (file) =>
+            `${file.name}_${file.size}_${file.lastModified}`;
+
+        const synchronizeInputFiles = () => {
+            const transfer = new DataTransfer();
+
+            selectedFiles.forEach((file) => {
+                transfer.items.add(file);
+            });
+
+            input.files = transfer.files;
+        };
+
+        const removeFileAt = (index) => {
+            selectedFiles.splice(index, 1);
+
+            synchronizeInputFiles();
+            renderPreview();
+        };
+
+        const renderPreview = () => {
             input.setCustomValidity("");
-            previewContainer?.classList.add("d-none");
+
+            releaseObjectUrls();
+
+            if (previewList) {
+                previewList.innerHTML = "";
+            }
 
             if (previewImage) {
                 previewImage.removeAttribute("src");
             }
 
-            if (previewList) {
-                previewList.innerHTML = "";
-            }
+            if (selectedFiles.length === 0) {
+                previewContainer?.classList.add("d-none");
 
-            if (infoContainer) {
-                infoContainer.textContent = "Chưa chọn ảnh";
-                infoContainer.classList.remove("d-none");
-                resetInfoStyle();
-            }
-        };
+                if (infoContainer) {
+                    infoContainer.textContent = "Chưa chọn ảnh";
+                    infoContainer.classList.remove("d-none");
+                    resetInfoStyle();
+                }
 
-        input.addEventListener("change", () => {
-            const files = Array.from(input.files ?? []);
-            if (files.length === 0) {
-                clearPreview();
                 return;
             }
 
-            const invalidFormat = files.find((file) => {
-                const lowerName = file.name.toLowerCase();
-                const hasAllowedExtension = allowedExtensions.some((extension) => lowerName.endsWith(extension));
-                const hasAllowedMimeType = !file.type || allowedMimeTypes.includes(file.type.toLowerCase());
-                return !hasAllowedExtension || !hasAllowedMimeType;
-            });
-            if (invalidFormat) {
-                showFileError("Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.");
-                return;
-            }
-
-            const oversizedFile = files.find((file) => file.size > maximumBytes);
-            if (oversizedFile) {
-                showFileError(`Ảnh ${oversizedFile.name} vượt quá ${formatBytes(maximumBytes)}.`);
-                return;
-            }
-
-            input.setCustomValidity("");
-            releaseObjectUrls();
-            objectUrls = files.map((file) => URL.createObjectURL(file));
+            objectUrls = selectedFiles.map((file) =>
+                URL.createObjectURL(file));
 
             if (previewList) {
-                previewList.innerHTML = "";
-                files.forEach((file, index) => {
-                    const column = document.createElement("div");
-                    column.className = "col-6 col-md-4";
+                selectedFiles.forEach((file, index) => {
+                    const column =
+                        document.createElement("div");
 
-                    const image = document.createElement("img");
+                    column.className =
+                        "col-6 col-md-4";
+
+                    const card =
+                        document.createElement("div");
+
+                    card.className =
+                        "border rounded p-2 h-100";
+
+                    const image =
+                        document.createElement("img");
+
                     image.src = objectUrls[index];
-                    image.alt = `Xem trước ${file.name}`;
-                    image.className = "img-fluid rounded border w-100";
+
+                    image.alt =
+                        `Xem trước ${file.name}`;
+
+                    image.className =
+                        "img-fluid rounded w-100";
+
                     image.style.height = "140px";
                     image.style.objectFit = "cover";
 
-                    const caption = document.createElement("div");
-                    caption.className = "small text-truncate mt-1";
+                    const caption =
+                        document.createElement("div");
+
+                    caption.className =
+                        "small text-truncate mt-2";
+
                     caption.title = file.name;
                     caption.textContent = file.name;
 
-                    column.append(image, caption);
+                    const size =
+                        document.createElement("div");
+
+                    size.className =
+                        "small text-muted";
+
+                    size.textContent =
+                        formatBytes(file.size);
+
+                    card.append(
+                        image,
+                        caption,
+                        size);
+
+                    if (input.multiple) {
+                        const removeButton =
+                            document.createElement("button");
+
+                        removeButton.type = "button";
+
+                        removeButton.className =
+                            "btn btn-sm btn-outline-danger w-100 mt-2";
+
+                        removeButton.textContent =
+                            "Xóa ảnh này";
+
+                        removeButton.addEventListener(
+                            "click",
+                            () => removeFileAt(index));
+
+                        card.append(removeButton);
+                    }
+
+                    column.append(card);
                     previewList.appendChild(column);
                 });
-            } else if (previewImage) {
+            }
+            else if (previewImage) {
                 previewImage.src = objectUrls[0];
             }
 
             if (infoContainer) {
-                const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-                infoContainer.textContent = files.length === 1
-                    ? `${files[0].name} · ${formatBytes(files[0].size)}`
-                    : `${files.length} ảnh · Tổng dung lượng ${formatBytes(totalSize)}`;
+                const totalSize =
+                    selectedFiles.reduce(
+                        (sum, file) => sum + file.size,
+                        0);
+
+                infoContainer.textContent =
+                    selectedFiles.length === 1
+                        ? `${selectedFiles[0].name} · ${formatBytes(selectedFiles[0].size)}`
+                        : `${selectedFiles.length} ảnh · Tổng dung lượng ${formatBytes(totalSize)}`;
+
                 infoContainer.classList.remove("d-none");
                 resetInfoStyle();
             }
 
             previewContainer?.classList.remove("d-none");
+        };
+
+        const clearAllFiles = () => {
+            selectedFiles = [];
+
+            input.value = "";
+
+            synchronizeInputFiles();
+            renderPreview();
+        };
+
+        input.addEventListener("change", () => {
+            const newFiles =
+                Array.from(input.files ?? []);
+
+            // Người dùng đóng hộp thoại chọn file.
+            // Không xóa các ảnh đã chọn trước đó.
+            if (newFiles.length === 0) {
+                synchronizeInputFiles();
+                return;
+            }
+
+            const invalidFormat =
+                newFiles.find((file) => {
+                    const lowerName =
+                        file.name.toLowerCase();
+
+                    const validExtension =
+                        allowedExtensions.some(
+                            (extension) =>
+                                lowerName.endsWith(extension));
+
+                    const validMime =
+                        !file.type ||
+                        allowedMimeTypes.includes(
+                            file.type.toLowerCase());
+
+                    return !validExtension || !validMime;
+                });
+
+            if (invalidFormat) {
+                showFileError(
+                    `Ảnh ${invalidFormat.name} không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`);
+
+                synchronizeInputFiles();
+                return;
+            }
+
+            const oversizedFile =
+                newFiles.find((file) =>
+                    file.size > maximumBytes);
+
+            if (oversizedFile) {
+                showFileError(
+                    `Ảnh ${oversizedFile.name} vượt quá ${formatBytes(maximumBytes)}.`);
+
+                synchronizeInputFiles();
+                return;
+            }
+
+            if (!input.multiple) {
+                selectedFiles = [newFiles[0]];
+
+                synchronizeInputFiles();
+                renderPreview();
+
+                return;
+            }
+
+            const existingKeys =
+                new Set(
+                    selectedFiles.map(fileKey));
+
+            const filesToAdd = [];
+
+            newFiles.forEach((file) => {
+                const key = fileKey(file);
+
+                if (!existingKeys.has(key)) {
+                    existingKeys.add(key);
+                    filesToAdd.push(file);
+                }
+            });
+
+            const candidateFiles = [
+                ...selectedFiles,
+                ...filesToAdd
+            ];
+
+            if (candidateFiles.length > maximumFiles) {
+                showFileError(
+                    `Chỉ được chọn tối đa ${maximumFiles} ảnh.`);
+
+                synchronizeInputFiles();
+                return;
+            }
+
+            selectedFiles = candidateFiles;
+
+            synchronizeInputFiles();
+            renderPreview();
         });
 
-        clearButton?.addEventListener("click", clearPreview);
-        window.addEventListener("beforeunload", releaseObjectUrls, { once: true });
+        clearButton?.addEventListener(
+            "click",
+            clearAllFiles);
+
+        window.addEventListener(
+            "beforeunload",
+            releaseObjectUrls,
+            { once: true });
     });
 }
 

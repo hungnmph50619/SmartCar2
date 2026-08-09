@@ -16,4 +16,8 @@
     <ProjectReference Include="..\SmartCar.Domain\SmartCar.Domain.csproj" />
     <ProjectReference Include="..\SmartCar.Infrastructure\SmartCar.Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\images\payment\" />
+  </ItemGroup>
 </Project>

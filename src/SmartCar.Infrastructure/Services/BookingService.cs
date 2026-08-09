@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
@@ -6,6 +6,7 @@ using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Domain.Constants;
 
 namespace SmartCar.Infrastructure.Services;
 
@@ -66,9 +67,15 @@ internal sealed class BookingService : IBookingService
         var vehicle = await _dbContext.Vehicles
             .FirstOrDefaultAsync(item => item.VehicleId == request.VehicleId, cancellationToken);
 
-        if (vehicle is null || vehicle.Status != VehicleStatus.Available)
+        if (vehicle is null)
         {
-            return BookingMutationResult.Failure("Xe không tồn tại hoặc hiện không thể cho thuê.");
+            return BookingMutationResult.Failure("Không tìm thấy xe.");
+        }
+
+        if (vehicle.Status is not (VehicleStatus.Available or VehicleStatus.Rented))
+        {
+            return BookingMutationResult.Failure(
+                "Xe đang bảo trì, kiểm tra hoặc ngừng hoạt động nên chưa thể đặt.");
         }
 
         var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(item =>
@@ -243,7 +250,7 @@ internal sealed class BookingService : IBookingService
                 Type = PaymentType.Rental,
                 Amount = rentalPaymentAmount,
                 Status = PaymentStatus.Pending,
-                Method = "Mo phong"
+                Method = PaymentMethods.NotSelected
             });
         }
 
@@ -451,6 +458,7 @@ internal sealed class BookingService : IBookingService
                     payment.PaymentId,
                     payment.Type,
                     payment.Amount,
+                    payment.Method,
                     payment.Status,
                     payment.PaidAt,
                     payment.TransactionCode))

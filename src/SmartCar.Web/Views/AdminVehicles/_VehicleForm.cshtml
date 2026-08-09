@@ -1,4 +1,4 @@
-@model SmartCar.Web.ViewModels.VehicleFormViewModel
+﻿@model SmartCar.Web.ViewModels.VehicleFormViewModel
 
 <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-3"></div>
 <input asp-for="VehicleId" type="hidden" />
@@ -87,6 +87,7 @@
                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                class="form-control"
                data-image-input
+               data-max-files="10"
                data-preview-target="#vehicle-image-preview"
                data-file-info-target="#vehicle-file-info" />
         <div class="form-text">Tối đa 10 ảnh cho mỗi xe, mỗi ảnh không quá 5 MB. Chấp nhận JPG, PNG hoặc WEBP.</div>

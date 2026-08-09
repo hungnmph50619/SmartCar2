@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
@@ -7,6 +7,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace SmartCar.Infrastructure.Services;
 
@@ -524,6 +525,7 @@ internal sealed class DocumentService : IDocumentService
     {
         var connection = _dbContext.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
+
         if (shouldClose)
         {
             await connection.OpenAsync(cancellationToken);
@@ -532,17 +534,33 @@ internal sealed class DocumentService : IDocumentService
         try
         {
             await using var command = connection.CreateCommand();
+
+            // Nếu DbContext hiện đang nằm trong transaction,
+            // command này phải tham gia cùng transaction đó.
+            if (_dbContext.Database.CurrentTransaction is { } currentTransaction)
+            {
+                command.Transaction = currentTransaction.GetDbTransaction();
+            }
+
             command.CommandText = @"
-                SELECT [FullNameOnDocument], [DateOfBirth], [Gender], [IssuedDate], [PermanentAddress], [LicenseClass]
-                FROM [CustomerDocuments]
-                WHERE [CustomerDocumentId] = @documentId";
+            SELECT
+                [FullNameOnDocument],
+                [DateOfBirth],
+                [Gender],
+                [IssuedDate],
+                [PermanentAddress],
+                [LicenseClass]
+            FROM [CustomerDocuments]
+            WHERE [CustomerDocumentId] = @documentId";
 
             var parameter = command.CreateParameter();
             parameter.ParameterName = "@documentId";
             parameter.Value = documentId;
             command.Parameters.Add(parameter);
 
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            await using var reader =
+                await command.ExecuteReaderAsync(cancellationToken);
+
             if (!await reader.ReadAsync(cancellationToken))
             {
                 return KycMetadata.Empty;

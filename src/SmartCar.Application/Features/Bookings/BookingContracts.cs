@@ -1,4 +1,4 @@
-using SmartCar.Application.Common;
+﻿using SmartCar.Application.Common;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Application.Features.Bookings;
@@ -54,10 +54,10 @@ public sealed record PaymentSummaryDto(
     int PaymentId,
     PaymentType Type,
     decimal Amount,
+    string Method,
     PaymentStatus Status,
     DateTime? PaidAt,
     string? TransactionCode);
-
 public sealed record ChargeSummaryDto(
     int AdditionalChargeId,
     AdditionalChargeType ChargeType,

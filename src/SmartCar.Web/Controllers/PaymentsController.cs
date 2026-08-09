@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Payments;
@@ -41,5 +41,37 @@ public sealed class PaymentsController : Controller
             : string.Join("; ", result.Errors);
 
         return RedirectToAction("Details", "Bookings", new { id = bookingId });
+    }
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SubmitQr(
+    int bookingId,
+    PaymentType type,
+    CancellationToken cancellationToken)
+    {
+        var customerId =
+            User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return Challenge();
+        }
+
+        var result = await _paymentService.SubmitQrPaymentAsync(
+            bookingId,
+            customerId,
+            type,
+            cancellationToken);
+
+        TempData[result.Succeeded
+            ? "SuccessMessage"
+            : "ErrorMessage"] = result.Succeeded
+                ? "Đã gửi thông tin chuyển khoản. Vui lòng chờ SmartCar xác nhận."
+                : string.Join("; ", result.Errors);
+
+        return RedirectToAction(
+            "Details",
+            "Bookings",
+            new { id = bookingId });
     }
 }

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Web.Extensions;
@@ -40,6 +40,8 @@ public static class VietnameseDisplayExtensions
             PaymentStatus.Paid => "Đã thanh toán",
             PaymentStatus.Failed => "Thanh toán thất bại",
             PaymentStatus.Refunded => "Đã hoàn tiền",
+            PaymentStatus.AwaitingConfirmation => "Chờ xác nhận chuyển khoản",
+            PaymentStatus.AwaitingRefund => "Chờ hoàn tiền",
             _ => status.ToString()
         },
         PaymentType type => type switch

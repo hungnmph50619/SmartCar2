@@ -1,4 +1,4 @@
-@model SmartCar.Web.ViewModels.HandoverViewModel
+﻿@model SmartCar.Web.ViewModels.HandoverViewModel
 @{
     ViewData["Title"] = "Biên bản giao xe";
 }
@@ -60,8 +60,9 @@
                    accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
                    class="form-control"
                    data-image-input
-                   data-preview-target="#handover-image-preview"
-                   data-file-info-target="#handover-file-info" />
+                   data-max-files="10"
+                   data-preview-target="#vehicle-image-preview"
+                   data-file-info-target="#vehicle-file-info" />
             <span asp-validation-for="Images" class="text-danger small"></span>
             <div class="form-text">Tải từ 1 đến 10 ảnh, mỗi ảnh tối đa 5 MB. Nên có ảnh bốn góc xe, nội thất, đồng hồ km và mức nhiên liệu.</div>
             <div id="handover-file-info" class="small text-muted mt-2 d-none"></div>
