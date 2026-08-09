@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Audits;
@@ -15,6 +16,13 @@ public sealed class AuditLogsController : Controller
         "Việt Nam",
         "Việt Nam");
 
+    private static readonly string[] SupportedDateFormats =
+    {
+        "dd/MM/yyyy",
+        "d/M/yyyy",
+        "yyyy-MM-dd"
+    };
+
     private readonly IAuditService _auditService;
 
     public AuditLogsController(IAuditService auditService)
@@ -28,14 +36,14 @@ public sealed class AuditLogsController : Controller
         string? userId,
         string? auditAction,
         string? entityName,
-        DateTime? fromDate,
-        DateTime? toDate,
+        string? fromDate,
+        string? toDate,
         int page = 1,
-        int pageSize = 50,
+        int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
-        var normalizedFrom = fromDate?.Date;
-        var normalizedTo = toDate?.Date;
+        var normalizedFrom = ParseVietnamDate(fromDate);
+        var normalizedTo = ParseVietnamDate(toDate);
 
         if (normalizedFrom.HasValue && normalizedTo.HasValue && normalizedFrom > normalizedTo)
         {
@@ -73,6 +81,23 @@ public sealed class AuditLogsController : Controller
     {
         var auditLog = await _auditService.GetByIdAsync(id, cancellationToken);
         return auditLog is null ? NotFound() : View(auditLog);
+    }
+
+    private static DateTime? ParseVietnamDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return DateTime.TryParseExact(
+            value.Trim(),
+            SupportedDateFormats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var parsed)
+            ? parsed.Date
+            : null;
     }
 
     private static DateTime? ToUtc(DateTime? vietnamDateTime)
