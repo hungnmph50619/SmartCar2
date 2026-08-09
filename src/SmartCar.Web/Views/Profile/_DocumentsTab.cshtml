@@ -77,7 +77,7 @@
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
         <div>
             <h2 class="h4 fw-bold mb-1">Hồ sơ xác minh CCCD & GPLX</h2>
-            <p class="text-muted mb-0">Điền đủ hai loại giấy tờ và gửi một lần. Quản trị viên sẽ nhận một hồ sơ hoàn chỉnh để đối chiếu và ra quyết định.</p>
+            <p class="text-muted mb-0">Điền các thông tin cần thiết, tải đủ 4 ảnh và gửi một lần. Quản trị viên sẽ đối chiếu cả bộ hồ sơ rồi ra một quyết định.</p>
         </div>
         @if (fullyVerified)
         {
@@ -117,7 +117,7 @@
                     <h3 class="h5 fw-bold mb-1">@verifiedSteps/2 loại giấy tờ đã xác minh</h3>
                     @if (hasReturnContext)
                     {
-                        <div class="small text-muted">Giấy tờ phải còn hiệu lực ít nhất đến <strong>@requiredValidThrough.ToString("dd/MM/yyyy")</strong>.</div>
+                        <div class="small text-muted">CCCD và GPLX phải còn hiệu lực ít nhất đến <strong>@requiredValidThrough.ToString("dd/MM/yyyy")</strong>.</div>
                     }
                 </div>
                 <span class="badge @BadgeClass(overallStatus) px-3 py-2">@overallStatus</span>
@@ -191,7 +191,7 @@
     else
     {
         <div class="alert alert-light border shadow-sm mb-4">
-            <strong>Chuẩn bị 4 ảnh:</strong> CCCD mặt trước + mặt sau và GPLX mặt trước + mặt sau. Hỗ trợ JPG, PNG, WEBP; tối đa <strong>5 MB/ảnh</strong>. Sau khi điền đủ, bạn chỉ bấm <strong>Gửi hồ sơ xác minh</strong> một lần.
+            <strong>Chuẩn bị 4 ảnh:</strong> CCCD mặt trước + mặt sau và GPLX mặt trước + mặt sau. Hỗ trợ JPG, PNG, WEBP; tối đa <strong>5 MB/ảnh</strong>. Họ tên chỉ nhập một lần theo CCCD; Quản trị viên sẽ đối chiếu tên trên GPLX trực tiếp từ ảnh.
         </div>
 
         <form asp-controller="KycPackage"
@@ -214,7 +214,7 @@
                         <div>
                             <div class="text-uppercase small text-primary fw-semibold">Bước 1/2</div>
                             <h3 class="h4 fw-bold mb-1">Căn cước công dân</h3>
-                            <p class="text-muted mb-0">Nhập đúng thông tin trên CCCD và chọn ảnh hai mặt.</p>
+                            <p class="text-muted mb-0">Nhập thông tin cần cho xác minh danh tính và thời hạn thuê xe.</p>
                         </div>
                         <span class="badge @BadgeClass(citizenStatus) px-3 py-2">@citizenStatus</span>
                     </div>
@@ -229,31 +229,17 @@
                             <label asp-for="CitizenIdVerification.DocumentNumber" class="form-label fw-semibold"></label>
                             <input asp-for="CitizenIdVerification.DocumentNumber" class="form-control" inputmode="numeric" maxlength="12" autocomplete="off" required />
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold" for="citizenDobDisplay">Ngày sinh</label>
                             <input id="citizenDobDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="CitizenDateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("dd/MM/yyyy")" required />
                             <input id="CitizenDateOfBirth" type="hidden" name="CitizenIdVerification.DateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("yyyy-MM-dd")" />
                         </div>
-                        <div class="col-md-4">
-                            <label asp-for="CitizenIdVerification.Gender" class="form-label fw-semibold"></label>
-                            <select asp-for="CitizenIdVerification.Gender" class="form-select" required>
-                                <option value="">-- Chọn giới tính --</option>
-                                <option value="Nam">Nam</option>
-                                <option value="Nữ">Nữ</option>
-                                <option value="Khác">Khác</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold" for="citizenIssuedDisplay">Ngày cấp</label>
-                            <input id="citizenIssuedDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="CitizenIssuedDate" value="@Model.CitizenIdVerification.IssuedDate?.ToString("dd/MM/yyyy")" required />
-                            <input id="CitizenIssuedDate" type="hidden" name="CitizenIdVerification.IssuedDate" value="@Model.CitizenIdVerification.IssuedDate?.ToString("yyyy-MM-dd")" />
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label fw-semibold" for="citizenExpiryDisplay">Ngày hết hạn</label>
                             <input id="citizenExpiryDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="CitizenExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("dd/MM/yyyy")" required />
                             <input id="CitizenExpiryDate" type="hidden" name="CitizenIdVerification.ExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />
                         </div>
-                        <div class="col-md-8">
+                        <div class="col-12">
                             <label asp-for="CitizenIdVerification.PermanentAddress" class="form-label fw-semibold"></label>
                             <input asp-for="CitizenIdVerification.PermanentAddress" class="form-control" autocomplete="street-address" required />
                         </div>
@@ -294,22 +280,18 @@
                         <div>
                             <div class="text-uppercase small text-primary fw-semibold">Bước 2/2</div>
                             <h3 class="h4 fw-bold mb-1">Giấy phép lái xe</h3>
-                            <p class="text-muted mb-0">Nhập thông tin trên GPLX và chọn ảnh hai mặt. Sau đó gửi toàn bộ hồ sơ một lần.</p>
+                            <p class="text-muted mb-0">Không cần nhập lại họ tên. Hãy nhập số GPLX, hạng GPLX và thời hạn; Quản trị viên sẽ đối chiếu tên trực tiếp trên ảnh với CCCD.</p>
                         </div>
                         <span class="badge @BadgeClass(licenseStatus) px-3 py-2">@licenseStatus</span>
                     </div>
                 </div>
                 <div class="card-body p-4">
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label asp-for="DrivingLicenseVerification.FullNameOnDocument" class="form-label fw-semibold"></label>
-                            <input asp-for="DrivingLicenseVerification.FullNameOnDocument" class="form-control" autocomplete="name" required />
-                        </div>
-                        <div class="col-md-6">
+                        <div class="col-md-5">
                             <label asp-for="DrivingLicenseVerification.DocumentNumber" class="form-label fw-semibold"></label>
                             <input asp-for="DrivingLicenseVerification.DocumentNumber" class="form-control" maxlength="20" autocomplete="off" required />
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label asp-for="DrivingLicenseVerification.LicenseClass" class="form-label fw-semibold"></label>
                             <select asp-for="DrivingLicenseVerification.LicenseClass" class="form-select" required>
                                 <option value="">-- Chọn hạng --</option>
@@ -328,11 +310,6 @@
                                 <option value="B1">B1</option>
                                 <option value="B2">B2</option>
                             </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold" for="licenseIssuedDisplay">Ngày cấp</label>
-                            <input id="licenseIssuedDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="LicenseIssuedDate" value="@Model.DrivingLicenseVerification.IssuedDate?.ToString("dd/MM/yyyy")" required />
-                            <input id="LicenseIssuedDate" type="hidden" name="DrivingLicenseVerification.IssuedDate" value="@Model.DrivingLicenseVerification.IssuedDate?.ToString("yyyy-MM-dd")" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold" for="licenseExpiryDisplay">Ngày hết hạn</label>
@@ -367,14 +344,22 @@
             </section>
 
             <section class="card border-primary shadow-sm mb-4 kyc-submit-card">
-                <div class="card-body p-4 d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-                    <div>
-                        <h3 class="h5 fw-bold mb-1">Gửi một hồ sơ duy nhất cho Quản trị viên</h3>
-                        <p class="text-muted mb-0">Hệ thống chỉ tạo yêu cầu KYC sau khi có đủ thông tin CCCD, GPLX và cả 4 ảnh. Quản trị viên sẽ duyệt hoặc yêu cầu cập nhật toàn bộ hồ sơ trong một lần.</p>
+                <div class="card-body p-4">
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" value="true" id="confirmSamePerson" name="ConfirmSamePerson" required />
+                        <label class="form-check-label fw-semibold" for="confirmSamePerson">
+                            Tôi xác nhận CCCD và GPLX trên thuộc cùng một người và thông tin cung cấp là chính xác.
+                        </label>
                     </div>
-                    <button class="btn btn-primary btn-lg flex-shrink-0" type="submit" data-loading-text="Đang gửi hồ sơ...">
-                        Gửi hồ sơ xác minh
-                    </button>
+                    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                        <div>
+                            <h3 class="h5 fw-bold mb-1">Gửi một hồ sơ duy nhất cho Quản trị viên</h3>
+                            <p class="text-muted mb-0">Hệ thống chỉ tạo yêu cầu KYC khi có đủ thông tin cần thiết và cả 4 ảnh. Quản trị viên duyệt hoặc yêu cầu cập nhật toàn bộ hồ sơ trong một lần.</p>
+                        </div>
+                        <button class="btn btn-primary btn-lg flex-shrink-0" type="submit" data-loading-text="Đang gửi hồ sơ...">
+                            Gửi hồ sơ xác minh
+                        </button>
+                    </div>
                 </div>
             </section>
         </form>
