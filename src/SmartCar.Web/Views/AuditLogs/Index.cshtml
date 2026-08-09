@@ -12,10 +12,12 @@
         "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "text-bg-danger",
         "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "text-bg-success",
         "ViewKycDocumentImage" => "text-bg-info",
-        "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "text-bg-primary",
+        "Submit" or "SubmitKycPackage" or "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "text-bg-primary",
         "RequestResubmission" or "RequestUpdate" or "AddCharge" => "text-bg-warning",
         _ => "text-bg-secondary"
     };
+
+    bool IsGuidIdentifier(string? value) => Guid.TryParse(value, out _);
 }
 
 <link rel="stylesheet" href="~/css/admin-audit.css" asp-append-version="true" />
@@ -131,8 +133,13 @@
                     <label class="form-label fw-semibold" for="auditFromDate">Từ ngày</label>
                     <input id="auditFromDate"
                            name="fromDate"
-                           type="date"
-                           value="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
+                           type="text"
+                           inputmode="numeric"
+                           autocomplete="off"
+                           value="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                           placeholder="dd/mm/yyyy"
+                           pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}"
+                           title="Nhập ngày theo định dạng dd/mm/yyyy"
                            class="form-control" />
                 </div>
 
@@ -140,8 +147,13 @@
                     <label class="form-label fw-semibold" for="auditToDate">Đến ngày</label>
                     <input id="auditToDate"
                            name="toDate"
-                           type="date"
-                           value="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                           type="text"
+                           inputmode="numeric"
+                           autocomplete="off"
+                           value="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
+                           placeholder="dd/mm/yyyy"
+                           pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}"
+                           title="Nhập ngày theo định dạng dd/mm/yyyy"
                            class="form-control" />
                 </div>
 
@@ -204,7 +216,7 @@
             <span class="badge text-bg-light border">Trang @result.Page / @result.TotalPages</span>
         </div>
 
-        <div class="table-responsive">
+        <div class="table-responsive audit-table-wrapper">
             <table class="table table-hover align-middle mb-0 audit-table">
                 <thead>
                     <tr>
@@ -232,6 +244,7 @@
                 {
                     @foreach (var item in result.Items)
                     {
+                        var showEntityId = !string.IsNullOrWhiteSpace(item.EntityId) && !IsGuidIdentifier(item.EntityId);
                         <tr>
                             <td class="text-nowrap">
                                 <strong>@item.CreatedAt.AddHours(7).ToString("dd/MM/yyyy")</strong>
@@ -239,25 +252,36 @@
                             </td>
                             <td>
                                 <div class="fw-semibold">@(item.UserName ?? "Hệ thống")</div>
-                                @if (!string.IsNullOrWhiteSpace(item.UserId))
-                                {
-                                    <div class="small text-muted audit-user-id" title="@item.UserId">ID: @item.UserId</div>
-                                }
                             </td>
                             <td>
-                                <span class="badge @AuditBadgeClass(item.Action)">@item.Action.ToVietnameseAuditAction()</span>
-                                <div class="small text-muted mt-1">@item.Action</div>
+                                <span class="badge audit-action-badge @AuditBadgeClass(item.Action)">@item.Action.ToVietnameseAuditAction()</span>
                             </td>
                             <td>
                                 <div class="fw-semibold">@item.EntityName.ToVietnameseEntity()</div>
-                                <div class="small text-muted">#@item.EntityId</div>
+                                @if (showEntityId)
+                                {
+                                    <div class="small text-muted">#@item.EntityId</div>
+                                }
                             </td>
-                            <td class="audit-description">@item.Description</td>
-                            <td class="text-nowrap"><code>@(item.IpAddress ?? "—")</code></td>
+                            <td>
+                                <div class="audit-description" title="@item.Description.ToFriendlyAuditDescription()">
+                                    @item.Description.ToFriendlyAuditDescription()
+                                </div>
+                            </td>
+                            <td class="text-nowrap">
+                                @if (string.IsNullOrWhiteSpace(item.IpAddress))
+                                {
+                                    <span class="audit-no-ip">Không ghi nhận</span>
+                                }
+                                else
+                                {
+                                    <code>@item.IpAddress</code>
+                                }
+                            </td>
                             <td class="text-end">
-                                <a class="btn btn-sm btn-outline-primary"
+                                <a class="btn btn-sm btn-outline-primary audit-detail-button"
                                    asp-action="Details"
-                                   asp-route-id="@item.AuditLogId">Xem chi tiết</a>
+                                   asp-route-id="@item.AuditLogId">Xem</a>
                             </td>
                         </tr>
                     }
@@ -278,8 +302,8 @@
                                asp-route-userId="@Model.UserId"
                                asp-route-auditAction="@Model.Action"
                                asp-route-entityName="@Model.EntityName"
-                               asp-route-fromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
-                               asp-route-toDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                               asp-route-fromDate="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                               asp-route-toDate="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
                                asp-route-pageSize="@result.PageSize"
                                asp-route-page="@(result.Page - 1)">‹ Trước</a>
                         </li>
@@ -293,8 +317,8 @@
                                    asp-route-userId="@Model.UserId"
                                    asp-route-auditAction="@Model.Action"
                                    asp-route-entityName="@Model.EntityName"
-                                   asp-route-fromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
-                                   asp-route-toDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                                   asp-route-fromDate="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                                   asp-route-toDate="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
                                    asp-route-pageSize="@result.PageSize"
                                    asp-route-page="@currentPage">@currentPage</a>
                             </li>
@@ -307,8 +331,8 @@
                                asp-route-userId="@Model.UserId"
                                asp-route-auditAction="@Model.Action"
                                asp-route-entityName="@Model.EntityName"
-                               asp-route-fromDate="@(Model.FromDate?.ToString("yyyy-MM-dd"))"
-                               asp-route-toDate="@(Model.ToDate?.ToString("yyyy-MM-dd"))"
+                               asp-route-fromDate="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                               asp-route-toDate="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
                                asp-route-pageSize="@result.PageSize"
                                asp-route-page="@(result.Page + 1)">Sau ›</a>
                         </li>
