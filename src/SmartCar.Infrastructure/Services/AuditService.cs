@@ -7,6 +7,7 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class AuditService : IAuditService
 {
+    private const string SystemUserFilter = "__system__";
     private readonly ApplicationDbContext _dbContext;
 
     public AuditService(ApplicationDbContext dbContext)
@@ -78,7 +79,9 @@ internal sealed class AuditService : IAuditService
 
         if (!string.IsNullOrWhiteSpace(query.UserId))
         {
-            logs = logs.Where(log => log.UserId == query.UserId);
+            logs = query.UserId == SystemUserFilter
+                ? logs.Where(log => log.UserId == null)
+                : logs.Where(log => log.UserId == query.UserId);
         }
 
         if (!string.IsNullOrWhiteSpace(query.Action))
@@ -137,6 +140,14 @@ internal sealed class AuditService : IAuditService
                 userNames.TryGetValue(item.UserId, out var displayName) ? displayName : item.UserId,
                 item.Count))
             .ToList();
+
+        var systemCount = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .CountAsync(log => log.UserId == null, cancellationToken);
+        if (systemCount > 0)
+        {
+            users.Insert(0, new AuditUserFilterOption(SystemUserFilter, "Hệ thống", systemCount));
+        }
 
         var actions = await _dbContext.AuditLogs
             .AsNoTracking()
