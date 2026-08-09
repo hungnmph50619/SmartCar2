@@ -1,0 +1,195 @@
+.admin-kyc-review .kyc-review-summary {
+    border: 1px solid #d8e5f7;
+    border-radius: 16px;
+    background: #fff;
+}
+
+.admin-kyc-review .kyc-document-card {
+    border: 0;
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgba(20, 45, 80, 0.07);
+}
+
+.admin-kyc-review .kyc-data-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.admin-kyc-review .kyc-data-item {
+    min-width: 0;
+    padding: 14px 15px;
+    border: 1px solid #e1e8f1;
+    border-radius: 12px;
+    background: #fbfcfe;
+}
+
+.admin-kyc-review .kyc-data-item.is-wide {
+    grid-column: span 2;
+}
+
+.admin-kyc-review .kyc-data-item span,
+.admin-kyc-review .kyc-data-item strong {
+    display: block;
+}
+
+.admin-kyc-review .kyc-data-item span {
+    margin-bottom: 4px;
+    color: #758399;
+    font-size: 12px;
+}
+
+.admin-kyc-review .kyc-data-item strong {
+    overflow-wrap: anywhere;
+    color: #10243e;
+}
+
+.kyc-thumbnail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.kyc-thumbnail {
+    overflow: hidden;
+    border: 1px solid #dfe7f1;
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+.kyc-thumbnail-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+}
+
+.kyc-thumbnail-image-wrap {
+    display: grid;
+    height: 300px;
+    place-items: center;
+    overflow: hidden;
+    background: #eef3f8;
+}
+
+.kyc-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform .18s ease;
+}
+
+.kyc-thumbnail-button:hover img {
+    transform: scale(1.015);
+}
+
+.kyc-thumbnail-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 13px;
+    border-top: 1px solid #dfe7f1;
+    background: #fff;
+}
+
+.kyc-thumbnail-meta strong {
+    font-size: 13px;
+}
+
+.kyc-thumbnail-meta span {
+    color: #1f6fe5;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.kyc-decision-panel {
+    position: sticky;
+    top: 94px;
+    border: 1px solid #cfe0f6;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 12px 32px rgba(20, 45, 80, 0.09);
+}
+
+.kyc-decision-panel .document-checklist {
+    display: grid;
+    gap: 10px;
+    padding: 0;
+    border: 0;
+}
+
+.kyc-decision-panel .document-checklist legend {
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.kyc-decision-panel .document-checklist label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.kyc-decision-panel .form-check-input {
+    flex: 0 0 auto;
+    margin-top: 2px;
+}
+
+.kyc-image-modal .modal-dialog {
+    max-width: min(1180px, 96vw);
+}
+
+.kyc-image-modal .modal-content {
+    border: 0;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.kyc-image-stage {
+    display: grid;
+    min-height: 68vh;
+    place-items: center;
+    overflow: auto;
+    padding: 18px;
+    background: #121820;
+}
+
+.kyc-image-stage img {
+    max-width: 100%;
+    max-height: 72vh;
+    object-fit: contain;
+    transform-origin: center center;
+    transition: transform .18s ease;
+}
+
+.kyc-image-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+@media (max-width: 1199.98px) {
+    .kyc-decision-panel {
+        position: static;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .admin-kyc-review .kyc-data-grid,
+    .kyc-thumbnail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-kyc-review .kyc-data-item.is-wide {
+        grid-column: auto;
+    }
+
+    .kyc-thumbnail-image-wrap {
+        height: 250px;
+    }
+}
