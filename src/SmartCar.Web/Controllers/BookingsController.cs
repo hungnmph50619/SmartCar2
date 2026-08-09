@@ -1,9 +1,11 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
+using SmartCar.Infrastructure.Identity;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -13,13 +15,19 @@ public sealed class BookingsController : Controller
 {
     private readonly IBookingService _bookingService;
     private readonly IDocumentService _documentService;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IConfiguration _configuration;
 
     public BookingsController(
         IBookingService bookingService,
-        IDocumentService documentService)
+        IDocumentService documentService,
+        UserManager<ApplicationUser> userManager,
+        IConfiguration configuration)
     {
         _bookingService = bookingService;
         _documentService = documentService;
+        _userManager = userManager;
+        _configuration = configuration;
     }
 
     [HttpPost]
@@ -32,6 +40,29 @@ public sealed class BookingsController : Controller
         if (string.IsNullOrWhiteSpace(customerId))
         {
             return Challenge();
+        }
+
+        var customer = await _userManager.FindByIdAsync(customerId);
+        if (customer is null)
+        {
+            return Challenge();
+        }
+
+        if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
+        {
+            TempData["WarningMessage"] =
+                "Vui lòng bổ sung số điện thoại liên hệ trước khi gửi yêu cầu thuê xe để SmartCar có thể xác nhận và hỗ trợ đơn của bạn.";
+
+            return RedirectToAction(
+                "Index",
+                "Profile",
+                new
+                {
+                    tab = "profile",
+                    returnVehicleId = model.VehicleId,
+                    pickupDate = model.PickupDate,
+                    returnDate = model.ReturnDate
+                });
         }
 
         var hasValidRentalDocuments = await _documentService.HasValidRentalDocumentsAsync(
@@ -69,7 +100,8 @@ public sealed class BookingsController : Controller
             });
         }
 
-        TempData["SuccessMessage"] = "Đã gửi yêu cầu thuê xe. Vui lòng chờ Admin xác nhận.";
+        TempData["SuccessMessage"] =
+            $"Đã gửi yêu cầu thuê xe. SmartCar sẽ liên hệ qua số {customer.PhoneNumber}. Nếu cần hỗ trợ, bạn có thể gọi Hotline {GetSupportPhone()}.";
         return RedirectToAction(nameof(Details), new { id = result.BookingId.Value });
     }
 
@@ -101,6 +133,17 @@ public sealed class BookingsController : Controller
             customerId,
             cancellationToken);
 
-        return booking is null ? NotFound() : View(booking);
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        ViewBag.SmartCarSupportPhone = GetSupportPhone();
+        return View(booking);
     }
+
+    private string GetSupportPhone() =>
+        _configuration["SmartCar:SupportPhone"]?.Trim() is { Length: > 0 } phone
+            ? phone
+            : "0982223792";
 }
