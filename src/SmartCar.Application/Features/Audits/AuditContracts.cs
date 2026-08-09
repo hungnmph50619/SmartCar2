@@ -21,7 +21,7 @@ public sealed record AuditLogQuery(
     DateTime? FromDate = null,
     DateTime? ToDate = null,
     int Page = 1,
-    int PageSize = 50);
+    int PageSize = 25);
 
 public sealed record AuditUserFilterOption(
     string UserId,
