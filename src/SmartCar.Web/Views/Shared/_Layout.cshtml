@@ -37,6 +37,7 @@
     <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux-final.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/profile-ux.css" asp-append-version="true" />
 </head>
 <body>
     <header>
@@ -83,7 +84,14 @@
                                    role="button"
                                    data-bs-toggle="dropdown"
                                    aria-expanded="false">
-                                    <span class="user-avatar" aria-hidden="true">@avatarInitial</span>
+                                    @if (!string.IsNullOrWhiteSpace(currentUser?.AvatarPath))
+                                    {
+                                        <img src="@currentUser.AvatarPath" alt="" class="user-avatar user-avatar-photo" />
+                                    }
+                                    else
+                                    {
+                                        <span class="user-avatar" aria-hidden="true">@avatarInitial</span>
+                                    }
                                     <span class="user-display-name">@displayName</span>
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end user-navigation-menu">
