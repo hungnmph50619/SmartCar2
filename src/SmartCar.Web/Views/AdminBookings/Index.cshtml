@@ -28,14 +28,27 @@
 <div class="table-responsive">
 <table class="table table-bordered align-middle">
     <thead>
-        <tr><th>Mã</th><th>Khách hàng</th><th>Xe</th><th>Thời gian</th><th>Tổng tiền</th><th>Trạng thái</th><th></th></tr>
+        <tr><th>Mã</th><th>Khách hàng & liên hệ</th><th>Xe</th><th>Thời gian</th><th>Tổng tiền</th><th>Trạng thái</th><th></th></tr>
     </thead>
     <tbody>
     @foreach (var booking in Model)
     {
         <tr>
             <td>#@booking.BookingId</td>
-            <td><strong>@booking.CustomerName</strong><br /><small>@booking.CustomerPhone</small></td>
+            <td>
+                <strong>@booking.CustomerName</strong>
+                @if (!string.IsNullOrWhiteSpace(booking.CustomerPhone))
+                {
+                    <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+                        <a href="tel:@booking.CustomerPhone" class="text-decoration-none fw-semibold">☎ @booking.CustomerPhone</a>
+                        <a href="tel:@booking.CustomerPhone" class="btn btn-sm btn-outline-success">Gọi khách</a>
+                    </div>
+                }
+                else
+                {
+                    <span class="badge bg-danger mt-1">Thiếu số điện thoại</span>
+                }
+            </td>
             <td>@booking.VehicleName<br /><small>@booking.LicensePlate</small></td>
             <td>@booking.PickupDate.ToString("dd/MM HH:mm")<br />→ @booking.ReturnDate.ToString("dd/MM HH:mm")</td>
             <td>@booking.TotalAmount.ToString("N0") đ</td>

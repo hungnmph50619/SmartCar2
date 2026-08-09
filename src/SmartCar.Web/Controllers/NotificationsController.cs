@@ -2,12 +2,14 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Notifications;
+using SmartCar.Domain.Constants;
 
 namespace SmartCar.Web.Controllers;
 
 [Authorize]
 public sealed class NotificationsController : Controller
 {
+    private const string KycWorkPrefix = "Hồ sơ KYC chờ duyệt|";
     private readonly INotificationService _notificationService;
 
     public NotificationsController(INotificationService notificationService)
@@ -46,6 +48,25 @@ public sealed class NotificationsController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    [Authorize(Roles = RoleNames.Admin)]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult OpenKyc(
+        int id,
+        string customerId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return RedirectToAction(nameof(Index));
+        }
+
+        // KYC is a work item, not just an informational notification. Opening the
+        // review page must not clear the alert. It is marked handled only after
+        // the admin approves the package or requests resubmission.
+        return RedirectToAction("Review", "AdminKyc", new { customerId });
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> MarkAllRead(CancellationToken cancellationToken)
@@ -56,8 +77,24 @@ public sealed class NotificationsController : Controller
             return Challenge();
         }
 
-        await _notificationService.MarkAllReadAsync(userId, cancellationToken);
-        TempData["SuccessMessage"] = "Đã đánh dấu tất cả thông báo là đã đọc.";
+        if (User.IsInRole(RoleNames.Admin))
+        {
+            var notifications = await _notificationService.GetAsync(userId, cancellationToken);
+            foreach (var item in notifications.Where(item =>
+                         !item.IsRead &&
+                         !item.Title.StartsWith(KycWorkPrefix, StringComparison.Ordinal)))
+            {
+                await _notificationService.MarkReadAsync(item.NotificationId, userId, cancellationToken);
+            }
+
+            TempData["SuccessMessage"] = "Đã đánh dấu các thông báo thông thường là đã đọc. Hồ sơ KYC chờ duyệt vẫn được giữ cho đến khi xử lý.";
+        }
+        else
+        {
+            await _notificationService.MarkAllReadAsync(userId, cancellationToken);
+            TempData["SuccessMessage"] = "Đã đánh dấu tất cả thông báo là đã đọc.";
+        }
+
         return RedirectToAction(nameof(Index));
     }
 }

@@ -1,73 +1,344 @@
-@model IReadOnlyList<SmartCar.Application.Features.Audits.AuditLogDto>
+@model SmartCar.Web.ViewModels.AuditLogIndexViewModel
 @{
     ViewData["Title"] = "Nhật ký thao tác";
+    var result = Model.Result;
+    var firstRow = result.TotalCount == 0 ? 0 : ((result.Page - 1) * result.PageSize) + 1;
+    var lastRow = Math.Min(result.Page * result.PageSize, result.TotalCount);
+    var pageStart = Math.Max(1, result.Page - 2);
+    var pageEnd = Math.Min(result.TotalPages, result.Page + 2);
+
+    string AuditBadgeClass(string action) => action switch
+    {
+        "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "text-bg-danger",
+        "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "text-bg-success",
+        "ViewKycDocumentImage" => "text-bg-info",
+        "Submit" or "SubmitKycPackage" or "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "text-bg-primary",
+        "RequestResubmission" or "RequestUpdate" or "AddCharge" => "text-bg-warning",
+        _ => "text-bg-secondary"
+    };
+
+    bool IsGuidIdentifier(string? value) => Guid.TryParse(value, out _);
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h1 class="h3 mb-1">Nhật ký thao tác</h1>
-        <p class="text-muted mb-0">Bằng chứng ai đã thay đổi dữ liệu nào và vào thời điểm nào.</p>
-    </div>
-</div>
+<link rel="stylesheet" href="~/css/admin-audit.css" asp-append-version="true" />
 
-<form method="get" class="card card-body shadow-sm mb-3">
-    <div class="row g-2 align-items-end">
-        <div class="col-md-4">
-            <label class="form-label">Số bản ghi gần nhất</label>
-            <input name="take" type="number" min="1" max="1000" value="@ViewBag.Take" class="form-control" />
+<div class="audit-page">
+    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-start gap-3 mb-4">
+        <div>
+            <div class="text-uppercase small text-primary fw-semibold">TRUY VẾT HỆ THỐNG</div>
+            <h1 class="h2 fw-bold mb-1">Nhật ký thao tác</h1>
+            <p class="text-muted mb-0">Tra cứu ai đã thực hiện hành động gì, trên dữ liệu nào, vào thời điểm nào và từ địa chỉ IP nào.</p>
         </div>
-        <div class="col-md-3"><button class="btn btn-primary w-100" type="submit">Tải nhật ký</button></div>
+        <div class="audit-summary-badge">
+            <span>Kết quả phù hợp</span>
+            <strong>@result.TotalCount.ToString("N0")</strong>
+        </div>
     </div>
-</form>
 
-<div class="card shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Thời gian</th>
-                    <th>Người thực hiện</th>
-                    <th>Hành động</th>
-                    <th>Đối tượng</th>
-                    <th>Nội dung</th>
-                    <th>Chi tiết</th>
-                </tr>
-            </thead>
-            <tbody>
-            @if (Model.Count == 0)
+    <section class="card border-0 shadow-sm audit-filter-card mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <h2 class="h5 fw-bold mb-1">Bộ lọc nhật ký</h2>
+                    <p class="small text-muted mb-0">Có thể kết hợp nhiều điều kiện để tìm đúng thao tác cần kiểm tra.</p>
+                </div>
+                @if (Model.HasFilters)
+                {
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Index">Xóa toàn bộ bộ lọc</a>
+                }
+            </div>
+
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-12 col-xl-4">
+                    <label class="form-label fw-semibold" for="auditSearch">Tìm kiếm</label>
+                    <input id="auditSearch"
+                           name="search"
+                           value="@Model.Search"
+                           class="form-control"
+                           placeholder="Nội dung, mã đối tượng, tên/email, IP..." />
+                </div>
+
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label fw-semibold" for="auditUser">Người thực hiện</label>
+                    <select id="auditUser" name="userId" class="form-select">
+                        <option value="">Tất cả</option>
+                        @foreach (var option in result.Users)
+                        {
+                            if (Model.UserId == option.UserId)
+                            {
+                                <option value="@option.UserId" selected>@option.DisplayName (@option.Count)</option>
+                            }
+                            else
+                            {
+                                <option value="@option.UserId">@option.DisplayName (@option.Count)</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label fw-semibold" for="auditAction">Hành động</label>
+                    <select id="auditAction" name="auditAction" class="form-select">
+                        <option value="">Tất cả</option>
+                        @foreach (var option in result.Actions)
+                        {
+                            if (Model.Action == option.Value)
+                            {
+                                <option value="@option.Value" selected>@option.Value.ToVietnameseAuditAction() (@option.Count)</option>
+                            }
+                            else
+                            {
+                                <option value="@option.Value">@option.Value.ToVietnameseAuditAction() (@option.Count)</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label fw-semibold" for="auditEntity">Đối tượng</label>
+                    <select id="auditEntity" name="entityName" class="form-select">
+                        <option value="">Tất cả</option>
+                        @foreach (var option in result.Entities)
+                        {
+                            if (Model.EntityName == option.Value)
+                            {
+                                <option value="@option.Value" selected>@option.Value.ToVietnameseEntity() (@option.Count)</option>
+                            }
+                            else
+                            {
+                                <option value="@option.Value">@option.Value.ToVietnameseEntity() (@option.Count)</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label fw-semibold" for="auditPageSize">Số dòng / trang</label>
+                    <select id="auditPageSize" name="pageSize" class="form-select">
+                        @foreach (var size in new[] { 25, 50, 100, 200 })
+                        {
+                            if (result.PageSize == size)
+                            {
+                                <option value="@size" selected>@size dòng</option>
+                            }
+                            else
+                            {
+                                <option value="@size">@size dòng</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label fw-semibold" for="auditFromDate">Từ ngày</label>
+                    <input id="auditFromDate"
+                           name="fromDate"
+                           type="text"
+                           inputmode="numeric"
+                           autocomplete="off"
+                           value="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                           placeholder="dd/mm/yyyy"
+                           pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}"
+                           title="Nhập ngày theo định dạng dd/mm/yyyy"
+                           class="form-control" />
+                </div>
+
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label fw-semibold" for="auditToDate">Đến ngày</label>
+                    <input id="auditToDate"
+                           name="toDate"
+                           type="text"
+                           inputmode="numeric"
+                           autocomplete="off"
+                           value="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
+                           placeholder="dd/mm/yyyy"
+                           pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}"
+                           title="Nhập ngày theo định dạng dd/mm/yyyy"
+                           class="form-control" />
+                </div>
+
+                <div class="col-md-6 col-xl-3">
+                    <button class="btn btn-primary w-100" type="submit">Lọc nhật ký</button>
+                </div>
+
+                <div class="col-md-6 col-xl-3">
+                    <a class="btn btn-outline-secondary w-100" asp-action="Index">Đặt lại</a>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    @if (Model.HasFilters)
+    {
+        <div class="audit-active-filters mb-3">
+            <span class="text-muted small fw-semibold">Đang lọc:</span>
+            @if (!string.IsNullOrWhiteSpace(Model.Search))
             {
-                <tr><td colspan="6" class="text-center text-muted py-4">Chưa có nhật ký thao tác.</td></tr>
+                <span class="badge rounded-pill text-bg-light border">Từ khóa: @Model.Search</span>
             }
-            else
+            @if (!string.IsNullOrWhiteSpace(Model.UserId))
             {
-                @foreach (var item in Model)
+                var selectedUser = result.Users.FirstOrDefault(option => option.UserId == Model.UserId);
+                <span class="badge rounded-pill text-bg-light border">Người: @(selectedUser?.DisplayName ?? Model.UserId)</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.Action))
+            {
+                <span class="badge rounded-pill text-bg-light border">Hành động: @Model.Action.ToVietnameseAuditAction()</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.EntityName))
+            {
+                <span class="badge rounded-pill text-bg-light border">Đối tượng: @Model.EntityName.ToVietnameseEntity()</span>
+            }
+            @if (Model.FromDate.HasValue || Model.ToDate.HasValue)
+            {
+                <span class="badge rounded-pill text-bg-light border">
+                    Thời gian: @(Model.FromDate?.ToString("dd/MM/yyyy") ?? "...") → @(Model.ToDate?.ToString("dd/MM/yyyy") ?? "...")
+                </span>
+            }
+        </div>
+    }
+
+    <section class="card border-0 shadow-sm audit-table-card">
+        <div class="card-header bg-white border-0 px-4 pt-4 pb-3 d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div>
+                <h2 class="h5 fw-bold mb-1">Lịch sử thao tác</h2>
+                <p class="small text-muted mb-0">
+                    @if (result.TotalCount > 0)
+                    {
+                        <text>Đang hiển thị @firstRow–@lastRow trên @result.TotalCount bản ghi.</text>
+                    }
+                    else
+                    {
+                        <text>Không tìm thấy bản ghi phù hợp.</text>
+                    }
+                </p>
+            </div>
+            <span class="badge text-bg-light border">Trang @result.Page / @result.TotalPages</span>
+        </div>
+
+        <div class="table-responsive audit-table-wrapper">
+            <table class="table table-hover align-middle mb-0 audit-table">
+                <thead>
+                    <tr>
+                        <th>Thời gian</th>
+                        <th>Người thực hiện</th>
+                        <th>Hành động</th>
+                        <th>Đối tượng</th>
+                        <th>Nội dung</th>
+                        <th>IP</th>
+                        <th class="text-end">Chi tiết</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (result.Items.Count == 0)
                 {
                     <tr>
-                        <td class="text-nowrap">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
-                        <td>@(item.UserName ?? item.UserId ?? "Hệ thống")</td>
-                        <td><span class="badge bg-secondary">@item.Action.ToVietnameseAuditAction()</span></td>
-                        <td>@item.EntityName.ToVietnameseEntity() #@item.EntityId</td>
-                        <td>@item.Description</td>
-                        <td>
-                            @if (!string.IsNullOrWhiteSpace(item.OldValues) || !string.IsNullOrWhiteSpace(item.NewValues))
-                            {
-                                <details>
-                                    <summary>Xem dữ liệu</summary>
-                                    @if (!string.IsNullOrWhiteSpace(item.OldValues))
-                                    {
-                                        <div class="small mt-2"><strong>Trước:</strong><pre class="text-wrap">@item.OldValues</pre></div>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(item.NewValues))
-                                    {
-                                        <div class="small"><strong>Sau:</strong><pre class="text-wrap">@item.NewValues</pre></div>
-                                    }
-                                </details>
-                            }
+                        <td colspan="7" class="text-center py-5">
+                            <div class="audit-empty-icon">⌕</div>
+                            <div class="fw-semibold">Không có nhật ký phù hợp</div>
+                            <div class="small text-muted mt-1">Hãy thay đổi điều kiện lọc hoặc xóa bộ lọc để xem toàn bộ nhật ký.</div>
                         </td>
                     </tr>
                 }
-            }
-            </tbody>
-        </table>
-    </div>
+                else
+                {
+                    @foreach (var item in result.Items)
+                    {
+                        var showEntityId = !string.IsNullOrWhiteSpace(item.EntityId) && !IsGuidIdentifier(item.EntityId);
+                        <tr>
+                            <td class="text-nowrap">
+                                <strong>@item.CreatedAt.AddHours(7).ToString("dd/MM/yyyy")</strong>
+                                <div class="small text-muted">@item.CreatedAt.AddHours(7).ToString("HH:mm:ss")</div>
+                            </td>
+                            <td>
+                                <div class="fw-semibold">@(item.UserName ?? "Hệ thống")</div>
+                            </td>
+                            <td>
+                                <span class="badge audit-action-badge @AuditBadgeClass(item.Action)">@item.Action.ToVietnameseAuditAction()</span>
+                            </td>
+                            <td>
+                                <div class="fw-semibold">@item.EntityName.ToVietnameseEntity()</div>
+                                @if (showEntityId)
+                                {
+                                    <div class="small text-muted">#@item.EntityId</div>
+                                }
+                            </td>
+                            <td>
+                                <div class="audit-description" title="@item.Description.ToFriendlyAuditDescription()">
+                                    @item.Description.ToFriendlyAuditDescription()
+                                </div>
+                            </td>
+                            <td class="text-nowrap">
+                                @if (string.IsNullOrWhiteSpace(item.IpAddress))
+                                {
+                                    <span class="audit-no-ip">Không ghi nhận</span>
+                                }
+                                else
+                                {
+                                    <code>@item.IpAddress</code>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary audit-detail-button"
+                                   asp-action="Details"
+                                   asp-route-id="@item.AuditLogId">Xem</a>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+
+        @if (result.TotalPages > 1)
+        {
+            <div class="card-footer bg-white border-0 px-4 py-3">
+                <nav aria-label="Phân trang nhật ký thao tác">
+                    <ul class="pagination pagination-sm mb-0 justify-content-end flex-wrap">
+                        <li class="page-item @(result.Page <= 1 ? "disabled" : string.Empty)">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-search="@Model.Search"
+                               asp-route-userId="@Model.UserId"
+                               asp-route-auditAction="@Model.Action"
+                               asp-route-entityName="@Model.EntityName"
+                               asp-route-fromDate="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                               asp-route-toDate="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
+                               asp-route-pageSize="@result.PageSize"
+                               asp-route-page="@(result.Page - 1)">‹ Trước</a>
+                        </li>
+
+                        @for (var currentPage = pageStart; currentPage <= pageEnd; currentPage++)
+                        {
+                            <li class="page-item @(currentPage == result.Page ? "active" : string.Empty)">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-search="@Model.Search"
+                                   asp-route-userId="@Model.UserId"
+                                   asp-route-auditAction="@Model.Action"
+                                   asp-route-entityName="@Model.EntityName"
+                                   asp-route-fromDate="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                                   asp-route-toDate="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
+                                   asp-route-pageSize="@result.PageSize"
+                                   asp-route-page="@currentPage">@currentPage</a>
+                            </li>
+                        }
+
+                        <li class="page-item @(result.Page >= result.TotalPages ? "disabled" : string.Empty)">
+                            <a class="page-link"
+                               asp-action="Index"
+                               asp-route-search="@Model.Search"
+                               asp-route-userId="@Model.UserId"
+                               asp-route-auditAction="@Model.Action"
+                               asp-route-entityName="@Model.EntityName"
+                               asp-route-fromDate="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                               asp-route-toDate="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
+                               asp-route-pageSize="@result.PageSize"
+                               asp-route-page="@(result.Page + 1)">Sau ›</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        }
+    </section>
 </div>
