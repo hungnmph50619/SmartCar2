@@ -59,6 +59,14 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
 
+        services.Configure<DataProtectionTokenProviderOptions>(options =>
+        {
+            options.TokenLifespan = TimeSpan.FromMinutes(30);
+        });
+
+        services.Configure<SmtpEmailOptions>(
+            configuration.GetSection(SmtpEmailOptions.SectionName));
+
         services.ConfigureApplicationCookie(options =>
         {
             options.LoginPath = "/Account/Login";
@@ -68,6 +76,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<IEmailService, SmtpEmailService>();
         services.AddScoped<IBrandService, BrandService>();
         services.AddScoped<IVehicleService, VehicleService>();
         services.AddScoped<IDocumentService, DocumentService>();
