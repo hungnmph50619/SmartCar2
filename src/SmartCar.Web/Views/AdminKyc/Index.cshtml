@@ -1,0 +1,72 @@
+@model SmartCar.Web.ViewModels.AdminKycQueueViewModel
+@{
+    ViewData["Title"] = "Hồ sơ xác minh chờ duyệt";
+}
+
+<div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
+    <div>
+        <div class="text-uppercase small text-primary fw-semibold">HÀNG ĐỢI XÁC MINH GIẤY TỜ</div>
+        <h1 class="h2 fw-bold mb-1">Hồ sơ xác minh chờ duyệt</h1>
+        <p class="text-muted mb-0">KYC trong SmartCar là bước quản trị viên đối chiếu CCCD và GPLX của khách hàng. Chỉ hồ sơ đã gửi đủ 4 ảnh mới xuất hiện tại đây.</p>
+    </div>
+    <span class="badge @(Model.Items.Count > 0 ? "bg-warning text-dark" : "bg-success") fs-6 px-3 py-2">
+        @Model.Items.Count hồ sơ cần xử lý
+    </span>
+</div>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-5 text-center">
+            <div class="display-6 mb-3">✓</div>
+            <h2 class="h4 fw-bold">Không có hồ sơ xác minh đang chờ</h2>
+            <p class="text-muted mb-0">Khi khách hàng gửi đủ CCCD và GPLX, hồ sơ sẽ tự xuất hiện tại đây.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-0 p-4 pb-2">
+            <div>
+                <h2 class="h5 fw-bold mb-1">Cần quản trị viên xử lý</h2>
+                <p class="text-muted mb-0">Mỗi khách hàng chỉ có một hồ sơ gồm CCCD + GPLX để duyệt hoặc yêu cầu cập nhật trong một lần.</p>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Khách hàng</th>
+                        <th>Liên hệ</th>
+                        <th>Gửi lúc</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@item.CustomerName</div>
+                            <small class="text-muted">@item.CustomerEmail</small>
+                        </td>
+                        <td>@(string.IsNullOrWhiteSpace(item.CustomerPhone) ? "Chưa cập nhật" : item.CustomerPhone)</td>
+                        <td>
+                            <div>@item.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                            <small class="text-muted">Đủ CCCD + GPLX · 4 ảnh</small>
+                        </td>
+                        <td><span class="badge bg-warning text-dark">Mới gửi · Chờ duyệt</span></td>
+                        <td class="text-end">
+                            <a class="btn btn-primary btn-sm"
+                               asp-action="Review"
+                               asp-route-customerId="@item.CustomerId">Xem và xác minh</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

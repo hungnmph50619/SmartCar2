@@ -574,8 +574,6 @@ internal sealed class DocumentService : IDocumentService
                 document.ExpiryDate.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.FullNameOnDocument) &&
                 metadata.DateOfBirth.HasValue &&
-                !string.IsNullOrWhiteSpace(metadata.Gender) &&
-                metadata.IssuedDate.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.PermanentAddress),
             DocumentTypes.CitizenIdBack =>
                 !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
@@ -585,7 +583,6 @@ internal sealed class DocumentService : IDocumentService
                 !string.IsNullOrWhiteSpace(document.ImagePath) &&
                 document.ExpiryDate.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.FullNameOnDocument) &&
-                metadata.IssuedDate.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.LicenseClass),
             DocumentTypes.DrivingLicenseBack =>
                 !string.IsNullOrWhiteSpace(document.DocumentNumber) &&

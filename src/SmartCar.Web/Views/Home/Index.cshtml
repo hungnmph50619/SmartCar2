@@ -132,21 +132,7 @@
           class="row g-3 align-items-start"
           data-vehicle-search-form
           novalidate>
-        <div class="col-lg-4 col-md-6">
-
-            <label for="homePickupAddress"
-                   class="form-label fw-semibold">
-                Địa điểm nhận xe
-            </label>
-
-            <input id="homePickupAddress"
-                   type="text"
-                   name="PickupAddress"
-                   class="form-control form-control-lg"
-                   placeholder="Ví dụ: Hà Nội" />
-
-        </div>
-        <div class="col-lg-4 col-md-6">
+        <div class="col-lg-5 col-md-6">
             <label for="homePickupDisplay" class="form-label fw-semibold">Ngày giờ nhận xe</label>
             <div class="vn-datetime-control">
                 <input id="homePickupDisplay"
@@ -170,7 +156,7 @@
                    value="@pickupDate.ToString("yyyy-MM-ddTHH:mm")"
                    data-vn-datetime-hidden="pickup" />
         </div>
-        <div class="col-lg-4 col-md-6">
+        <div class="col-lg-5 col-md-6">
             <label for="homeReturnDisplay" class="form-label fw-semibold">Ngày giờ trả xe</label>
             <div class="vn-datetime-control">
                 <input id="homeReturnDisplay"
@@ -194,15 +180,6 @@
                    value="@returnDate.ToString("yyyy-MM-ddTHH:mm")"
                    data-vn-datetime-hidden="return" />
         </div>
-        <div class="col-lg-2 col-md-6">
-            <label for="homeSeats" class="form-label fw-semibold">Số chỗ tối thiểu</label>
-            <select id="homeSeats" name="Seats" class="form-select form-select-lg">
-                <option value="">Tất cả</option>
-                <option value="4">4+ chỗ</option>
-                <option value="5">5+ chỗ</option>
-                <option value="7">7+ chỗ</option>
-            </select>
-        </div>
         <div class="col-lg-2 col-md-6 search-submit-column">
             <button type="submit"
                     class="btn btn-primary btn-lg w-100 home-search-button"
@@ -224,7 +201,7 @@
                     aria-controls="homeAdvancedFilters">
                 ⚙ Bộ lọc nâng cao
             </button>
-            <span class="small text-muted">Lọc thêm theo hãng, hộp số, nhiên liệu, giá và đời xe.</span>
+            <span class="small text-muted">Lọc thêm theo số chỗ, hãng, hộp số, nhiên liệu, giá và đời xe.</span>
         </div>
 
         <div class="col-12">
@@ -235,13 +212,13 @@
                         <span class="small text-muted">Có thể bỏ trống các tiêu chí không cần thiết</span>
                     </div>
                     <div class="row g-3">
-                        <div class="col-lg-4 col-md-6">
+                        <div class="col-lg-3 col-md-6">
                             <label for="homeBrand" class="form-label fw-semibold">Hãng xe</label>
                             <select id="homeBrand" name="BrandId" asp-items="ViewBag.Brands" class="form-select">
                                 <option value="">Tất cả hãng</option>
                             </select>
                         </div>
-                        <div class="col-lg-4 col-md-6">
+                        <div class="col-lg-3 col-md-6">
                             <label for="homeTransmission" class="form-label fw-semibold">Hộp số</label>
                             <select id="homeTransmission" name="Transmission" class="form-select">
                                 <option value="">Tất cả</option>
@@ -249,7 +226,7 @@
                                 <option value="Số sàn">Số sàn</option>
                             </select>
                         </div>
-                        <div class="col-lg-4 col-md-6">
+                        <div class="col-lg-3 col-md-6">
                             <label for="homeFuelType" class="form-label fw-semibold">Nhiên liệu</label>
                             <select id="homeFuelType" name="FuelType" class="form-select">
                                 <option value="">Tất cả</option>
@@ -257,6 +234,15 @@
                                 <option value="Dầu">Dầu</option>
                                 <option value="Điện">Điện</option>
                                 <option value="Hybrid">Hybrid</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-6">
+                            <label for="homeSeats" class="form-label fw-semibold">Số chỗ tối thiểu</label>
+                            <select id="homeSeats" name="Seats" class="form-select">
+                                <option value="">Tất cả</option>
+                                <option value="4">4+ chỗ</option>
+                                <option value="5">5+ chỗ</option>
+                                <option value="7">7+ chỗ</option>
                             </select>
                         </div>
                         <div class="col-lg-3 col-md-6">

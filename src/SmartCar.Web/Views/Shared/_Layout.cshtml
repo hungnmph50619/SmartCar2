@@ -37,6 +37,7 @@
     <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux-final.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/profile-ux.css" asp-append-version="true" />
 </head>
 <body>
     <header>
@@ -83,7 +84,14 @@
                                    role="button"
                                    data-bs-toggle="dropdown"
                                    aria-expanded="false">
-                                    <span class="user-avatar" aria-hidden="true">@avatarInitial</span>
+                                    @if (!string.IsNullOrWhiteSpace(currentUser?.AvatarPath))
+                                    {
+                                        <img src="@currentUser.AvatarPath" alt="" class="user-avatar user-avatar-photo" />
+                                    }
+                                    else
+                                    {
+                                        <span class="user-avatar" aria-hidden="true">@avatarInitial</span>
+                                    }
                                     <span class="user-display-name">@displayName</span>
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end user-navigation-menu">
@@ -149,17 +157,8 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-guards.js" asp-append-version="true"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@6.0.0/dist/tesseract.min.js"></script>
-    <script src="~/js/ekyc-gate-click-compat.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-document-gate.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-pipeline-order.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-pipeline-compat.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-image-quality-local.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-local-test.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-cccd-field-level.js" asp-append-version="true"></script>
-    <script src="~/js/ekyc-quality-copy.js" asp-append-version="true"></script>
+    <script src="~/js/profile-interactions.js" asp-append-version="true"></script>
+
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

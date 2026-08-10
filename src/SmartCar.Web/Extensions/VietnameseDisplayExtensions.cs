@@ -1,9 +1,14 @@
+using System.Text.RegularExpressions;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Web.Extensions;
 
 public static class VietnameseDisplayExtensions
 {
+    private static readonly Regex GuidPattern = new(
+        @"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b",
+        RegexOptions.Compiled);
+
     public static string ToVietnamese(this Enum value) => value switch
     {
         BookingStatus status => status switch
@@ -129,10 +134,12 @@ public static class VietnameseDisplayExtensions
         "Update" => "Cập nhật",
         "Delete" => "Xóa",
         "ChangeStatus" => "Đổi trạng thái",
-        "Submit" => "Gửi xác minh",
-        "Verify" => "Xác minh",
+        "Submit" => "Gửi giấy tờ",
+        "SubmitKycPackage" => "Gửi hồ sơ xác minh",
+        "Verify" => "Xác minh giấy tờ",
+        "VerifyAll" => "Duyệt hồ sơ xác minh",
         "Reject" => "Từ chối",
-        "RequestResubmission" => "Yêu cầu gửi lại giấy tờ",
+        "RequestResubmission" => "Yêu cầu cập nhật giấy tờ",
         "RequestUpdate" => "Yêu cầu cập nhật giấy tờ",
         "SendDocumentReminder" => "Nhắc hoàn thiện giấy tờ",
         "LockCustomer" => "Khóa tài khoản khách hàng",
@@ -140,6 +147,7 @@ public static class VietnameseDisplayExtensions
         "Confirm" => "Xác nhận đơn",
         "MarkReady" => "Đánh dấu sẵn sàng",
         "Pay" => "Thanh toán",
+        "Refund" => "Hoàn tiền",
         "CustomerCancel" => "Khách hàng hủy đơn",
         "AdminCancel" => "Quản trị viên hủy đơn",
         "MarkNoShow" => "Ghi nhận không đến nhận xe",
@@ -152,6 +160,10 @@ public static class VietnameseDisplayExtensions
         "RemovePromotion" => "Gỡ khuyến mãi",
         "StartInvestigation" => "Bắt đầu xử lý",
         "Resolve" => "Hoàn tất xử lý",
+        "UpdateAvatar" => "Đổi ảnh đại diện",
+        "ChangePassword" => "Đổi mật khẩu",
+        "UpdateBankAccount" => "Cập nhật tài khoản ngân hàng",
+        "ViewKycDocumentImage" => "Xem ảnh giấy tờ xác minh",
         null or "" => "Không xác định",
         _ => value
     };
@@ -170,7 +182,26 @@ public static class VietnameseDisplayExtensions
         "Vehicle" => "Xe",
         "MaintenanceRecord" => "Phiếu bảo trì",
         "UserProfile" => "Hồ sơ người dùng",
+        "UserAccount" => "Tài khoản người dùng",
+        "UserBankAccount" => "Tài khoản ngân hàng",
         null or "" => "Không xác định",
         _ => value
     };
+
+    public static string ToFriendlyAuditDescription(this string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Không có mô tả.";
+        }
+
+        var withoutGuids = GuidPattern.Replace(value, string.Empty);
+        var normalized = Regex.Replace(withoutGuids, @"\s+", " ").Trim();
+        normalized = normalized
+            .Replace("khách hàng .", "khách hàng.", StringComparison.OrdinalIgnoreCase)
+            .Replace("khách hàng ,", "khách hàng,", StringComparison.OrdinalIgnoreCase)
+            .Replace(" #", " #", StringComparison.Ordinal);
+
+        return normalized;
+    }
 }

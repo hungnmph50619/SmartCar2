@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using SmartCar.Application.Features.Brands;
 using SmartCar.Application.Features.Vehicles;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Identity;
 using SmartCar.Web.Models;
@@ -31,6 +32,12 @@ public class HomeController : Controller
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
+        // Admin làm việc trong workspace quản trị riêng. Không đưa Admin vào giao diện thuê xe của khách.
+        if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Admin))
+        {
+            return RedirectToAction("Index", "Dashboard");
+        }
+
         var vehicles = await _vehicleService.GetAllAsync(cancellationToken);
         var featuredVehicles = vehicles
             .Where(vehicle => vehicle.Status == VehicleStatus.Available)
