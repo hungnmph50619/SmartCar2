@@ -6,6 +6,9 @@
     var lastRow = Math.Min(result.Page * result.PageSize, result.TotalCount);
     var pageStart = Math.Max(1, result.Page - 2);
     var pageEnd = Math.Min(result.TotalPages, result.Page + 2);
+    var hasAdvancedFilters = !string.IsNullOrWhiteSpace(Model.UserId)
+        || !string.IsNullOrWhiteSpace(Model.Action)
+        || !string.IsNullOrWhiteSpace(Model.EntityName);
 
     string AuditBadgeClass(string action) => action switch
     {
@@ -23,147 +26,135 @@
 <link rel="stylesheet" href="~/css/admin-audit.css" asp-append-version="true" />
 
 <div class="audit-page">
-    <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-start gap-3 mb-4">
-        <div>
-            <div class="text-uppercase small text-primary fw-semibold">TRUY VẾT HỆ THỐNG</div>
-            <h1 class="h2 fw-bold mb-1">Nhật ký thao tác</h1>
-            <p class="text-muted mb-0">Tra cứu ai đã thực hiện hành động gì, trên dữ liệu nào, vào thời điểm nào và từ địa chỉ IP nào.</p>
-        </div>
-        <div class="audit-summary-badge">
-            <span>Kết quả phù hợp</span>
-            <strong>@result.TotalCount.ToString("N0")</strong>
-        </div>
+    <div class="audit-page-heading mb-4">
+        <h1 class="h2 fw-bold mb-1">Nhật ký thao tác</h1>
+        <p class="text-muted mb-0">Theo dõi các hoạt động quan trọng trong hệ thống.</p>
     </div>
 
-    <section class="card border-0 shadow-sm audit-filter-card mb-4">
-        <div class="card-body p-4">
-            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-                <div>
-                    <h2 class="h5 fw-bold mb-1">Bộ lọc nhật ký</h2>
-                    <p class="small text-muted mb-0">Có thể kết hợp nhiều điều kiện để tìm đúng thao tác cần kiểm tra.</p>
+    <section class="card border-0 shadow-sm audit-filter-card mb-3">
+        <div class="card-body p-3 p-lg-4">
+            <form method="get">
+                <input type="hidden" name="pageSize" value="@result.PageSize" />
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-12 col-xl-5">
+                        <label class="form-label fw-semibold" for="auditSearch">Tìm kiếm</label>
+                        <input id="auditSearch"
+                               name="search"
+                               value="@Model.Search"
+                               class="form-control"
+                               placeholder="Nội dung, mã đối tượng, tên/email, IP..." />
+                    </div>
+
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label fw-semibold" for="auditFromDate">Từ ngày</label>
+                        <input id="auditFromDate"
+                               name="fromDate"
+                               type="text"
+                               inputmode="numeric"
+                               autocomplete="off"
+                               value="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
+                               placeholder="dd/mm/yyyy"
+                               pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}"
+                               title="Nhập ngày theo định dạng dd/mm/yyyy"
+                               class="form-control" />
+                    </div>
+
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label fw-semibold" for="auditToDate">Đến ngày</label>
+                        <input id="auditToDate"
+                               name="toDate"
+                               type="text"
+                               inputmode="numeric"
+                               autocomplete="off"
+                               value="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
+                               placeholder="dd/mm/yyyy"
+                               pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}"
+                               title="Nhập ngày theo định dạng dd/mm/yyyy"
+                               class="form-control" />
+                    </div>
+
+                    <div class="col-md-4 col-xl-3">
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary flex-grow-1" type="submit">Lọc</button>
+                            <button class="btn btn-outline-secondary audit-advanced-toggle"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#auditAdvancedFilters"
+                                    aria-expanded="@(hasAdvancedFilters ? "true" : "false")"
+                                    aria-controls="auditAdvancedFilters">
+                                Nâng cao <span aria-hidden="true">⌄</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
+
+                <div class="collapse @(hasAdvancedFilters ? "show" : string.Empty)" id="auditAdvancedFilters">
+                    <div class="audit-advanced-panel mt-3 pt-3">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold" for="auditUser">Người thực hiện</label>
+                                <select id="auditUser" name="userId" class="form-select">
+                                    <option value="">Tất cả</option>
+                                    @foreach (var option in result.Users)
+                                    {
+                                        if (Model.UserId == option.UserId)
+                                        {
+                                            <option value="@option.UserId" selected>@option.DisplayName (@option.Count)</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.UserId">@option.DisplayName (@option.Count)</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold" for="auditAction">Hành động</label>
+                                <select id="auditAction" name="auditAction" class="form-select">
+                                    <option value="">Tất cả</option>
+                                    @foreach (var option in result.Actions)
+                                    {
+                                        if (Model.Action == option.Value)
+                                        {
+                                            <option value="@option.Value" selected>@option.Value.ToVietnameseAuditAction() (@option.Count)</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.Value">@option.Value.ToVietnameseAuditAction() (@option.Count)</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold" for="auditEntity">Đối tượng</label>
+                                <select id="auditEntity" name="entityName" class="form-select">
+                                    <option value="">Tất cả</option>
+                                    @foreach (var option in result.Entities)
+                                    {
+                                        if (Model.EntityName == option.Value)
+                                        {
+                                            <option value="@option.Value" selected>@option.Value.ToVietnameseEntity() (@option.Count)</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.Value">@option.Value.ToVietnameseEntity() (@option.Count)</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 @if (Model.HasFilters)
                 {
-                    <a class="btn btn-sm btn-outline-secondary" asp-action="Index">Xóa toàn bộ bộ lọc</a>
+                    <div class="d-flex justify-content-end mt-3">
+                        <a class="btn btn-sm btn-link text-decoration-none" asp-action="Index">Đặt lại bộ lọc</a>
+                    </div>
                 }
-            </div>
-
-            <form method="get" class="row g-3 align-items-end">
-                <div class="col-12 col-xl-4">
-                    <label class="form-label fw-semibold" for="auditSearch">Tìm kiếm</label>
-                    <input id="auditSearch"
-                           name="search"
-                           value="@Model.Search"
-                           class="form-control"
-                           placeholder="Nội dung, mã đối tượng, tên/email, IP..." />
-                </div>
-
-                <div class="col-md-6 col-xl-2">
-                    <label class="form-label fw-semibold" for="auditUser">Người thực hiện</label>
-                    <select id="auditUser" name="userId" class="form-select">
-                        <option value="">Tất cả</option>
-                        @foreach (var option in result.Users)
-                        {
-                            if (Model.UserId == option.UserId)
-                            {
-                                <option value="@option.UserId" selected>@option.DisplayName (@option.Count)</option>
-                            }
-                            else
-                            {
-                                <option value="@option.UserId">@option.DisplayName (@option.Count)</option>
-                            }
-                        }
-                    </select>
-                </div>
-
-                <div class="col-md-6 col-xl-2">
-                    <label class="form-label fw-semibold" for="auditAction">Hành động</label>
-                    <select id="auditAction" name="auditAction" class="form-select">
-                        <option value="">Tất cả</option>
-                        @foreach (var option in result.Actions)
-                        {
-                            if (Model.Action == option.Value)
-                            {
-                                <option value="@option.Value" selected>@option.Value.ToVietnameseAuditAction() (@option.Count)</option>
-                            }
-                            else
-                            {
-                                <option value="@option.Value">@option.Value.ToVietnameseAuditAction() (@option.Count)</option>
-                            }
-                        }
-                    </select>
-                </div>
-
-                <div class="col-md-6 col-xl-2">
-                    <label class="form-label fw-semibold" for="auditEntity">Đối tượng</label>
-                    <select id="auditEntity" name="entityName" class="form-select">
-                        <option value="">Tất cả</option>
-                        @foreach (var option in result.Entities)
-                        {
-                            if (Model.EntityName == option.Value)
-                            {
-                                <option value="@option.Value" selected>@option.Value.ToVietnameseEntity() (@option.Count)</option>
-                            }
-                            else
-                            {
-                                <option value="@option.Value">@option.Value.ToVietnameseEntity() (@option.Count)</option>
-                            }
-                        }
-                    </select>
-                </div>
-
-                <div class="col-md-6 col-xl-2">
-                    <label class="form-label fw-semibold" for="auditPageSize">Số dòng / trang</label>
-                    <select id="auditPageSize" name="pageSize" class="form-select">
-                        @foreach (var size in new[] { 25, 50, 100, 200 })
-                        {
-                            if (result.PageSize == size)
-                            {
-                                <option value="@size" selected>@size dòng</option>
-                            }
-                            else
-                            {
-                                <option value="@size">@size dòng</option>
-                            }
-                        }
-                    </select>
-                </div>
-
-                <div class="col-md-6 col-xl-3">
-                    <label class="form-label fw-semibold" for="auditFromDate">Từ ngày</label>
-                    <input id="auditFromDate"
-                           name="fromDate"
-                           type="text"
-                           inputmode="numeric"
-                           autocomplete="off"
-                           value="@(Model.FromDate?.ToString("dd/MM/yyyy"))"
-                           placeholder="dd/mm/yyyy"
-                           pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}"
-                           title="Nhập ngày theo định dạng dd/mm/yyyy"
-                           class="form-control" />
-                </div>
-
-                <div class="col-md-6 col-xl-3">
-                    <label class="form-label fw-semibold" for="auditToDate">Đến ngày</label>
-                    <input id="auditToDate"
-                           name="toDate"
-                           type="text"
-                           inputmode="numeric"
-                           autocomplete="off"
-                           value="@(Model.ToDate?.ToString("dd/MM/yyyy"))"
-                           placeholder="dd/mm/yyyy"
-                           pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}"
-                           title="Nhập ngày theo định dạng dd/mm/yyyy"
-                           class="form-control" />
-                </div>
-
-                <div class="col-md-6 col-xl-3">
-                    <button class="btn btn-primary w-100" type="submit">Lọc nhật ký</button>
-                </div>
-
-                <div class="col-md-6 col-xl-3">
-                    <a class="btn btn-outline-secondary w-100" asp-action="Index">Đặt lại</a>
-                </div>
             </form>
         </div>
     </section>
@@ -201,19 +192,42 @@
     <section class="card border-0 shadow-sm audit-table-card">
         <div class="card-header bg-white border-0 px-4 pt-4 pb-3 d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div>
-                <h2 class="h5 fw-bold mb-1">Lịch sử thao tác</h2>
-                <p class="small text-muted mb-0">
-                    @if (result.TotalCount > 0)
-                    {
-                        <text>Đang hiển thị @firstRow–@lastRow trên @result.TotalCount bản ghi.</text>
-                    }
-                    else
-                    {
-                        <text>Không tìm thấy bản ghi phù hợp.</text>
-                    }
-                </p>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h2 class="h5 fw-bold mb-0">Lịch sử thao tác</h2>
+                    <span class="badge rounded-pill text-bg-light border">@result.TotalCount.ToString("N0") bản ghi</span>
+                </div>
+                @if (result.TotalCount > 0)
+                {
+                    <p class="small text-muted mb-0 mt-1">Hiển thị @firstRow–@lastRow.</p>
+                }
+                else
+                {
+                    <p class="small text-muted mb-0 mt-1">Không tìm thấy bản ghi phù hợp.</p>
+                }
             </div>
-            <span class="badge text-bg-light border">Trang @result.Page / @result.TotalPages</span>
+
+            <form method="get" class="audit-page-size-form">
+                <input type="hidden" name="search" value="@Model.Search" />
+                <input type="hidden" name="userId" value="@Model.UserId" />
+                <input type="hidden" name="auditAction" value="@Model.Action" />
+                <input type="hidden" name="entityName" value="@Model.EntityName" />
+                <input type="hidden" name="fromDate" value="@(Model.FromDate?.ToString("dd/MM/yyyy"))" />
+                <input type="hidden" name="toDate" value="@(Model.ToDate?.ToString("dd/MM/yyyy"))" />
+                <label class="visually-hidden" for="auditPageSize">Số dòng mỗi trang</label>
+                <select id="auditPageSize" name="pageSize" class="form-select form-select-sm" onchange="this.form.submit()">
+                    @foreach (var size in new[] { 25, 50, 100, 200 })
+                    {
+                        if (result.PageSize == size)
+                        {
+                            <option value="@size" selected>@size dòng / trang</option>
+                        }
+                        else
+                        {
+                            <option value="@size">@size dòng / trang</option>
+                        }
+                    }
+                </select>
+            </form>
         </div>
 
         <div class="table-responsive audit-table-wrapper">
@@ -236,7 +250,7 @@
                         <td colspan="7" class="text-center py-5">
                             <div class="audit-empty-icon">⌕</div>
                             <div class="fw-semibold">Không có nhật ký phù hợp</div>
-                            <div class="small text-muted mt-1">Hãy thay đổi điều kiện lọc hoặc xóa bộ lọc để xem toàn bộ nhật ký.</div>
+                            <div class="small text-muted mt-1">Thử thay đổi điều kiện lọc.</div>
                         </td>
                     </tr>
                 }
@@ -246,22 +260,19 @@
                     {
                         var showEntityId = !string.IsNullOrWhiteSpace(item.EntityId) && !IsGuidIdentifier(item.EntityId);
                         <tr>
-                            <td class="text-nowrap">
-                                <strong>@item.CreatedAt.AddHours(7).ToString("dd/MM/yyyy")</strong>
-                                <div class="small text-muted">@item.CreatedAt.AddHours(7).ToString("HH:mm:ss")</div>
+                            <td class="text-nowrap audit-time-cell">
+                                @item.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm")
                             </td>
                             <td>
-                                <div class="fw-semibold">@(item.UserName ?? "Hệ thống")</div>
+                                <div class="fw-semibold audit-user-name">@(item.UserName ?? "Hệ thống")</div>
                             </td>
                             <td>
                                 <span class="badge audit-action-badge @AuditBadgeClass(item.Action)">@item.Action.ToVietnameseAuditAction()</span>
                             </td>
                             <td>
-                                <div class="fw-semibold">@item.EntityName.ToVietnameseEntity()</div>
-                                @if (showEntityId)
-                                {
-                                    <div class="small text-muted">#@item.EntityId</div>
-                                }
+                                <div class="fw-semibold audit-entity-name">
+                                    @item.EntityName.ToVietnameseEntity()@if (showEntityId){<text> #@item.EntityId</text>}
+                                </div>
                             </td>
                             <td>
                                 <div class="audit-description" title="@item.Description.ToFriendlyAuditDescription()">
@@ -271,7 +282,7 @@
                             <td class="text-nowrap">
                                 @if (string.IsNullOrWhiteSpace(item.IpAddress))
                                 {
-                                    <span class="audit-no-ip">Không ghi nhận</span>
+                                    <span class="audit-no-ip">—</span>
                                 }
                                 else
                                 {
