@@ -25,8 +25,15 @@ internal sealed class AccountService : IAccountService
     {
         var email = request.Email.Trim().ToLowerInvariant();
         var phoneNumber = NormalizePhoneNumber(request.PhoneNumber);
-        var internationalPhoneNumber = $"+84{phoneNumber[1..]}";
         var fullName = NormalizeFullName(request.FullName);
+
+        if (!IsValidNormalizedPhoneNumber(phoneNumber))
+        {
+            return OperationResult.Failure(
+                "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0, hoặc dùng mã quốc gia +84.");
+        }
+
+        var internationalPhoneNumber = $"+84{phoneNumber[1..]}";
 
         if (await _userManager.FindByEmailAsync(email) is not null)
         {
@@ -161,4 +168,9 @@ internal sealed class AccountService : IAccountService
 
         return phone;
     }
+
+    private static bool IsValidNormalizedPhoneNumber(string value) =>
+        value.Length == 10 &&
+        value[0] == '0' &&
+        value.All(char.IsDigit);
 }
