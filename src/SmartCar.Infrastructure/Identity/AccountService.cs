@@ -23,8 +23,10 @@ internal sealed class AccountService : IAccountService
         RegisterCustomerRequest request,
         CancellationToken cancellationToken = default)
     {
-        var email = request.Email.Trim();
-        var phoneNumber = request.PhoneNumber.Trim();
+        var email = request.Email.Trim().ToLowerInvariant();
+        var phoneNumber = NormalizePhoneNumber(request.PhoneNumber);
+        var internationalPhoneNumber = $"+84{phoneNumber[1..]}";
+        var fullName = NormalizeFullName(request.FullName);
 
         if (await _userManager.FindByEmailAsync(email) is not null)
         {
@@ -32,7 +34,10 @@ internal sealed class AccountService : IAccountService
         }
 
         var phoneExists = await _userManager.Users
-            .AnyAsync(user => user.PhoneNumber == phoneNumber, cancellationToken);
+            .AnyAsync(
+                user => user.PhoneNumber == phoneNumber ||
+                        user.PhoneNumber == internationalPhoneNumber,
+                cancellationToken);
 
         if (phoneExists)
         {
@@ -41,7 +46,7 @@ internal sealed class AccountService : IAccountService
 
         var user = new ApplicationUser
         {
-            FullName = request.FullName.Trim(),
+            FullName = fullName,
             UserName = email,
             Email = email,
             PhoneNumber = phoneNumber,
@@ -136,4 +141,24 @@ internal sealed class AccountService : IAccountService
     }
 
     public Task LogoutAsync() => _signInManager.SignOutAsync();
+
+    private static string NormalizeFullName(string value) =>
+        string.Join(
+            ' ',
+            value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    private static string NormalizePhoneNumber(string value)
+    {
+        var phone = value.Trim()
+            .Replace(" ", string.Empty)
+            .Replace(".", string.Empty)
+            .Replace("-", string.Empty);
+
+        if (phone.StartsWith("+84", StringComparison.Ordinal))
+        {
+            phone = $"0{phone[3..]}";
+        }
+
+        return phone;
+    }
 }
