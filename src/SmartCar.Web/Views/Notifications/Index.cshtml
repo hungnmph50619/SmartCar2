@@ -5,6 +5,14 @@
     var unreadRegularCount = Model.Count(item =>
         !item.IsRead &&
         !item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
+
+    string FriendlyNotificationText(string value) => value
+        .Replace("Hồ sơ KYC đã được xác minh", "Hồ sơ xác minh danh tính đã được duyệt", StringComparison.Ordinal)
+        .Replace("Hồ sơ KYC cần cập nhật", "Hồ sơ xác minh danh tính cần cập nhật", StringComparison.Ordinal)
+        .Replace("Hồ sơ KYC đã hoàn tất", "Xác minh danh tính đã hoàn tất", StringComparison.Ordinal)
+        .Replace("quyết định KYC", "quyết định xác minh hồ sơ", StringComparison.Ordinal)
+        .Replace("Hồ sơ KYC", "Hồ sơ xác minh danh tính", StringComparison.Ordinal)
+        .Replace("KYC", "xác minh danh tính", StringComparison.Ordinal);
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -39,7 +47,10 @@ else
         var separatorIndex = item.Title.IndexOf('|');
         var rawDisplayTitle = separatorIndex > 0 ? item.Title[..separatorIndex] : item.Title;
         var isKycTitle = rawDisplayTitle == "Hồ sơ KYC chờ duyệt";
-        var displayTitle = isKycTitle ? "Hồ sơ xác minh chờ duyệt" : rawDisplayTitle;
+        var displayTitle = isKycTitle
+            ? "Hồ sơ xác minh chờ duyệt"
+            : FriendlyNotificationText(rawDisplayTitle);
+        var displayMessage = FriendlyNotificationText(item.Message);
         var kycCustomerId = isKycTitle && separatorIndex > 0
             ? item.Title[(separatorIndex + 1)..]
             : null;
@@ -59,7 +70,7 @@ else
                             <span class="badge bg-success">Đã xử lý</span>
                         }
                     </div>
-                    <p class="mb-1">@item.Message</p>
+                    <p class="mb-1">@displayMessage</p>
                     <small class="text-muted">@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
 
                     @if (isKycAction && !item.IsRead)
