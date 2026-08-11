@@ -7,11 +7,16 @@ public class RegisterViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập họ và tên.")]
     [StringLength(100, MinimumLength = 2, ErrorMessage = "Họ và tên phải có từ 2 đến 100 ký tự.")]
+    [RegularExpression(
+        @"^ *[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ]+(?:(?: +|['’\-])[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ]+)* *$",
+        ErrorMessage = "Họ và tên chỉ được chứa chữ cái, khoảng trắng, dấu nháy hoặc dấu gạch nối.")]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại.")]
-    [RegularExpression(@"^(0|\+84)[0-9]{9}$", ErrorMessage = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0, hoặc dùng mã quốc gia +84.")]
+    [RegularExpression(
+        @"^(?:0|\+84)(?:[ .-]?[0-9]){9}$",
+        ErrorMessage = "Số điện thoại phải gồm 10 chữ số bắt đầu bằng 0 hoặc dùng mã quốc gia +84.")]
     [Display(Name = "Số điện thoại")]
     public string PhoneNumber { get; set; } = string.Empty;
 
