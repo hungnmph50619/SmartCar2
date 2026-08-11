@@ -8,6 +8,7 @@ using SmartCar.Application.Features.Reviews;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -19,17 +20,20 @@ public sealed class VehiclesController : Controller
     private readonly IBrandService _brandService;
     private readonly IReviewService _reviewService;
     private readonly IDocumentService _documentService;
+    private readonly IUserBankAccountService _bankAccountService;
 
     public VehiclesController(
         IVehicleService vehicleService,
         IBrandService brandService,
         IReviewService reviewService,
-        IDocumentService documentService)
+        IDocumentService documentService,
+        IUserBankAccountService bankAccountService)
     {
         _vehicleService = vehicleService;
         _brandService = brandService;
         _reviewService = reviewService;
         _documentService = documentService;
+        _bankAccountService = bankAccountService;
     }
 
     [HttpGet]
@@ -139,6 +143,7 @@ public sealed class VehiclesController : Controller
         ViewBag.KycVerified = false;
         ViewBag.KycVerifiedCount = 0;
         ViewBag.KycTotal = 2;
+        ViewBag.HasBankAccount = false;
 
         if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
         {
@@ -172,6 +177,9 @@ public sealed class VehiclesController : Controller
                 var verifiedCount = (citizenVerified ? 1 : 0) + (licenseVerified ? 1 : 0);
                 ViewBag.KycVerifiedCount = verifiedCount;
                 ViewBag.KycVerified = verifiedCount == 2;
+                ViewBag.HasBankAccount = await _bankAccountService.GetDefaultAsync(
+                    customerId,
+                    cancellationToken) is not null;
             }
         }
 
