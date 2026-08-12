@@ -161,17 +161,6 @@ internal sealed class BookingOperationService : IBookingOperationService
                 PaidAt = DateTime.UtcNow,
                 TransactionCode = $"RF{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}"
             });
-
-            if (!string.IsNullOrWhiteSpace(booking.PromotionCode))
-            {
-                var promotion = await _dbContext.Promotions.FirstOrDefaultAsync(
-                    item => item.Code == booking.PromotionCode,
-                    cancellationToken);
-                if (promotion is not null && promotion.UsedCount > 0)
-                {
-                    promotion.UsedCount--;
-                }
-            }
         }
 
         _dbContext.Notifications.Add(new Notification
