@@ -84,11 +84,53 @@
 }
 
 .audit-action-badge {
-    max-width: 180px;
-    padding: 6px 9px;
+    display: inline-flex;
+    align-items: center;
+    max-width: 190px;
+    padding: 5px 9px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
     line-height: 1.25;
     white-space: normal;
     text-align: left;
+}
+
+.audit-action-primary {
+    color: #1559a8;
+    border-color: #c9def8;
+    background: #edf5ff;
+}
+
+.audit-action-success {
+    color: #197047;
+    border-color: #c8ead8;
+    background: #edf9f2;
+}
+
+.audit-action-warning {
+    color: #8a5a00;
+    border-color: #f2deb3;
+    background: #fff7e6;
+}
+
+.audit-action-danger {
+    color: #a8343b;
+    border-color: #efc8cb;
+    background: #fff0f1;
+}
+
+.audit-action-info {
+    color: #17698d;
+    border-color: #c8e6f2;
+    background: #eef9fd;
+}
+
+.audit-action-secondary {
+    color: #526275;
+    border-color: #dce3eb;
+    background: #f6f8fa;
 }
 
 .audit-description {
@@ -104,6 +146,11 @@
 
 .audit-no-ip {
     color: #95a2b2;
+}
+
+.audit-ip-friendly {
+    color: #526275;
+    font-size: 13px;
 }
 
 .audit-detail-button {
@@ -198,6 +245,18 @@
 
 .audit-tech-details summary:hover {
     text-decoration: underline;
+}
+
+.audit-tech-code {
+    display: inline-block;
+    max-width: 100%;
+    padding: 3px 7px;
+    border: 1px solid #e0e6ed;
+    border-radius: 6px;
+    color: #42556c;
+    background: #f6f8fa;
+    font-size: 12px;
+    overflow-wrap: anywhere;
 }
 
 .audit-data-card {
