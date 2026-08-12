@@ -134,7 +134,6 @@ internal sealed class BookingService : IBookingService
             DailyPrice = vehicle.DailyPrice,
             NumberOfDays = numberOfDays,
             RentalAmount = rentalAmount,
-            DiscountAmount = 0,
             AdditionalAmount = 0,
             TotalAmount = rentalAmount,
             Status = BookingStatus.PendingConfirmation,
@@ -234,7 +233,7 @@ internal sealed class BookingService : IBookingService
         }
 
         booking.Status = BookingStatus.PendingPayment;
-        var rentalPaymentAmount = Math.Max(0, booking.RentalAmount - booking.DiscountAmount);
+        var rentalPaymentAmount = booking.RentalAmount;
 
         if (!booking.Payments.Any(payment => payment.Type == PaymentType.Rental))
         {
@@ -422,8 +421,6 @@ internal sealed class BookingService : IBookingService
             DailyPrice = booking.DailyPrice,
             NumberOfDays = booking.NumberOfDays,
             RentalAmount = booking.RentalAmount,
-            PromotionCode = booking.PromotionCode,
-            DiscountAmount = booking.DiscountAmount,
             AdditionalAmount = booking.AdditionalAmount,
             TotalAmount = booking.TotalAmount,
             Status = booking.Status,
