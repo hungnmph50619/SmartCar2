@@ -9,14 +9,20 @@ namespace SmartCar.Web.Controllers;
 public class AccountController : Controller
 {
     private readonly IAccountService _accountService;
+    private readonly IEmailService _emailService;
     private readonly IWebHostEnvironment _environment;
+    private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         IAccountService accountService,
-        IWebHostEnvironment environment)
+        IEmailService emailService,
+        IWebHostEnvironment environment,
+        ILogger<AccountController> logger)
     {
         _accountService = accountService;
+        _emailService = emailService;
         _environment = environment;
+        _logger = logger;
     }
 
     [HttpGet]
@@ -135,17 +141,63 @@ public class AccountController : Controller
             return View(model);
         }
 
+        var email = model.Email.Trim();
         var token = await _accountService.GeneratePasswordResetTokenAsync(
-            model.Email,
+            email,
             cancellationToken);
 
-        if (token is not null && _environment.IsDevelopment())
+        // Luôn trả cùng một trang xác nhận để tránh tiết lộ email nào đang tồn tại.
+        if (token is not null)
         {
-            ViewData["DevelopmentResetUrl"] = Url.Action(
+            var resetUrl = Url.Action(
                 nameof(ResetPassword),
                 "Account",
-                new { email = model.Email.Trim(), token },
+                new { email, token },
                 Request.Scheme);
+
+            if (string.IsNullOrWhiteSpace(resetUrl))
+            {
+                _logger.LogError(
+                    "Không thể tạo URL đặt lại mật khẩu cho tài khoản {Email}.",
+                    email);
+
+                if (_environment.IsDevelopment())
+                {
+                    ModelState.AddModelError(
+                        string.Empty,
+                        "Không thể tạo liên kết đặt lại mật khẩu. Vui lòng thử lại.");
+                    return View(model);
+                }
+            }
+            else
+            {
+                try
+                {
+                    await _emailService.SendPasswordResetEmailAsync(
+                        email,
+                        resetUrl,
+                        cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "Không thể gửi email đặt lại mật khẩu đến {Email}.",
+                        email);
+
+                    if (_environment.IsDevelopment())
+                    {
+                        ModelState.AddModelError(
+                            string.Empty,
+                            "Không gửi được email khôi phục. Hãy kiểm tra cấu hình Email:Smtp và mật khẩu ứng dụng của email gửi.");
+                        return View(model);
+                    }
+                }
+            }
         }
 
         return View("ForgotPasswordConfirmation");

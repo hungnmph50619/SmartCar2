@@ -54,8 +54,12 @@
     var bookingActive = new[] { "AdminBookings", "AdminBookingOperations", "Handovers", "Returns" }.Contains(currentController);
     var customerActive = new[] { "AdminCustomers", "AdminDocuments", "AdminKyc" }.Contains(currentController);
     var vehicleActive = new[] { "AdminVehicles", "Brands", "VehicleDocuments", "Maintenance", "Incidents" }.Contains(currentController);
+<<<<<<< HEAD
     var businessActive =
     new[] { "Promotions", "AdminPayments", "Reports" }.Contains(currentController);
+=======
+    var businessActive = currentController == "Reports";
+>>>>>>> origin/hung-dev
     var systemActive = new[] { "Notifications", "AuditLogs", "Profile" }.Contains(currentController);
 }
 <!DOCTYPE html>
@@ -159,6 +163,7 @@
 
                 <div class="admin-nav-section">
                     <div class="admin-nav-heading">Kinh doanh và báo cáo</div>
+<<<<<<< HEAD
                     <a class="admin-nav-link @(currentController == "Promotions" ? "active" : string.Empty)"
                        asp-controller="Promotions" asp-action="Index">
                         <span class="admin-nav-icon">%</span>
@@ -169,6 +174,9 @@
                         <span>Thanh toán</span>
                     </a>
                     <a class="admin-nav-link @(currentController == "Reports" ? "active" : string.Empty)"
+=======
+                    <a class="admin-nav-link @(businessActive ? "active" : string.Empty)"
+>>>>>>> origin/hung-dev
                        asp-controller="Reports" asp-action="Index">
                         <span class="admin-nav-icon">▥</span>
                         <span>Hiệu suất và lợi nhuận</span>
@@ -279,6 +287,7 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/ui-terminology.js" asp-append-version="true"></script>
     <script>
         (() => {
             const sidebar = document.getElementById('adminSidebar');

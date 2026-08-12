@@ -6,6 +6,7 @@ using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure.Identity;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -15,17 +16,20 @@ public sealed class BookingsController : Controller
 {
     private readonly IBookingService _bookingService;
     private readonly IDocumentService _documentService;
+    private readonly IUserBankAccountService _bankAccountService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
 
     public BookingsController(
         IBookingService bookingService,
         IDocumentService documentService,
+        IUserBankAccountService bankAccountService,
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration)
     {
         _bookingService = bookingService;
         _documentService = documentService;
+        _bankAccountService = bankAccountService;
         _userManager = userManager;
         _configuration = configuration;
     }
@@ -72,12 +76,36 @@ public sealed class BookingsController : Controller
 
         if (!hasValidRentalDocuments)
         {
+            TempData["WarningMessage"] =
+                "Vui lòng hoàn tất xác minh CCCD và GPLX còn hiệu lực đến ngày trả xe trước khi gửi yêu cầu thuê xe.";
+
             return RedirectToAction(
                 "Index",
                 "Profile",
                 new
                 {
                     tab = "documents",
+                    returnVehicleId = model.VehicleId,
+                    pickupDate = model.PickupDate,
+                    returnDate = model.ReturnDate
+                });
+        }
+
+        var bankAccount = await _bankAccountService.GetDefaultAsync(
+            customerId,
+            cancellationToken);
+
+        if (bankAccount is null)
+        {
+            TempData["WarningMessage"] =
+                "Vui lòng thêm tài khoản ngân hàng trước khi gửi yêu cầu thuê xe. SmartCar dùng tài khoản này để hoàn tiền, hoàn cọc hoặc chuyển trả các khoản phát sinh khi cần.";
+
+            return RedirectToAction(
+                "Index",
+                "Profile",
+                new
+                {
+                    tab = "banking",
                     returnVehicleId = model.VehicleId,
                     pickupDate = model.PickupDate,
                     returnDate = model.ReturnDate

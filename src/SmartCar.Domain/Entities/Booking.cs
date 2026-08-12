@@ -12,8 +12,6 @@ public class Booking
     public decimal DailyPrice { get; set; }
     public int NumberOfDays { get; set; }
     public decimal RentalAmount { get; set; }
-    public string? PromotionCode { get; set; }
-    public decimal DiscountAmount { get; set; }
     public decimal AdditionalAmount { get; set; }
     public decimal TotalAmount { get; set; }
     public BookingStatus Status { get; set; } = BookingStatus.PendingConfirmation;

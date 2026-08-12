@@ -331,7 +331,7 @@ public sealed class AdminCustomersController : Controller
 
         if (!front.HasRequiredData || !back.HasRequiredData)
         {
-            TempData["ErrorMessage"] = "Hồ sơ CCCD chưa có đủ thông tin KYC để xác minh.";
+            TempData["ErrorMessage"] = "Hồ sơ CCCD chưa có đủ thông tin cần thiết để xác minh.";
             return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
         }
 
@@ -603,7 +603,7 @@ public sealed class AdminCustomersController : Controller
 
         if (!citizenFront.HasRequiredData || !citizenBack.HasRequiredData || !drivingLicense.HasRequiredData)
         {
-            return new ProfileState("Missing", "Thiếu thông tin KYC");
+            return new ProfileState("Missing", "Thiếu thông tin xác minh");
         }
 
         if (documents.Any(item => item.Status == DocumentStatus.Rejected))

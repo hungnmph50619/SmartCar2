@@ -190,6 +190,7 @@ internal sealed class PaymentService : IPaymentService
                     "Không tìm thấy khoản thanh toán phù hợp.");
         }
 
+<<<<<<< HEAD
         // ========================================================
         // KIỂM TRA KHUYẾN MÃI KHI THANH TOÁN TIỀN THUÊ
         // ========================================================
@@ -249,6 +250,11 @@ internal sealed class PaymentService : IPaymentService
         // ========================================================
         // XỬ LÝ THEO LOẠI PAYMENT
         // ========================================================
+=======
+        payment.Status = PaymentStatus.Paid;
+        payment.PaidAt = DateTime.UtcNow;
+        payment.TransactionCode = $"SC{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}";
+>>>>>>> origin/hung-dev
 
         if (paymentType == PaymentType.Rental)
         {

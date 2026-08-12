@@ -12,6 +12,7 @@
     var kycVerified = ViewBag.KycVerified is bool verified && verified;
     var kycVerifiedCount = ViewBag.KycVerifiedCount is int count ? count : 0;
     var kycTotal = ViewBag.KycTotal is int total ? total : 2;
+    var hasBankAccount = ViewBag.HasBankAccount is bool hasBank && hasBank;
 }
 
 <div class="row g-4">
@@ -61,17 +62,38 @@
             {
                 @if (kycVerified)
                 {
-                    <div class="alert alert-success py-2 mb-3">
-                        <strong>✓ Tài khoản đã xác minh.</strong> Bạn đủ điều kiện gửi yêu cầu thuê xe này.
-                    </div>
-                    <form asp-controller="Bookings" asp-action="Create" method="post" data-loading-form>
-                        <input type="hidden" name="VehicleId" value="@Model.VehicleId" />
-                        <input type="hidden" name="PickupDate" value="@pickupDate.ToString("O")" />
-                        <input type="hidden" name="ReturnDate" value="@returnDate.ToString("O")" />
-                        <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">
-                            Gửi yêu cầu thuê xe
-                        </button>
-                    </form>
+                    @if (hasBankAccount)
+                    {
+                        <div class="alert alert-success py-2 mb-3">
+                            <strong>✓ Giấy tờ và tài khoản nhận hoàn tiền đã sẵn sàng.</strong> Bạn có thể gửi yêu cầu thuê xe.
+                        </div>
+                        <form asp-controller="Bookings" asp-action="Create" method="post" data-loading-form>
+                            <input type="hidden" name="VehicleId" value="@Model.VehicleId" />
+                            <input type="hidden" name="PickupDate" value="@pickupDate.ToString("O")" />
+                            <input type="hidden" name="ReturnDate" value="@returnDate.ToString("O")" />
+                            <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">
+                                Gửi yêu cầu thuê xe
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <div class="border rounded-3 p-3 mb-3 bg-light">
+                            <div class="fw-bold">🏦 Cần thêm tài khoản ngân hàng</div>
+                            <div class="small text-muted mt-1">
+                                Trước khi đặt xe, bạn cần lưu tài khoản ngân hàng để SmartCar có thể hoàn tiền, hoàn cọc hoặc chuyển trả các khoản phát sinh khi cần.
+                            </div>
+                        </div>
+                        <a class="btn btn-primary btn-lg w-100"
+                           asp-controller="Profile"
+                           asp-action="Index"
+                           asp-route-tab="banking"
+                           asp-route-returnVehicleId="@Model.VehicleId"
+                           asp-route-pickupDate="@pickupDate.ToString("O")"
+                           asp-route-returnDate="@returnDate.ToString("O")">
+                            Thêm tài khoản ngân hàng
+                        </a>
+                    }
                 }
                 else
                 {

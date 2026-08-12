@@ -11,7 +11,7 @@
         const response = await fetch(url, { credentials: 'same-origin', ...options });
         let payload = null;
         try { payload = await response.json(); } catch { payload = null; }
-        if (!response.ok) throw new Error(payload?.message || 'Không thể cập nhật chế độ kiểm thử KYC.');
+        if (!response.ok) throw new Error(payload?.message || 'Không thể cập nhật chế độ kiểm thử xác minh giấy tờ.');
         return payload || {};
     };
 
@@ -216,11 +216,11 @@
         banner.innerHTML = `
             <div class="d-flex justify-content-between gap-3 align-items-center flex-wrap">
                 <div>
-                    <strong>${state.active ? '🧪 Chế độ kiểm thử KYC đang BẬT' : '🧪 Có chế độ kiểm thử KYC'}</strong>
+                    <strong>${state.active ? '🧪 Chế độ kiểm thử xác minh giấy tờ đang BẬT' : '🧪 Có chế độ kiểm thử xác minh giấy tờ'}</strong>
                     <div class="small mt-1">
                         ${state.active
                             ? 'Chỉ trong Development: nhận diện/đọc dữ liệu mẫu được mô phỏng để test luồng. Validation nghiệp vụ, lưu hồ sơ, thông báo và Admin duyệt vẫn chạy bình thường.'
-                            : 'Chỉ dùng trong Development để nhóm test luồng bằng dữ liệu giả. Chế độ bình thường vẫn giữ kiểm tra KYC nghiêm ngặt.'}
+                            : 'Chỉ dùng trong Development để nhóm test luồng bằng dữ liệu giả. Chế độ bình thường vẫn giữ kiểm tra giấy tờ nghiêm ngặt.'}
                     </div>
                 </div>
                 <button type="button" class="btn ${state.active ? 'btn-outline-dark' : 'btn-warning'}" data-kyc-test-toggle>

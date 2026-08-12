@@ -113,12 +113,6 @@ public static class VietnameseDisplayExtensions
             VehicleDocumentType.Other => "Khác",
             _ => type.ToString()
         },
-        PromotionType type => type switch
-        {
-            PromotionType.Percentage => "Giảm theo phần trăm",
-            PromotionType.FixedAmount => "Giảm số tiền cố định",
-            _ => type.ToString()
-        },
         _ => value.ToString()
     };
 
@@ -158,8 +152,6 @@ public static class VietnameseDisplayExtensions
         "AddCharge" => "Thêm phụ phí",
         "RemoveCharge" => "Xóa phụ phí",
         "CompleteBooking" => "Hoàn tất đơn",
-        "ApplyPromotion" => "Áp dụng khuyến mãi",
-        "RemovePromotion" => "Gỡ khuyến mãi",
         "StartInvestigation" => "Bắt đầu xử lý",
         "Resolve" => "Hoàn tất xử lý",
         "UpdateAvatar" => "Đổi ảnh đại diện",
@@ -174,7 +166,6 @@ public static class VietnameseDisplayExtensions
     {
         "Booking" => "Đơn thuê",
         "Payment" => "Thanh toán",
-        "Promotion" => "Khuyến mãi",
         "CustomerDocument" => "Giấy tờ khách hàng",
         "VehicleDocument" => "Giấy tờ xe",
         "VehicleHandover" => "Biên bản giao xe",

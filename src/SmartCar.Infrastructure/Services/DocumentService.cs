@@ -334,7 +334,7 @@ internal sealed class DocumentService : IDocumentService
         var metadata = await ReadKycMetadataAsync(document.CustomerDocumentId, cancellationToken);
         if (verified && !HasRequiredData(document, metadata))
         {
-            return OperationResult.Failure("Giấy tờ chưa có đủ thông tin KYC để xác minh.");
+            return OperationResult.Failure("Giấy tờ chưa có đủ thông tin cần thiết để xác minh.");
         }
 
         var previousStatus = document.Status;

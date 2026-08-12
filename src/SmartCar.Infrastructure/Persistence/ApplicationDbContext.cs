@@ -27,7 +27,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<Notification> Notifications => Set<Notification>();
-    public DbSet<Promotion> Promotions => Set<Promotion>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -141,8 +140,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.CustomerId).HasMaxLength(450).IsRequired();
             entity.Property(booking => booking.DailyPrice).HasPrecision(18, 2);
             entity.Property(booking => booking.RentalAmount).HasPrecision(18, 2);
-            entity.Property(booking => booking.PromotionCode).HasMaxLength(50);
-            entity.Property(booking => booking.DiscountAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.AdditionalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.TotalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.RefundAmount).HasPrecision(18, 2);
@@ -267,19 +264,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany()
                 .HasForeignKey(notification => notification.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        builder.Entity<Promotion>(entity =>
-        {
-            entity.HasKey(promotion => promotion.PromotionId);
-            entity.Property(promotion => promotion.Code).HasMaxLength(50).IsRequired();
-            entity.Property(promotion => promotion.Name).HasMaxLength(200).IsRequired();
-            entity.Property(promotion => promotion.PromotionType).HasConversion<string>().HasMaxLength(30);
-            entity.Property(promotion => promotion.Value).HasPrecision(18, 2);
-            entity.Property(promotion => promotion.MaximumDiscount).HasPrecision(18, 2);
-            entity.Property(promotion => promotion.MinimumRentalAmount).HasPrecision(18, 2);
-            entity.HasIndex(promotion => promotion.Code).IsUnique();
-            entity.HasIndex(promotion => new { promotion.IsActive, promotion.StartAt, promotion.EndAt });
         });
 
         builder.Entity<AuditLog>(entity =>

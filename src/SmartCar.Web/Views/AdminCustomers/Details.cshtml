@@ -73,7 +73,7 @@
 
 <div class="customer-detail-tabs mb-4">
     <a class="@(Model.ActiveTab == "overview" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="overview">Tổng quan</a>
-    <a class="@(Model.ActiveTab == "documents" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents">Xác minh KYC</a>
+    <a class="@(Model.ActiveTab == "documents" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents">Xác minh giấy tờ</a>
     <a class="@(Model.ActiveTab == "bookings" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="bookings">Đơn thuê</a>
     <a class="@(Model.ActiveTab == "payments" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="payments">Thanh toán</a>
     <a class="@(Model.ActiveTab == "incidents" ? "active" : string.Empty)" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="incidents">Sự cố & vi phạm</a>
@@ -120,7 +120,7 @@
                     {
                         <p class="text-danger">Tài khoản đang bị khóa.</p>
                     }
-                    <a asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents" class="btn @(Model.CanRent ? "btn-outline-success" : "btn-primary") w-100">Xem và đối chiếu KYC</a>
+                    <a asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents" class="btn @(Model.CanRent ? "btn-outline-success" : "btn-primary") w-100">Xem và đối chiếu giấy tờ</a>
                 </div>
             </section>
         </div>
@@ -130,7 +130,7 @@ else if (Model.ActiveTab == "documents")
 {
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
         <div>
-            <h2 class="h4 fw-bold mb-1">Đối chiếu hồ sơ KYC</h2>
+            <h2 class="h4 fw-bold mb-1">Đối chiếu hồ sơ giấy tờ</h2>
             <p class="text-muted mb-0">Chỉ số CCCD được che một phần; các thông tin còn lại hiển thị đầy đủ để đối chiếu với ảnh.</p>
         </div>
         <span class="badge @ProfileBadge(Model.ProfileStatusCode) fs-6">Hồ sơ: @Model.ProfileStatusText</span>

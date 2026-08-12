@@ -12,8 +12,8 @@ using SmartCar.Infrastructure.Persistence;
 namespace SmartCar.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260805085437_Phase3SnapshotSync")]
-    partial class Phase3SnapshotSync
+    [Migration("20260812090701_RemovePromotions")]
+    partial class RemovePromotions
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -279,10 +279,6 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("DiscountAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<DateTime?>("NoShowMarkedAt")
                         .HasColumnType("datetime2");
 
@@ -291,10 +287,6 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("PickupDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("PromotionCode")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.Property<decimal>("RefundAmount")
                         .HasPrecision(18, 2)
@@ -602,69 +594,6 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.HasIndex("BookingId", "Type", "Status");
 
                     b.ToTable("Payments");
-                });
-
-            modelBuilder.Entity("SmartCar.Domain.Entities.Promotion", b =>
-                {
-                    b.Property<int>("PromotionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PromotionId"));
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("EndAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal?>("MaximumDiscount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("MinimumRentalAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("PromotionType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<DateTime>("StartAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UsageLimit")
-                        .HasColumnType("int");
-
-                    b.Property<int>("UsedCount")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("Value")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("PromotionId");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.HasIndex("IsActive", "StartAt", "EndAt");
-
-                    b.ToTable("Promotions");
                 });
 
             modelBuilder.Entity("SmartCar.Domain.Entities.Review", b =>

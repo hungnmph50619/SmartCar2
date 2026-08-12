@@ -21,7 +21,7 @@
     {
         BookingStatus.PendingConfirmation => (
             "Kiểm tra và quyết định đơn",
-            "Đối chiếu hồ sơ KYC, lịch sử thuê xe, lịch xe và thông tin thuê. Sau đó xác nhận hoặc nhập lý do từ chối.",
+            "Đối chiếu hồ sơ xác minh giấy tờ, lịch sử thuê xe, lịch xe và thông tin thuê. Sau đó xác nhận hoặc nhập lý do từ chối.",
             "warning"),
         BookingStatus.PendingPayment => (
             "Chờ khách hàng thanh toán",
@@ -99,8 +99,8 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                 <div>
                     <div class="text-uppercase small text-muted fw-semibold">Kiểm soát khách thuê</div>
-                    <h2 class="h5 mb-1">Hồ sơ KYC & độ tin cậy khách hàng</h2>
-                    <p class="text-muted small mb-0">KYC gồm 2 bước: xác minh danh tính bằng CCCD và xác minh giấy phép lái xe.</p>
+                    <h2 class="h5 mb-1">Hồ sơ xác minh giấy tờ & độ tin cậy khách hàng</h2>
+                    <p class="text-muted small mb-0">Xác minh giấy tờ gồm 2 bước: đối chiếu CCCD và kiểm tra giấy phép lái xe.</p>
                 </div>
                 <span class="badge @(customerKycVerified ? "bg-success" : "bg-danger") px-3 py-2">
                     @(customerKycVerified ? "Hồ sơ đã xác minh" : "Hồ sơ chưa đủ")
@@ -162,7 +162,7 @@
                    asp-action="Details"
                    asp-route-id="@Model.CustomerId"
                    asp-route-tab="documents">
-                    Xem và đối chiếu KYC
+                    Xem và đối chiếu giấy tờ
                 </a>
             </div>
         </div>

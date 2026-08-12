@@ -1,5 +1,13 @@
 ﻿@model SmartCar.Application.Features.Bookings.BookingDetailsDto
 @using SmartCar.Domain.Enums
+<<<<<<< HEAD
+=======
+@{
+    ViewData["Title"] = $"Đơn thuê #{Model.BookingId}";
+    var hasOpenExtension = Model.Extensions.Any(item =>
+        item.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.Approved);
+    var canCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
+>>>>>>> origin/hung-dev
 
 @{
     ViewData["Title"] =
@@ -884,6 +892,7 @@
         <div class="card card-body shadow-sm sticky-top" style="top:1rem" id="payment-panel">
             <h2 class="h5">Thanh toán</h2>
             <div class="d-flex justify-content-between"><span>Tiền thuê và gia hạn</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
+<<<<<<< HEAD
             @if (Model.DiscountAmount > 0)
             {
                 <div class="d-flex
@@ -917,6 +926,9 @@
             </div>
 
 
+=======
+            <div class="d-flex justify-content-between"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+>>>>>>> origin/hung-dev
             <hr />
 
 
@@ -939,6 +951,7 @@
                KHUYẾN MÃI
                ==================================================== *@
 
+<<<<<<< HEAD
             @if (canApplyPromotion)
             {
                 @if (string.IsNullOrWhiteSpace(
@@ -1018,6 +1031,9 @@
             @if (Model.Status ==
                      BookingStatus.PendingPayment &&
                  !Model.RentalPaid)
+=======
+            @if (Model.Status == BookingStatus.PendingPayment && !Model.RentalPaid)
+>>>>>>> origin/hung-dev
             {
                 @if (rentalPayment?.Status ==
                      PaymentStatus.AwaitingConfirmation)

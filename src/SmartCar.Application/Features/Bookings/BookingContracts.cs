@@ -30,8 +30,6 @@ public sealed class BookingDetailsDto : BookingListItemDto
     public decimal DailyPrice { get; init; }
     public int NumberOfDays { get; init; }
     public decimal RentalAmount { get; init; }
-    public string? PromotionCode { get; init; }
-    public decimal DiscountAmount { get; init; }
     public decimal AdditionalAmount { get; init; }
     public string? CancelReason { get; init; }
     public string? CancelledBy { get; init; }
