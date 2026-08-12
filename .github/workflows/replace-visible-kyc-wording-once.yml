@@ -1,0 +1,122 @@
+name: Replace visible KYC wording once
+
+on:
+  push:
+    branches:
+      - hung-dev
+
+permissions:
+  contents: write
+
+jobs:
+  replace:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout hung-dev
+        uses: actions/checkout@v4
+        with:
+          ref: hung-dev
+          fetch-depth: 0
+
+      - name: Replace user-facing terminology
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              'src/SmartCar.Web/Views/AdminBookings/Details.cshtml': [
+                  ('Đối chiếu hồ sơ KYC, lịch sử thuê xe, lịch xe và thông tin thuê.', 'Đối chiếu hồ sơ xác minh giấy tờ, lịch sử thuê xe, lịch xe và thông tin thuê.'),
+                  ('Hồ sơ KYC & độ tin cậy khách hàng', 'Hồ sơ xác minh giấy tờ & độ tin cậy khách hàng'),
+                  ('KYC gồm 2 bước: xác minh danh tính bằng CCCD và xác minh giấy phép lái xe.', 'Xác minh giấy tờ gồm 2 bước: đối chiếu CCCD và kiểm tra giấy phép lái xe.'),
+                  ('Xem và đối chiếu KYC', 'Xem và đối chiếu giấy tờ'),
+              ],
+              'src/SmartCar.Web/Views/AdminCustomers/Details.cshtml': [
+                  ('Xác minh KYC', 'Xác minh giấy tờ'),
+                  ('Xem và đối chiếu KYC', 'Xem và đối chiếu giấy tờ'),
+                  ('Đối chiếu hồ sơ KYC', 'Đối chiếu hồ sơ giấy tờ'),
+              ],
+              'src/SmartCar.Web/Views/Profile/_DocumentsTab.cshtml': [
+                  ('✓ Hồ sơ KYC đã hoàn tất.', '✓ Hồ sơ xác minh giấy tờ đã hoàn tất.'),
+                  ('Hệ thống chỉ tạo yêu cầu KYC khi có đủ thông tin cần thiết và cả 4 ảnh.', 'Hệ thống chỉ tạo yêu cầu xác minh giấy tờ khi có đủ thông tin cần thiết và cả 4 ảnh.'),
+              ],
+              'src/SmartCar.Web/Views/Notifications/Index.cshtml': [
+                  ('Hồ sơ xác minh danh tính đã được duyệt', 'Hồ sơ giấy tờ đã được duyệt'),
+                  ('Hồ sơ xác minh danh tính cần cập nhật', 'Hồ sơ giấy tờ cần cập nhật'),
+                  ('Xác minh danh tính đã hoàn tất', 'Xác minh giấy tờ đã hoàn tất'),
+                  ('Hồ sơ xác minh danh tính', 'Hồ sơ xác minh giấy tờ'),
+                  ('xác minh danh tính', 'xác minh giấy tờ'),
+              ],
+              'src/SmartCar.Web/wwwroot/js/kyc-page-ux.js': [
+                  ('duyệt toàn bộ KYC.', 'duyệt toàn bộ hồ sơ giấy tờ.'),
+                  ('CÁCH HOÀN TẤT KYC', 'CÁCH HOÀN TẤT XÁC MINH GIẤY TỜ'),
+                  ('3. Duyệt KYC', '3. Duyệt hồ sơ'),
+              ],
+              'src/SmartCar.Web/Controllers/AdminCustomersController.cs': [
+                  ('Hồ sơ CCCD chưa có đủ thông tin KYC để xác minh.', 'Hồ sơ CCCD chưa có đủ thông tin cần thiết để xác minh.'),
+                  ('Thiếu thông tin KYC', 'Thiếu thông tin xác minh'),
+              ],
+              'src/SmartCar.Infrastructure/Services/DocumentService.cs': [
+                  ('Giấy tờ chưa có đủ thông tin KYC để xác minh.', 'Giấy tờ chưa có đủ thông tin cần thiết để xác minh.'),
+              ],
+              'src/SmartCar.Web/Filters/KycAdminNotificationConsolidationFilter.cs': [
+                  ('duyệt KYC trong một lần.', 'duyệt hồ sơ trong một lần.'),
+              ],
+              'src/SmartCar.Web/wwwroot/js/kyc-test-mode.js': [
+                  ('Không thể cập nhật chế độ kiểm thử KYC.', 'Không thể cập nhật chế độ kiểm thử xác minh giấy tờ.'),
+                  ('🧪 Chế độ kiểm thử KYC đang BẬT', '🧪 Chế độ kiểm thử xác minh giấy tờ đang BẬT'),
+                  ('🧪 Có chế độ kiểm thử KYC', '🧪 Có chế độ kiểm thử xác minh giấy tờ'),
+                  ('kiểm tra KYC nghiêm ngặt.', 'kiểm tra giấy tờ nghiêm ngặt.'),
+              ],
+              'src/SmartCar.Web/wwwroot/js/ekyc-cccd-qr-mrz.js': [
+                  ('KYC TEST · DEVELOPMENT', 'KIỂM THỬ GIẤY TỜ · DEVELOPMENT'),
+              ],
+              'src/SmartCar.Web/wwwroot/js/ekyc.js': [
+                  ('Không thể xử lý yêu cầu eKYC.', 'Không thể xử lý yêu cầu xác minh giấy tờ điện tử.'),
+                  ("latest.provider || 'eKYC'", "latest.provider || 'Xác minh giấy tờ điện tử'"),
+                  ("status.provider || 'eKYC'", "status.provider || 'Xác minh giấy tờ điện tử'"),
+                  ('Đã gửi hồ sơ eKYC.', 'Đã gửi hồ sơ xác minh giấy tờ điện tử.'),
+                  ('Kết quả eKYC hỗ trợ duyệt', 'Kết quả xác minh điện tử hỗ trợ duyệt'),
+              ],
+          }
+
+          for file_name, pairs in replacements.items():
+              path = Path(file_name)
+              text = path.read_text(encoding='utf-8-sig')
+              original = text
+              for old, new in pairs:
+                  text = text.replace(old, new)
+              if text != original:
+                  path.write_text(text, encoding='utf-8')
+                  print(f'updated: {file_name}')
+              else:
+                  print(f'no matching visible text: {file_name}')
+          PY
+
+      - name: Check diff formatting
+        run: git diff --check
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore SmartCar.sln
+
+      - name: Build
+        run: dotnet build SmartCar.sln --configuration Release --no-restore
+
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/SmartCar.Web src/SmartCar.Infrastructure
+          if git diff --cached --quiet; then
+            echo "No user-facing terminology changes needed."
+            exit 0
+          fi
+          git commit -m "Replace visible KYC wording with document verification"
+          git push origin HEAD:hung-dev
