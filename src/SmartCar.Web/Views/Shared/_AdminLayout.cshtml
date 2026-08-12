@@ -54,7 +54,7 @@
     var bookingActive = new[] { "AdminBookings", "AdminBookingOperations", "Handovers", "Returns" }.Contains(currentController);
     var customerActive = new[] { "AdminCustomers", "AdminDocuments", "AdminKyc" }.Contains(currentController);
     var vehicleActive = new[] { "AdminVehicles", "Brands", "VehicleDocuments", "Maintenance", "Incidents" }.Contains(currentController);
-    var businessActive = new[] { "Promotions", "Reports" }.Contains(currentController);
+    var businessActive = currentController == "Reports";
     var systemActive = new[] { "Notifications", "AuditLogs", "Profile" }.Contains(currentController);
 }
 <!DOCTYPE html>
@@ -158,12 +158,7 @@
 
                 <div class="admin-nav-section">
                     <div class="admin-nav-heading">Kinh doanh và báo cáo</div>
-                    <a class="admin-nav-link @(currentController == "Promotions" ? "active" : string.Empty)"
-                       asp-controller="Promotions" asp-action="Index">
-                        <span class="admin-nav-icon">%</span>
-                        <span>Khuyến mãi</span>
-                    </a>
-                    <a class="admin-nav-link @(currentController == "Reports" ? "active" : string.Empty)"
+                    <a class="admin-nav-link @(businessActive ? "active" : string.Empty)"
                        asp-controller="Reports" asp-action="Index">
                         <span class="admin-nav-icon">▥</span>
                         <span>Hiệu suất và lợi nhuận</span>
