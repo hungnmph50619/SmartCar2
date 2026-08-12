@@ -15,7 +15,6 @@ using SmartCar.Application.Features.Maintenance;
 using SmartCar.Application.Features.Notifications;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Application.Features.Payments;
-using SmartCar.Application.Features.Promotions;
 using SmartCar.Application.Features.Reports;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Application.Features.Reviews;
@@ -85,7 +84,6 @@ public static class DependencyInjection
         services.AddScoped<IBookingOperationService, BookingOperationService>();
         services.AddScoped<IExtensionService, ExtensionService>();
         services.AddScoped<IPaymentService, PaymentService>();
-        services.AddScoped<IPromotionService, PromotionService>();
         services.AddScoped<IHandoverService, HandoverService>();
         services.AddScoped<IReturnService, ReturnService>();
         services.AddScoped<IMaintenanceService, MaintenanceService>();
