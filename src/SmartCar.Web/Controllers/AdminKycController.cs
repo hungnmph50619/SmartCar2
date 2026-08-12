@@ -113,7 +113,7 @@ public sealed class AdminKycController : Controller
         var documents = await _documentService.GetCustomerDocumentsAsync(customerId, cancellationToken);
         if (!RequiredKycTypes.All(type => documents.Any(item => item.DocumentType == type)))
         {
-            TempData["ErrorMessage"] = "Khách hàng chưa gửi đủ toàn bộ hồ sơ KYC.";
+            TempData["ErrorMessage"] = "Khách hàng chưa gửi đủ toàn bộ hồ sơ CCCD và GPLX.";
             return RedirectToAction("Details", "AdminCustomers", new { id = customerId, tab = "documents" });
         }
 
@@ -151,7 +151,7 @@ public sealed class AdminKycController : Controller
 
         if (package.Any(item => !item!.HasRequiredData))
         {
-            TempData["ErrorMessage"] = "Hồ sơ KYC chưa có đủ dữ liệu bắt buộc để xác minh.";
+            TempData["ErrorMessage"] = "Hồ sơ xác minh chưa có đủ dữ liệu bắt buộc để xác minh.";
             return RedirectToAction(nameof(Review), new { customerId });
         }
 
@@ -191,13 +191,13 @@ public sealed class AdminKycController : Controller
         _dbContext.Notifications.Add(new Notification
         {
             UserId = customerId,
-            Title = "Hồ sơ KYC đã được xác minh",
-            Message = "CCCD và giấy phép lái xe của bạn đã được Quản trị viên đối chiếu và xác minh. Hồ sơ KYC đã hoàn tất."
+            Title = "Hồ sơ xác minh danh tính đã được duyệt",
+            Message = "CCCD và giấy phép lái xe của bạn đã được Quản trị viên đối chiếu và xác minh. Bạn đã hoàn tất xác minh danh tính và đủ điều kiện về giấy tờ để thuê xe."
         });
 
         await MarkKycWorkHandledAsync(customerId, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        TempData["SuccessMessage"] = "Đã duyệt toàn bộ hồ sơ KYC gồm CCCD và GPLX trong một lần.";
+        TempData["SuccessMessage"] = "Đã duyệt toàn bộ hồ sơ CCCD và GPLX trong một lần.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -222,7 +222,7 @@ public sealed class AdminKycController : Controller
 
         if (package.Any(item => item is null))
         {
-            TempData["ErrorMessage"] = "Khách hàng chưa có đủ hồ sơ KYC để xử lý.";
+            TempData["ErrorMessage"] = "Khách hàng chưa có đủ hồ sơ CCCD và GPLX để xử lý.";
             return RedirectToAction(nameof(Review), new { customerId });
         }
 
@@ -273,13 +273,13 @@ public sealed class AdminKycController : Controller
         _dbContext.Notifications.Add(new Notification
         {
             UserId = customerId,
-            Title = "Hồ sơ KYC cần cập nhật",
+            Title = "Hồ sơ xác minh danh tính cần cập nhật",
             Message = $"Quản trị viên yêu cầu bạn cập nhật lại CCCD và GPLX. Lý do: {fullReason}"
         });
 
         await MarkKycWorkHandledAsync(customerId, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        TempData["SuccessMessage"] = "Đã yêu cầu khách hàng cập nhật lại hồ sơ KYC và đóng yêu cầu chờ duyệt.";
+        TempData["SuccessMessage"] = "Đã yêu cầu khách hàng cập nhật lại hồ sơ CCCD và GPLX và đóng yêu cầu chờ duyệt.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -398,6 +398,7 @@ public sealed class AdminKycController : Controller
 
     private async Task MarkKycWorkHandledAsync(string customerId, CancellationToken cancellationToken)
     {
+        // Khóa nội bộ cũ được giữ để xử lý các thông báo đã lưu từ trước.
         var packageTitle = $"Hồ sơ KYC chờ duyệt|{customerId}";
         var adminNotifications = await _dbContext.Notifications
             .Where(item => item.Title == packageTitle && !item.IsRead)

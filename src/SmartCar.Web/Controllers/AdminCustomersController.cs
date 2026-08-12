@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -241,9 +241,24 @@ public sealed class AdminCustomersController : Controller
 
         var state = ResolveProfileState(documents);
         var activeTab = NormalizeTab(tab);
-        var paidIn = payments
-            .Where(payment => payment.Status == PaymentStatus.Paid && payment.Type != PaymentType.Refund)
-            .Sum(payment => payment.Amount);
+        var paidIn =
+    payments
+        .Where(payment =>
+            payment.Status ==
+                PaymentStatus.Paid &&
+
+            (
+                payment.Type ==
+                    PaymentType.Rental ||
+
+                payment.Type ==
+                    PaymentType.Extension ||
+
+                payment.Type ==
+                    PaymentType.AdditionalCharge
+            ))
+        .Sum(payment =>
+            payment.Amount);
         var refunds = payments
             .Where(payment => payment.Type == PaymentType.Refund &&
                               (payment.Status == PaymentStatus.Paid || payment.Status == PaymentStatus.Refunded))
@@ -331,7 +346,7 @@ public sealed class AdminCustomersController : Controller
 
         if (!front.HasRequiredData || !back.HasRequiredData)
         {
-            TempData["ErrorMessage"] = "Hồ sơ CCCD chưa có đủ thông tin KYC để xác minh.";
+            TempData["ErrorMessage"] = "Hồ sơ CCCD chưa có đủ thông tin cần thiết để xác minh.";
             return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
         }
 
@@ -603,7 +618,7 @@ public sealed class AdminCustomersController : Controller
 
         if (!citizenFront.HasRequiredData || !citizenBack.HasRequiredData || !drivingLicense.HasRequiredData)
         {
-            return new ProfileState("Missing", "Thiếu thông tin KYC");
+            return new ProfileState("Missing", "Thiếu thông tin xác minh");
         }
 
         if (documents.Any(item => item.Status == DocumentStatus.Rejected))

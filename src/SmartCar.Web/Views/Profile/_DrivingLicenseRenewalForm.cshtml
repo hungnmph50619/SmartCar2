@@ -1,0 +1,116 @@
+@model SmartCar.Web.ViewModels.ProfileViewModel
+@{
+    var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
+    var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
+    var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
+}
+
+<form asp-controller="Profile"
+      asp-action="SubmitDrivingLicense"
+      method="post"
+      enctype="multipart/form-data"
+      class="card border-warning shadow-sm mt-3"
+      data-kyc-renewal-form
+      data-loading-form>
+    @if (returnVehicleId.HasValue)
+    {
+        <input type="hidden" name="returnVehicleId" value="@returnVehicleId" />
+        <input type="hidden" name="pickupDate" value="@returnPickupDate?.ToString("O")" />
+        <input type="hidden" name="returnDate" value="@returnDate?.ToString("O")" />
+    }
+
+    <div class="card-header bg-warning-subtle border-0 p-4 pb-2">
+        <h3 class="h5 fw-bold mb-1">Cập nhật Giấy phép lái xe</h3>
+        <p class="text-muted mb-0">Chỉ cần gửi lại GPLX. CCCD đã xác minh của bạn vẫn được giữ nguyên.</p>
+    </div>
+
+    <div class="card-body p-4">
+        <input asp-for="DrivingLicenseVerification.FullNameOnDocument" type="hidden" />
+
+        <div class="row g-3">
+            <div class="col-md-5">
+                <label asp-for="DrivingLicenseVerification.DocumentNumber" class="form-label fw-semibold"></label>
+                <input asp-for="DrivingLicenseVerification.DocumentNumber"
+                       class="form-control"
+                       maxlength="12"
+                       pattern="[A-Za-z0-9]{8,12}"
+                       autocomplete="off"
+                       required />
+                <div class="form-text">Nhập đúng số trên GPLX mới, từ 8 đến 12 ký tự chữ hoặc số.</div>
+                <span asp-validation-for="DrivingLicenseVerification.DocumentNumber" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="DrivingLicenseVerification.LicenseClass" class="form-label fw-semibold"></label>
+                <select asp-for="DrivingLicenseVerification.LicenseClass" class="form-select" required>
+                    <option value="">-- Chọn hạng --</option>
+                    <option value="B">B</option>
+                    <option value="C1">C1</option>
+                    <option value="C">C</option>
+                    <option value="D1">D1</option>
+                    <option value="D2">D2</option>
+                    <option value="D">D</option>
+                    <option value="BE">BE</option>
+                    <option value="C1E">C1E</option>
+                    <option value="CE">CE</option>
+                    <option value="D1E">D1E</option>
+                    <option value="D2E">D2E</option>
+                    <option value="DE">DE</option>
+                    <option value="B1">B1</option>
+                    <option value="B2">B2</option>
+                </select>
+                <span asp-validation-for="DrivingLicenseVerification.LicenseClass" class="text-danger small"></span>
+            </div>
+            <div class="col-md-2">
+                <label asp-for="DrivingLicenseVerification.IssuedDate" class="form-label fw-semibold"></label>
+                <input asp-for="DrivingLicenseVerification.IssuedDate" type="date" class="form-control" max="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                <span asp-validation-for="DrivingLicenseVerification.IssuedDate" class="text-danger small"></span>
+            </div>
+            <div class="col-md-2">
+                <label asp-for="DrivingLicenseVerification.ExpiryDate" class="form-label fw-semibold"></label>
+                <input asp-for="DrivingLicenseVerification.ExpiryDate" type="date" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                <span asp-validation-for="DrivingLicenseVerification.ExpiryDate" class="text-danger small"></span>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-2">
+            <div class="col-md-6">
+                <label class="kyc-upload-card" data-upload-card>
+                    <input asp-for="DrivingLicenseVerification.FrontImage"
+                           type="file"
+                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                           class="visually-hidden"
+                           data-upload-input
+                           required />
+                    <img alt="Xem trước GPLX mặt trước" class="kyc-upload-preview" data-upload-preview />
+                    <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
+                    <strong>GPLX mặt trước mới</strong>
+                    <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
+                    <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                </label>
+                <span asp-validation-for="DrivingLicenseVerification.FrontImage" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="kyc-upload-card" data-upload-card>
+                    <input asp-for="DrivingLicenseVerification.BackImage"
+                           type="file"
+                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                           class="visually-hidden"
+                           data-upload-input
+                           required />
+                    <img alt="Xem trước GPLX mặt sau" class="kyc-upload-preview" data-upload-preview />
+                    <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
+                    <strong>GPLX mặt sau mới</strong>
+                    <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
+                    <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                </label>
+                <span asp-validation-for="DrivingLicenseVerification.BackImage" class="text-danger small"></span>
+            </div>
+        </div>
+
+        <div class="alert alert-light border small mt-3 mb-3">
+            Sau khi gửi, GPLX chuyển sang <strong>Chờ xác minh</strong>. Quản trị viên phải duyệt GPLX mới trước khi giấy phép được sử dụng lại để thuê xe.
+        </div>
+
+        <button type="submit" class="btn btn-warning fw-semibold" data-loading-text="Đang gửi GPLX...">Gửi GPLX mới để xác minh</button>
+    </div>
+</form>

@@ -1,12 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Notifications;
+using SmartCar.Domain.Constants;
+using SmartCar.Domain.Entities;
+using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 
 namespace SmartCar.Infrastructure.Services;
 
 internal sealed class NotificationService : INotificationService
 {
+    private const int ExpiringSoonDays = 30;
     private readonly ApplicationDbContext _dbContext;
 
     public NotificationService(ApplicationDbContext dbContext)
@@ -16,8 +20,11 @@ internal sealed class NotificationService : INotificationService
 
     public async Task<IReadOnlyList<NotificationDto>> GetAsync(
         string userId,
-        CancellationToken cancellationToken = default) =>
-        await _dbContext.Notifications
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureDocumentExpiryNotificationsAsync(userId, cancellationToken);
+
+        return await _dbContext.Notifications
             .AsNoTracking()
             .Where(item => item.UserId == userId)
             .OrderByDescending(item => item.CreatedAt)
@@ -30,13 +37,18 @@ internal sealed class NotificationService : INotificationService
                 item.CreatedAt,
                 item.ReadAt))
             .ToListAsync(cancellationToken);
+    }
 
-    public Task<int> GetUnreadCountAsync(
+    public async Task<int> GetUnreadCountAsync(
         string userId,
-        CancellationToken cancellationToken = default) =>
-        _dbContext.Notifications.CountAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureDocumentExpiryNotificationsAsync(userId, cancellationToken);
+
+        return await _dbContext.Notifications.CountAsync(
             item => item.UserId == userId && !item.IsRead,
             cancellationToken);
+    }
 
     public async Task<OperationResult> MarkReadAsync(
         int notificationId,
@@ -76,5 +88,87 @@ internal sealed class NotificationService : INotificationService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return OperationResult.Success();
+    }
+
+    private async Task EnsureDocumentExpiryNotificationsAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        var documents = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == userId &&
+                document.Status == DocumentStatus.Verified &&
+                document.ExpiryDate.HasValue &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.DrivingLicense))
+            .Select(document => new
+            {
+                document.DocumentType,
+                document.ExpiryDate
+            })
+            .ToListAsync(cancellationToken);
+
+        if (documents.Count == 0)
+        {
+            return;
+        }
+
+        var today = DateTime.Today;
+        var pendingNotifications = new List<Notification>();
+
+        foreach (var document in documents)
+        {
+            var expiryDate = document.ExpiryDate!.Value.Date;
+            var remainingDays = (expiryDate - today).Days;
+            if (remainingDays > ExpiringSoonDays)
+            {
+                continue;
+            }
+
+            var documentName = document.DocumentType == DocumentTypes.CitizenId
+                ? "CCCD"
+                : "GPLX";
+
+            var isExpired = remainingDays < 0;
+            var title = isExpired
+                ? $"{documentName} đã hết hạn - cần cập nhật"
+                : $"{documentName} sắp hết hạn - cần cập nhật";
+            var message = isExpired
+                ? $"{documentName} của bạn đã hết hạn ngày {expiryDate:dd/MM/yyyy}. Vui lòng cập nhật giấy tờ mới và chờ Quản trị viên xác minh lại trước khi thuê xe."
+                : $"{documentName} của bạn sẽ hết hạn vào ngày {expiryDate:dd/MM/yyyy} (còn {remainingDays} ngày). Vui lòng chuẩn bị cập nhật giấy tờ mới để tránh gián đoạn việc thuê xe.";
+
+            var exists = await _dbContext.Notifications
+                .AsNoTracking()
+                .AnyAsync(item =>
+                    item.UserId == userId &&
+                    item.Title == title &&
+                    item.Message == message,
+                    cancellationToken);
+
+            if (!exists && !pendingNotifications.Any(item =>
+                    item.Title == title && item.Message == message))
+            {
+                pendingNotifications.Add(new Notification
+                {
+                    UserId = userId,
+                    Title = title,
+                    Message = message
+                });
+            }
+        }
+
+        if (pendingNotifications.Count == 0)
+        {
+            return;
+        }
+
+        _dbContext.Notifications.AddRange(pendingNotifications);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }

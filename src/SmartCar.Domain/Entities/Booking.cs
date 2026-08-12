@@ -1,4 +1,4 @@
-using SmartCar.Domain.Enums;
+﻿using SmartCar.Domain.Enums;
 
 namespace SmartCar.Domain.Entities;
 
@@ -12,10 +12,14 @@ public class Booking
     public decimal DailyPrice { get; set; }
     public int NumberOfDays { get; set; }
     public decimal RentalAmount { get; set; }
-    public string? PromotionCode { get; set; }
-    public decimal DiscountAmount { get; set; }
+    public decimal DepositAmount { get; set; }
     public decimal AdditionalAmount { get; set; }
     public decimal TotalAmount { get; set; }
+    public VehiclePickupMethod PickupMethod { get; set; }
+    = VehiclePickupMethod.StorePickup;
+    public string? DeliveryAddress { get; set; }
+    public decimal? DeliveryLatitude { get; set; }
+    public decimal? DeliveryLongitude { get; set; }
     public BookingStatus Status { get; set; } = BookingStatus.PendingConfirmation;
     public string? CancelReason { get; set; }
     public string? CancelledBy { get; set; }
@@ -25,7 +29,6 @@ public class Booking
     public DateTime? NoShowMarkedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
-
     public Vehicle Vehicle { get; set; } = null!;
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
     public ICollection<BookingExtension> Extensions { get; set; } = new List<BookingExtension>();

@@ -91,7 +91,7 @@
         let showContinue = true;
 
         if (citizenPending && !licensePending && !licenseVerified) {
-            stateText = '✓ CCCD đã gửi. Bạn không cần chờ Quản trị viên duyệt CCCD riêng. Hãy tiếp tục GPLX; khi đủ CCCD + GPLX, Quản trị viên mới nhận một yêu cầu để xem và duyệt toàn bộ KYC.';
+            stateText = '✓ CCCD đã gửi. Bạn không cần chờ Quản trị viên duyệt CCCD riêng. Hãy tiếp tục GPLX; khi đủ CCCD + GPLX, Quản trị viên mới nhận một yêu cầu để xem và duyệt toàn bộ hồ sơ giấy tờ.';
             stateClass = 'alert-info';
         } else if ((citizenPending || citizenVerified) && (licensePending || licenseVerified)) {
             stateText = '✓ Bạn đã hoàn tất cả CCCD và GPLX. Quản trị viên sẽ đối chiếu hai giấy tờ trong cùng một hồ sơ và duyệt một lần. Bạn chỉ cần chờ kết quả.';
@@ -106,7 +106,7 @@
             <div class="card-body p-3 p-md-4">
                 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                     <div>
-                        <div class="text-uppercase small text-primary fw-semibold">CÁCH HOÀN TẤT KYC</div>
+                        <div class="text-uppercase small text-primary fw-semibold">CÁCH HOÀN TẤT XÁC MINH GIẤY TỜ</div>
                         <h3 class="h5 fw-bold mb-1">3 bước, Quản trị viên chỉ duyệt một lần</h3>
                     </div>
                     <span class="badge bg-light text-dark border">CCCD + GPLX</span>
@@ -114,7 +114,7 @@
                 <div class="row g-2 mb-3">
                     <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><strong>1. CCCD</strong><div class="small text-muted mt-1">Chọn 2 mặt → kiểm tra ảnh → đọc QR/MRZ → kiểm tra thông tin.</div></div></div>
                     <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><strong>2. GPLX</strong><div class="small text-muted mt-1">Chọn 2 mặt → kiểm tra ảnh → ưu tiên QR, OCR bổ sung → kiểm tra thông tin.</div></div></div>
-                    <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><strong>3. Duyệt KYC</strong><div class="small text-muted mt-1">Khi đủ hai giấy tờ, Admin xem cả 4 ảnh và duyệt toàn bộ hồ sơ một lần.</div></div></div>
+                    <div class="col-md-4"><div class="border rounded-3 p-3 h-100"><strong>3. Duyệt hồ sơ</strong><div class="small text-muted mt-1">Khi đủ hai giấy tờ, Admin xem cả 4 ảnh và duyệt toàn bộ hồ sơ một lần.</div></div></div>
                 </div>
                 <div class="alert ${stateClass} mb-0" data-kyc-flow-state>${stateText}</div>
             </div>`;

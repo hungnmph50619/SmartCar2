@@ -1,4 +1,4 @@
-@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
+﻿@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
 @using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Trang chủ";
@@ -320,8 +320,8 @@
                     <a asp-controller="Vehicles"
                        asp-action="Details"
                        asp-route-id="@vehicle.VehicleId"
-                       asp-route-pickupDate="@pickupDate"
-                       asp-route-returnDate="@returnDate"
+                       asp-route-pickupDate="@pickupDate.ToString("O")"
+                       asp-route-returnDate="@returnDate.ToString("O")"
                        class="featured-card-link h-100"
                        aria-label="Xem chi tiết @vehicle.VehicleName">
                         <article class="featured-car-card h-100">
@@ -392,7 +392,7 @@
             <div class="benefit-card h-100">
                 <div class="benefit-icon">₫</div>
                 <h3 class="h5">Chi phí minh bạch</h3>
-                <p>Giá thuê, khuyến mãi, phụ phí và hoàn tiền được hiển thị rõ trên đơn.</p>
+                <p>Giá thuê, phụ phí và hoàn tiền được hiển thị rõ trên đơn.</p>
             </div>
         </div>
         <div class="col-lg-3 col-md-6">
@@ -448,18 +448,3 @@
         </div>
     </div>
 </section>
-
-<section class="home-cta">
-    <div>
-        <span class="section-eyebrow">SẴN SÀNG KHỞI HÀNH?</span>
-        <h2 class="h2 fw-bold mb-2">Tìm chiếc xe phù hợp cho hành trình tiếp theo</h2>
-        <p class="text-muted mb-0">Chọn thời gian nhận và trả xe để xem đúng xe còn trống.</p>
-    </div>
-    <a href="#quick-search" class="btn btn-primary btn-lg px-4">
-        Tìm xe theo thời gian
-    </a>
-</section>
-
-@section Scripts {
-    <script src="~/js/vehicle-search.js" asp-append-version="true"></script>
-}

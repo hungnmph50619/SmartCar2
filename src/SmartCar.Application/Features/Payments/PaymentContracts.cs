@@ -24,11 +24,6 @@ public interface IPaymentService
         PaymentType? type = null,
         CancellationToken cancellationToken = default);
 
-    Task<OperationResult> SimulatePaymentAsync(
-        int bookingId,
-        string customerId,
-        PaymentType paymentType,
-        CancellationToken cancellationToken = default);
 
     Task<OperationResult> SubmitQrPaymentAsync(
         int bookingId,
