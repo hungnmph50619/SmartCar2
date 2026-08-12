@@ -11,16 +11,18 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "Promotions");
+            // Hỗ trợ cả database cũ đã từng có module khuyến mãi và database mới
+            // được tạo từ migration history đã loại bỏ module này.
+            migrationBuilder.Sql(@"
+IF OBJECT_ID(N'[dbo].[Promotions]', N'U') IS NOT NULL
+    DROP TABLE [dbo].[Promotions];
 
-            migrationBuilder.DropColumn(
-                name: "DiscountAmount",
-                table: "Bookings");
+IF COL_LENGTH('dbo.Bookings', 'DiscountAmount') IS NOT NULL
+    ALTER TABLE [dbo].[Bookings] DROP COLUMN [DiscountAmount];
 
-            migrationBuilder.DropColumn(
-                name: "PromotionCode",
-                table: "Bookings");
+IF COL_LENGTH('dbo.Bookings', 'PromotionCode') IS NOT NULL
+    ALTER TABLE [dbo].[Bookings] DROP COLUMN [PromotionCode];
+");
         }
 
         /// <inheritdoc />
