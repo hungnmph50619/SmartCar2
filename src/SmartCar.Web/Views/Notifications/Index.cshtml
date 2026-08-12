@@ -6,12 +6,12 @@
         !item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
 
     string FriendlyNotificationText(string value) => value
-        .Replace("Hồ sơ KYC đã được xác minh", "Hồ sơ xác minh danh tính đã được duyệt", StringComparison.Ordinal)
-        .Replace("Hồ sơ KYC cần cập nhật", "Hồ sơ xác minh danh tính cần cập nhật", StringComparison.Ordinal)
-        .Replace("Hồ sơ KYC đã hoàn tất", "Xác minh danh tính đã hoàn tất", StringComparison.Ordinal)
+        .Replace("Hồ sơ KYC đã được xác minh", "Hồ sơ giấy tờ đã được duyệt", StringComparison.Ordinal)
+        .Replace("Hồ sơ KYC cần cập nhật", "Hồ sơ giấy tờ cần cập nhật", StringComparison.Ordinal)
+        .Replace("Hồ sơ KYC đã hoàn tất", "Xác minh giấy tờ đã hoàn tất", StringComparison.Ordinal)
         .Replace("quyết định KYC", "quyết định xác minh hồ sơ", StringComparison.Ordinal)
-        .Replace("Hồ sơ KYC", "Hồ sơ xác minh danh tính", StringComparison.Ordinal)
-        .Replace("KYC", "xác minh danh tính", StringComparison.Ordinal);
+        .Replace("Hồ sơ KYC", "Hồ sơ xác minh giấy tờ", StringComparison.Ordinal)
+        .Replace("KYC", "xác minh giấy tờ", StringComparison.Ordinal);
 }
 
 <style>
@@ -285,7 +285,7 @@
                              displayTitle.Contains("đã hoàn tất", StringComparison.OrdinalIgnoreCase) ||
                              displayMessage.Contains("đã hoàn tất", StringComparison.OrdinalIgnoreCase) ||
                              displayMessage.Contains("đã được xác minh", StringComparison.OrdinalIgnoreCase);
-            var isIdentityNotification = displayTitle.Contains("xác minh danh tính", StringComparison.OrdinalIgnoreCase) ||
+            var isIdentityNotification = displayTitle.Contains("xác minh giấy tờ", StringComparison.OrdinalIgnoreCase) ||
                                          displayMessage.Contains("CCCD", StringComparison.OrdinalIgnoreCase) ||
                                          displayMessage.Contains("GPLX", StringComparison.OrdinalIgnoreCase) ||
                                          displayMessage.Contains("giấy phép lái xe", StringComparison.OrdinalIgnoreCase);

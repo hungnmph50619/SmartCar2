@@ -21,7 +21,7 @@
 
         const provider = panel.querySelector('[data-ekyc-provider]');
         if (provider) {
-            provider.textContent = window.SmartCarKycTest?.active === true ? 'KYC TEST · DEVELOPMENT' : 'QR + MRZ · LOCAL';
+            provider.textContent = window.SmartCarKycTest?.active === true ? 'KIỂM THỬ GIẤY TỜ · DEVELOPMENT' : 'QR + MRZ · LOCAL';
             provider.className = window.SmartCarKycTest?.active === true
                 ? 'badge bg-warning text-dark'
                 : 'badge bg-info text-dark';
