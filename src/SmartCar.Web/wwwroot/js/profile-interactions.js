@@ -388,13 +388,24 @@
             }
         }, true);
 
-        packageForm.querySelectorAll('[data-person-name]').forEach(validatePersonName);
-        packageForm.querySelectorAll('[data-citizen-number]').forEach(validateCitizenNumber);
-        packageForm.querySelectorAll('[data-license-number]').forEach(validateLicenseNumber);
-        packageForm.querySelectorAll('[data-address-field]').forEach(validateAddress);
-        packageForm.querySelectorAll('[data-license-class]').forEach(validateSelect);
-        packageForm.querySelectorAll('[data-vn-date]').forEach(validateDateInput);
-        if (confirmation) validateConfirmation(confirmation);
+        packageForm.querySelectorAll('[data-person-name]').forEach(input => {
+            if (input.value.trim()) validatePersonName(input);
+        });
+        packageForm.querySelectorAll('[data-citizen-number]').forEach(input => {
+            if (input.value.trim()) validateCitizenNumber(input);
+        });
+        packageForm.querySelectorAll('[data-license-number]').forEach(input => {
+            if (input.value.trim()) validateLicenseNumber(input);
+        });
+        packageForm.querySelectorAll('[data-address-field]').forEach(input => {
+            if (input.value.trim()) validateAddress(input);
+        });
+        packageForm.querySelectorAll('[data-license-class]').forEach(input => {
+            if (input.value) validateSelect(input);
+        });
+        packageForm.querySelectorAll('[data-vn-date]').forEach(input => {
+            if (input.value.trim()) validateDateInput(input);
+        });
         updateSubmitState();
     }
 
