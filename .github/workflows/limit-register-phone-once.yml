@@ -1,0 +1,70 @@
+name: Limit register phone input once
+
+on:
+  push:
+    branches:
+      - hung-dev
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hung-dev
+          fetch-depth: 0
+
+      - name: Limit registration phone to 10 digits
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/SmartCar.Web/Views/Account/Register.cshtml')
+          text = path.read_text(encoding='utf-8-sig')
+          old = '''                                <input asp-for="PhoneNumber"
+                                       class="form-control"
+                                       placeholder="0912345678"
+                                       inputmode="tel"
+                                       autocomplete="tel" />
+                                <span asp-validation-for="PhoneNumber" class="text-danger small"></span>'''
+          new = '''                                <input asp-for="PhoneNumber"
+                                       class="form-control"
+                                       placeholder="0912345678"
+                                       inputmode="numeric"
+                                       maxlength="10"
+                                       pattern="[0-9]{10}"
+                                       oninput="this.value = this.value.replace(/\\D/g, '').slice(0, 10)"
+                                       autocomplete="tel" />
+                                <div class="form-text">Nhập 10 chữ số, bắt đầu bằng 0.</div>
+                                <span asp-validation-for="PhoneNumber" class="text-danger small"></span>'''
+          if old not in text:
+              raise SystemExit('Expected phone input block not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+      - name: Check diff
+        run: git diff --check
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore SmartCar.sln
+
+      - name: Build
+        run: dotnet build SmartCar.sln --configuration Release --no-restore
+
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/SmartCar.Web/Views/Account/Register.cshtml
+          git commit -m "Limit registration phone to 10 digits"
+          git push origin HEAD:hung-dev
