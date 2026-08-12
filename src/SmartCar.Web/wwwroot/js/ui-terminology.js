@@ -1,21 +1,21 @@
 (() => {
     const replacementRules = [
-        ["eKYC", "xác minh danh tính điện tử"],
-        ["Hồ sơ KYC & độ tin cậy khách hàng", "Hồ sơ xác minh & độ tin cậy khách hàng"],
-        ["KYC gồm 2 bước", "Xác minh khách hàng gồm 2 bước"],
+        ["eKYC", "xác minh giấy tờ điện tử"],
+        ["Hồ sơ KYC & độ tin cậy khách hàng", "Hồ sơ xác minh giấy tờ & độ tin cậy khách hàng"],
+        ["KYC gồm 2 bước", "Xác minh giấy tờ gồm 2 bước"],
         ["Xem và đối chiếu KYC", "Xem và đối chiếu giấy tờ"],
-        ["Đối chiếu hồ sơ KYC", "Đối chiếu hồ sơ xác minh"],
-        ["Hồ sơ KYC đã được xác minh", "Hồ sơ xác minh danh tính đã được duyệt"],
-        ["Hồ sơ KYC đã hoàn tất", "Xác minh danh tính đã hoàn tất"],
-        ["Hồ sơ KYC cần cập nhật", "Hồ sơ xác minh danh tính cần cập nhật"],
-        ["Hồ sơ KYC chờ duyệt", "Hồ sơ xác minh chờ duyệt"],
-        ["Hồ sơ KYC chờ xử lý", "Hồ sơ xác minh chờ xử lý"],
-        ["Hồ sơ KYC", "Hồ sơ xác minh danh tính"],
-        ["KYC trong SmartCar", "Xác minh danh tính trong SmartCar"],
+        ["Đối chiếu hồ sơ KYC", "Đối chiếu hồ sơ giấy tờ"],
+        ["Hồ sơ KYC đã được xác minh", "Hồ sơ giấy tờ đã được duyệt"],
+        ["Hồ sơ KYC đã hoàn tất", "Xác minh giấy tờ đã hoàn tất"],
+        ["Hồ sơ KYC cần cập nhật", "Hồ sơ giấy tờ cần cập nhật"],
+        ["Hồ sơ KYC chờ duyệt", "Hồ sơ xác minh giấy tờ chờ duyệt"],
+        ["Hồ sơ KYC chờ xử lý", "Hồ sơ xác minh giấy tờ chờ xử lý"],
+        ["Hồ sơ KYC", "Hồ sơ xác minh giấy tờ"],
+        ["KYC trong SmartCar", "Xác minh giấy tờ trong SmartCar"],
         ["quyết định KYC", "quyết định xác minh hồ sơ"],
-        ["KYC chờ duyệt", "Xác minh giấy tờ chờ duyệt"],
-        ["KYC chờ xử lý", "Hồ sơ xác minh chờ xử lý"],
-        ["KYC", "xác minh danh tính"]
+        ["KYC chờ duyệt", "Hồ sơ xác minh giấy tờ chờ duyệt"],
+        ["KYC chờ xử lý", "Hồ sơ xác minh giấy tờ chờ xử lý"],
+        ["KYC", "xác minh giấy tờ"]
     ];
 
     const excludedTags = new Set(["SCRIPT", "STYLE", "CODE", "PRE", "NOSCRIPT"]);
