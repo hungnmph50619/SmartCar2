@@ -17,6 +17,14 @@
         _ => "bg-secondary"
     };
 
+    static string StepClass(string status) => status switch
+    {
+        "Đã xác minh" => "is-done",
+        "Chờ xác minh" => "is-pending",
+        "Cần cập nhật" => "is-error",
+        _ => string.Empty
+    };
+
     var citizenFront = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
     var citizenBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
     var licenseFront = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
@@ -93,17 +101,17 @@
     </div>
 
     <div class="kyc-stepper mb-4" aria-label="Tiến trình xác minh danh tính">
-        <div class="kyc-step @(citizenStatus != "Chưa gửi" ? "is-done" : "is-active")">
+        <div class="kyc-step @(citizenStatus == "Chưa gửi" ? "is-active" : StepClass(citizenStatus))">
             <span class="kyc-step-number">1</span>
             <span><strong>CCCD</strong><small>@citizenStatus</small></span>
         </div>
         <div class="kyc-step-line"></div>
-        <div class="kyc-step @(licenseStatus != "Chưa gửi" ? "is-done" : citizenStatus != "Chưa gửi" ? "is-active" : string.Empty)">
+        <div class="kyc-step @(licenseStatus == "Chưa gửi" && citizenStatus != "Chưa gửi" ? "is-active" : StepClass(licenseStatus))">
             <span class="kyc-step-number">2</span>
             <span><strong>GPLX</strong><small>@licenseStatus</small></span>
         </div>
         <div class="kyc-step-line"></div>
-        <div class="kyc-step @(fullyVerified ? "is-done" : allPending ? "is-active" : string.Empty)">
+        <div class="kyc-step @StepClass(overallStatus)">
             <span class="kyc-step-number">3</span>
             <span><strong>Hoàn tất</strong><small>@overallStatus</small></span>
         </div>
@@ -223,48 +231,99 @@
                     <div class="row g-3">
                         <div class="col-md-7">
                             <label asp-for="CitizenIdVerification.FullNameOnDocument" class="form-label fw-semibold"></label>
-                            <input asp-for="CitizenIdVerification.FullNameOnDocument" class="form-control" autocomplete="name" required />
+                            <input asp-for="CitizenIdVerification.FullNameOnDocument"
+                                   class="form-control"
+                                   autocomplete="name"
+                                   maxlength="100"
+                                   data-person-name
+                                   data-client-error-id="citizenNameError"
+                                   required />
+                            <span asp-validation-for="CitizenIdVerification.FullNameOnDocument" id="citizenNameError" class="kyc-client-error d-block"></span>
                         </div>
                         <div class="col-md-5">
                             <label asp-for="CitizenIdVerification.DocumentNumber" class="form-label fw-semibold"></label>
-                            <input asp-for="CitizenIdVerification.DocumentNumber" class="form-control" inputmode="numeric" maxlength="12" autocomplete="off" required />
+                            <input asp-for="CitizenIdVerification.DocumentNumber"
+                                   class="form-control"
+                                   inputmode="numeric"
+                                   maxlength="12"
+                                   pattern="[0-9]{12}"
+                                   autocomplete="off"
+                                   data-citizen-number
+                                   data-client-error-id="citizenNumberError"
+                                   required />
+                            <span asp-validation-for="CitizenIdVerification.DocumentNumber" id="citizenNumberError" class="kyc-client-error d-block"></span>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold" for="citizenDobDisplay">Ngày sinh</label>
-                            <input id="citizenDobDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="CitizenDateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("dd/MM/yyyy")" required />
+                            <input id="citizenDobDisplay"
+                                   type="text"
+                                   class="form-control"
+                                   inputmode="numeric"
+                                   maxlength="10"
+                                   placeholder="dd/mm/yyyy"
+                                   data-vn-date
+                                   data-date-role="dob"
+                                   data-date-target="CitizenDateOfBirth"
+                                   data-client-error-id="citizenDobError"
+                                   value="@Model.CitizenIdVerification.DateOfBirth?.ToString("dd/MM/yyyy")"
+                                   required />
                             <input id="CitizenDateOfBirth" type="hidden" name="CitizenIdVerification.DateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("yyyy-MM-dd")" />
+                            <div id="citizenDobError" class="kyc-client-error"></div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold" for="citizenExpiryDisplay">Ngày hết hạn</label>
-                            <input id="citizenExpiryDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="CitizenExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("dd/MM/yyyy")" required />
+                            <input id="citizenExpiryDisplay"
+                                   type="text"
+                                   class="form-control"
+                                   inputmode="numeric"
+                                   maxlength="10"
+                                   placeholder="dd/mm/yyyy"
+                                   data-vn-date
+                                   data-date-role="expiry"
+                                   data-document-label="CCCD"
+                                   data-date-target="CitizenExpiryDate"
+                                   data-client-error-id="citizenExpiryError"
+                                   value="@Model.CitizenIdVerification.ExpiryDate?.ToString("dd/MM/yyyy")"
+                                   required />
                             <input id="CitizenExpiryDate" type="hidden" name="CitizenIdVerification.ExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />
+                            <div id="citizenExpiryError" class="kyc-client-error"></div>
                         </div>
                         <div class="col-12">
                             <label asp-for="CitizenIdVerification.PermanentAddress" class="form-label fw-semibold"></label>
-                            <input asp-for="CitizenIdVerification.PermanentAddress" class="form-control" autocomplete="street-address" required />
+                            <input asp-for="CitizenIdVerification.PermanentAddress"
+                                   class="form-control"
+                                   autocomplete="street-address"
+                                   minlength="5"
+                                   maxlength="500"
+                                   data-address-field
+                                   data-client-error-id="citizenAddressError"
+                                   required />
+                            <span asp-validation-for="CitizenIdVerification.PermanentAddress" id="citizenAddressError" class="kyc-client-error d-block"></span>
                         </div>
                     </div>
 
                     <div class="row g-3 mt-2">
                         <div class="col-md-6">
                             <label class="kyc-upload-card" data-upload-card>
-                                <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />
+                                <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="citizenFrontImageError" required />
                                 <img alt="Xem trước CCCD mặt trước" class="kyc-upload-preview" data-upload-preview />
                                 <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
                                 <strong>CCCD mặt trước</strong>
                                 <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
                                 <small>JPG, PNG, WEBP · tối đa 5 MB</small>
                             </label>
+                            <span asp-validation-for="CitizenIdVerification.FrontImage" id="citizenFrontImageError" class="kyc-client-error d-block"></span>
                         </div>
                         <div class="col-md-6">
                             <label class="kyc-upload-card" data-upload-card>
-                                <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />
+                                <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="citizenBackImageError" required />
                                 <img alt="Xem trước CCCD mặt sau" class="kyc-upload-preview" data-upload-preview />
                                 <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
                                 <strong>CCCD mặt sau</strong>
                                 <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
                                 <small>JPG, PNG, WEBP · tối đa 5 MB</small>
                             </label>
+                            <span asp-validation-for="CitizenIdVerification.BackImage" id="citizenBackImageError" class="kyc-client-error d-block"></span>
                         </div>
                     </div>
 
@@ -289,11 +348,21 @@
                     <div class="row g-3">
                         <div class="col-md-5">
                             <label asp-for="DrivingLicenseVerification.DocumentNumber" class="form-label fw-semibold"></label>
-                            <input asp-for="DrivingLicenseVerification.DocumentNumber" class="form-control" maxlength="20" autocomplete="off" required />
+                            <input asp-for="DrivingLicenseVerification.DocumentNumber"
+                                   class="form-control"
+                                   inputmode="text"
+                                   maxlength="12"
+                                   pattern="[A-Za-z0-9]{8,12}"
+                                   autocomplete="off"
+                                   data-license-number
+                                   data-client-error-id="licenseNumberError"
+                                   required />
+                            <div class="form-text">Nhập đúng số trên GPLX, từ 8 đến 12 ký tự chữ hoặc số.</div>
+                            <span asp-validation-for="DrivingLicenseVerification.DocumentNumber" id="licenseNumberError" class="kyc-client-error d-block"></span>
                         </div>
                         <div class="col-md-3">
                             <label asp-for="DrivingLicenseVerification.LicenseClass" class="form-label fw-semibold"></label>
-                            <select asp-for="DrivingLicenseVerification.LicenseClass" class="form-select" required>
+                            <select asp-for="DrivingLicenseVerification.LicenseClass" class="form-select" data-license-class data-client-error-id="licenseClassError" required>
                                 <option value="">-- Chọn hạng --</option>
                                 <option value="B">B</option>
                                 <option value="C1">C1</option>
@@ -310,34 +379,50 @@
                                 <option value="B1">B1</option>
                                 <option value="B2">B2</option>
                             </select>
+                            <span asp-validation-for="DrivingLicenseVerification.LicenseClass" id="licenseClassError" class="kyc-client-error d-block"></span>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold" for="licenseExpiryDisplay">Ngày hết hạn</label>
-                            <input id="licenseExpiryDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="LicenseExpiryDate" value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("dd/MM/yyyy")" required />
+                            <input id="licenseExpiryDisplay"
+                                   type="text"
+                                   class="form-control"
+                                   inputmode="numeric"
+                                   maxlength="10"
+                                   placeholder="dd/mm/yyyy"
+                                   data-vn-date
+                                   data-date-role="expiry"
+                                   data-document-label="GPLX"
+                                   data-date-target="LicenseExpiryDate"
+                                   data-client-error-id="licenseExpiryError"
+                                   value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("dd/MM/yyyy")"
+                                   required />
                             <input id="LicenseExpiryDate" type="hidden" name="DrivingLicenseVerification.ExpiryDate" value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />
+                            <div id="licenseExpiryError" class="kyc-client-error"></div>
                         </div>
                     </div>
 
                     <div class="row g-3 mt-2">
                         <div class="col-md-6">
                             <label class="kyc-upload-card" data-upload-card>
-                                <input asp-for="DrivingLicenseVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />
+                                <input asp-for="DrivingLicenseVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="licenseFrontImageError" required />
                                 <img alt="Xem trước GPLX mặt trước" class="kyc-upload-preview" data-upload-preview />
                                 <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
                                 <strong>GPLX mặt trước</strong>
                                 <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
                                 <small>JPG, PNG, WEBP · tối đa 5 MB</small>
                             </label>
+                            <span asp-validation-for="DrivingLicenseVerification.FrontImage" id="licenseFrontImageError" class="kyc-client-error d-block"></span>
                         </div>
                         <div class="col-md-6">
                             <label class="kyc-upload-card" data-upload-card>
-                                <input asp-for="DrivingLicenseVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />
+                                <input asp-for="DrivingLicenseVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="licenseBackImageError" required />
                                 <img alt="Xem trước GPLX mặt sau" class="kyc-upload-preview" data-upload-preview />
                                 <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
                                 <strong>GPLX mặt sau</strong>
                                 <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
                                 <small>JPG, PNG, WEBP · tối đa 5 MB</small>
                             </label>
+                            <span asp-validation-for="DrivingLicenseVerification.BackImage" id="licenseBackImageError" class="kyc-client-error d-block"></span>
                         </div>
                     </div>
                 </div>
@@ -345,20 +430,24 @@
 
             <section class="card border-primary shadow-sm mb-4 kyc-submit-card">
                 <div class="card-body p-4">
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" value="true" id="confirmSamePerson" name="ConfirmSamePerson" required />
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" value="true" id="confirmSamePerson" name="ConfirmSamePerson" data-confirm-same-person data-client-error-id="confirmSamePersonError" required />
                         <label class="form-check-label fw-semibold" for="confirmSamePerson">
                             Tôi xác nhận CCCD và GPLX trên thuộc cùng một người và thông tin cung cấp là chính xác.
                         </label>
                     </div>
+                    <div id="confirmSamePersonError" class="kyc-client-error mb-2"></div>
                     <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
                         <div>
                             <h3 class="h5 fw-bold mb-1">Gửi một hồ sơ duy nhất cho Quản trị viên</h3>
                             <p class="text-muted mb-0">Hệ thống chỉ tạo yêu cầu xác minh giấy tờ khi có đủ thông tin cần thiết và cả 4 ảnh. Quản trị viên duyệt hoặc yêu cầu cập nhật toàn bộ hồ sơ trong một lần.</p>
                         </div>
-                        <button class="btn btn-primary btn-lg flex-shrink-0" type="submit" data-loading-text="Đang gửi hồ sơ...">
-                            Gửi hồ sơ xác minh
-                        </button>
+                        <div class="text-lg-end">
+                            <button class="btn btn-primary btn-lg flex-shrink-0" type="submit" data-kyc-submit data-loading-text="Đang gửi hồ sơ..." disabled>
+                                Gửi hồ sơ xác minh
+                            </button>
+                            <small class="text-muted d-block mt-2" data-submit-hint>Vui lòng hoàn tất thông tin, chọn đủ 4 ảnh và tích xác nhận.</small>
+                        </div>
                     </div>
                 </div>
             </section>
