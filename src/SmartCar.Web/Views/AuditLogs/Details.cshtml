@@ -26,12 +26,19 @@
 
     string AuditBadgeClass(string action) => action switch
     {
-        "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "text-bg-danger",
-        "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "text-bg-success",
-        "ViewKycDocumentImage" => "text-bg-info",
-        "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "text-bg-primary",
-        "RequestResubmission" or "RequestUpdate" or "AddCharge" => "text-bg-warning",
-        _ => "text-bg-secondary"
+        "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "audit-action-danger",
+        "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "audit-action-success",
+        "ViewKycDocumentImage" => "audit-action-info",
+        "Submit" or "SubmitKycPackage" or "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "audit-action-primary",
+        "RequestResubmission" or "RequestUpdate" or "AddCharge" => "audit-action-warning",
+        _ => "audit-action-secondary"
+    };
+
+    string FriendlyIp(string? ip) => ip switch
+    {
+        null or "" => "Không ghi nhận",
+        "::1" or "127.0.0.1" => "Máy cục bộ",
+        _ => ip
     };
 
     var hasOldValues = !string.IsNullOrWhiteSpace(Model.OldValues);
@@ -64,12 +71,12 @@
     <section class="card border-0 shadow-sm audit-detail-summary mb-4">
         <div class="card-body p-4">
             <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
-                <span class="badge audit-action-badge @AuditBadgeClass(Model.Action)">@Model.Action.ToVietnameseAuditAction()</span>
+                <span class="audit-action-badge @AuditBadgeClass(Model.Action)">@Model.Action.ToVietnameseAuditAction()</span>
                 <span class="small text-muted">@Model.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm:ss") · Giờ Việt Nam (UTC+7)</span>
             </div>
 
             <div class="audit-description-block mb-4">
-                <span>Nội dung</span>
+                <span>Nội dung thao tác</span>
                 <p class="mb-0">@Model.Description.ToFriendlyAuditDescription()</p>
             </div>
 
@@ -79,7 +86,7 @@
                     <dd>@(Model.UserName ?? "Hệ thống")</dd>
                 </div>
                 <div>
-                    <dt>Đối tượng</dt>
+                    <dt>Dữ liệu liên quan</dt>
                     <dd>
                         @Model.EntityName.ToVietnameseEntity()
                         @if (showEntityId)
@@ -89,15 +96,19 @@
                     </dd>
                 </div>
                 <div>
-                    <dt>Địa chỉ IP</dt>
+                    <dt>Nơi thực hiện</dt>
                     <dd>
                         @if (string.IsNullOrWhiteSpace(Model.IpAddress))
                         {
                             <span class="text-muted">Không ghi nhận</span>
                         }
+                        else if (Model.IpAddress is "::1" or "127.0.0.1")
+                        {
+                            <span class="audit-ip-friendly" title="Địa chỉ kỹ thuật: @Model.IpAddress">Máy cục bộ</span>
+                        }
                         else
                         {
-                            <code>@Model.IpAddress</code>
+                            <span class="audit-ip-friendly">@FriendlyIp(Model.IpAddress)</span>
                         }
                     </dd>
                 </div>
@@ -105,23 +116,31 @@
 
             <details class="audit-tech-details mt-4">
                 <summary>Thông tin kỹ thuật</summary>
-                <dl class="audit-tech-list mb-0 mt-3">
+                <p class="small text-muted mt-2 mb-2">Dành cho việc kiểm tra hệ thống khi cần truy vết sâu hơn.</p>
+                <dl class="audit-tech-list mb-0">
                     <div>
                         <dt>Mã hành động</dt>
-                        <dd><code>@Model.Action</code></dd>
+                        <dd><code class="audit-tech-code">@Model.Action</code></dd>
                     </div>
                     <div>
-                        <dt>Loại đối tượng</dt>
-                        <dd><code>@Model.EntityName</code></dd>
+                        <dt>Loại dữ liệu</dt>
+                        <dd><code class="audit-tech-code">@Model.EntityName</code></dd>
                     </div>
                     <div>
-                        <dt>Mã đối tượng</dt>
-                        <dd><code>@(Model.EntityId ?? "Không ghi nhận")</code></dd>
+                        <dt>Mã bản ghi</dt>
+                        <dd><code class="audit-tech-code">@(Model.EntityId ?? "Không ghi nhận")</code></dd>
                     </div>
                     <div>
-                        <dt>User ID</dt>
-                        <dd><code>@(Model.UserId ?? "Không ghi nhận")</code></dd>
+                        <dt>Mã người dùng hệ thống</dt>
+                        <dd><code class="audit-tech-code">@(Model.UserId ?? "Không ghi nhận")</code></dd>
                     </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.IpAddress))
+                    {
+                        <div>
+                            <dt>Địa chỉ IP gốc</dt>
+                            <dd><code class="audit-tech-code">@Model.IpAddress</code></dd>
+                        </div>
+                    }
                 </dl>
             </details>
         </div>
@@ -129,7 +148,8 @@
 
     <section class="card border-0 shadow-sm audit-data-card">
         <div class="card-header bg-white border-0 px-4 pt-4 pb-2">
-            <h2 class="h5 fw-bold mb-1">Dữ liệu thay đổi</h2>
+            <h2 class="h5 fw-bold mb-1">Dữ liệu trước và sau thao tác</h2>
+            <p class="small text-muted mb-0">Chỉ hiển thị khi hệ thống có lưu lại dữ liệu để so sánh.</p>
         </div>
         <div class="card-body px-4 pt-2 pb-4">
             @if (!hasSnapshot)
@@ -138,7 +158,7 @@
                     <span class="audit-no-snapshot-icon" aria-hidden="true">i</span>
                     <div>
                         <strong>Không có dữ liệu trước/sau</strong>
-                        <p class="small text-muted mb-0">Thao tác này không lưu snapshot dữ liệu để so sánh.</p>
+                        <p class="small text-muted mb-0">Thao tác này không lưu bản chụp dữ liệu để so sánh.</p>
                     </div>
                 </div>
             }
