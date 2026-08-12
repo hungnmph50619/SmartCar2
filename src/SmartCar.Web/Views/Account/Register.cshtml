@@ -400,7 +400,7 @@
                                        inputmode="numeric"
                                        maxlength="10"
                                        pattern="[0-9]{10}"
-                                       oninput="this.value = this.value.replace(/\D/g, \'\').slice(0, 10)"
+                                       oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)"
                                        autocomplete="tel" />
                                 <div class="form-text">Nhập 10 chữ số, bắt đầu bằng 0.</div>
                                 <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
