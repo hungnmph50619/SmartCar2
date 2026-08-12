@@ -23,27 +23,34 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           path = Path('src/SmartCar.Web/Views/Account/Register.cshtml')
           text = path.read_text(encoding='utf-8-sig')
-          old = '''                                <input asp-for="PhoneNumber"
-                                       class="form-control"
-                                       placeholder="0912345678"
-                                       inputmode="tel"
-                                       autocomplete="tel" />
-                                <span asp-validation-for="PhoneNumber" class="text-danger small"></span>'''
-          new = '''                                <input asp-for="PhoneNumber"
-                                       class="form-control"
-                                       placeholder="0912345678"
-                                       inputmode="numeric"
-                                       maxlength="10"
-                                       pattern="[0-9]{10}"
-                                       oninput="this.value = this.value.replace(/\\D/g, '').slice(0, 10)"
-                                       autocomplete="tel" />
-                                <div class="form-text">Nhập 10 chữ số, bắt đầu bằng 0.</div>
-                                <span asp-validation-for="PhoneNumber" class="text-danger small"></span>'''
-          if old not in text:
-              raise SystemExit('Expected phone input block not found')
-          path.write_text(text.replace(old, new), encoding='utf-8')
+
+          pattern = re.compile(
+              r'(<input\s+asp-for="PhoneNumber"[\s\S]*?placeholder="0912345678"[\s\S]*?)inputmode="tel"([\s\S]*?)autocomplete="tel"\s*/>',
+              re.MULTILINE,
+          )
+
+          replacement = (
+              r'\1inputmode="numeric"\2'
+              r'maxlength="10"\n'
+              r'                                       pattern="[0-9]{10}"\n'
+              r'                                       oninput="this.value = this.value.replace(/\\D/g, \'\').slice(0, 10)"\n'
+              r'                                       autocomplete="tel" />'
+          )
+
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one phone input match, found {count}')
+
+          validation = '<span asp-validation-for="PhoneNumber" class="text-danger small"></span>'
+          helper = '<div class="form-text">Nhập 10 chữ số, bắt đầu bằng 0.</div>\n                                '
+          if helper.strip() not in updated:
+              updated = updated.replace(validation, helper + validation, 1)
+
+          path.write_text(updated, encoding='utf-8')
           PY
 
       - name: Check diff
