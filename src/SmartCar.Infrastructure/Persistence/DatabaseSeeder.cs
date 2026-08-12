@@ -170,26 +170,6 @@ public static class DatabaseSeeder
                     [LicenseClass] = {demoLicenseClass}
                 WHERE [CustomerDocumentId] IN ({drivingLicense.CustomerDocumentId}, {drivingLicenseBack.CustomerDocumentId})");
         }
-
-        if (!await dbContext.Promotions.AnyAsync())
-        {
-            dbContext.Promotions.Add(new Promotion
-            {
-                Code = "WELCOME10",
-                Name = "Chào mừng khách hàng mới",
-                PromotionType = PromotionType.Percentage,
-                Value = 10,
-                MaximumDiscount = 300_000m,
-                MinimumRentalAmount = 500_000m,
-                StartAt = DateTime.Today.AddMonths(-1),
-                EndAt = DateTime.Today.AddYears(2),
-                UsageLimit = 500,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await dbContext.SaveChangesAsync();
-        }
     }
 
     private static async Task EnsureDemoDocumentAsync(
