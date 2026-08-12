@@ -4,6 +4,11 @@
     var unreadRegularCount = Model.Count(item =>
         !item.IsRead &&
         !item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
+    var pendingWorkCount = Model.Count(item =>
+        !item.IsRead &&
+        item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
+    var hasKycWorkHistory = Model.Any(item =>
+        item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
 
     string FriendlyNotificationText(string value) => value
         .Replace("Hồ sơ KYC đã được xác minh", "Hồ sơ giấy tờ đã được duyệt", StringComparison.Ordinal)
@@ -25,7 +30,7 @@
         justify-content: space-between;
         align-items: flex-start;
         gap: 1rem;
-        margin-bottom: 1.25rem;
+        margin-bottom: 1rem;
     }
 
     .notifications-header h1 {
@@ -45,14 +50,14 @@
     .notifications-list {
         display: flex;
         flex-direction: column;
-        gap: .75rem;
+        gap: .65rem;
     }
 
     .notification-card {
         position: relative;
         display: flex;
-        gap: 1rem;
-        padding: 1rem 1.15rem;
+        gap: .85rem;
+        padding: .85rem 1rem;
         border: 1px solid #e5e7eb;
         border-radius: 14px;
         background: #fff;
@@ -71,15 +76,19 @@
         border-color: #cfe0ff;
     }
 
+    .notification-card-handled {
+        background: #fbfcfe;
+    }
+
     .notification-icon {
-        flex: 0 0 42px;
-        width: 42px;
-        height: 42px;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
         border-radius: 50%;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 800;
         line-height: 1;
     }
@@ -123,17 +132,17 @@
     }
 
     .notification-message {
-        margin: .35rem 0 0;
+        margin: .25rem 0 0;
         color: #465166;
-        line-height: 1.5;
+        line-height: 1.45;
     }
 
     .notification-meta {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: .65rem;
-        margin-top: .65rem;
+        gap: .55rem;
+        margin-top: .45rem;
         color: #7b8495;
         font-size: .82rem;
     }
@@ -142,7 +151,7 @@
         display: flex;
         align-items: center;
         gap: .5rem;
-        margin-top: .8rem;
+        margin-top: .6rem;
     }
 
     .notification-actions form {
@@ -152,8 +161,8 @@
     .notification-unread-dot {
         position: absolute;
         z-index: 2;
-        top: 1.05rem;
-        right: 1.05rem;
+        top: 1rem;
+        right: 1rem;
         width: 9px;
         height: 9px;
         border-radius: 50%;
@@ -165,10 +174,12 @@
     .notification-status {
         display: inline-flex;
         align-items: center;
+        min-height: 22px;
         border-radius: 999px;
-        padding: .16rem .5rem;
+        padding: .18rem .55rem;
         font-size: .72rem;
         font-weight: 700;
+        line-height: 1.15;
     }
 
     .notification-status-success {
@@ -207,8 +218,8 @@
         }
 
         .notification-card {
-            padding: .9rem;
-            gap: .75rem;
+            padding: .8rem;
+            gap: .7rem;
         }
 
         .notification-icon {
@@ -224,13 +235,21 @@
         <div>
             <h1 class="h3 mb-1">Thông báo</h1>
             <p class="text-muted mb-0">
-                @if (unreadRegularCount > 0)
+                @if (pendingWorkCount > 0 && unreadRegularCount > 0)
+                {
+                    <span><strong>@pendingWorkCount</strong> hồ sơ cần xử lý · @unreadRegularCount thông báo chưa đọc.</span>
+                }
+                else if (pendingWorkCount > 0)
+                {
+                    <span><strong>@pendingWorkCount</strong> hồ sơ xác minh đang chờ xử lý.</span>
+                }
+                else if (unreadRegularCount > 0)
                 {
                     <span>@unreadRegularCount thông báo chưa đọc.</span>
                 }
                 else
                 {
-                    <span>Bạn đã đọc tất cả thông báo.</span>
+                    <span>Bạn đã xử lý và đọc hết các thông báo hiện tại.</span>
                 }
             </p>
         </div>
@@ -246,10 +265,10 @@
         }
     </div>
 
-    @if (User.IsInRole(SmartCar.Domain.Constants.RoleNames.Admin))
+    @if (User.IsInRole(SmartCar.Domain.Constants.RoleNames.Admin) && hasKycWorkHistory)
     {
         <div class="alert notifications-admin-note py-2 px-3 mb-3">
-            <strong>Lưu ý:</strong> mục <strong>Hồ sơ xác minh chờ duyệt</strong> là công việc cần xử lý. Mục này chỉ được đóng sau khi bạn duyệt hồ sơ hoặc yêu cầu khách hàng cập nhật.
+            <strong>Hồ sơ chờ duyệt</strong> là công việc quản trị; trạng thái chỉ chuyển sang <strong>Đã xử lý</strong> sau khi bạn duyệt hoặc yêu cầu khách hàng cập nhật.
         </div>
     }
 
@@ -294,17 +313,19 @@
                                         User.IsInRole(SmartCar.Domain.Constants.RoleNames.Customer);
 
             var toneClass = isKycAction
-                ? "notification-tone-work"
+                ? (item.IsRead ? "notification-tone-success" : "notification-tone-work")
                 : isNeedsUpdate
                     ? "notification-tone-warning"
                     : isApproved
                         ? "notification-tone-success"
                         : "notification-tone-info";
-            var iconText = isKycAction || isNeedsUpdate
-                ? "!"
-                : isApproved
-                    ? "✓"
-                    : "i";
+            var iconText = isKycAction
+                ? (item.IsRead ? "✓" : "!")
+                : isNeedsUpdate
+                    ? "!"
+                    : isApproved
+                        ? "✓"
+                        : "i";
             var statusText = isKycAction
                 ? (item.IsRead ? "Đã xử lý" : "Cần xử lý")
                 : isNeedsUpdate
@@ -312,13 +333,15 @@
                     : isApproved
                         ? "Đã duyệt"
                         : (!item.IsRead ? "Mới" : string.Empty);
-            var statusClass = isKycAction || isNeedsUpdate
-                ? "notification-status-warning"
-                : isApproved
-                    ? "notification-status-success"
-                    : "notification-status-info";
+            var statusClass = isKycAction
+                ? (item.IsRead ? "notification-status-success" : "notification-status-warning")
+                : isNeedsUpdate
+                    ? "notification-status-warning"
+                    : isApproved
+                        ? "notification-status-success"
+                        : "notification-status-info";
 
-            <article class="notification-card @toneClass @(item.IsRead ? string.Empty : "notification-card-unread")">
+            <article class="notification-card @toneClass @(item.IsRead ? string.Empty : "notification-card-unread") @(isKycAction && item.IsRead ? "notification-card-handled" : string.Empty)">
                 <div class="notification-icon" aria-hidden="true">@iconText</div>
 
                 <div class="notification-body">
@@ -335,32 +358,45 @@
                         <span>@item.CreatedAt.ToLocalTime().ToString("HH:mm · dd/MM/yyyy")</span>
                     </div>
 
-                    <div class="notification-actions">
-                        @if (isKycAction && !item.IsRead)
-                        {
-                            <form asp-action="OpenKyc" method="post">
-                                <input type="hidden" name="id" value="@item.NotificationId" />
-                                <input type="hidden" name="customerId" value="@kycCustomerId" />
-                                <button class="btn btn-sm btn-primary stretched-link" type="submit">Mở hồ sơ để xử lý →</button>
-                            </form>
-                        }
-                        else if (opensProfileDocuments)
-                        {
-                            <form asp-action="OpenProfileDocuments" method="post">
-                                <input type="hidden" name="id" value="@item.NotificationId" />
-                                <button class="btn btn-sm @(isNeedsUpdate ? "btn-primary" : "btn-outline-primary") stretched-link" type="submit">
-                                    @(isNeedsUpdate ? "Cập nhật hồ sơ →" : "Xem hồ sơ →")
-                                </button>
-                            </form>
-                        }
-                        else if (!item.IsRead && !isKycAction)
-                        {
-                            <form asp-action="MarkRead" method="post">
-                                <input type="hidden" name="id" value="@item.NotificationId" />
-                                <button class="btn btn-sm btn-link text-decoration-none px-0" type="submit">Đánh dấu đã đọc</button>
-                            </form>
-                        }
-                    </div>
+                    @if (isKycAction || opensProfileDocuments || (!item.IsRead && !isKycAction))
+                    {
+                        <div class="notification-actions">
+                            @if (isKycAction && !item.IsRead)
+                            {
+                                <form asp-action="OpenKyc" method="post">
+                                    <input type="hidden" name="id" value="@item.NotificationId" />
+                                    <input type="hidden" name="customerId" value="@kycCustomerId" />
+                                    <button class="btn btn-sm btn-primary stretched-link" type="submit">Xử lý hồ sơ →</button>
+                                </form>
+                            }
+                            else if (isKycAction && item.IsRead)
+                            {
+                                <a class="btn btn-sm btn-outline-secondary stretched-link"
+                                   asp-controller="AdminCustomers"
+                                   asp-action="Details"
+                                   asp-route-id="@kycCustomerId"
+                                   asp-route-tab="documents">
+                                    Xem hồ sơ giấy tờ →
+                                </a>
+                            }
+                            else if (opensProfileDocuments)
+                            {
+                                <form asp-action="OpenProfileDocuments" method="post">
+                                    <input type="hidden" name="id" value="@item.NotificationId" />
+                                    <button class="btn btn-sm @(isNeedsUpdate ? "btn-primary" : "btn-outline-primary") stretched-link" type="submit">
+                                        @(isNeedsUpdate ? "Cập nhật hồ sơ →" : "Xem hồ sơ →")
+                                    </button>
+                                </form>
+                            }
+                            else if (!item.IsRead && !isKycAction)
+                            {
+                                <form asp-action="MarkRead" method="post">
+                                    <input type="hidden" name="id" value="@item.NotificationId" />
+                                    <button class="btn btn-sm btn-link text-decoration-none px-0" type="submit">Đánh dấu đã đọc</button>
+                                </form>
+                            }
+                        </div>
+                    }
                 </div>
 
                 @if (!item.IsRead && !isKycAction)
