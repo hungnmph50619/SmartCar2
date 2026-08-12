@@ -93,31 +93,6 @@ internal sealed class PaymentService : IPaymentService
                 : OperationResult.Failure("Không tìm thấy khoản thanh toán phù hợp.");
         }
 
-        if (paymentType == PaymentType.Rental && !string.IsNullOrWhiteSpace(booking.PromotionCode))
-        {
-            var now = DateTime.Now;
-            var promotion = await _dbContext.Promotions.FirstOrDefaultAsync(item =>
-                item.Code == booking.PromotionCode &&
-                item.IsActive &&
-                item.StartAt <= now &&
-                item.EndAt >= now,
-                cancellationToken);
-
-            if (promotion is null)
-            {
-                return OperationResult.Failure(
-                    "Mã khuyến mãi không còn hiệu lực. Vui lòng gỡ mã hoặc chọn mã khác.");
-            }
-
-            if (promotion.UsageLimit.HasValue && promotion.UsedCount >= promotion.UsageLimit.Value)
-            {
-                return OperationResult.Failure(
-                    "Mã khuyến mãi vừa hết lượt sử dụng. Vui lòng gỡ mã hoặc chọn mã khác.");
-            }
-
-            promotion.UsedCount++;
-        }
-
         payment.Status = PaymentStatus.Paid;
         payment.PaidAt = DateTime.UtcNow;
         payment.TransactionCode = $"SC{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}";
