@@ -1,0 +1,364 @@
+name: Patch document validation once
+
+on:
+  push:
+    branches:
+      - hung-dev
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hung-dev
+          fetch-depth: 0
+
+      - name: Patch document verification UI
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/SmartCar.Web/Views/Profile/_DocumentsTab.cshtml')
+          text = path.read_text(encoding='utf-8-sig')
+
+          def replace_once(old, new, label):
+              global text
+              if old not in text:
+                  raise SystemExit(f'Expected block not found: {label}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+          '''    static string BadgeClass(string status) => status switch
+              {
+                  "Đã xác minh" => "bg-success",
+                  "Chờ xác minh" => "bg-warning text-dark",
+                  "Cần cập nhật" => "bg-danger",
+                  _ => "bg-secondary"
+              };
+
+              var citizenFront''',
+          '''    static string BadgeClass(string status) => status switch
+              {
+                  "Đã xác minh" => "bg-success",
+                  "Chờ xác minh" => "bg-warning text-dark",
+                  "Cần cập nhật" => "bg-danger",
+                  _ => "bg-secondary"
+              };
+
+              static string StepClass(string status) => status switch
+              {
+                  "Đã xác minh" => "is-done",
+                  "Chờ xác minh" => "is-pending",
+                  "Cần cập nhật" => "is-error",
+                  _ => string.Empty
+              };
+
+              var citizenFront''',
+          'step helper')
+
+          replace_once(
+          '''    <div class="kyc-stepper mb-4" aria-label="Tiến trình xác minh danh tính">
+                  <div class="kyc-step @(citizenStatus != "Chưa gửi" ? "is-done" : "is-active")">
+                      <span class="kyc-step-number">1</span>
+                      <span><strong>CCCD</strong><small>@citizenStatus</small></span>
+                  </div>
+                  <div class="kyc-step-line"></div>
+                  <div class="kyc-step @(licenseStatus != "Chưa gửi" ? "is-done" : citizenStatus != "Chưa gửi" ? "is-active" : string.Empty)">
+                      <span class="kyc-step-number">2</span>
+                      <span><strong>GPLX</strong><small>@licenseStatus</small></span>
+                  </div>
+                  <div class="kyc-step-line"></div>
+                  <div class="kyc-step @(fullyVerified ? "is-done" : allPending ? "is-active" : string.Empty)">
+                      <span class="kyc-step-number">3</span>
+                      <span><strong>Hoàn tất</strong><small>@overallStatus</small></span>
+                  </div>
+              </div>''',
+          '''    <div class="kyc-stepper mb-4" aria-label="Tiến trình xác minh danh tính">
+                  <div class="kyc-step @(citizenStatus == "Chưa gửi" ? "is-active" : StepClass(citizenStatus))">
+                      <span class="kyc-step-number">1</span>
+                      <span><strong>CCCD</strong><small>@citizenStatus</small></span>
+                  </div>
+                  <div class="kyc-step-line"></div>
+                  <div class="kyc-step @(licenseStatus == "Chưa gửi" && citizenStatus != "Chưa gửi" ? "is-active" : StepClass(licenseStatus))">
+                      <span class="kyc-step-number">2</span>
+                      <span><strong>GPLX</strong><small>@licenseStatus</small></span>
+                  </div>
+                  <div class="kyc-step-line"></div>
+                  <div class="kyc-step @StepClass(overallStatus)">
+                      <span class="kyc-step-number">3</span>
+                      <span><strong>Hoàn tất</strong><small>@overallStatus</small></span>
+                  </div>
+              </div>''',
+          'stepper')
+
+          replace_once(
+          '''                            <label asp-for="CitizenIdVerification.FullNameOnDocument" class="form-label fw-semibold"></label>
+                                      <input asp-for="CitizenIdVerification.FullNameOnDocument" class="form-control" autocomplete="name" required />''',
+          '''                            <label asp-for="CitizenIdVerification.FullNameOnDocument" class="form-label fw-semibold"></label>
+                                      <input asp-for="CitizenIdVerification.FullNameOnDocument"
+                                             class="form-control"
+                                             autocomplete="name"
+                                             maxlength="100"
+                                             data-person-name
+                                             data-client-error-id="citizenNameError"
+                                             required />
+                                      <span asp-validation-for="CitizenIdVerification.FullNameOnDocument" id="citizenNameError" class="kyc-client-error d-block"></span>''',
+          'citizen name')
+
+          replace_once(
+          '''                            <label asp-for="CitizenIdVerification.DocumentNumber" class="form-label fw-semibold"></label>
+                                      <input asp-for="CitizenIdVerification.DocumentNumber" class="form-control" inputmode="numeric" maxlength="12" autocomplete="off" required />''',
+          '''                            <label asp-for="CitizenIdVerification.DocumentNumber" class="form-label fw-semibold"></label>
+                                      <input asp-for="CitizenIdVerification.DocumentNumber"
+                                             class="form-control"
+                                             inputmode="numeric"
+                                             maxlength="12"
+                                             pattern="[0-9]{12}"
+                                             autocomplete="off"
+                                             data-citizen-number
+                                             data-client-error-id="citizenNumberError"
+                                             required />
+                                      <span asp-validation-for="CitizenIdVerification.DocumentNumber" id="citizenNumberError" class="kyc-client-error d-block"></span>''',
+          'citizen number')
+
+          replace_once(
+          '''                            <input id="citizenDobDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="CitizenDateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("dd/MM/yyyy")" required />
+                                      <input id="CitizenDateOfBirth" type="hidden" name="CitizenIdVerification.DateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("yyyy-MM-dd")" />''',
+          '''                            <input id="citizenDobDisplay"
+                                             type="text"
+                                             class="form-control"
+                                             inputmode="numeric"
+                                             maxlength="10"
+                                             placeholder="dd/mm/yyyy"
+                                             data-vn-date
+                                             data-date-role="dob"
+                                             data-date-target="CitizenDateOfBirth"
+                                             data-client-error-id="citizenDobError"
+                                             value="@Model.CitizenIdVerification.DateOfBirth?.ToString("dd/MM/yyyy")"
+                                             required />
+                                      <input id="CitizenDateOfBirth" type="hidden" name="CitizenIdVerification.DateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("yyyy-MM-dd")" />
+                                      <div id="citizenDobError" class="kyc-client-error"></div>''',
+          'citizen dob')
+
+          replace_once(
+          '''                            <input id="citizenExpiryDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="CitizenExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("dd/MM/yyyy")" required />
+                                      <input id="CitizenExpiryDate" type="hidden" name="CitizenIdVerification.ExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />''',
+          '''                            <input id="citizenExpiryDisplay"
+                                             type="text"
+                                             class="form-control"
+                                             inputmode="numeric"
+                                             maxlength="10"
+                                             placeholder="dd/mm/yyyy"
+                                             data-vn-date
+                                             data-date-role="expiry"
+                                             data-document-label="CCCD"
+                                             data-date-target="CitizenExpiryDate"
+                                             data-client-error-id="citizenExpiryError"
+                                             value="@Model.CitizenIdVerification.ExpiryDate?.ToString("dd/MM/yyyy")"
+                                             required />
+                                      <input id="CitizenExpiryDate" type="hidden" name="CitizenIdVerification.ExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />
+                                      <div id="citizenExpiryError" class="kyc-client-error"></div>''',
+          'citizen expiry')
+
+          replace_once(
+          '''                            <label asp-for="CitizenIdVerification.PermanentAddress" class="form-label fw-semibold"></label>
+                                      <input asp-for="CitizenIdVerification.PermanentAddress" class="form-control" autocomplete="street-address" required />''',
+          '''                            <label asp-for="CitizenIdVerification.PermanentAddress" class="form-label fw-semibold"></label>
+                                      <input asp-for="CitizenIdVerification.PermanentAddress"
+                                             class="form-control"
+                                             autocomplete="street-address"
+                                             minlength="5"
+                                             maxlength="500"
+                                             data-address-field
+                                             data-client-error-id="citizenAddressError"
+                                             required />
+                                      <span asp-validation-for="CitizenIdVerification.PermanentAddress" id="citizenAddressError" class="kyc-client-error d-block"></span>''',
+          'citizen address')
+
+          replace_once(
+          '''                                <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />''',
+          '''                                <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="citizenFrontImageError" required />''',
+          'citizen front input')
+          replace_once(
+          '''                            </label>
+                                  </div>
+                                  <div class="col-md-6">
+                                      <label class="kyc-upload-card" data-upload-card>
+                                          <input asp-for="CitizenIdVerification.BackImage"''',
+          '''                            </label>
+                                      <span asp-validation-for="CitizenIdVerification.FrontImage" id="citizenFrontImageError" class="kyc-client-error d-block"></span>
+                                  </div>
+                                  <div class="col-md-6">
+                                      <label class="kyc-upload-card" data-upload-card>
+                                          <input asp-for="CitizenIdVerification.BackImage"''',
+          'citizen front error')
+          replace_once(
+          '''                                <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />''',
+          '''                                <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="citizenBackImageError" required />''',
+          'citizen back input')
+          replace_once(
+          '''                                <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                                      </label>
+                                  </div>
+                              </div>
+
+                              <div class="d-flex justify-content-end mt-4">''',
+          '''                                <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                                      </label>
+                                      <span asp-validation-for="CitizenIdVerification.BackImage" id="citizenBackImageError" class="kyc-client-error d-block"></span>
+                                  </div>
+                              </div>
+
+                              <div class="d-flex justify-content-end mt-4">''',
+          'citizen back error')
+
+          replace_once(
+          '''                            <label asp-for="DrivingLicenseVerification.DocumentNumber" class="form-label fw-semibold"></label>
+                                      <input asp-for="DrivingLicenseVerification.DocumentNumber" class="form-control" maxlength="20" autocomplete="off" required />''',
+          '''                            <label asp-for="DrivingLicenseVerification.DocumentNumber" class="form-label fw-semibold"></label>
+                                      <input asp-for="DrivingLicenseVerification.DocumentNumber"
+                                             class="form-control"
+                                             inputmode="text"
+                                             maxlength="12"
+                                             pattern="[A-Za-z0-9]{8,12}"
+                                             autocomplete="off"
+                                             data-license-number
+                                             data-client-error-id="licenseNumberError"
+                                             required />
+                                      <div class="form-text">Nhập đúng số trên GPLX, từ 8 đến 12 ký tự chữ hoặc số.</div>
+                                      <span asp-validation-for="DrivingLicenseVerification.DocumentNumber" id="licenseNumberError" class="kyc-client-error d-block"></span>''',
+          'license number')
+
+          replace_once(
+          '''                            <select asp-for="DrivingLicenseVerification.LicenseClass" class="form-select" required>''',
+          '''                            <select asp-for="DrivingLicenseVerification.LicenseClass" class="form-select" data-license-class data-client-error-id="licenseClassError" required>''',
+          'license class select')
+          replace_once(
+          '''                                <option value="B2">B2</option>
+                                      </select>
+                                  </div>''',
+          '''                                <option value="B2">B2</option>
+                                      </select>
+                                      <span asp-validation-for="DrivingLicenseVerification.LicenseClass" id="licenseClassError" class="kyc-client-error d-block"></span>
+                                  </div>''',
+          'license class error')
+
+          replace_once(
+          '''                            <input id="licenseExpiryDisplay" type="text" class="form-control" inputmode="numeric" placeholder="dd/mm/yyyy" data-vn-date data-date-target="LicenseExpiryDate" value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("dd/MM/yyyy")" required />
+                                      <input id="LicenseExpiryDate" type="hidden" name="DrivingLicenseVerification.ExpiryDate" value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />''',
+          '''                            <input id="licenseExpiryDisplay"
+                                             type="text"
+                                             class="form-control"
+                                             inputmode="numeric"
+                                             maxlength="10"
+                                             placeholder="dd/mm/yyyy"
+                                             data-vn-date
+                                             data-date-role="expiry"
+                                             data-document-label="GPLX"
+                                             data-date-target="LicenseExpiryDate"
+                                             data-client-error-id="licenseExpiryError"
+                                             value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("dd/MM/yyyy")"
+                                             required />
+                                      <input id="LicenseExpiryDate" type="hidden" name="DrivingLicenseVerification.ExpiryDate" value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />
+                                      <div id="licenseExpiryError" class="kyc-client-error"></div>''',
+          'license expiry')
+
+          replace_once(
+          '''                                <input asp-for="DrivingLicenseVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />''',
+          '''                                <input asp-for="DrivingLicenseVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="licenseFrontImageError" required />''',
+          'license front input')
+          replace_once(
+          '''                            </label>
+                                  </div>
+                                  <div class="col-md-6">
+                                      <label class="kyc-upload-card" data-upload-card>
+                                          <input asp-for="DrivingLicenseVerification.BackImage"''',
+          '''                            </label>
+                                      <span asp-validation-for="DrivingLicenseVerification.FrontImage" id="licenseFrontImageError" class="kyc-client-error d-block"></span>
+                                  </div>
+                                  <div class="col-md-6">
+                                      <label class="kyc-upload-card" data-upload-card>
+                                          <input asp-for="DrivingLicenseVerification.BackImage"''',
+          'license front error')
+          replace_once(
+          '''                                <input asp-for="DrivingLicenseVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />''',
+          '''                                <input asp-for="DrivingLicenseVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="licenseBackImageError" required />''',
+          'license back input')
+          replace_once(
+          '''                                <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                                      </label>
+                                  </div>
+                              </div>
+                          </div>
+                      </section>''',
+          '''                                <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                                      </label>
+                                      <span asp-validation-for="DrivingLicenseVerification.BackImage" id="licenseBackImageError" class="kyc-client-error d-block"></span>
+                                  </div>
+                              </div>
+                          </div>
+                      </section>''',
+          'license back error')
+
+          replace_once(
+          '''                    <div class="form-check mb-3">
+                                  <input class="form-check-input" type="checkbox" value="true" id="confirmSamePerson" name="ConfirmSamePerson" required />
+                                  <label class="form-check-label fw-semibold" for="confirmSamePerson">
+                                      Tôi xác nhận CCCD và GPLX trên thuộc cùng một người và thông tin cung cấp là chính xác.
+                                  </label>
+                              </div>''',
+          '''                    <div class="form-check mb-2">
+                                  <input class="form-check-input" type="checkbox" value="true" id="confirmSamePerson" name="ConfirmSamePerson" data-confirm-same-person data-client-error-id="confirmSamePersonError" required />
+                                  <label class="form-check-label fw-semibold" for="confirmSamePerson">
+                                      Tôi xác nhận CCCD và GPLX trên thuộc cùng một người và thông tin cung cấp là chính xác.
+                                  </label>
+                              </div>
+                              <div id="confirmSamePersonError" class="kyc-client-error mb-2"></div>''',
+          'confirmation')
+
+          replace_once(
+          '''                        <button class="btn btn-primary btn-lg flex-shrink-0" type="submit" data-loading-text="Đang gửi hồ sơ...">
+                                      Gửi hồ sơ xác minh
+                                  </button>''',
+          '''                        <div class="text-lg-end">
+                                      <button class="btn btn-primary btn-lg flex-shrink-0" type="submit" data-kyc-submit data-loading-text="Đang gửi hồ sơ..." disabled>
+                                          Gửi hồ sơ xác minh
+                                      </button>
+                                      <small class="text-muted d-block mt-2" data-submit-hint>Vui lòng hoàn tất thông tin, chọn đủ 4 ảnh và tích xác nhận.</small>
+                                  </div>''',
+          'submit button')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Check diff
+        run: git diff --check
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore SmartCar.sln
+
+      - name: Build
+        run: dotnet build SmartCar.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test SmartCar.sln --configuration Release --no-build
+
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/SmartCar.Web/Views/Profile/_DocumentsTab.cshtml
+          git commit -m "Improve document verification form UX"
+          git push origin HEAD:hung-dev
