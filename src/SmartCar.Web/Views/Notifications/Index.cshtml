@@ -95,7 +95,8 @@
         background: #fff4df;
     }
 
-    .notification-tone-info .notification-icon {
+    .notification-tone-info .notification-icon,
+    .notification-icon.notification-tone-info {
         color: #1967d2;
         background: #eaf2ff;
     }
@@ -138,8 +139,6 @@
     }
 
     .notification-actions {
-        position: relative;
-        z-index: 2;
         display: flex;
         align-items: center;
         gap: .5rem;
@@ -152,6 +151,7 @@
 
     .notification-unread-dot {
         position: absolute;
+        z-index: 2;
         top: 1.05rem;
         right: 1.05rem;
         width: 9px;
@@ -159,6 +159,7 @@
         border-radius: 50%;
         background: #0d6efd;
         box-shadow: 0 0 0 3px #e8f1ff;
+        pointer-events: none;
     }
 
     .notification-status {
