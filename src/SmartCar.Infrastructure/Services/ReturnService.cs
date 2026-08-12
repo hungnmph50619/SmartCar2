@@ -275,7 +275,7 @@ internal sealed class ReturnService : IReturnService
             .SumAsync(charge => (decimal?)charge.Amount, cancellationToken) ?? 0;
         booking.TotalAmount = Math.Max(
             0,
-            booking.RentalAmount - booking.DiscountAmount + booking.AdditionalAmount);
+            booking.RentalAmount + booking.AdditionalAmount);
 
         var pendingPayment = booking.Payments.FirstOrDefault(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
