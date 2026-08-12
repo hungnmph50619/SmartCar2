@@ -1,55 +1,505 @@
 @model IReadOnlyList<SmartCar.Application.Features.Bookings.BookingListItemDto>
+@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Đơn thuê của tôi";
+
+    string StatusGroup(BookingStatus status) => status switch
+    {
+        BookingStatus.PendingConfirmation => "pending",
+        BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup => "confirmed",
+        BookingStatus.Rented or BookingStatus.PendingInspection => "active",
+        BookingStatus.Completed => "completed",
+        BookingStatus.Rejected or BookingStatus.Cancelled or BookingStatus.NoShow => "cancelled",
+        _ => "other"
+    };
+
+    string StatusClass(BookingStatus status) => status switch
+    {
+        BookingStatus.PendingConfirmation => "booking-status-warning",
+        BookingStatus.PendingPayment => "booking-status-warning",
+        BookingStatus.Paid => "booking-status-info",
+        BookingStatus.ReadyForPickup => "booking-status-info",
+        BookingStatus.Rented => "booking-status-success",
+        BookingStatus.PendingInspection => "booking-status-warning",
+        BookingStatus.Completed => "booking-status-success",
+        BookingStatus.Rejected => "booking-status-danger",
+        BookingStatus.Cancelled => "booking-status-danger",
+        BookingStatus.NoShow => "booking-status-danger",
+        _ => "booking-status-neutral"
+    };
+
+    var pendingCount = Model.Count(item => StatusGroup(item.Status) == "pending");
+    var confirmedCount = Model.Count(item => StatusGroup(item.Status) == "confirmed");
+    var activeCount = Model.Count(item => StatusGroup(item.Status) == "active");
+    var completedCount = Model.Count(item => StatusGroup(item.Status) == "completed");
+    var cancelledCount = Model.Count(item => StatusGroup(item.Status) == "cancelled");
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h1 class="h3 mb-1">Đơn thuê của tôi</h1>
-        <p class="text-muted mb-0">Theo dõi toàn bộ yêu cầu và lịch sử thuê xe.</p>
-    </div>
-    <a class="btn btn-primary" asp-controller="Vehicles" asp-action="Index">Tìm xe</a>
-</div>
+<style>
+    .my-bookings-page {
+        max-width: 1040px;
+        margin: 0 auto;
+    }
 
-@if (Model.Count == 0)
-{
-    <div class="alert alert-info">Bạn chưa có đơn thuê nào.</div>
-}
-else
-{
-    <div class="table-responsive">
-    <table class="table table-bordered align-middle">
-        <thead>
-            <tr>
-                <th>Mã đơn</th>
-                <th>Xe</th>
-                <th>Thời gian thuê</th>
-                <th>Tổng tiền</th>
-                <th>Trạng thái</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-        @foreach (var booking in Model)
+    .my-bookings-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .my-bookings-header h1 {
+        font-weight: 700;
+        letter-spacing: -.02em;
+    }
+
+    .my-bookings-empty {
+        max-width: 680px;
+        margin: 4rem auto 2rem;
+        padding: 3rem 2rem;
+        text-align: center;
+        border: 1px solid #dce5f0;
+        border-radius: 20px;
+        background: #fff;
+        box-shadow: 0 12px 34px rgba(15, 23, 42, .06);
+    }
+
+    .my-bookings-empty-icon {
+        width: 72px;
+        height: 72px;
+        margin: 0 auto 1.25rem;
+        display: grid;
+        place-items: center;
+        border-radius: 20px;
+        color: #0d6efd;
+        background: #edf5ff;
+    }
+
+    .my-bookings-empty-icon svg {
+        width: 38px;
+        height: 38px;
+    }
+
+    .my-bookings-empty h2 {
+        margin-bottom: .5rem;
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #162033;
+    }
+
+    .my-bookings-empty p {
+        max-width: 470px;
+        margin: 0 auto 1.5rem;
+        color: #6b7280;
+        line-height: 1.6;
+    }
+
+    .booking-filters {
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+        padding-bottom: .35rem;
+        margin-bottom: 1.25rem;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .booking-filter {
+        flex: 0 0 auto;
+        border: 1px solid #dbe2eb;
+        border-radius: 999px;
+        padding: .48rem .8rem;
+        color: #49566a;
+        background: #fff;
+        font-size: .86rem;
+        font-weight: 600;
+        transition: all .16s ease;
+    }
+
+    .booking-filter:hover {
+        border-color: #9ec3ff;
+        color: #0d6efd;
+        background: #f7fbff;
+    }
+
+    .booking-filter.active {
+        border-color: #0d6efd;
+        color: #fff;
+        background: #0d6efd;
+        box-shadow: 0 5px 14px rgba(13, 110, 253, .18);
+    }
+
+    .booking-filter-count {
+        margin-left: .3rem;
+        opacity: .82;
+        font-size: .78rem;
+    }
+
+    .booking-card-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .booking-card {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr) auto;
+        gap: 1.15rem;
+        align-items: stretch;
+        padding: 1rem;
+        border: 1px solid #dfe6ef;
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: 0 7px 22px rgba(15, 23, 42, .045);
+        transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    .booking-card:hover {
+        border-color: #c5d6ee;
+        box-shadow: 0 11px 28px rgba(15, 23, 42, .075);
+        transform: translateY(-1px);
+    }
+
+    .booking-image-wrap {
+        min-height: 128px;
+        overflow: hidden;
+        border-radius: 13px;
+        background: linear-gradient(145deg, #edf4ff, #f6f8fb);
+    }
+
+    .booking-image {
+        width: 100%;
+        height: 100%;
+        min-height: 128px;
+        object-fit: cover;
+        display: block;
+    }
+
+    .booking-image-placeholder {
+        width: 100%;
+        height: 100%;
+        min-height: 128px;
+        display: grid;
+        place-items: center;
+        color: #7a8ba5;
+    }
+
+    .booking-image-placeholder svg {
+        width: 52px;
+        height: 52px;
+    }
+
+    .booking-main {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .booking-topline {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .55rem;
+        margin-bottom: .3rem;
+    }
+
+    .booking-code {
+        color: #738096;
+        font-size: .8rem;
+        font-weight: 700;
+        letter-spacing: .025em;
+    }
+
+    .booking-status {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: .22rem .55rem;
+        font-size: .72rem;
+        font-weight: 700;
+    }
+
+    .booking-status-warning {
+        color: #8a5700;
+        background: #fff1d6;
+    }
+
+    .booking-status-info {
+        color: #155fc4;
+        background: #e8f1ff;
+    }
+
+    .booking-status-success {
+        color: #17653e;
+        background: #e7f6ed;
+    }
+
+    .booking-status-danger {
+        color: #a12b34;
+        background: #fdecef;
+    }
+
+    .booking-status-neutral {
+        color: #596273;
+        background: #edf0f4;
+    }
+
+    .booking-vehicle-name {
+        margin: 0;
+        color: #142033;
+        font-size: 1.08rem;
+        font-weight: 700;
+    }
+
+    .booking-license {
+        margin-top: .15rem;
+        color: #7a8495;
+        font-size: .84rem;
+    }
+
+    .booking-info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .65rem 1.5rem;
+        margin-top: .9rem;
+    }
+
+    .booking-info-item span {
+        display: block;
+        margin-bottom: .13rem;
+        color: #8690a0;
+        font-size: .72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .035em;
+    }
+
+    .booking-info-item strong {
+        color: #344054;
+        font-size: .88rem;
+        font-weight: 600;
+    }
+
+    .booking-side {
+        min-width: 142px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: flex-end;
+        gap: .8rem;
+        padding-left: .9rem;
+        border-left: 1px solid #edf0f4;
+    }
+
+    .booking-total-label {
+        color: #8992a1;
+        font-size: .76rem;
+    }
+
+    .booking-total {
+        color: #0d6efd;
+        font-size: 1.08rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .booking-no-filter-results {
+        display: none;
+        padding: 2.25rem 1rem;
+        text-align: center;
+        border: 1px dashed #d7dee8;
+        border-radius: 15px;
+        color: #778195;
+        background: #fff;
+    }
+
+    @@media (max-width: 767.98px) {
+        .my-bookings-header {
+            flex-direction: column;
+        }
+
+        .booking-card {
+            grid-template-columns: 105px minmax(0, 1fr);
+        }
+
+        .booking-image-wrap,
+        .booking-image,
+        .booking-image-placeholder {
+            min-height: 92px;
+        }
+
+        .booking-side {
+            grid-column: 1 / -1;
+            min-width: 0;
+            padding: .85rem 0 0;
+            border-left: 0;
+            border-top: 1px solid #edf0f4;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+        }
+    }
+
+    @@media (max-width: 479.98px) {
+        .booking-card {
+            grid-template-columns: 1fr;
+        }
+
+        .booking-image-wrap,
+        .booking-image,
+        .booking-image-placeholder {
+            min-height: 170px;
+        }
+
+        .booking-info-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="my-bookings-page">
+    <div class="my-bookings-header">
+        <div>
+            <h1 class="h3 mb-1">Đơn thuê của tôi</h1>
+            <p class="text-muted mb-0">Theo dõi toàn bộ yêu cầu và lịch sử thuê xe của bạn.</p>
+        </div>
+
+        @if (Model.Count > 0)
         {
-            <tr>
-                <td>#@booking.BookingId</td>
-                <td>
-                    <div class="d-flex align-items-center gap-2">
+            <a class="btn btn-primary" asp-controller="Vehicles" asp-action="Index">Tìm thêm xe</a>
+        }
+    </div>
+
+    @if (Model.Count == 0)
+    {
+        <section class="my-bookings-empty" aria-labelledby="emptyBookingsTitle">
+            <div class="my-bookings-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 17h14"></path>
+                    <path d="M6.5 17 5 13.5l1.7-4.1A2 2 0 0 1 8.55 8h6.9a2 2 0 0 1 1.85 1.4l1.7 4.1L17.5 17"></path>
+                    <path d="M7 13h10"></path>
+                    <circle cx="7.5" cy="17.5" r="1.5"></circle>
+                    <circle cx="16.5" cy="17.5" r="1.5"></circle>
+                </svg>
+            </div>
+            <h2 id="emptyBookingsTitle">Bạn chưa có đơn thuê nào</h2>
+            <p>Hãy tìm một chiếc xe phù hợp và bắt đầu hành trình đầu tiên của bạn cùng SmartCar.</p>
+            <a class="btn btn-primary px-4" asp-controller="Vehicles" asp-action="Index">Tìm xe ngay</a>
+        </section>
+    }
+    else
+    {
+        <nav class="booking-filters" aria-label="Lọc đơn thuê theo trạng thái">
+            <button type="button" class="booking-filter active" data-booking-filter="all">
+                Tất cả <span class="booking-filter-count">@Model.Count</span>
+            </button>
+            <button type="button" class="booking-filter" data-booking-filter="pending">
+                Chờ xác nhận <span class="booking-filter-count">@pendingCount</span>
+            </button>
+            <button type="button" class="booking-filter" data-booking-filter="confirmed">
+                Đã xác nhận <span class="booking-filter-count">@confirmedCount</span>
+            </button>
+            <button type="button" class="booking-filter" data-booking-filter="active">
+                Đang thuê <span class="booking-filter-count">@activeCount</span>
+            </button>
+            <button type="button" class="booking-filter" data-booking-filter="completed">
+                Hoàn thành <span class="booking-filter-count">@completedCount</span>
+            </button>
+            <button type="button" class="booking-filter" data-booking-filter="cancelled">
+                Đã hủy <span class="booking-filter-count">@cancelledCount</span>
+            </button>
+        </nav>
+
+        <div class="booking-card-list" data-booking-list>
+            @foreach (var booking in Model)
+            {
+                <article class="booking-card" data-booking-card data-status-group="@StatusGroup(booking.Status)">
+                    <div class="booking-image-wrap">
                         @if (!string.IsNullOrWhiteSpace(booking.PrimaryImagePath))
                         {
-                            <img src="@booking.PrimaryImagePath" alt="Ảnh @booking.VehicleName" style="width:72px;height:48px;object-fit:cover" class="rounded" />
+                            <img src="@booking.PrimaryImagePath" alt="Ảnh @booking.VehicleName" class="booking-image" />
                         }
-                        <div><strong>@booking.VehicleName</strong><br /><small>@booking.LicensePlate</small></div>
+                        else
+                        {
+                            <div class="booking-image-placeholder" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M5 17h14"></path>
+                                    <path d="M6.5 17 5 13.5l1.7-4.1A2 2 0 0 1 8.55 8h6.9a2 2 0 0 1 1.85 1.4l1.7 4.1L17.5 17"></path>
+                                    <path d="M7 13h10"></path>
+                                    <circle cx="7.5" cy="17.5" r="1.5"></circle>
+                                    <circle cx="16.5" cy="17.5" r="1.5"></circle>
+                                </svg>
+                            </div>
+                        }
                     </div>
-                </td>
-                <td>@booking.PickupDate.ToString("dd/MM/yyyy HH:mm")<br />→ @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
-                <td>@booking.TotalAmount.ToString("N0") đ</td>
-                <td><span class="badge bg-secondary">@booking.Status.ToVietnamese()</span></td>
-                <td><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@booking.BookingId">Chi tiết</a></td>
-            </tr>
-        }
-        </tbody>
-    </table>
-    </div>
+
+                    <div class="booking-main">
+                        <div class="booking-topline">
+                            <span class="booking-code">ĐƠN #@booking.BookingId</span>
+                            <span class="booking-status @StatusClass(booking.Status)">@booking.Status.ToVietnamese()</span>
+                        </div>
+
+                        <h2 class="booking-vehicle-name">@booking.VehicleName</h2>
+                        <div class="booking-license">Biển số @booking.LicensePlate</div>
+
+                        <div class="booking-info-grid">
+                            <div class="booking-info-item">
+                                <span>Nhận xe</span>
+                                <strong>@booking.PickupDate.ToString("HH:mm · dd/MM/yyyy")</strong>
+                            </div>
+                            <div class="booking-info-item">
+                                <span>Trả xe</span>
+                                <strong>@booking.ReturnDate.ToString("HH:mm · dd/MM/yyyy")</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="booking-side">
+                        <div class="text-end">
+                            <div class="booking-total-label">Tổng tiền</div>
+                            <div class="booking-total">@booking.TotalAmount.ToString("N0") đ</div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@booking.BookingId">Xem chi tiết →</a>
+                    </div>
+                </article>
+            }
+        </div>
+
+        <div class="booking-no-filter-results" data-booking-empty-filter>
+            Không có đơn thuê nào trong trạng thái này.
+        </div>
+    }
+</div>
+
+@if (Model.Count > 0)
+{
+    <script>
+        (() => {
+            const filters = document.querySelectorAll('[data-booking-filter]');
+            const cards = document.querySelectorAll('[data-booking-card]');
+            const empty = document.querySelector('[data-booking-empty-filter]');
+
+            filters.forEach(button => {
+                button.addEventListener('click', () => {
+                    const selected = button.dataset.bookingFilter;
+                    let visibleCount = 0;
+
+                    filters.forEach(item => item.classList.remove('active'));
+                    button.classList.add('active');
+
+                    cards.forEach(card => {
+                        const visible = selected === 'all' || card.dataset.statusGroup === selected;
+                        card.hidden = !visible;
+                        if (visible) visibleCount++;
+                    });
+
+                    if (empty) {
+                        empty.style.display = visibleCount === 0 ? 'block' : 'none';
+                    }
+                });
+            });
+        })();
+    </script>
 }
