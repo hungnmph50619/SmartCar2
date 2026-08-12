@@ -5,9 +5,6 @@
     var hasOpenExtension = Model.Extensions.Any(item =>
         item.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.Approved);
     var canCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
-    var canApplyPromotion =
-        (Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment) &&
-        !Model.RentalPaid;
 
     var smartCarSupportPhone = (ViewBag.SmartCarSupportPhone as string ?? "0982223792").Trim();
     var smartCarSupportPhoneDisplay = smartCarSupportPhone.Length == 10
@@ -279,38 +276,9 @@
         <div class="card card-body shadow-sm sticky-top" style="top:1rem" id="payment-panel">
             <h2 class="h5">Thanh toán</h2>
             <div class="d-flex justify-content-between"><span>Tiền thuê và gia hạn</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
-            @if (Model.DiscountAmount > 0)
-            {
-                <div class="d-flex justify-content-between text-success">
-                    <span>Khuyến mãi (@Model.PromotionCode)</span>
-                    <strong>-@Model.DiscountAmount.ToString("N0") đ</strong>
-                </div>
-            }
             <div class="d-flex justify-content-between"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
             <hr />
             <div class="d-flex justify-content-between fs-5"><span>Tổng cộng</span><strong>@Model.TotalAmount.ToString("N0") đ</strong></div>
-
-            @if (canApplyPromotion)
-            {
-                @if (string.IsNullOrWhiteSpace(Model.PromotionCode))
-                {
-                    <form asp-controller="Promotions" asp-action="Apply" method="post" class="mt-3" data-loading-form>
-                        <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                        <label class="form-label">Mã khuyến mãi</label>
-                        <div class="input-group">
-                            <input name="Code" maxlength="50" class="form-control text-uppercase" required placeholder="Nhập mã" />
-                            <button class="btn btn-outline-primary" type="submit" data-loading-text="Đang áp dụng...">Áp dụng</button>
-                        </div>
-                    </form>
-                }
-                else
-                {
-                    <form asp-controller="Promotions" asp-action="Remove" method="post" class="mt-3" data-loading-form data-confirm="Gỡ mã khuyến mãi khỏi đơn này?">
-                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                        <button class="btn btn-sm btn-outline-danger w-100" type="submit" data-loading-text="Đang gỡ...">Gỡ mã @Model.PromotionCode</button>
-                    </form>
-                }
-            }
 
             @if (Model.Status == BookingStatus.PendingPayment && !Model.RentalPaid)
             {
