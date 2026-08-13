@@ -3,106 +3,258 @@
     ViewData["Title"] = "Tổng quan quản trị";
 }
 
-<link rel="stylesheet" href="~/css/admin-dashboard.css" asp-append-version="true" />
+<link rel="stylesheet"
+      href="~/css/admin-dashboard.css"
+      asp-append-version="true" />
 
 <div class="admin-dashboard-header">
     <div>
         <h1>Tổng quan quản trị</h1>
-        <p>Theo dõi tình trạng đội xe, đơn thuê, hồ sơ xác minh giấy tờ cần xử lý và doanh thu SmartCar.</p>
+        <p>
+            Theo dõi tình trạng đội xe, các việc cần xử lý,
+            đơn thuê và doanh thu SmartCar.
+        </p>
     </div>
+
     <div class="admin-dashboard-actions">
-        @if (Model.PendingKycPackages > 0)
+        @if (Model.PendingWorkItems > 0)
         {
-            <a class="btn btn-warning" asp-controller="AdminKyc" asp-action="Index">Hồ sơ xác minh chờ duyệt (@Model.PendingKycPackages)</a>
+            <a class="btn btn-warning"
+               asp-controller="Notifications"
+               asp-action="Index">
+                Việc cần xử lý (@Model.PendingWorkItems)
+            </a>
         }
-        <a class="btn btn-outline-primary" asp-controller="AdminBookings" asp-action="Index">Quản lý đơn thuê</a>
-        <a class="btn btn-primary" asp-controller="AdminVehicles" asp-action="Index">Quản lý xe</a>
+
+        <a class="btn btn-outline-primary"
+           asp-controller="AdminBookings"
+           asp-action="Index">
+            Quản lý đơn thuê
+        </a>
+
+        <a class="btn btn-primary"
+           asp-controller="AdminVehicles"
+           asp-action="Index">
+            Quản lý xe
+        </a>
     </div>
 </div>
 
-@if (Model.PendingKycPackages > 0)
+@if (Model.PendingWorkItems > 0)
 {
-    <div class="alert alert-warning d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 shadow-sm mb-4" role="alert">
+    <div class="alert alert-warning
+                d-flex flex-column flex-lg-row
+                justify-content-between
+                align-items-lg-center gap-3
+                shadow-sm mb-4"
+         role="alert">
+
         <div>
-            <div class="fw-bold">Có @Model.PendingKycPackages hồ sơ xác minh đang chờ quản trị viên duyệt.</div>
-            <div class="small">Khách hàng đã gửi đủ CCCD và GPLX. Đây là công việc cần xử lý, không chỉ là thông báo để đọc.</div>
+            <div class="fw-bold">
+                Có @Model.PendingWorkItems việc
+                đang chờ Quản trị viên xử lý.
+            </div>
+
+            <div class="small">
+                KYC: @Model.PendingKycPackages
+                · Đơn thuê: @Model.PendingBookings
+                · Gia hạn: @Model.PendingExtensions
+                · QR: @Model.PendingQrPayments
+            </div>
         </div>
-        <a class="btn btn-dark flex-shrink-0" asp-controller="AdminKyc" asp-action="Index">Mở hàng đợi xác minh →</a>
+
+        <a class="btn btn-dark flex-shrink-0"
+           asp-controller="Notifications"
+           asp-action="Index">
+            Mở danh sách cần xử lý →
+        </a>
     </div>
 }
 
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3">
-        <a class="admin-stat-card is-blue" asp-controller="AdminVehicles" asp-action="Index">
-            <div class="admin-stat-label">Tổng số xe</div>
-            <div class="admin-stat-value">@Model.TotalVehicles</div>
-            <div class="admin-stat-hint">Mở danh sách xe →</div>
+        <a class="admin-stat-card is-blue"
+           asp-controller="AdminVehicles"
+           asp-action="Index">
+            <div class="admin-stat-label">
+                Tổng số xe
+            </div>
+            <div class="admin-stat-value">
+                @Model.TotalVehicles
+            </div>
+            <div class="admin-stat-hint">
+                Mở danh sách xe →
+            </div>
         </a>
     </div>
+
     <div class="col-sm-6 col-xl-3">
-        <a class="admin-stat-card is-green" asp-controller="AdminVehicles" asp-action="Index">
-            <div class="admin-stat-label">Xe sẵn sàng</div>
-            <div class="admin-stat-value">@Model.AvailableVehicles</div>
-            <div class="admin-stat-hint">Kiểm tra xe có thể cho thuê →</div>
+        <a class="admin-stat-card is-green"
+           asp-controller="AdminVehicles"
+           asp-action="Index">
+            <div class="admin-stat-label">
+                Xe sẵn sàng
+            </div>
+            <div class="admin-stat-value">
+                @Model.AvailableVehicles
+            </div>
+            <div class="admin-stat-hint">
+                Kiểm tra xe có thể cho thuê →
+            </div>
         </a>
     </div>
+
     <div class="col-sm-6 col-xl-3">
         <a class="admin-stat-card is-purple"
-           asp-controller="AdminBookings" asp-action="Index" asp-route-status="Rented">
-            <div class="admin-stat-label">Xe đang được thuê</div>
-            <div class="admin-stat-value">@Model.RentedVehicles</div>
-            <div class="admin-stat-hint">Xem các đơn đang thuê →</div>
+           asp-controller="AdminBookings"
+           asp-action="Index"
+           asp-route-status="Rented">
+            <div class="admin-stat-label">
+                Xe đang được thuê
+            </div>
+            <div class="admin-stat-value">
+                @Model.RentedVehicles
+            </div>
+            <div class="admin-stat-hint">
+                Xem các đơn đang thuê →
+            </div>
         </a>
     </div>
+
     <div class="col-sm-6 col-xl-3">
-        <a class="admin-stat-card is-cyan" asp-controller="Reports" asp-action="Index">
-            <div class="admin-stat-label">Doanh thu tháng</div>
-            <div class="admin-stat-value is-money">@Model.MonthlyRevenue.ToString("N0") đ</div>
-            <div class="admin-stat-hint">Xem hiệu suất và lợi nhuận →</div>
+        <a class="admin-stat-card is-cyan"
+           asp-controller="Reports"
+           asp-action="Index">
+            <div class="admin-stat-label">
+                Doanh thu tháng
+            </div>
+            <div class="admin-stat-value is-money">
+                @Model.MonthlyRevenue.ToString("N0") đ
+            </div>
+            <div class="admin-stat-hint">
+                Xem hiệu suất và lợi nhuận →
+            </div>
         </a>
     </div>
 </div>
 
 <div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl-3">
-        <a class="admin-stat-card is-orange" asp-controller="AdminKyc" asp-action="Index">
-            <div class="admin-stat-label">Hồ sơ xác minh chờ duyệt</div>
-            <div class="admin-stat-value">@Model.PendingKycPackages</div>
-            <div class="admin-stat-hint">Xem CCCD + GPLX cần xử lý →</div>
-        </a>
-    </div>
     <div class="col-sm-6 col-xl-3">
         <a class="admin-stat-card is-orange"
-           asp-controller="AdminBookings" asp-action="Index" asp-route-status="PendingConfirmation">
-            <div class="admin-stat-label">Đơn chờ xác nhận</div>
-            <div class="admin-stat-value">@Model.PendingBookings</div>
-            <div class="admin-stat-hint">Cần quản trị viên xử lý →</div>
+           asp-controller="Notifications"
+           asp-action="Index">
+            <div class="admin-stat-label">
+                KYC cần xử lý
+            </div>
+            <div class="admin-stat-value">
+                @Model.PendingKycPackages
+            </div>
+            <div class="admin-stat-hint">
+                Xem CCCD / GPLX đang chờ →
+            </div>
         </a>
     </div>
+
     <div class="col-sm-6 col-xl-3">
-        <a class="admin-stat-card is-blue"
-           asp-controller="AdminBookings" asp-action="Index" asp-route-status="ReadyForPickup">
-            <div class="admin-stat-label">Giao xe hôm nay</div>
-            <div class="admin-stat-value">@Model.TodayPickups</div>
-            <div class="admin-stat-hint">Mở danh sách chuẩn bị giao →</div>
+        <a class="admin-stat-card is-orange"
+           asp-controller="AdminBookings"
+           asp-action="Index"
+           asp-route-status="PendingConfirmation">
+            <div class="admin-stat-label">
+                Đơn chờ xác nhận
+            </div>
+            <div class="admin-stat-value">
+                @Model.PendingBookings
+            </div>
+            <div class="admin-stat-hint">
+                Cần quản trị viên xử lý →
+            </div>
         </a>
     </div>
+
     <div class="col-sm-6 col-xl-3">
-        <a class="admin-stat-card is-purple"
-           asp-controller="AdminBookings" asp-action="Index" asp-route-status="Rented">
-            <div class="admin-stat-label">Nhận xe trả hôm nay</div>
-            <div class="admin-stat-value">@Model.TodayReturns</div>
-            <div class="admin-stat-hint">Kiểm tra các xe cần nhận →</div>
+        <a class="admin-stat-card is-orange"
+           asp-controller="AdminExtensions"
+           asp-action="Index">
+            <div class="admin-stat-label">
+                Yêu cầu gia hạn
+            </div>
+            <div class="admin-stat-value">
+                @Model.PendingExtensions
+            </div>
+            <div class="admin-stat-hint">
+                Duyệt hoặc từ chối gia hạn →
+            </div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <a class="admin-stat-card is-orange"
+           asp-controller="AdminPayments"
+           asp-action="Index"
+           asp-route-status="AwaitingConfirmation">
+            <div class="admin-stat-label">
+                QR chờ xác nhận
+            </div>
+            <div class="admin-stat-value">
+                @Model.PendingQrPayments
+            </div>
+            <div class="admin-stat-hint">
+                Kiểm tra chuyển khoản →
+            </div>
         </a>
     </div>
 </div>
 
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3">
-        <a class="admin-stat-card is-red" asp-controller="Maintenance" asp-action="Index">
-            <div class="admin-stat-label">Chờ kiểm tra hoặc bảo trì</div>
-            <div class="admin-stat-value">@(Model.InspectionVehicles + Model.MaintenanceVehicles)</div>
-            <div class="admin-stat-hint">Xử lý tình trạng xe →</div>
+        <a class="admin-stat-card is-blue"
+           asp-controller="AdminBookings"
+           asp-action="Index"
+           asp-route-status="ReadyForPickup">
+            <div class="admin-stat-label">
+                Giao xe hôm nay
+            </div>
+            <div class="admin-stat-value">
+                @Model.TodayPickups
+            </div>
+            <div class="admin-stat-hint">
+                Mở danh sách chuẩn bị giao →
+            </div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <a class="admin-stat-card is-purple"
+           asp-controller="AdminBookings"
+           asp-action="Index"
+           asp-route-status="Rented">
+            <div class="admin-stat-label">
+                Nhận xe trả hôm nay
+            </div>
+            <div class="admin-stat-value">
+                @Model.TodayReturns
+            </div>
+            <div class="admin-stat-hint">
+                Kiểm tra các xe cần nhận →
+            </div>
+        </a>
+    </div>
+
+    <div class="col-sm-6 col-xl-3">
+        <a class="admin-stat-card is-red"
+           asp-controller="Maintenance"
+           asp-action="Index">
+            <div class="admin-stat-label">
+                Chờ kiểm tra hoặc bảo trì
+            </div>
+            <div class="admin-stat-value">
+                @(Model.InspectionVehicles +
+                  Model.MaintenanceVehicles)
+            </div>
+            <div class="admin-stat-hint">
+                Xử lý tình trạng xe →
+            </div>
         </a>
     </div>
 </div>
@@ -110,14 +262,22 @@
 <section class="admin-panel">
     <div class="admin-panel-header">
         <h2>Đơn thuê gần đây</h2>
-        <a asp-controller="AdminBookings" asp-action="Index">Xem tất cả đơn →</a>
+        <a asp-controller="AdminBookings"
+           asp-action="Index">
+            Xem tất cả đơn →
+        </a>
     </div>
+
     <div class="admin-panel-body">
         @if (Model.RecentBookings.Count == 0)
         {
             <div class="admin-empty-state">
-                <strong>Chưa có đơn thuê nào</strong>
-                <span>Đơn thuê mới sẽ được hiển thị tại khu vực này.</span>
+                <strong>
+                    Chưa có đơn thuê nào
+                </strong>
+                <span>
+                    Đơn thuê mới sẽ được hiển thị tại khu vực này.
+                </span>
             </div>
         }
         else
@@ -131,27 +291,56 @@
                             <th>Xe</th>
                             <th>Thời gian thuê</th>
                             <th>Trạng thái</th>
-                            <th class="text-end">Thao tác</th>
+                            <th class="text-end">
+                                Thao tác
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
-                    @foreach (var booking in Model.RecentBookings)
+                    @foreach (var booking in
+                              Model.RecentBookings)
                     {
                         <tr>
-                            <td class="fw-semibold">#@booking.BookingId</td>
-                            <td>@booking.CustomerName</td>
-                            <td>
-                                <span class="fw-semibold">@booking.VehicleName</span><br />
-                                <small class="text-muted">@booking.LicensePlate</small>
+                            <td class="fw-semibold">
+                                #@booking.BookingId
                             </td>
+
                             <td>
-                                @booking.PickupDate.ToString("dd/MM/yyyy HH:mm")<br />
-                                <small class="text-muted">đến @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</small>
+                                @booking.CustomerName
                             </td>
-                            <td><span class="badge bg-secondary">@booking.Status.ToVietnamese()</span></td>
+
+                            <td>
+                                <span class="fw-semibold">
+                                    @booking.VehicleName
+                                </span>
+                                <br />
+                                <small class="text-muted">
+                                    @booking.LicensePlate
+                                </small>
+                            </td>
+
+                            <td>
+                                @booking.PickupDate
+                                    .ToString("dd/MM/yyyy HH:mm")
+                                <br />
+                                <small class="text-muted">
+                                    đến
+                                    @booking.ReturnDate
+                                        .ToString("dd/MM/yyyy HH:mm")
+                                </small>
+                            </td>
+
+                            <td>
+                                <span class="badge bg-secondary">
+                                    @booking.Status.ToVietnamese()
+                                </span>
+                            </td>
+
                             <td class="text-end">
                                 <a class="btn btn-sm btn-outline-primary"
-                                   asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.BookingId">
+                                   asp-controller="AdminBookings"
+                                   asp-action="Details"
+                                   asp-route-id="@booking.BookingId">
                                     Xử lý
                                 </a>
                             </td>

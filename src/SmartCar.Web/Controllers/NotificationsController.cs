@@ -9,27 +9,47 @@ namespace SmartCar.Web.Controllers;
 [Authorize]
 public sealed class NotificationsController : Controller
 {
-    private const string KycWorkPrefix = "Hồ sơ KYC chờ duyệt|";
+    private static readonly string[] AdminWorkPrefixes =
+    {
+        "Hồ sơ KYC chờ duyệt|",
+        "CCCD chờ xác minh|",
+        "GPLX chờ xác minh|",
+        "Đơn thuê chờ xử lý|",
+        "Yêu cầu gia hạn chờ xử lý|",
+        "Thanh toán QR chờ xác nhận|"
+    };
+
     private readonly INotificationService _notificationService;
 
-    public NotificationsController(INotificationService notificationService)
+    public NotificationsController(
+        INotificationService notificationService)
     {
         _notificationService = notificationService;
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(
+        CancellationToken cancellationToken)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
         if (string.IsNullOrWhiteSpace(userId))
         {
             return Challenge();
         }
 
-        ViewBag.UnreadCount = await _notificationService.GetUnreadCountAsync(
-            userId,
-            cancellationToken);
-        return View(await _notificationService.GetAsync(userId, cancellationToken));
+        ViewBag.UnreadCount =
+            await _notificationService
+                .GetUnreadCountAsync(
+                    userId,
+                    cancellationToken);
+
+        return View(
+            await _notificationService.GetAsync(
+                userId,
+                cancellationToken));
     }
 
     [HttpPost]
@@ -38,13 +58,20 @@ public sealed class NotificationsController : Controller
         int id,
         CancellationToken cancellationToken)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
         if (string.IsNullOrWhiteSpace(userId))
         {
             return Challenge();
         }
 
-        await _notificationService.MarkReadAsync(id, userId, cancellationToken);
+        await _notificationService.MarkReadAsync(
+            id,
+            userId,
+            cancellationToken);
+
         return RedirectToAction(nameof(Index));
     }
 
@@ -54,14 +81,24 @@ public sealed class NotificationsController : Controller
         int id,
         CancellationToken cancellationToken)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
         if (string.IsNullOrWhiteSpace(userId))
         {
             return Challenge();
         }
 
-        await _notificationService.MarkReadAsync(id, userId, cancellationToken);
-        return RedirectToAction("Index", "Profile", new { tab = "documents" });
+        await _notificationService.MarkReadAsync(
+            id,
+            userId,
+            cancellationToken);
+
+        return RedirectToAction(
+            "Index",
+            "Profile",
+            new { tab = "documents" });
     }
 
     [Authorize(Roles = RoleNames.Admin)]
@@ -77,17 +114,24 @@ public sealed class NotificationsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        // KYC is a work item, not just an informational notification. Opening the
-        // review page must not clear the alert. It is marked handled only after
-        // the admin approves the package or requests resubmission.
-        return RedirectToAction("Review", "AdminKyc", new { customerId });
+        // Work item: chỉ mở trang xử lý, không đánh dấu đã đọc.
+        // NotificationService sẽ tự đóng khi trạng thái nghiệp vụ
+        // thực sự không còn Pending.
+        return RedirectToAction(
+            "Review",
+            "AdminKyc",
+            new { customerId });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> MarkAllRead(CancellationToken cancellationToken)
+    public async Task<IActionResult> MarkAllRead(
+        CancellationToken cancellationToken)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
         if (string.IsNullOrWhiteSpace(userId))
         {
             return Challenge();
@@ -95,22 +139,46 @@ public sealed class NotificationsController : Controller
 
         if (User.IsInRole(RoleNames.Admin))
         {
-            var notifications = await _notificationService.GetAsync(userId, cancellationToken);
-            foreach (var item in notifications.Where(item =>
+            var notifications =
+                await _notificationService.GetAsync(
+                    userId,
+                    cancellationToken);
+
+            foreach (var item in
+                     notifications.Where(item =>
                          !item.IsRead &&
-                         !item.Title.StartsWith(KycWorkPrefix, StringComparison.Ordinal)))
+                         !IsAdminWorkNotification(
+                             item.Title)))
             {
-                await _notificationService.MarkReadAsync(item.NotificationId, userId, cancellationToken);
+                await _notificationService
+                    .MarkReadAsync(
+                        item.NotificationId,
+                        userId,
+                        cancellationToken);
             }
 
-            TempData["SuccessMessage"] = "Đã đánh dấu các thông báo thông thường là đã đọc. Hồ sơ xác minh chờ duyệt vẫn được giữ cho đến khi xử lý.";
+            TempData["SuccessMessage"] =
+                "Đã đánh dấu các thông báo thường là đã đọc. " +
+                "Các việc cần xử lý vẫn được giữ cho đến khi bạn hoàn tất nghiệp vụ.";
         }
         else
         {
-            await _notificationService.MarkAllReadAsync(userId, cancellationToken);
-            TempData["SuccessMessage"] = "Đã đánh dấu tất cả thông báo là đã đọc.";
+            await _notificationService
+                .MarkAllReadAsync(
+                    userId,
+                    cancellationToken);
+
+            TempData["SuccessMessage"] =
+                "Đã đánh dấu tất cả thông báo là đã đọc.";
         }
 
         return RedirectToAction(nameof(Index));
     }
+
+    private static bool IsAdminWorkNotification(
+        string title) =>
+        AdminWorkPrefixes.Any(prefix =>
+            title.StartsWith(
+                prefix,
+                StringComparison.Ordinal));
 }

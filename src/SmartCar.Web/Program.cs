@@ -14,10 +14,12 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ISecureDocumentStorage, SecureDocumentStorage>();
 builder.Services.AddScoped<IUserBankAccountService, UserBankAccountService>();
 builder.Services.AddScoped<KycAdminNotificationConsolidationFilter>();
+builder.Services.AddScoped<AdminWorkNotificationFilter>();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
     options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
+    options.Filters.AddService<AdminWorkNotificationFilter>();
 });
 
 var app = builder.Build();

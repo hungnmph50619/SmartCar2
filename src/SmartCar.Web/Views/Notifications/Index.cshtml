@@ -1,27 +1,78 @@
 @model IReadOnlyList<SmartCar.Application.Features.Notifications.NotificationDto>
 @{
     ViewData["Title"] = "Thông báo";
-    var unreadRegularCount = Model.Count(item =>
-        !item.IsRead &&
-        !item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
-    var pendingWorkCount = Model.Count(item =>
-        !item.IsRead &&
-        item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
-    var hasKycWorkHistory = Model.Any(item =>
-        item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
 
-    string FriendlyNotificationText(string value) => value
-        .Replace("Hồ sơ KYC đã được xác minh", "Hồ sơ giấy tờ đã được duyệt", StringComparison.Ordinal)
-        .Replace("Hồ sơ KYC cần cập nhật", "Hồ sơ giấy tờ cần cập nhật", StringComparison.Ordinal)
-        .Replace("Hồ sơ KYC đã hoàn tất", "Xác minh giấy tờ đã hoàn tất", StringComparison.Ordinal)
-        .Replace("quyết định KYC", "quyết định xác minh hồ sơ", StringComparison.Ordinal)
-        .Replace("Hồ sơ KYC", "Hồ sơ xác minh giấy tờ", StringComparison.Ordinal)
-        .Replace("KYC", "xác minh giấy tờ", StringComparison.Ordinal);
+    var isAdmin =
+        User.IsInRole(
+            SmartCar.Domain.Constants.RoleNames.Admin);
+
+    var workPrefixes = new[]
+    {
+        "Hồ sơ KYC chờ duyệt|",
+        "CCCD chờ xác minh|",
+        "GPLX chờ xác minh|",
+        "Đơn thuê chờ xử lý|",
+        "Yêu cầu gia hạn chờ xử lý|",
+        "Thanh toán QR chờ xác nhận|"
+    };
+
+    bool IsWorkTitle(string title) =>
+        workPrefixes.Any(prefix =>
+            title.StartsWith(
+                prefix,
+                StringComparison.Ordinal));
+
+    var pendingWorkCount =
+        Model.Count(item =>
+            !item.IsRead &&
+            IsWorkTitle(item.Title));
+
+    var unreadRegularCount =
+        Model.Count(item =>
+            !item.IsRead &&
+            !IsWorkTitle(item.Title));
+
+    var handledCount =
+        Model.Count(item => item.IsRead);
+
+    string FriendlyNotificationText(string value) =>
+        value
+            .Replace(
+                "Hồ sơ KYC đã được xác minh",
+                "Hồ sơ giấy tờ đã được duyệt",
+                StringComparison.Ordinal)
+            .Replace(
+                "Hồ sơ KYC cần cập nhật",
+                "Hồ sơ giấy tờ cần cập nhật",
+                StringComparison.Ordinal)
+            .Replace(
+                "Hồ sơ KYC đã hoàn tất",
+                "Xác minh giấy tờ đã hoàn tất",
+                StringComparison.Ordinal)
+            .Replace(
+                "quyết định KYC",
+                "quyết định xác minh hồ sơ",
+                StringComparison.Ordinal)
+            .Replace(
+                "Hồ sơ KYC",
+                "Hồ sơ xác minh giấy tờ",
+                StringComparison.Ordinal)
+            .Replace(
+                "KYC",
+                "xác minh giấy tờ",
+                StringComparison.Ordinal);
+
+    var defaultAdminFilter =
+        pendingWorkCount > 0
+            ? "work"
+            : unreadRegularCount > 0
+                ? "unread"
+                : "handled";
 }
 
 <style>
     .notifications-page {
-        max-width: 980px;
+        max-width: 1040px;
         margin: 0 auto;
     }
 
@@ -35,38 +86,81 @@
 
     .notifications-header h1 {
         font-weight: 700;
-        letter-spacing: -0.02em;
+        letter-spacing: -.02em;
     }
 
-    .notifications-mark-all {
+    .notifications-summary {
+        color: #687386;
+        margin: .2rem 0 0;
+    }
+
+    .notifications-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        margin-bottom: 1rem;
+        padding: .35rem;
+        border: 1px solid #e3e8ef;
+        border-radius: 14px;
+        background: #fff;
+    }
+
+    .notifications-tab {
+        border: 0;
+        border-radius: 10px;
+        padding: .55rem .8rem;
+        background: transparent;
+        color: #596579;
+        font-weight: 700;
+    }
+
+    .notifications-tab.active {
+        color: #0d6efd;
+        background: #edf4ff;
+    }
+
+    .notifications-tab-count {
         display: inline-flex;
+        min-width: 22px;
+        min-height: 22px;
         align-items: center;
-        gap: .45rem;
-        padding: .35rem .25rem;
-        font-weight: 600;
-        white-space: nowrap;
+        justify-content: center;
+        margin-left: .35rem;
+        padding: 0 .35rem;
+        border-radius: 999px;
+        background: #e9edf3;
+        color: #4a5568;
+        font-size: .72rem;
+    }
+
+    .notifications-tab.active .notifications-tab-count {
+        background: #0d6efd;
+        color: #fff;
     }
 
     .notifications-list {
         display: flex;
         flex-direction: column;
-        gap: .65rem;
+        gap: .7rem;
     }
 
     .notification-card {
         position: relative;
         display: flex;
-        gap: .85rem;
-        padding: .85rem 1rem;
-        border: 1px solid #e5e7eb;
-        border-radius: 14px;
+        gap: .9rem;
+        padding: 1rem;
+        border: 1px solid #e3e8ef;
+        border-radius: 16px;
         background: #fff;
         box-shadow: 0 4px 16px rgba(15, 23, 42, .045);
-        transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+        transition:
+            border-color .18s ease,
+            box-shadow .18s ease,
+            transform .18s ease;
     }
 
     .notification-card:has(.stretched-link):hover {
-        border-color: #cbd5e1;
+        border-color: #c9d5e6;
         box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
         transform: translateY(-1px);
     }
@@ -76,14 +170,21 @@
         border-color: #cfe0ff;
     }
 
+    .notification-card-work {
+        background: #fffdf7;
+        border-color: #f4cf83;
+        box-shadow: 0 5px 18px rgba(168, 103, 0, .08);
+    }
+
     .notification-card-handled {
         background: #fbfcfe;
+        opacity: .88;
     }
 
     .notification-icon {
-        flex: 0 0 38px;
-        width: 38px;
-        height: 38px;
+        flex: 0 0 40px;
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
         display: inline-flex;
         align-items: center;
@@ -101,11 +202,10 @@
     .notification-tone-warning .notification-icon,
     .notification-tone-work .notification-icon {
         color: #9a5a00;
-        background: #fff4df;
+        background: #fff1d5;
     }
 
-    .notification-tone-info .notification-icon,
-    .notification-icon.notification-tone-info {
+    .notification-tone-info .notification-icon {
         color: #1967d2;
         background: #eaf2ff;
     }
@@ -113,7 +213,7 @@
     .notification-body {
         min-width: 0;
         flex: 1;
-        padding-right: .4rem;
+        padding-right: .35rem;
     }
 
     .notification-title-row {
@@ -126,22 +226,18 @@
 
     .notification-title {
         margin: 0;
-        font-size: .98rem;
-        font-weight: 700;
+        font-size: 1rem;
+        font-weight: 750;
         color: #172033;
     }
 
     .notification-message {
-        margin: .25rem 0 0;
+        margin: .3rem 0 0;
         color: #465166;
-        line-height: 1.45;
+        line-height: 1.5;
     }
 
     .notification-meta {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: .55rem;
         margin-top: .45rem;
         color: #7b8495;
         font-size: .82rem;
@@ -150,8 +246,9 @@
     .notification-actions {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: .5rem;
-        margin-top: .6rem;
+        margin-top: .7rem;
     }
 
     .notification-actions form {
@@ -179,7 +276,6 @@
         padding: .18rem .55rem;
         font-size: .72rem;
         font-weight: 700;
-        line-height: 1.15;
     }
 
     .notification-status-success {
@@ -197,6 +293,13 @@
         background: #e7f0ff;
     }
 
+    .notifications-admin-note {
+        border: 0;
+        border-radius: 12px;
+        background: #f1f7ff;
+        color: #345071;
+    }
+
     .notifications-empty {
         padding: 2.5rem 1.25rem;
         text-align: center;
@@ -205,20 +308,13 @@
         background: #fff;
     }
 
-    .notifications-admin-note {
-        border: 0;
-        border-radius: 12px;
-        background: #f1f7ff;
-        color: #345071;
-    }
-
     @@media (max-width: 575.98px) {
         .notifications-header {
             flex-direction: column;
         }
 
         .notification-card {
-            padding: .8rem;
+            padding: .85rem;
             gap: .7rem;
         }
 
@@ -230,26 +326,33 @@
     }
 </style>
 
-<div class="notifications-page">
+<div class="notifications-page"
+     data-notifications-page
+     data-default-filter="@defaultAdminFilter">
+
     <div class="notifications-header">
         <div>
             <h1 class="h3 mb-1">Thông báo</h1>
-            <p class="text-muted mb-0">
-                @if (pendingWorkCount > 0 && unreadRegularCount > 0)
+
+            <p class="notifications-summary">
+                @if (isAdmin)
                 {
-                    <span><strong>@pendingWorkCount</strong> hồ sơ cần xử lý · @unreadRegularCount thông báo chưa đọc.</span>
-                }
-                else if (pendingWorkCount > 0)
-                {
-                    <span><strong>@pendingWorkCount</strong> hồ sơ xác minh đang chờ xử lý.</span>
+                    <span>
+                        <strong>@pendingWorkCount</strong> việc cần xử lý
+                        · @unreadRegularCount thông báo chưa đọc.
+                    </span>
                 }
                 else if (unreadRegularCount > 0)
                 {
-                    <span>@unreadRegularCount thông báo chưa đọc.</span>
+                    <span>
+                        @unreadRegularCount thông báo chưa đọc.
+                    </span>
                 }
                 else
                 {
-                    <span>Bạn đã xử lý và đọc hết các thông báo hiện tại.</span>
+                    <span>
+                        Bạn đã đọc hết các thông báo hiện tại.
+                    </span>
                 }
             </p>
         </div>
@@ -257,154 +360,458 @@
         @if (unreadRegularCount > 0)
         {
             <form asp-action="MarkAllRead" method="post">
-                <button class="btn btn-link text-decoration-none notifications-mark-all" type="submit">
-                    <span aria-hidden="true">✓✓</span>
-                    <span>Đánh dấu tất cả đã đọc</span>
+                <button class="btn btn-link text-decoration-none fw-semibold"
+                        type="submit">
+                    ✓✓ Đánh dấu thông báo thường đã đọc
                 </button>
             </form>
         }
     </div>
 
-    @if (User.IsInRole(SmartCar.Domain.Constants.RoleNames.Admin) && hasKycWorkHistory)
+    @if (isAdmin)
     {
+        <div class="notifications-tabs"
+             role="tablist"
+             aria-label="Lọc thông báo">
+
+            <button class="notifications-tab"
+                    type="button"
+                    data-notification-filter="work">
+                Cần xử lý
+                <span class="notifications-tab-count">
+                    @pendingWorkCount
+                </span>
+            </button>
+
+            <button class="notifications-tab"
+                    type="button"
+                    data-notification-filter="unread">
+                Chưa đọc
+                <span class="notifications-tab-count">
+                    @unreadRegularCount
+                </span>
+            </button>
+
+            <button class="notifications-tab"
+                    type="button"
+                    data-notification-filter="handled">
+                Đã xử lý
+                <span class="notifications-tab-count">
+                    @handledCount
+                </span>
+            </button>
+        </div>
+
         <div class="alert notifications-admin-note py-2 px-3 mb-3">
-            <strong>Hồ sơ chờ duyệt</strong> là công việc quản trị; trạng thái chỉ chuyển sang <strong>Đã xử lý</strong> sau khi bạn duyệt hoặc yêu cầu khách hàng cập nhật.
+            <strong>Cần xử lý</strong>
+            là công việc quản trị.
+            Mở xem không làm mất badge;
+            công việc chỉ chuyển sang
+            <strong>Đã xử lý</strong>
+            khi trạng thái nghiệp vụ thực sự được hoàn tất.
         </div>
     }
 
     @if (Model.Count == 0)
     {
         <div class="notifications-empty">
-            <div class="notification-icon notification-tone-info mx-auto mb-3" aria-hidden="true">✓</div>
-            <h2 class="h6 fw-bold mb-1">Chưa có thông báo</h2>
-            <p class="text-muted mb-0">Các cập nhật quan trọng về tài khoản và đơn thuê sẽ xuất hiện tại đây.</p>
+            <div class="notification-icon notification-tone-info mx-auto mb-3"
+                 aria-hidden="true">✓</div>
+
+            <h2 class="h6 fw-bold mb-1">
+                Chưa có thông báo
+            </h2>
+
+            <p class="text-muted mb-0">
+                Các cập nhật quan trọng và việc cần xử lý
+                sẽ xuất hiện tại đây.
+            </p>
         </div>
     }
     else
     {
-        <div class="notifications-list">
+        <div class="notifications-list"
+             data-notifications-list>
+
         @foreach (var item in Model)
         {
-            var separatorIndex = item.Title.IndexOf('|');
-            var rawDisplayTitle = separatorIndex > 0 ? item.Title[..separatorIndex] : item.Title;
-            var isKycWorkItem = rawDisplayTitle == "Hồ sơ KYC chờ duyệt";
-            var displayTitle = isKycWorkItem
-                ? "Hồ sơ xác minh chờ duyệt"
-                : FriendlyNotificationText(rawDisplayTitle);
-            var displayMessage = FriendlyNotificationText(item.Message);
-            var kycCustomerId = isKycWorkItem && separatorIndex > 0
-                ? item.Title[(separatorIndex + 1)..]
-                : null;
-            var isKycAction = !string.IsNullOrWhiteSpace(kycCustomerId);
+            var separatorIndex =
+                item.Title.IndexOf('|');
 
-            var isNeedsUpdate = displayTitle.Contains("cần cập nhật", StringComparison.OrdinalIgnoreCase) ||
-                                displayMessage.Contains("cần cập nhật", StringComparison.OrdinalIgnoreCase) ||
-                                displayMessage.Contains("không khớp", StringComparison.OrdinalIgnoreCase);
-            var isApproved = displayTitle.Contains("đã được duyệt", StringComparison.OrdinalIgnoreCase) ||
-                             displayTitle.Contains("đã hoàn tất", StringComparison.OrdinalIgnoreCase) ||
-                             displayMessage.Contains("đã hoàn tất", StringComparison.OrdinalIgnoreCase) ||
-                             displayMessage.Contains("đã được xác minh", StringComparison.OrdinalIgnoreCase);
-            var isIdentityNotification = displayTitle.Contains("xác minh giấy tờ", StringComparison.OrdinalIgnoreCase) ||
-                                         displayMessage.Contains("CCCD", StringComparison.OrdinalIgnoreCase) ||
-                                         displayMessage.Contains("GPLX", StringComparison.OrdinalIgnoreCase) ||
-                                         displayMessage.Contains("giấy phép lái xe", StringComparison.OrdinalIgnoreCase);
-            var opensProfileDocuments = !isKycAction &&
-                                        isIdentityNotification &&
-                                        User.IsInRole(SmartCar.Domain.Constants.RoleNames.Customer);
+            var rawDisplayTitle =
+                separatorIndex > 0
+                    ? item.Title[..separatorIndex]
+                    : item.Title;
 
-            var toneClass = isKycAction
-                ? (item.IsRead ? "notification-tone-success" : "notification-tone-work")
-                : isNeedsUpdate
-                    ? "notification-tone-warning"
-                    : isApproved
-                        ? "notification-tone-success"
-                        : "notification-tone-info";
-            var iconText = isKycAction
-                ? (item.IsRead ? "✓" : "!")
-                : isNeedsUpdate
-                    ? "!"
-                    : isApproved
-                        ? "✓"
-                        : "i";
-            var statusText = isKycAction
-                ? (item.IsRead ? "Đã xử lý" : "Cần xử lý")
-                : isNeedsUpdate
-                    ? "Cần cập nhật"
-                    : isApproved
-                        ? "Đã duyệt"
-                        : (!item.IsRead ? "Mới" : string.Empty);
-            var statusClass = isKycAction
-                ? (item.IsRead ? "notification-status-success" : "notification-status-warning")
-                : isNeedsUpdate
-                    ? "notification-status-warning"
-                    : isApproved
+            var workKey =
+                separatorIndex > 0 &&
+                separatorIndex < item.Title.Length - 1
+                    ? item.Title[(separatorIndex + 1)..]
+                    : string.Empty;
+
+            var isWorkItem =
+                IsWorkTitle(item.Title);
+
+            var displayTitle =
+                rawDisplayTitle switch
+                {
+                    "Hồ sơ KYC chờ duyệt" =>
+                        "Hồ sơ xác minh chờ duyệt",
+
+                    "CCCD chờ xác minh" =>
+                        "CCCD cần xác minh",
+
+                    "GPLX chờ xác minh" =>
+                        "GPLX cần xác minh",
+
+                    "Đơn thuê chờ xử lý" =>
+                        "Đơn thuê mới cần xác nhận",
+
+                    "Yêu cầu gia hạn chờ xử lý" =>
+                        "Yêu cầu gia hạn cần xử lý",
+
+                    "Thanh toán QR chờ xác nhận" =>
+                        "Thanh toán QR cần xác nhận",
+
+                    _ =>
+                        FriendlyNotificationText(
+                            rawDisplayTitle)
+                };
+
+            var displayMessage =
+                FriendlyNotificationText(
+                    item.Message);
+
+            var isNeedsUpdate =
+                displayTitle.Contains(
+                    "cần cập nhật",
+                    StringComparison.OrdinalIgnoreCase) ||
+                displayMessage.Contains(
+                    "cần cập nhật",
+                    StringComparison.OrdinalIgnoreCase) ||
+                displayMessage.Contains(
+                    "không khớp",
+                    StringComparison.OrdinalIgnoreCase);
+
+            var isApproved =
+                displayTitle.Contains(
+                    "đã được duyệt",
+                    StringComparison.OrdinalIgnoreCase) ||
+                displayTitle.Contains(
+                    "đã hoàn tất",
+                    StringComparison.OrdinalIgnoreCase) ||
+                displayMessage.Contains(
+                    "đã hoàn tất",
+                    StringComparison.OrdinalIgnoreCase) ||
+                displayMessage.Contains(
+                    "đã được xác minh",
+                    StringComparison.OrdinalIgnoreCase);
+
+            var isIdentityNotification =
+                displayTitle.Contains(
+                    "xác minh",
+                    StringComparison.OrdinalIgnoreCase) ||
+                displayMessage.Contains(
+                    "CCCD",
+                    StringComparison.OrdinalIgnoreCase) ||
+                displayMessage.Contains(
+                    "GPLX",
+                    StringComparison.OrdinalIgnoreCase);
+
+            var opensProfileDocuments =
+                !isWorkItem &&
+                isIdentityNotification &&
+                User.IsInRole(
+                    SmartCar.Domain.Constants.RoleNames.Customer);
+
+            var toneClass =
+                isWorkItem && !item.IsRead
+                    ? "notification-tone-work"
+                    : isNeedsUpdate
+                        ? "notification-tone-warning"
+                        : isApproved || (isWorkItem && item.IsRead)
+                            ? "notification-tone-success"
+                            : "notification-tone-info";
+
+            var iconText =
+                isWorkItem
+                    ? item.IsRead ? "✓" : "!"
+                    : isNeedsUpdate
+                        ? "!"
+                        : isApproved
+                            ? "✓"
+                            : "i";
+
+            var statusText =
+                isWorkItem
+                    ? item.IsRead
+                        ? "Đã xử lý"
+                        : "Cần xử lý"
+                    : isNeedsUpdate
+                        ? "Cần cập nhật"
+                        : isApproved
+                            ? "Đã duyệt"
+                            : !item.IsRead
+                                ? "Mới"
+                                : string.Empty;
+
+            var statusClass =
+                isWorkItem
+                    ? item.IsRead
                         ? "notification-status-success"
-                        : "notification-status-info";
+                        : "notification-status-warning"
+                    : isNeedsUpdate
+                        ? "notification-status-warning"
+                        : isApproved
+                            ? "notification-status-success"
+                            : "notification-status-info";
 
-            <article class="notification-card @toneClass @(item.IsRead ? string.Empty : "notification-card-unread") @(isKycAction && item.IsRead ? "notification-card-handled" : string.Empty)">
-                <div class="notification-icon" aria-hidden="true">@iconText</div>
+            var itemState =
+                isWorkItem
+                    ? item.IsRead ? "handled" : "work"
+                    : item.IsRead ? "handled" : "unread";
+
+            <article class="notification-card
+                            @toneClass
+                            @(item.IsRead
+                                ? "notification-card-handled"
+                                : string.Empty)
+                            @(isWorkItem && !item.IsRead
+                                ? "notification-card-work"
+                                : "notification-card-unread")"
+                     data-notification-card
+                     data-notification-state="@itemState">
+
+                <div class="notification-icon"
+                     aria-hidden="true">
+                    @iconText
+                </div>
 
                 <div class="notification-body">
                     <div class="notification-title-row">
-                        <h2 class="notification-title">@displayTitle</h2>
+                        <h2 class="notification-title">
+                            @displayTitle
+                        </h2>
+
                         @if (!string.IsNullOrWhiteSpace(statusText))
                         {
-                            <span class="notification-status @statusClass">@statusText</span>
+                            <span class="notification-status @statusClass">
+                                @statusText
+                            </span>
                         }
                     </div>
 
-                    <p class="notification-message">@displayMessage</p>
+                    <p class="notification-message">
+                        @displayMessage
+                    </p>
+
                     <div class="notification-meta">
-                        <span>@item.CreatedAt.ToLocalTime().ToString("HH:mm · dd/MM/yyyy")</span>
+                        @item.CreatedAt
+                            .ToLocalTime()
+                            .ToString("HH:mm · dd/MM/yyyy")
                     </div>
 
-                    @if (isKycAction || opensProfileDocuments || (!item.IsRead && !isKycAction))
-                    {
-                        <div class="notification-actions">
-                            @if (isKycAction && !item.IsRead)
+                    <div class="notification-actions">
+                        @if (isWorkItem)
+                        {
+                            if (rawDisplayTitle ==
+                                "Hồ sơ KYC chờ duyệt")
                             {
-                                <form asp-action="OpenKyc" method="post">
-                                    <input type="hidden" name="id" value="@item.NotificationId" />
-                                    <input type="hidden" name="customerId" value="@kycCustomerId" />
-                                    <button class="btn btn-sm btn-primary stretched-link" type="submit">Xử lý hồ sơ →</button>
-                                </form>
+                                if (!item.IsRead)
+                                {
+                                    <form asp-action="OpenKyc"
+                                          method="post">
+                                        <input type="hidden"
+                                               name="id"
+                                               value="@item.NotificationId" />
+                                        <input type="hidden"
+                                               name="customerId"
+                                               value="@workKey" />
+                                        <button class="btn btn-sm btn-primary stretched-link"
+                                                type="submit">
+                                            Xử lý hồ sơ →
+                                        </button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary stretched-link"
+                                       asp-controller="AdminCustomers"
+                                       asp-action="Details"
+                                       asp-route-id="@workKey"
+                                       asp-route-tab="documents">
+                                        Xem hồ sơ →
+                                    </a>
+                                }
                             }
-                            else if (isKycAction && item.IsRead)
+                            else if (rawDisplayTitle ==
+                                     "CCCD chờ xác minh" ||
+                                     rawDisplayTitle ==
+                                     "GPLX chờ xác minh")
                             {
-                                <a class="btn btn-sm btn-outline-secondary stretched-link"
+                                <a class="btn btn-sm @(item.IsRead ? "btn-outline-secondary" : "btn-primary") stretched-link"
                                    asp-controller="AdminCustomers"
                                    asp-action="Details"
-                                   asp-route-id="@kycCustomerId"
+                                   asp-route-id="@workKey"
                                    asp-route-tab="documents">
-                                    Xem hồ sơ giấy tờ →
+                                    @(item.IsRead
+                                        ? "Xem hồ sơ →"
+                                        : rawDisplayTitle.StartsWith("CCCD")
+                                            ? "Kiểm tra CCCD →"
+                                            : "Kiểm tra GPLX →")
                                 </a>
                             }
-                            else if (opensProfileDocuments)
+                            else if (rawDisplayTitle ==
+                                     "Đơn thuê chờ xử lý" &&
+                                     int.TryParse(
+                                         workKey,
+                                         out var bookingWorkId))
                             {
-                                <form asp-action="OpenProfileDocuments" method="post">
-                                    <input type="hidden" name="id" value="@item.NotificationId" />
-                                    <button class="btn btn-sm @(isNeedsUpdate ? "btn-primary" : "btn-outline-primary") stretched-link" type="submit">
-                                        @(isNeedsUpdate ? "Cập nhật hồ sơ →" : "Xem hồ sơ →")
-                                    </button>
-                                </form>
+                                <a class="btn btn-sm @(item.IsRead ? "btn-outline-secondary" : "btn-primary") stretched-link"
+                                   asp-controller="AdminBookings"
+                                   asp-action="Details"
+                                   asp-route-id="@bookingWorkId">
+                                    @(item.IsRead
+                                        ? "Xem đơn →"
+                                        : "Xử lý đơn →")
+                                </a>
                             }
-                            else if (!item.IsRead && !isKycAction)
+                            else if (rawDisplayTitle ==
+                                     "Yêu cầu gia hạn chờ xử lý")
                             {
-                                <form asp-action="MarkRead" method="post">
-                                    <input type="hidden" name="id" value="@item.NotificationId" />
-                                    <button class="btn btn-sm btn-link text-decoration-none px-0" type="submit">Đánh dấu đã đọc</button>
-                                </form>
+                                <a class="btn btn-sm @(item.IsRead ? "btn-outline-secondary" : "btn-primary") stretched-link"
+                                   asp-controller="AdminExtensions"
+                                   asp-action="Index">
+                                    @(item.IsRead
+                                        ? "Xem gia hạn →"
+                                        : "Xử lý gia hạn →")
+                                </a>
                             }
-                        </div>
-                    }
+                            else if (rawDisplayTitle ==
+                                     "Thanh toán QR chờ xác nhận")
+                            {
+                                <a class="btn btn-sm @(item.IsRead ? "btn-outline-secondary" : "btn-primary") stretched-link"
+                                   asp-controller="AdminPayments"
+                                   asp-action="Index"
+                                   asp-route-status="AwaitingConfirmation">
+                                    @(item.IsRead
+                                        ? "Xem thanh toán →"
+                                        : "Kiểm tra thanh toán →")
+                                </a>
+                            }
+                        }
+                        else if (opensProfileDocuments)
+                        {
+                            <form asp-action="OpenProfileDocuments"
+                                  method="post">
+                                <input type="hidden"
+                                       name="id"
+                                       value="@item.NotificationId" />
+
+                                <button class="btn btn-sm @(isNeedsUpdate ? "btn-primary" : "btn-outline-primary") stretched-link"
+                                        type="submit">
+                                    @(isNeedsUpdate
+                                        ? "Cập nhật hồ sơ →"
+                                        : "Xem hồ sơ →")
+                                </button>
+                            </form>
+                        }
+                        else if (!item.IsRead)
+                        {
+                            <form asp-action="MarkRead"
+                                  method="post">
+                                <input type="hidden"
+                                       name="id"
+                                       value="@item.NotificationId" />
+
+                                <button class="btn btn-sm btn-link text-decoration-none px-0"
+                                        type="submit">
+                                    Đánh dấu đã đọc
+                                </button>
+                            </form>
+                        }
+                    </div>
                 </div>
 
-                @if (!item.IsRead && !isKycAction)
+                @if (!item.IsRead && !isWorkItem)
                 {
-                    <span class="notification-unread-dot" title="Chưa đọc" aria-label="Chưa đọc"></span>
+                    <span class="notification-unread-dot"
+                          title="Chưa đọc"
+                          aria-label="Chưa đọc"></span>
                 }
             </article>
         }
         </div>
+
+        @if (isAdmin)
+        {
+            <div class="notifications-empty d-none mt-3"
+                 data-filter-empty>
+                Không có mục nào trong nhóm này.
+            </div>
+        }
     }
 </div>
+
+@if (isAdmin)
+{
+    <script>
+        (() => {
+            const page =
+                document.querySelector(
+                    '[data-notifications-page]');
+
+            if (!page) return;
+
+            const buttons =
+                [...page.querySelectorAll(
+                    '[data-notification-filter]')];
+
+            const cards =
+                [...page.querySelectorAll(
+                    '[data-notification-card]')];
+
+            const empty =
+                page.querySelector(
+                    '[data-filter-empty]');
+
+            const applyFilter = filter => {
+                let visible = 0;
+
+                cards.forEach(card => {
+                    const show =
+                        card.dataset.notificationState ===
+                        filter;
+
+                    card.classList.toggle(
+                        'd-none',
+                        !show);
+
+                    if (show) visible++;
+                });
+
+                buttons.forEach(button => {
+                    button.classList.toggle(
+                        'active',
+                        button.dataset.notificationFilter ===
+                        filter);
+                });
+
+                empty?.classList.toggle(
+                    'd-none',
+                    visible !== 0);
+            };
+
+            buttons.forEach(button => {
+                button.addEventListener(
+                    'click',
+                    () => applyFilter(
+                        button.dataset.notificationFilter));
+            });
+
+            applyFilter(
+                page.dataset.defaultFilter ||
+                'work');
+        })();
+    </script>
+}

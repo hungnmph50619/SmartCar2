@@ -9,39 +9,47 @@ using SmartCar.Infrastructure.Persistence;
 namespace SmartCar.Web.Filters;
 
 /// <summary>
-/// DocumentService keeps its existing per-document notifications for backwards compatibility,
-/// but the customer KYC workflow should alert admins only after the whole KYC package is ready.
-/// This filter removes the notification produced by the current partial submit and creates one
-/// actionable notification once CCCD + GPLX (both sides) are all pending.
+/// Mỗi lần khách gửi CCCD/GPLX, Admin nhận đúng một work notification.
+/// Nếu sau đó hồ sơ đã đủ cả CCCD + GPLX thì các notification rời rạc được
+/// gộp thành một work item "Hồ sơ KYC chờ duyệt".
 /// </summary>
 public sealed class KycAdminNotificationConsolidationFilter : IAsyncActionFilter
 {
-    private static readonly HashSet<string> CustomerKycSubmitActions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "SubmitCitizenId",
-        "SubmitDrivingLicense",
-        "VerifyAndSubmitCitizenId"
-    };
+    private static readonly HashSet<string> CustomerKycSubmitActions =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "SubmitCitizenId",
+            "SubmitDrivingLicense",
+            "VerifyAndSubmitCitizenId"
+        };
 
     private static readonly string[] LegacyKycNotificationTitles =
     {
         "Có CCCD chờ xác minh",
         "Có GPLX chờ xác minh",
-        "Có giấy tờ chờ xác minh"
+        "Có giấy tờ chờ xác minh",
+        "CCCD cập nhật chờ duyệt",
+        "GPLX cập nhật chờ duyệt"
     };
 
     private readonly ApplicationDbContext _dbContext;
 
-    public KycAdminNotificationConsolidationFilter(ApplicationDbContext dbContext)
+    public KycAdminNotificationConsolidationFilter(
+        ApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
-    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext context,
+        ActionExecutionDelegate next)
     {
-        var action = context.ActionDescriptor.RouteValues.TryGetValue("action", out var actionName)
-            ? actionName
-            : null;
+        var action =
+            context.ActionDescriptor.RouteValues.TryGetValue(
+                "action",
+                out var actionName)
+                ? actionName
+                : null;
 
         if (string.IsNullOrWhiteSpace(action) ||
             !CustomerKycSubmitActions.Contains(action) ||
@@ -51,20 +59,27 @@ public sealed class KycAdminNotificationConsolidationFilter : IAsyncActionFilter
             return;
         }
 
-        var startedAt = DateTime.UtcNow.AddSeconds(-2);
+        var startedAt = DateTime.UtcNow.AddSeconds(-3);
         var executed = await next();
-        if (executed.Exception is not null && !executed.ExceptionHandled)
+
+        if (executed.Exception is not null &&
+            !executed.ExceptionHandled)
         {
             return;
         }
 
-        var customerId = context.HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var customerId =
+            context.HttpContext.User.FindFirstValue(
+                ClaimTypes.NameIdentifier);
+
         if (string.IsNullOrWhiteSpace(customerId))
         {
             return;
         }
 
-        var cancellationToken = context.HttpContext.RequestAborted;
+        var cancellationToken =
+            context.HttpContext.RequestAborted;
+
         var adminRoleId = await _dbContext.Roles
             .Where(role => role.Name == RoleNames.Admin)
             .Select(role => role.Id)
@@ -86,16 +101,20 @@ public sealed class KycAdminNotificationConsolidationFilter : IAsyncActionFilter
             return;
         }
 
-        // Remove only notifications created by the current action. Older KYC work for other
-        // customers must never be touched.
-        var partialNotifications = await _dbContext.Notifications
-            .Where(item => adminIds.Contains(item.UserId) &&
-                           item.CreatedAt >= startedAt &&
-                           LegacyKycNotificationTitles.Contains(item.Title))
-            .ToListAsync(cancellationToken);
-        if (partialNotifications.Count > 0)
+        // Bỏ notification thông tin cũ vừa phát sinh trong request này.
+        // Chỉ giữ work notification có CTA ở bên dưới.
+        var legacyNotifications =
+            await _dbContext.Notifications
+                .Where(item =>
+                    adminIds.Contains(item.UserId) &&
+                    item.CreatedAt >= startedAt &&
+                    LegacyKycNotificationTitles.Contains(item.Title))
+                .ToListAsync(cancellationToken);
+
+        if (legacyNotifications.Count > 0)
         {
-            _dbContext.Notifications.RemoveRange(partialNotifications);
+            _dbContext.Notifications.RemoveRange(
+                legacyNotifications);
         }
 
         var requiredTypes = new[]
@@ -106,42 +125,132 @@ public sealed class KycAdminNotificationConsolidationFilter : IAsyncActionFilter
             DocumentTypes.DrivingLicenseBack
         };
 
-        var documents = await _dbContext.CustomerDocuments
-            .AsNoTracking()
-            .Where(document => document.CustomerId == customerId && requiredTypes.Contains(document.DocumentType))
-            .Select(document => new { document.DocumentType, document.Status })
-            .ToListAsync(cancellationToken);
+        var documents =
+            await _dbContext.CustomerDocuments
+                .AsNoTracking()
+                .Where(document =>
+                    document.CustomerId == customerId &&
+                    requiredTypes.Contains(document.DocumentType))
+                .Select(document => new
+                {
+                    document.DocumentType,
+                    document.Status
+                })
+                .ToListAsync(cancellationToken);
 
-        var completePendingPackage = requiredTypes.All(type =>
-            documents.Any(document => document.DocumentType == type && document.Status == DocumentStatus.Pending));
+        var citizenPending = documents.Any(document =>
+            (document.DocumentType == DocumentTypes.CitizenId ||
+             document.DocumentType == DocumentTypes.CitizenIdBack) &&
+            document.Status == DocumentStatus.Pending);
+
+        var licensePending = documents.Any(document =>
+            (document.DocumentType == DocumentTypes.DrivingLicense ||
+             document.DocumentType == DocumentTypes.DrivingLicenseBack) &&
+            document.Status == DocumentStatus.Pending);
+
+        var completePendingPackage =
+            requiredTypes.All(type =>
+                documents.Any(document =>
+                    document.DocumentType == type &&
+                    document.Status == DocumentStatus.Pending));
+
+        var customerName =
+            await _dbContext.Users
+                .Where(user => user.Id == customerId)
+                .Select(user => user.FullName)
+                .FirstOrDefaultAsync(cancellationToken)
+            ?? "Khách hàng";
 
         if (completePendingPackage)
         {
-            var customerName = await _dbContext.Users
-                .Where(user => user.Id == customerId)
-                .Select(user => user.FullName)
-                .FirstOrDefaultAsync(cancellationToken) ?? "Khách hàng";
-
-            var notificationTitle = $"Hồ sơ KYC chờ duyệt|{customerId}";
-            var existingAdminIds = await _dbContext.Notifications
-                .AsNoTracking()
-                .Where(item => adminIds.Contains(item.UserId) &&
-                               !item.IsRead &&
-                               item.Title == notificationTitle)
-                .Select(item => item.UserId)
-                .ToListAsync(cancellationToken);
-
-            foreach (var adminId in adminIds.Except(existingAdminIds))
+            // Đã đủ cả 2 loại giấy tờ: xóa work item rời để Admin chỉ thấy 1 việc.
+            var partialTitles = new[]
             {
-                _dbContext.Notifications.Add(new Notification
-                {
-                    UserId = adminId,
-                    Title = notificationTitle,
-                    Message = $"{customerName} đã gửi đủ CCCD và GPLX. Hãy mở hồ sơ để đối chiếu cả hai giấy tờ và duyệt hồ sơ trong một lần."
-                });
+                $"CCCD chờ xác minh|{customerId}",
+                $"GPLX chờ xác minh|{customerId}"
+            };
+
+            var partialWork =
+                await _dbContext.Notifications
+                    .Where(item =>
+                        adminIds.Contains(item.UserId) &&
+                        partialTitles.Contains(item.Title))
+                    .ToListAsync(cancellationToken);
+
+            if (partialWork.Count > 0)
+            {
+                _dbContext.Notifications.RemoveRange(partialWork);
             }
+
+            await EnsureAdminWorkAsync(
+                adminIds,
+                $"Hồ sơ KYC chờ duyệt|{customerId}",
+                $"{customerName} đã gửi đủ CCCD và GPLX. " +
+                "Hãy mở hồ sơ để đối chiếu cả hai giấy tờ và duyệt hồ sơ trong một lần.",
+                cancellationToken);
+        }
+        else if (
+            (string.Equals(
+                 action,
+                 "SubmitCitizenId",
+                 StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(
+                 action,
+                 "VerifyAndSubmitCitizenId",
+                 StringComparison.OrdinalIgnoreCase)) &&
+            citizenPending)
+        {
+            await EnsureAdminWorkAsync(
+                adminIds,
+                $"CCCD chờ xác minh|{customerId}",
+                $"{customerName} vừa gửi CCCD mới. " +
+                "Hãy kiểm tra thông tin và hai mặt CCCD để xác minh.",
+                cancellationToken);
+        }
+        else if (
+            string.Equals(
+                action,
+                "SubmitDrivingLicense",
+                StringComparison.OrdinalIgnoreCase) &&
+            licensePending)
+        {
+            await EnsureAdminWorkAsync(
+                adminIds,
+                $"GPLX chờ xác minh|{customerId}",
+                $"{customerName} vừa gửi GPLX mới. " +
+                "Hãy kiểm tra thông tin và hai mặt GPLX để xác minh.",
+                cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task EnsureAdminWorkAsync(
+        IReadOnlyCollection<string> adminIds,
+        string title,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var existingAdminIds =
+            await _dbContext.Notifications
+                .AsNoTracking()
+                .Where(item =>
+                    adminIds.Contains(item.UserId) &&
+                    !item.IsRead &&
+                    item.Title == title)
+                .Select(item => item.UserId)
+                .ToListAsync(cancellationToken);
+
+        foreach (var adminId in
+                 adminIds.Except(existingAdminIds))
+        {
+            _dbContext.Notifications.Add(
+                new Notification
+                {
+                    UserId = adminId,
+                    Title = title,
+                    Message = message
+                });
+        }
     }
 }
