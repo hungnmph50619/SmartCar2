@@ -1,0 +1,162 @@
+@model SmartCar.Application.Features.Vehicles.VehicleDto
+@using SmartCar.Application.Features.Reviews
+@using SmartCar.Domain.Constants
+@{
+    ViewData["Title"] = Model.VehicleName;
+    var pickupDate = (DateTime)ViewBag.PickupDate;
+    var returnDate = (DateTime)ViewBag.ReturnDate;
+    var numberOfDays = Math.Max(1, (int)Math.Ceiling((returnDate - pickupDate).TotalHours / 24d));
+    var estimatedAmount = numberOfDays * Model.DailyPrice;
+    var reviews = ViewBag.Reviews as IReadOnlyList<ReviewDto> ?? Array.Empty<ReviewDto>();
+    var averageRating = (double)(ViewBag.AverageRating ?? 0d);
+    var kycVerified = ViewBag.KycVerified is bool verified && verified;
+    var kycVerifiedCount = ViewBag.KycVerifiedCount is int count ? count : 0;
+    var kycTotal = ViewBag.KycTotal is int total ? total : 2;
+    var citizenApproved = ViewBag.CitizenApproved is bool citizenOk && citizenOk;
+    var licenseApproved = ViewBag.LicenseApproved is bool licenseOk && licenseOk;
+    var citizenValidForRental = ViewBag.CitizenValidForRental is bool citizenRentalOk && citizenRentalOk;
+    var licenseValidForRental = ViewBag.LicenseValidForRental is bool licenseRentalOk && licenseRentalOk;
+    var citizenExpiryDate = ViewBag.CitizenExpiryDate is DateTime citizenExpiry ? citizenExpiry : (DateTime?)null;
+    var licenseExpiryDate = ViewBag.LicenseExpiryDate is DateTime licenseExpiry ? licenseExpiry : (DateTime?)null;
+    var allDocumentsApproved = citizenApproved && licenseApproved;
+    var hasBankAccount = ViewBag.HasBankAccount is bool hasBank && hasBank;
+}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        @if (Model.Images.Count > 0)
+        {
+            <div class="row g-2">
+            @foreach (var image in Model.Images)
+            {
+                <div class="col-6">
+                    <img src="@image.ImagePath" class="img-fluid rounded w-100" style="height:240px;object-fit:cover" alt="@Model.VehicleName" />
+                </div>
+            }
+            </div>
+        }
+        else
+        {
+            <div class="bg-light rounded d-flex align-items-center justify-content-center" style="height:360px">Xe chưa có ảnh</div>
+        }
+    </div>
+    <div class="col-lg-5">
+        <div class="card card-body shadow-sm sticky-top" style="top:1rem">
+            <h1 class="h3">@Model.VehicleName</h1>
+            <p class="text-muted">@Model.BrandName · @Model.Model · @Model.LicensePlate</p>
+            <div class="mb-3">
+                <span class="text-warning fs-5">★</span>
+                <strong>@(reviews.Count == 0 ? "Chưa có đánh giá" : $"{averageRating:F1}/5")</strong>
+                @if (reviews.Count > 0)
+                {
+                    <span class="text-muted">(@reviews.Count lượt)</span>
+                }
+            </div>
+            <dl class="row mb-3">
+                <dt class="col-5">Số chỗ</dt><dd class="col-7">@Model.Seats</dd>
+                <dt class="col-5">Hộp số</dt><dd class="col-7">@Model.Transmission</dd>
+                <dt class="col-5">Nhiên liệu</dt><dd class="col-7">@Model.FuelType</dd>
+                <dt class="col-5">Năm sản xuất</dt><dd class="col-7">@Model.ManufactureYear</dd>
+            </dl>
+            <p>@Model.Description</p>
+            <hr />
+            <div class="mb-2"><strong>Nhận xe:</strong> @pickupDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div class="mb-2"><strong>Trả xe:</strong> @returnDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div class="mb-2"><strong>Số ngày tính phí:</strong> @numberOfDays</div>
+            <div class="fs-4 fw-bold text-primary mb-3">Dự kiến: @estimatedAmount.ToString("N0") đ</div>
+
+            @if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
+            {
+                @if (kycVerified)
+                {
+                    @if (hasBankAccount)
+                    {
+                        <div class="alert alert-success py-2 mb-3">
+                            <strong>✓ Giấy tờ và tài khoản nhận hoàn tiền đã sẵn sàng.</strong> Bạn có thể gửi yêu cầu thuê xe.
+                        </div>
+                        <form asp-controller="Bookings" asp-action="Create" method="post" data-loading-form>
+                            <input type="hidden" name="VehicleId" value="@Model.VehicleId" />
+                            <input type="hidden" name="PickupDate" value="@pickupDate.ToString("O")" />
+                            <input type="hidden" name="ReturnDate" value="@returnDate.ToString("O")" />
+                            <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">Gửi yêu cầu thuê xe</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <div class="border rounded-3 p-3 mb-3 bg-light">
+                            <div class="fw-bold">🏦 Cần thêm tài khoản ngân hàng</div>
+                            <div class="small text-muted mt-1">Trước khi đặt xe, bạn cần lưu tài khoản ngân hàng để SmartCar có thể hoàn tiền, hoàn cọc hoặc chuyển trả các khoản phát sinh khi cần.</div>
+                        </div>
+                        <a class="btn btn-primary btn-lg w-100" asp-controller="Profile" asp-action="Index" asp-route-tab="banking" asp-route-returnVehicleId="@Model.VehicleId" asp-route-pickupDate="@pickupDate.ToString("O")" asp-route-returnDate="@returnDate.ToString("O")">Thêm tài khoản ngân hàng</a>
+                    }
+                }
+                else if (allDocumentsApproved)
+                {
+                    <div class="border border-warning rounded-3 p-3 mb-3 bg-light">
+                        <div class="fw-bold mb-2">⚠ Giấy tờ không đủ thời hạn cho chuyến thuê</div>
+                        <div class="small mb-1">
+                            <strong>CCCD:</strong> ✓ Đã xác minh · Hết hạn @(citizenExpiryDate?.ToString("dd/MM/yyyy") ?? "chưa xác định")
+                            @if (!citizenValidForRental)
+                            {
+                                <span class="text-danger fw-semibold"> · Không đủ hiệu lực</span>
+                            }
+                        </div>
+                        <div class="small mb-2">
+                            <strong>GPLX:</strong> ✓ Đã xác minh · Hết hạn @(licenseExpiryDate?.ToString("dd/MM/yyyy") ?? "chưa xác định")
+                            @if (!licenseValidForRental)
+                            {
+                                <span class="text-danger fw-semibold"> · Không đủ hiệu lực</span>
+                            }
+                        </div>
+                        <div class="small text-muted">Chuyến thuê kết thúc ngày <strong>@returnDate.ToString("dd/MM/yyyy")</strong>. CCCD và GPLX phải còn hiệu lực ít nhất đến ngày trả xe.</div>
+                    </div>
+                    <a class="btn btn-primary btn-lg w-100" asp-controller="Profile" asp-action="Index" asp-route-tab="documents" asp-route-returnVehicleId="@Model.VehicleId" asp-route-pickupDate="@pickupDate.ToString("O")" asp-route-returnDate="@returnDate.ToString("O")">Cập nhật giấy tờ để tiếp tục</a>
+                }
+                else
+                {
+                    <div class="border rounded-3 p-3 mb-3 bg-light">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                            <div>
+                                <div class="fw-bold">🔒 Cần xác minh để thuê xe</div>
+                                <div class="small text-muted mt-1">Hoàn tất xác minh CCCD và GPLX trước khi gửi yêu cầu.</div>
+                            </div>
+                            <span class="badge bg-warning text-dark">@kycVerifiedCount/@kycTotal</span>
+                        </div>
+                        <div class="small text-muted">① CCCD: thông tin + 2 ảnh &nbsp;·&nbsp; ② GPLX: thông tin + 2 ảnh</div>
+                    </div>
+                    <a class="btn btn-primary btn-lg w-100" asp-controller="Profile" asp-action="Index" asp-route-tab="documents" asp-route-returnVehicleId="@Model.VehicleId" asp-route-pickupDate="@pickupDate.ToString("O")" asp-route-returnDate="@returnDate.ToString("O")">Xác minh để thuê xe</a>
+                }
+            }
+            else if (User.Identity?.IsAuthenticated != true)
+            {
+                <a class="btn btn-primary btn-lg w-100" asp-controller="Account" asp-action="Login">Đăng nhập để thuê xe</a>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="card card-body shadow-sm mt-4">
+    <h2 class="h4">Đánh giá từ khách hàng</h2>
+    @if (reviews.Count == 0)
+    {
+        <p class="text-muted mb-0">Xe chưa có đánh giá sau chuyến thuê.</p>
+    }
+    else
+    {
+        <div class="row g-3">
+        @foreach (var review in reviews)
+        {
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <div class="d-flex justify-content-between">
+                        <strong>@review.CustomerName</strong>
+                        <span class="text-warning">@string.Concat(Enumerable.Repeat("★", review.Rating))</span>
+                    </div>
+                    <p class="mb-1 mt-2">@(string.IsNullOrWhiteSpace(review.Comment) ? "Khách hàng không để lại nhận xét." : review.Comment)</p>
+                    <small class="text-muted">@review.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small>
+                </div>
+            </div>
+        }
+        </div>
+    }
+</div>
