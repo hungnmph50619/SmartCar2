@@ -35,8 +35,6 @@ public sealed class KycCitizenIdInputViewModel
     [Display(Name = "Ngày hết hạn")]
     public DateTime? ExpiryDate { get; set; }
 
-    // Địa chỉ cư trú không còn yêu cầu người dùng nhập ở bước KYC ban đầu.
-    // Giữ thuộc tính để tương thích với dữ liệu/mã hiện có; có thể được bổ sung sau từ OCR/QR hoặc khi Admin đối chiếu.
     public string PermanentAddress { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng chọn ảnh CCCD mặt trước.")]
