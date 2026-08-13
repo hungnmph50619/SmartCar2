@@ -3,6 +3,10 @@
     var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
     var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
     var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
+    var latestDateOfBirth = DateTime.Today.AddYears(-18).ToString("yyyy-MM-dd");
+    var minimumExpiryDate = returnDate.HasValue && returnDate.Value.Date > DateTime.Today
+        ? returnDate.Value.Date.ToString("yyyy-MM-dd")
+        : DateTime.Today.ToString("yyyy-MM-dd");
 }
 
 <div class="alert alert-light border shadow-sm mb-4">
@@ -42,16 +46,26 @@
                     <span asp-validation-for="CitizenIdVerification.DocumentNumber" id="citizenNumberError" class="kyc-client-error d-block"></span>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold" for="citizenDobDisplay">Ngày sinh</label>
-                    <input id="citizenDobDisplay" type="text" class="form-control" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" data-vn-date data-date-role="dob" data-date-target="CitizenDateOfBirth" data-client-error-id="citizenDobError" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("dd/MM/yyyy")" required />
-                    <input id="CitizenDateOfBirth" type="hidden" name="CitizenIdVerification.DateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("yyyy-MM-dd")" />
-                    <div id="citizenDobError" class="kyc-client-error"></div>
+                    <label class="form-label fw-semibold" for="CitizenDateOfBirth">Ngày sinh</label>
+                    <input id="CitizenDateOfBirth"
+                           name="CitizenIdVerification.DateOfBirth"
+                           type="date"
+                           class="form-control"
+                           max="@latestDateOfBirth"
+                           value="@Model.CitizenIdVerification.DateOfBirth?.ToString("yyyy-MM-dd")"
+                           required />
+                    <span asp-validation-for="CitizenIdVerification.DateOfBirth" class="kyc-client-error d-block"></span>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold" for="citizenExpiryDisplay">Ngày hết hạn</label>
-                    <input id="citizenExpiryDisplay" type="text" class="form-control" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" data-vn-date data-date-role="expiry" data-document-label="CCCD" data-date-target="CitizenExpiryDate" data-client-error-id="citizenExpiryError" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("dd/MM/yyyy")" required />
-                    <input id="CitizenExpiryDate" type="hidden" name="CitizenIdVerification.ExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />
-                    <div id="citizenExpiryError" class="kyc-client-error"></div>
+                    <label class="form-label fw-semibold" for="CitizenExpiryDate">Ngày hết hạn</label>
+                    <input id="CitizenExpiryDate"
+                           name="CitizenIdVerification.ExpiryDate"
+                           type="date"
+                           class="form-control"
+                           min="@minimumExpiryDate"
+                           value="@Model.CitizenIdVerification.ExpiryDate?.ToString("yyyy-MM-dd")"
+                           required />
+                    <span asp-validation-for="CitizenIdVerification.ExpiryDate" class="kyc-client-error d-block"></span>
                 </div>
                 <div class="col-12">
                     <label asp-for="CitizenIdVerification.PermanentAddress" class="form-label fw-semibold"></label>
@@ -114,10 +128,15 @@
                     <span asp-validation-for="DrivingLicenseVerification.LicenseClass" id="licenseClassError" class="kyc-client-error d-block"></span>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold" for="licenseExpiryDisplay">Ngày hết hạn</label>
-                    <input id="licenseExpiryDisplay" type="text" class="form-control" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" data-vn-date data-date-role="expiry" data-document-label="GPLX" data-date-target="LicenseExpiryDate" data-client-error-id="licenseExpiryError" value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("dd/MM/yyyy")" required />
-                    <input id="LicenseExpiryDate" type="hidden" name="DrivingLicenseVerification.ExpiryDate" value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("yyyy-MM-dd")" />
-                    <div id="licenseExpiryError" class="kyc-client-error"></div>
+                    <label class="form-label fw-semibold" for="LicenseExpiryDate">Ngày hết hạn</label>
+                    <input id="LicenseExpiryDate"
+                           name="DrivingLicenseVerification.ExpiryDate"
+                           type="date"
+                           class="form-control"
+                           min="@minimumExpiryDate"
+                           value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("yyyy-MM-dd")"
+                           required />
+                    <span asp-validation-for="DrivingLicenseVerification.ExpiryDate" class="kyc-client-error d-block"></span>
                 </div>
             </div>
 
