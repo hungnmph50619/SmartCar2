@@ -157,7 +157,7 @@ public sealed class KycPackageController : Controller
                     document.CustomerDocumentId,
                     holderName,
                     citizen.DateOfBirth!.Value.Date,
-                    null,
+                    citizen.Gender.Trim(),
                     null,
                     null,
                     null,
