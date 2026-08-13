@@ -199,7 +199,7 @@ public sealed class VehiclesController : Controller
             }
         }
 
-        return View(vehicle);
+        return View("DetailsV2", vehicle);
     }
 
     private async Task LoadBrandsAsync(int? selectedId, CancellationToken cancellationToken)
