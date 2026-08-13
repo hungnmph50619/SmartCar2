@@ -1,157 +1,62 @@
-﻿@model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@model SmartCar.Application.Features.Bookings.BookingDetailsDto
 @using SmartCar.Domain.Enums
-<<<<<<< HEAD
-=======
+
 @{
     ViewData["Title"] = $"Đơn thuê #{Model.BookingId}";
+
+    var rentalPayment = Model.Payments
+        .Where(item => item.Type == PaymentType.Rental &&
+                       item.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
+        .OrderByDescending(item => item.PaymentId)
+        .FirstOrDefault();
+
+    var extensionPayment = Model.Payments
+        .Where(item => item.Type == PaymentType.Extension &&
+                       item.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
+        .OrderByDescending(item => item.PaymentId)
+        .FirstOrDefault();
+
+    var additionalPayment = Model.Payments
+        .Where(item => item.Type == PaymentType.AdditionalCharge &&
+                       item.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
+        .OrderByDescending(item => item.PaymentId)
+        .FirstOrDefault();
+
+    var refundPayment = Model.Payments
+        .Where(item => item.Type == PaymentType.Refund)
+        .OrderByDescending(item => item.PaymentId)
+        .FirstOrDefault();
+
+    var approvedExtension = Model.Extensions
+        .Where(item => item.Status == BookingExtensionStatus.Approved)
+        .OrderByDescending(item => item.BookingExtensionId)
+        .FirstOrDefault();
+
     var hasOpenExtension = Model.Extensions.Any(item =>
         item.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.Approved);
-    var canCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
->>>>>>> origin/hung-dev
 
-@{
-    ViewData["Title"] =
-        $"Đơn thuê #{Model.BookingId}";
+    var canCancel = Model.Status is
+        BookingStatus.PendingConfirmation or
+        BookingStatus.PendingPayment or
+        BookingStatus.Paid or
+        BookingStatus.ReadyForPickup;
 
-    // ============================================================
-    // PAYMENT TIỀN THUÊ
-    // ============================================================
+    var smartCarSupportPhone = (ViewBag.SmartCarSupportPhone as string ?? "0982223792").Trim();
+    var smartCarSupportPhoneDisplay = smartCarSupportPhone.Length == 10
+        ? $"{smartCarSupportPhone[..4]} {smartCarSupportPhone.Substring(4, 3)} {smartCarSupportPhone.Substring(7, 3)}"
+        : smartCarSupportPhone;
 
-    var rentalPayment =
-        Model.Payments
-            .Where(item =>
-                item.Type ==
-                    PaymentType.Rental &&
-                item.Status is
-                    PaymentStatus.Pending
-                    or PaymentStatus.AwaitingConfirmation)
-            .OrderByDescending(item =>
-                item.PaymentId)
-            .FirstOrDefault();
-
-    // ============================================================
-    // PAYMENT GIA HẠN
-    // ============================================================
-
-    var extensionPayment =
-        Model.Payments
-            .Where(item =>
-                item.Type ==
-                    PaymentType.Extension &&
-                item.Status is
-                    PaymentStatus.Pending
-                    or PaymentStatus.AwaitingConfirmation)
-            .OrderByDescending(item =>
-                item.PaymentId)
-            .FirstOrDefault();
-
-    // ============================================================
-    // PAYMENT PHỤ PHÍ
-    // ============================================================
-
-    var additionalPayment =
-        Model.Payments
-            .Where(item =>
-                item.Type ==
-                    PaymentType.AdditionalCharge &&
-                item.Status is
-                    PaymentStatus.Pending
-                    or PaymentStatus.AwaitingConfirmation)
-            .OrderByDescending(item =>
-                item.PaymentId)
-            .FirstOrDefault();
-
-    // ============================================================
-    // REFUND
-    // ============================================================
-
-    var refundPayment =
-        Model.Payments
-            .Where(item =>
-                item.Type ==
-                    PaymentType.Refund)
-            .OrderByDescending(item =>
-                item.PaymentId)
-            .FirstOrDefault();
-
-    // ============================================================
-    // YÊU CẦU GIA HẠN ĐÃ ĐƯỢC DUYỆT
-    // ============================================================
-
-    var approvedExtension =
-        Model.Extensions
-            .Where(item =>
-                item.Status ==
-                    BookingExtensionStatus.Approved)
-            .OrderByDescending(item =>
-                item.BookingExtensionId)
-            .FirstOrDefault();
-
-    var hasOpenExtension =
-        Model.Extensions.Any(item =>
-            item.Status is
-                BookingExtensionStatus.Pending
-                or BookingExtensionStatus.Approved);
-
-    // ============================================================
-    // QR ĐANG CHỜ ADMIN XÁC NHẬN
-    // ============================================================
-
-    var rentalAwaitingConfirmation =
-        rentalPayment?.Status ==
-        PaymentStatus.AwaitingConfirmation;
-
-    // ============================================================
-    // THÔNG TIN NGÂN HÀNG SMARTCAR
-    // ============================================================
-
-    var paymentBankName =
-        ViewBag.PaymentBankName as string
-        ?? "MB Bank";
-
-    var paymentAccountNumber =
-        ViewBag.PaymentAccountNumber as string
-        ?? "";
-
-    var paymentAccountHolder =
-        ViewBag.PaymentAccountHolder as string
-        ?? "SMARTCAR";
-
-    var paymentQrImagePath =
-        ViewBag.PaymentQrImagePath as string
-        ?? "/images/payment/bank-qr.png";
-
-    // ============================================================
-    // QUYỀN HỦY
-    // ============================================================
-
-    var canCancel =
-        Model.Status is
-            BookingStatus.PendingConfirmation
-            or BookingStatus.PendingPayment
-            or BookingStatus.Paid
-            or BookingStatus.ReadyForPickup;
-
-    // ============================================================
-    // KHUYẾN MÃI
-    // Nếu QR đã gửi thì khóa thay đổi promotion.
-    // ============================================================
-
-    var canApplyPromotion =
-        (Model.Status is
-            BookingStatus.PendingConfirmation
-            or BookingStatus.PendingPayment)
-        &&
-        !Model.RentalPaid
-        &&
-        !rentalAwaitingConfirmation;
+    var paymentBankName = ViewBag.PaymentBankName as string ?? "MB Bank";
+    var paymentAccountNumber = ViewBag.PaymentAccountNumber as string ?? string.Empty;
+    var paymentAccountHolder = ViewBag.PaymentAccountHolder as string ?? "SMARTCAR";
+    var paymentQrImagePath = ViewBag.PaymentQrImagePath as string ?? "/images/payment/bank-qr.png";
 
     var statusInfo = Model.Status switch
     {
         BookingStatus.PendingConfirmation => (
             "SmartCar đang kiểm tra yêu cầu",
             "Quản trị viên đang kiểm tra giấy tờ, lịch xe và thông tin đơn thuê.",
-            "Bạn chưa cần thanh toán. Hãy chờ thông báo xác nhận hoặc từ chối.",
+            "Bạn chưa cần thanh toán. SmartCar sẽ liên hệ qua số điện thoại bạn đã đăng ký; nếu chờ lâu, bạn có thể chủ động gọi Hotline SmartCar.",
             "warning"),
         BookingStatus.PendingPayment => (
             "Đơn đã được xác nhận",
@@ -183,7 +88,9 @@
         BookingStatus.Completed => (
             "Chuyến thuê đã hoàn tất",
             "Mọi khoản thanh toán và kiểm tra xe đã hoàn thành.",
-            Model.HasReview ? "Cảm ơn bạn đã sử dụng SmartCar." : "Hãy đánh giá chuyến thuê để giúp SmartCar cải thiện dịch vụ.",
+            Model.HasReview
+                ? "Cảm ơn bạn đã sử dụng SmartCar."
+                : "Hãy đánh giá chuyến thuê để giúp SmartCar cải thiện dịch vụ.",
             "success"),
         BookingStatus.Rejected => (
             "Yêu cầu thuê xe bị từ chối",
@@ -193,7 +100,9 @@
         BookingStatus.Cancelled => (
             "Đơn thuê đã được hủy",
             "Quy trình thuê xe của đơn này đã kết thúc.",
-            Model.RefundAmount > 0 ? "Kiểm tra khoản hoàn tiền bên dưới." : "Bạn có thể quay lại danh sách xe để tạo đơn mới.",
+            Model.RefundAmount > 0
+                ? "Kiểm tra khoản hoàn tiền bên dưới."
+                : "Bạn có thể quay lại danh sách xe để tạo đơn mới.",
             "danger"),
         BookingStatus.NoShow => (
             "Đã ghi nhận không đến nhận xe",
@@ -207,332 +116,94 @@
             "secondary")
     };
 
-    // ============================================================
-    // XÁC NHẬN HỦY
-    // ============================================================
-
-    var cancellationConfirmation =
-        Model.RentalPaid
-
-            ? "Bạn chắc chắn muốn hủy đơn? " +
-              "Số tiền hoàn sẽ được tính theo thời điểm hủy: " +
-              "từ 48 giờ trở lên hoàn 100%, " +
-              "từ 24 đến dưới 48 giờ hoàn 50%, " +
-              "dưới 24 giờ không hoàn."
-
-            : "Bạn chắc chắn muốn hủy yêu cầu thuê xe này?";
+    var cancellationConfirmation = Model.RentalPaid
+        ? "Bạn chắc chắn muốn hủy đơn? Số tiền hoàn sẽ được tính theo thời điểm hủy: từ 48 giờ trở lên hoàn 100%, từ 24 đến dưới 48 giờ hoàn 50%, dưới 24 giờ không hoàn."
+        : "Bạn chắc chắn muốn hủy yêu cầu thuê xe này?";
 }
 
-
-@* ================================================================
-   HEADER
-   ================================================================ *@
-
-<div class="d-flex
-    justify-content-between
-    align-items-center
-    mb-3
-    flex-wrap
-    gap-3">
-
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
     <div>
-
-        <h1 class="h3 mb-1">
-            Đơn thuê #@Model.BookingId
-        </h1>
-
-        <span class="badge bg-@statusInfo.Item4">
-            @Model.Status.ToVietnamese()
-        </span>
-
+        <h1 class="h3 mb-1">Đơn thuê #@Model.BookingId</h1>
+        <span class="badge bg-@statusInfo.Item4">@Model.Status.ToVietnamese()</span>
     </div>
-
-    <a class="btn btn-outline-secondary"
-       asp-action="MyBookings">
-
-        Danh sách đơn
-
-    </a>
-
+    <a class="btn btn-outline-secondary" asp-action="MyBookings">Danh sách đơn</a>
 </div>
 
+<div class="alert alert-@statusInfo.Item4 shadow-sm mb-4" role="status">
+    <div class="text-uppercase small fw-semibold mb-1">Trạng thái hiện tại</div>
+    <h2 class="h5 mb-2">@statusInfo.Item1</h2>
+    <p class="mb-2">@statusInfo.Item2</p>
+    <div><strong>Việc cần làm tiếp theo:</strong> @statusInfo.Item3</div>
 
-@* ================================================================
-   TRẠNG THÁI HIỆN TẠI
-   ================================================================ *@
-
-<div class="alert
-    alert-@statusInfo.Item4
-    shadow-sm
-    mb-4"
-     role="status">
-
-    <div class="text-uppercase
-        small
-        fw-semibold
-        mb-1">
-
-        Trạng thái hiện tại
-
-    </div>
-
-    <h2 class="h5 mb-2">
-        @statusInfo.Item1
-    </h2>
-
-    <p class="mb-2">
-        @statusInfo.Item2
-    </p>
-
-    <div>
-
-        <strong>
-            Việc cần làm tiếp theo:
-        </strong>
-
-        @statusInfo.Item3
-
-    </div>
-
-
-    @if (Model.Status ==
-             BookingStatus.PendingPayment &&
-         !Model.RentalPaid)
+    @if (Model.Status == BookingStatus.PendingPayment && !Model.RentalPaid)
     {
-        <a class="btn
-            btn-primary
-            btn-sm
-            mt-3"
-           href="#payment-panel">
-
-            Đi đến thanh toán
-
-        </a>
+        <a class="btn btn-primary btn-sm mt-3" href="#payment-panel">Đi đến thanh toán</a>
     }
-
-    else if (
-        Model.Status ==
-            BookingStatus.Rented &&
-        !hasOpenExtension)
+    else if (Model.Status == BookingStatus.Rented && !hasOpenExtension)
     {
-        <a class="btn
-            btn-outline-primary
-            btn-sm
-            mt-3"
-           href="#extension-panel">
-
-            Yêu cầu gia hạn
-
-        </a>
+        <a class="btn btn-outline-primary btn-sm mt-3" href="#extension-panel">Yêu cầu gia hạn</a>
     }
-
-    else if (
-        Model.Status ==
-            BookingStatus.Completed &&
-        !Model.HasReview)
+    else if (Model.Status == BookingStatus.Completed && !Model.HasReview)
     {
-        <a class="btn
-            btn-outline-success
-            btn-sm
-            mt-3"
-           href="#review-panel">
-
-            Đánh giá chuyến thuê
-
-        </a>
+        <a class="btn btn-outline-success btn-sm mt-3" href="#review-panel">Đánh giá chuyến thuê</a>
     }
-
 </div>
-
 
 <div class="row g-4">
-
-    @* ============================================================
-       CỘT TRÁI
-       ============================================================ *@
-
     <div class="col-lg-8">
-
-        @* ========================================================
-           THÔNG TIN XE
-           ======================================================== *@
-
-        <div class="card
-            card-body
-            shadow-sm
-            mb-4">
-
-            <div class="d-flex
-                gap-3
-                flex-wrap">
-
-                @if (!string.IsNullOrWhiteSpace(
-                    Model.PrimaryImagePath))
+        <div class="card card-body shadow-sm mb-4">
+            <div class="d-flex gap-3 flex-wrap">
+                @if (!string.IsNullOrWhiteSpace(Model.PrimaryImagePath))
                 {
                     <img src="@Model.PrimaryImagePath"
-                         style="width:180px;
-                    height:120px;
-                    object-fit:cover"
+                         style="width:180px;height:120px;object-fit:cover"
                          class="rounded"
                          alt="Ảnh @Model.VehicleName" />
                 }
-
                 <div>
-
-                    <h2 class="h5">
-                        @Model.VehicleName
-                    </h2>
-
-                    <p class="text-muted">
-                        @Model.LicensePlate
-                    </p>
-
-                    <div>
-
-                        Nhận:
-
-                        <strong>
-                            @Model.PickupDate.ToString(
-                                "dd/MM/yyyy HH:mm")
-                        </strong>
-
-                    </div>
-
-                    <div>
-
-                        Trả:
-
-                        <strong>
-                            @Model.ReturnDate.ToString(
-                                "dd/MM/yyyy HH:mm")
-                        </strong>
-
-                    </div>
-
+                    <h2 class="h5">@Model.VehicleName</h2>
+                    <p class="text-muted">@Model.LicensePlate</p>
+                    <div>Nhận: <strong>@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div>Trả: <strong>@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
                 </div>
-
             </div>
-
         </div>
 
-
-        @* ========================================================
-           QUY TRÌNH THUÊ
-           ======================================================== *@
-
-        <div class="card
-            card-body
-            shadow-sm
-            mb-4">
-
-            <h2 class="h5">
-                Quy trình thuê xe
-            </h2>
-
+        <div class="card card-body shadow-sm mb-4">
+            <h2 class="h5">Quy trình thuê xe</h2>
             <ol class="mb-0">
-
-                <li>
-                    Gửi yêu cầu và kiểm tra giấy tờ
-                </li>
-
-                <li>
-                    Quản trị viên xác nhận hoặc từ chối
-                </li>
-
-                <li>
-                    Thanh toán tiền thuê
-                </li>
-
-                <li>
-                    Kiểm tra và bàn giao xe
-                </li>
-
-                <li>
-                    Gia hạn nếu cần và được duyệt
-                </li>
-
-                <li>
-                    Trả xe, xử lý phụ phí và hoàn tất
-                </li>
-
+                <li>Gửi yêu cầu và kiểm tra giấy tờ</li>
+                <li>Quản trị viên xác nhận hoặc từ chối</li>
+                <li>Thanh toán tiền thuê</li>
+                <li>Kiểm tra và bàn giao xe</li>
+                <li>Gia hạn nếu cần và được duyệt</li>
+                <li>Trả xe, xử lý phụ phí và hoàn tất</li>
             </ol>
 
-
-            @if (!string.IsNullOrWhiteSpace(
-                Model.CancelReason))
+            @if (!string.IsNullOrWhiteSpace(Model.CancelReason))
             {
-                <div class="alert
-                    alert-danger
-                    mt-3
-                    mb-0">
-
-                    <strong>
-                        Lý do:
-                    </strong>
-
-                    @Model.CancelReason
-
-
+                <div class="alert alert-danger mt-3 mb-0">
+                    <strong>Lý do:</strong> @Model.CancelReason
                     @if (Model.RefundAmount > 0)
                     {
-                        <div>
-
-                            <strong>
-                                Tiền hoàn:
-                            </strong>
-
-                            @Model.RefundAmount.ToString("N0") đ
-
-                        </div>
-
-                        <div>
-                            @Model.RefundReason
-                        </div>
+                        <div><strong>Tiền hoàn:</strong> @Model.RefundAmount.ToString("N0") đ</div>
+                        <div>@Model.RefundReason</div>
                     }
-
-                    else if (
-                        !string.IsNullOrWhiteSpace(
-                            Model.RefundReason))
+                    else if (!string.IsNullOrWhiteSpace(Model.RefundReason))
                     {
-                        <div>
-                            @Model.RefundReason
-                        </div>
+                        <div>@Model.RefundReason</div>
                     }
-
                 </div>
             }
-
         </div>
 
-
-        @* ========================================================
-           GIA HẠN
-           ======================================================== *@
-
-        @if (Model.Status ==
-            BookingStatus.Rented)
+        @if (Model.Status == BookingStatus.Rented)
         {
-            <div class="card
-                card-body
-                shadow-sm
-                mb-4"
-                 id="extension-panel">
-
-                <h2 class="h5">
-                    Gia hạn thuê xe
-                </h2>
-
-
+            <div class="card card-body shadow-sm mb-4" id="extension-panel">
+                <h2 class="h5">Gia hạn thuê xe</h2>
                 @if (hasOpenExtension)
                 {
-                    <div class="alert
-                        alert-info
-                        mb-0">
-
-                        Đơn đang có yêu cầu gia hạn
-                        chờ xử lý hoặc chờ thanh toán.
-
-                    </div>
+                    <div class="alert alert-info mb-0">Đơn đang có yêu cầu gia hạn chờ xử lý hoặc chờ thanh toán.</div>
                 }
                 else
                 {
@@ -541,684 +212,225 @@
                           method="post"
                           class="row g-2"
                           data-loading-form>
-
-                        <input type="hidden"
-                               name="BookingId"
-                               value="@Model.BookingId" />
-
-
+                        <input type="hidden" name="BookingId" value="@Model.BookingId" />
                         <div class="col-md-5">
-
-                            <label class="form-label">
-
-                                Thời gian trả mới
-
-                            </label>
-
+                            <label class="form-label">Thời gian trả mới</label>
                             <input name="RequestedReturnDate"
                                    type="datetime-local"
                                    min="@Model.ReturnDate.ToString("yyyy-MM-ddTHH:mm")"
                                    class="form-control"
                                    required />
-
                         </div>
-
-
                         <div class="col-md-5">
-
-                            <label class="form-label">
-
-                                Ghi chú
-
-                            </label>
-
+                            <label class="form-label">Ghi chú</label>
                             <input name="CustomerNote"
                                    class="form-control"
                                    maxlength="500"
                                    placeholder="Lý do gia hạn" />
-
                         </div>
-
-
-                        <div class="col-md-2
-                            d-flex
-                            align-items-end">
-
-                            <button class="btn
-                                btn-outline-primary
-                                w-100"
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-outline-primary w-100"
                                     type="submit"
-                                    data-loading-text="Đang gửi...">
-
-                                Gửi yêu cầu
-
-                            </button>
-
+                                    data-loading-text="Đang gửi...">Gửi yêu cầu</button>
                         </div>
-
                     </form>
                 }
-
             </div>
         }
-
-
-        @* ========================================================
-           LỊCH SỬ GIA HẠN
-           ======================================================== *@
 
         @if (Model.Extensions.Count > 0)
         {
-            <div class="card
-                card-body
-                shadow-sm
-                mb-4">
-
-                <h2 class="h5">
-                    Lịch sử gia hạn
-                </h2>
-
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Lịch sử gia hạn</h2>
                 <div class="table-responsive">
-
                     <table class="table mb-0">
-
-                        @foreach (
-                            var extension
-                            in Model.Extensions)
+                        @foreach (var extension in Model.Extensions)
                         {
                             <tr>
-
-                                <td>
-                                    @extension.RequestedReturnDate
-                                    .ToString(
-                                    "dd/MM/yyyy HH:mm")
-                                </td>
-
-                                <td>
-                                    @extension.AdditionalDays ngày
-                                </td>
-
-                                <td>
-                                    @extension.AdditionalAmount
-                                    .ToString("N0") đ
-                                </td>
-
-                                <td>
-
-                                    <span class="badge
-                                        bg-secondary">
-
-                                        @extension.Status
-                                        .ToVietnamese()
-
-                                    </span>
-
-                                </td>
-
+                                <td>@extension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@extension.AdditionalDays ngày</td>
+                                <td>@extension.AdditionalAmount.ToString("N0") đ</td>
+                                <td><span class="badge bg-secondary">@extension.Status.ToVietnamese()</span></td>
                             </tr>
                         }
-
                     </table>
-
                 </div>
-
             </div>
         }
-
-
-        @* ========================================================
-           DANH SÁCH PHỤ PHÍ
-           ======================================================== *@
 
         @if (Model.AdditionalCharges.Count > 0)
         {
-            <div class="card
-                card-body
-                shadow-sm
-                mb-4">
-
-                <h2 class="h5">
-                    Phụ phí
-                </h2>
-
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Phụ phí</h2>
                 <div class="table-responsive">
-
                     <table class="table mb-0">
-
-                        @foreach (
-                            var charge
-                            in Model.AdditionalCharges)
+                        @foreach (var charge in Model.AdditionalCharges)
                         {
                             <tr>
-
-                                <td>
-                                    @charge.ChargeType
-                                    .ToVietnamese()
-                                </td>
-
-                                <td>
-                                    @charge.Description
-                                </td>
-
-                                <td class="text-end">
-                                    @charge.Amount
-                                    .ToString("N0") đ
-                                </td>
-
+                                <td>@charge.ChargeType.ToVietnamese()</td>
+                                <td>@charge.Description</td>
+                                <td class="text-end">@charge.Amount.ToString("N0") đ</td>
                             </tr>
                         }
-
                     </table>
-
                 </div>
-
             </div>
         }
 
-
-        @* ========================================================
-           ĐÁNH GIÁ
-           ======================================================== *@
-
-        @if (Model.Status ==
-                 BookingStatus.Completed &&
-             !Model.HasReview)
+        @if (Model.Status == BookingStatus.Completed && !Model.HasReview)
         {
-            <div class="card
-                card-body
-                shadow-sm
-                mb-4"
-                 id="review-panel">
-
-                <h2 class="h5">
-                    Đánh giá chuyến thuê
-                </h2>
-
+            <div class="card card-body shadow-sm mb-4" id="review-panel">
+                <h2 class="h5">Đánh giá chuyến thuê</h2>
                 <form asp-controller="Reviews"
                       asp-action="Create"
                       method="post"
                       class="row g-2"
                       data-loading-form>
-
-                    <input type="hidden"
-                           name="BookingId"
-                           value="@Model.BookingId" />
-
-
+                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-3">
-
-                        <select name="Rating"
-                                class="form-select"
-                                aria-label="Số sao đánh giá">
-
-                            <option value="5">
-                                5 sao
-                            </option>
-
-                            <option value="4">
-                                4 sao
-                            </option>
-
-                            <option value="3">
-                                3 sao
-                            </option>
-
-                            <option value="2">
-                                2 sao
-                            </option>
-
-                            <option value="1">
-                                1 sao
-                            </option>
-
+                        <select name="Rating" class="form-select" aria-label="Số sao đánh giá">
+                            <option value="5">5 sao</option>
+                            <option value="4">4 sao</option>
+                            <option value="3">3 sao</option>
+                            <option value="2">2 sao</option>
+                            <option value="1">1 sao</option>
                         </select>
-
                     </div>
-
-
                     <div class="col-md-7">
-
                         <input name="Comment"
                                maxlength="1000"
                                class="form-control"
                                placeholder="Chia sẻ trải nghiệm của bạn" />
-
                     </div>
-
-
                     <div class="col-md-2">
-
-                        <button class="btn
-                            btn-success
-                            w-100"
+                        <button class="btn btn-success w-100"
                                 type="submit"
-                                data-loading-text="Đang gửi...">
-
-                            Gửi đánh giá
-
-                        </button>
-
+                                data-loading-text="Đang gửi...">Gửi đánh giá</button>
                     </div>
-
                 </form>
-
             </div>
         }
 
-
-        @* ========================================================
-           HỦY ĐƠN
-           ======================================================== *@
-
         @if (canCancel)
         {
-            <div class="card
-                card-body
-                border-danger
-                shadow-sm">
-
-                <h2 class="h5 text-danger">
-                    Hủy đơn thuê
-                </h2>
-
+            <div class="card card-body border-danger shadow-sm">
+                <h2 class="h5 text-danger">Hủy đơn thuê</h2>
                 <p class="text-muted">
-
-                    Nếu đã thanh toán, tiền hoàn được tính
-                    theo thời điểm hủy:
-
-                    từ 48 giờ trở lên trước giờ nhận xe
-                    hoàn 100%;
-
-                    từ 24 đến dưới 48 giờ
-                    hoàn 50%;
-
+                    Nếu đã thanh toán, tiền hoàn được tính theo thời điểm hủy:
+                    từ 48 giờ trở lên trước giờ nhận xe hoàn 100%;
+                    từ 24 đến dưới 48 giờ hoàn 50%;
                     dưới 24 giờ không hoàn.
-
-                    Quản trị viên/SmartCar hủy trước khi
-                    giao xe thì hoàn 100%.
-
+                    Quản trị viên/SmartCar hủy trước khi giao xe thì hoàn 100%.
                 </p>
-
                 <form asp-controller="BookingOperations"
                       asp-action="Cancel"
                       method="post"
                       class="row g-2"
                       data-loading-form
                       data-confirm="@cancellationConfirmation">
-
-                    <input type="hidden"
-                           name="BookingId"
-                           value="@Model.BookingId" />
-
-
+                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-9">
-
                         <input name="Reason"
                                maxlength="500"
                                class="form-control"
                                required
                                placeholder="Lý do hủy đơn" />
-
                     </div>
-
-
                     <div class="col-md-3">
-
-                        <button class="btn
-                            btn-outline-danger
-                            w-100"
+                        <button class="btn btn-outline-danger w-100"
                                 type="submit"
-                                data-loading-text="Đang hủy...">
-
-                            Hủy đơn
-
-                        </button>
-
+                                data-loading-text="Đang hủy...">Hủy đơn</button>
                     </div>
-
                 </form>
-
             </div>
         }
-
     </div>
 
-
-    @* ============================================================
-       CỘT PHẢI
-       ============================================================ *@
-
     <div class="col-lg-4">
-        <div class="card card-body shadow-sm sticky-top" style="top:1rem" id="payment-panel">
-            <h2 class="h5">Thanh toán</h2>
-            <div class="d-flex justify-content-between"><span>Tiền thuê và gia hạn</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
-<<<<<<< HEAD
-            @if (Model.DiscountAmount > 0)
+        <div class="card card-body shadow-sm border-primary mb-4">
+            <div class="text-uppercase small text-primary fw-semibold mb-1">Hỗ trợ đơn thuê</div>
+            <h2 class="h5 mb-2">Hotline SmartCar</h2>
+            <div class="fs-4 fw-bold text-primary mb-2">@smartCarSupportPhoneDisplay</div>
+            <p class="small text-muted mb-3">
+                Nếu bạn chờ xác nhận quá lâu hoặc cần hỗ trợ về đơn thuê, hãy chủ động liên hệ SmartCar qua số này.
+            </p>
+            <a class="btn btn-outline-primary w-100" href="tel:@smartCarSupportPhone">☎ Gọi SmartCar</a>
+
+            @if (!string.IsNullOrWhiteSpace(Model.CustomerPhone))
             {
-                <div class="d-flex
-                    justify-content-between
-                    text-success">
-
-                    <span>
-                        Khuyến mãi
-                        (@Model.PromotionCode)
-                    </span>
-
-                    <strong>
-                        -@Model.DiscountAmount.ToString("N0") đ
-                    </strong>
-
+                <div class="border-top mt-3 pt-3 small">
+                    <div class="text-muted">Số SmartCar sẽ dùng để liên hệ với bạn</div>
+                    <strong>@Model.CustomerPhone</strong>
+                    <div class="mt-2">
+                        <a asp-controller="Profile"
+                           asp-action="Index"
+                           asp-route-tab="profile"
+                           class="small">Cập nhật số điện thoại nếu chưa đúng →</a>
+                    </div>
                 </div>
             }
+        </div>
 
-
-            <div class="d-flex
-                justify-content-between">
-
-                <span>
-                    Phụ phí
-                </span>
-
-                <strong>
-                    @Model.AdditionalAmount.ToString("N0") đ
-                </strong>
-
+        <div class="card card-body shadow-sm sticky-top" style="top:1rem" id="payment-panel">
+            <h2 class="h5">Thanh toán</h2>
+            <div class="d-flex justify-content-between">
+                <span>Tiền thuê và gia hạn</span>
+                <strong>@Model.RentalAmount.ToString("N0") đ</strong>
             </div>
-
-
-=======
-            <div class="d-flex justify-content-between"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
->>>>>>> origin/hung-dev
+            <div class="d-flex justify-content-between">
+                <span>Phụ phí</span>
+                <strong>@Model.AdditionalAmount.ToString("N0") đ</strong>
+            </div>
             <hr />
-
-
-            <div class="d-flex
-                justify-content-between
-                fs-5">
-
-                <span>
-                    Tổng cộng
-                </span>
-
-                <strong>
-                    @Model.TotalAmount.ToString("N0") đ
-                </strong>
-
+            <div class="d-flex justify-content-between fs-5">
+                <span>Tổng cộng</span>
+                <strong>@Model.TotalAmount.ToString("N0") đ</strong>
             </div>
 
-
-            @* ====================================================
-               KHUYẾN MÃI
-               ==================================================== *@
-
-<<<<<<< HEAD
-            @if (canApplyPromotion)
-            {
-                @if (string.IsNullOrWhiteSpace(
-                    Model.PromotionCode))
-                {
-                    <form asp-controller="Promotions"
-                          asp-action="Apply"
-                          method="post"
-                          class="mt-3"
-                          data-loading-form>
-
-                        <input type="hidden"
-                               name="BookingId"
-                               value="@Model.BookingId" />
-
-                        <label class="form-label">
-
-                            Mã khuyến mãi
-
-                        </label>
-
-                        <div class="input-group">
-
-                            <input name="Code"
-                                   maxlength="50"
-                                   class="form-control
-                            text-uppercase"
-                                   required
-                                   placeholder="Nhập mã" />
-
-                            <button class="btn
-                                btn-outline-primary"
-                                    type="submit"
-                                    data-loading-text="Đang áp dụng...">
-
-                                Áp dụng
-
-                            </button>
-
-                        </div>
-
-                    </form>
-                }
-                else
-                {
-                    <form asp-controller="Promotions"
-                          asp-action="Remove"
-                          method="post"
-                          class="mt-3"
-                          data-loading-form
-                          data-confirm="Gỡ mã khuyến mãi khỏi đơn này?">
-
-                        <input type="hidden"
-                               name="bookingId"
-                               value="@Model.BookingId" />
-
-                        <button class="btn
-                            btn-sm
-                            btn-outline-danger
-                            w-100"
-                                type="submit"
-                                data-loading-text="Đang gỡ...">
-
-                            Gỡ mã @Model.PromotionCode
-
-                        </button>
-
-                    </form>
-                }
-            }
-
-
-            @* ====================================================
-               THANH TOÁN TIỀN THUÊ
-               ==================================================== *@
-
-            @if (Model.Status ==
-                     BookingStatus.PendingPayment &&
-                 !Model.RentalPaid)
-=======
             @if (Model.Status == BookingStatus.PendingPayment && !Model.RentalPaid)
->>>>>>> origin/hung-dev
             {
-                @if (rentalPayment?.Status ==
-                     PaymentStatus.AwaitingConfirmation)
+                @if (rentalPayment?.Status == PaymentStatus.AwaitingConfirmation)
                 {
-                    <div class="alert
-                        alert-warning
-                        mt-3
-                        mb-0">
-
-                        <div class="fw-bold">
-
-                            Tiền thuê đang chờ xác nhận
-
-                        </div>
-
-                        <div class="small mt-1">
-
-                            Bạn đã báo chuyển khoản QR.
-                            SmartCar đang kiểm tra giao dịch.
-
-                        </div>
-
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <div class="fw-bold">Tiền thuê đang chờ xác nhận</div>
+                        <div class="small mt-1">Bạn đã báo chuyển khoản QR. SmartCar đang kiểm tra giao dịch.</div>
                         <hr class="my-2" />
-
-                        <div class="d-flex
-                            justify-content-between">
-
-                            <span>
-                                Số tiền:
-                            </span>
-
-                            <strong>
-                                @rentalPayment.Amount.ToString("N0") đ
-                            </strong>
-
+                        <div class="d-flex justify-content-between">
+                            <span>Số tiền:</span>
+                            <strong>@rentalPayment.Amount.ToString("N0") đ</strong>
                         </div>
-
-                        <div class="small
-                            text-muted
-                            mt-2">
-
-                            Không cần thanh toán lại
-                            trong lúc đang chờ quản trị viên
-                            xác nhận.
-
-                        </div>
-
+                        <div class="small text-muted mt-2">Không cần thanh toán lại trong lúc đang chờ quản trị viên xác nhận.</div>
                     </div>
                 }
                 else
                 {
-                    <div class="card
-                        bg-light
-                        border
-                        mt-3">
-
+                    <div class="card bg-light border mt-3">
                         <div class="card-body">
-
-                            <h3 class="h6 mb-3">
-
-                                Thanh toán tiền thuê bằng QR
-
-                            </h3>
-
-
+                            <h3 class="h6 mb-3">Thanh toán tiền thuê bằng QR</h3>
                             <div class="text-center mb-3">
-
                                 <img src="@paymentQrImagePath"
                                      alt="QR thanh toán tiền thuê"
-                                     class="img-fluid
-                                border
-                                rounded
-                                bg-white
-                                p-2"
+                                     class="img-fluid border rounded bg-white p-2"
                                      style="max-width:240px;" />
-
                             </div>
-
-
                             <div class="small">
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Ngân hàng:
-                                    </span>
-
-                                    <strong>
-                                        @paymentBankName
-                                    </strong>
-
+                                <div class="d-flex justify-content-between mb-1"><span>Ngân hàng:</span><strong>@paymentBankName</strong></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Số tài khoản:</span><strong>@paymentAccountNumber</strong></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Chủ tài khoản:</span><strong>@paymentAccountHolder</strong></div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Số tiền:</span>
+                                    <strong class="text-danger">@((rentalPayment?.Amount ?? Model.RentalAmount).ToString("N0")) đ</strong>
                                 </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Số tài khoản:
-                                    </span>
-
-                                    <strong>
-                                        @paymentAccountNumber
-                                    </strong>
-
-                                </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Chủ tài khoản:
-                                    </span>
-
-                                    <strong>
-                                        @paymentAccountHolder
-                                    </strong>
-
-                                </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Số tiền:
-                                    </span>
-
-                                    <strong class="text-danger">
-
-                                        @((rentalPayment?.Amount ??
-                                           Math.Max(
-                                               0,
-                                               Model.RentalAmount -
-                                               Model.DiscountAmount))
-                                            .ToString("N0")) đ
-
-                                    </strong>
-
-                                </div>
-
-
                                 <div class="mt-2">
-
-                                    <span>
-                                        Nội dung chuyển khoản:
-                                    </span>
-
-                                    <div class="border
-                                        rounded
-                                        bg-white
-                                        p-2
-                                        mt-1
-                                        text-center
-                                        fw-bold">
-
-                                        SC@(Model.BookingId)-RENTAL
-
-                                    </div>
-
+                                    <span>Nội dung chuyển khoản:</span>
+                                    <div class="border rounded bg-white p-2 mt-1 text-center fw-bold">SC@(Model.BookingId)-RENTAL</div>
                                 </div>
-
                             </div>
-
 
                             @if (rentalPayment is null)
                             {
-                                <div class="alert
-                                    alert-danger
-                                    small
-                                    mt-3
-                                    mb-0">
-
-                                    Không tìm thấy khoản thanh toán
-                                    tiền thuê đang chờ.
-
-                                    Vui lòng liên hệ SmartCar
-                                    trước khi chuyển khoản.
-
+                                <div class="alert alert-danger small mt-3 mb-0">
+                                    Không tìm thấy khoản thanh toán tiền thuê đang chờ. Vui lòng liên hệ SmartCar trước khi chuyển khoản.
                                 </div>
                             }
                             else
@@ -1229,317 +441,81 @@
                                       class="mt-3"
                                       data-loading-form
                                       data-confirm="Bạn xác nhận đã thực hiện chuyển khoản tiền thuê?">
-
-                                    <input type="hidden"
-                                           name="bookingId"
-                                           value="@Model.BookingId" />
-
-                                    <input type="hidden"
-                                           name="type"
-                                           value="@PaymentType.Rental" />
-
-                                    <button class="btn
-                                        btn-success
-                                        w-100"
+                                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                    <input type="hidden" name="type" value="@PaymentType.Rental" />
+                                    <button class="btn btn-success w-100"
                                             type="submit"
-                                            data-loading-text="Đang gửi...">
-
-                                        Tôi đã chuyển khoản tiền thuê
-
-                                    </button>
-
+                                            data-loading-text="Đang gửi...">Tôi đã chuyển khoản tiền thuê</button>
                                 </form>
-
-
-                                <div class="text-center
-                                    text-muted
-                                    small
-                                    my-2">
-
-                                    hoặc thanh toán thử nghiệm
-
-                                </div>
-
-
+                                <div class="text-center text-muted small my-2">hoặc thanh toán thử nghiệm</div>
                                 <form asp-controller="Payments"
                                       asp-action="Pay"
                                       method="post"
                                       data-loading-form
                                       data-confirm="Xác nhận dùng thanh toán mô phỏng cho tiền thuê?">
-
-                                    <input type="hidden"
-                                           name="bookingId"
-                                           value="@Model.BookingId" />
-
-                                    <input type="hidden"
-                                           name="type"
-                                           value="@PaymentType.Rental" />
-
-                                    <button class="btn
-                                        btn-outline-primary
-                                        w-100"
+                                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                    <input type="hidden" name="type" value="@PaymentType.Rental" />
+                                    <button class="btn btn-outline-primary w-100"
                                             type="submit"
-                                            data-loading-text="Đang thanh toán...">
-
-                                        Thanh toán tiền thuê mô phỏng
-
-                                    </button>
-
+                                            data-loading-text="Đang thanh toán...">Thanh toán tiền thuê mô phỏng</button>
                                 </form>
                             }
-
                         </div>
-
                     </div>
                 }
             }
 
-
-            @* ====================================================
-               THANH TOÁN GIA HẠN
-               CHỈ HIỆN KHI CÓ EXTENSION APPROVED
-               ==================================================== *@
-
-            @if (Model.Status ==
-                     BookingStatus.Rented &&
-                 approvedExtension is not null)
+            @if (Model.Status == BookingStatus.Rented && approvedExtension is not null)
             {
-                @if (extensionPayment?.Status ==
-                     PaymentStatus.AwaitingConfirmation)
+                @if (extensionPayment?.Status == PaymentStatus.AwaitingConfirmation)
                 {
-                    <div class="alert
-                        alert-warning
-                        mt-3
-                        mb-0">
-
-                        <div class="fw-bold">
-
-                            Tiền gia hạn đang chờ xác nhận
-
-                        </div>
-
-                        <div class="small mt-1">
-
-                            Bạn đã báo chuyển khoản QR
-                            cho khoản gia hạn.
-
-                            SmartCar đang kiểm tra giao dịch.
-
-                        </div>
-
-
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <div class="fw-bold">Tiền gia hạn đang chờ xác nhận</div>
+                        <div class="small mt-1">Bạn đã báo chuyển khoản QR cho khoản gia hạn. SmartCar đang kiểm tra giao dịch.</div>
                         <hr class="my-2" />
-
-
-                        <div class="d-flex
-                            justify-content-between">
-
-                            <span>
-                                Số tiền gia hạn:
-                            </span>
-
-                            <strong>
-                                @extensionPayment.Amount.ToString("N0") đ
-                            </strong>
-
+                        <div class="d-flex justify-content-between">
+                            <span>Số tiền gia hạn:</span>
+                            <strong>@extensionPayment.Amount.ToString("N0") đ</strong>
                         </div>
-
-
-                        <div class="small
-                            text-muted
-                            mt-2">
-
-                            Thời gian trả mới:
-
-                            <strong>
-
-                                @approvedExtension
-                                .RequestedReturnDate
-                                .ToString("dd/MM/yyyy HH:mm")
-
-                            </strong>
-
+                        <div class="small text-muted mt-2">
+                            Thời gian trả mới: <strong>@approvedExtension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</strong>
                         </div>
-
                     </div>
                 }
                 else
                 {
-                    <div class="card
-                        border-primary
-                        mt-3">
-
+                    <div class="card border-primary mt-3">
                         <div class="card-body">
-
-                            <h3 class="h6 mb-2">
-
-                                Thanh toán tiền gia hạn
-
-                            </h3>
-
-
-                            <div class="alert
-                                alert-info
-                                py-2
-                                small">
-
-                                <div>
-
-                                    <strong>
-                                        Trả xe ban đầu:
-                                    </strong>
-
-                                    @approvedExtension
-                                    .OriginalReturnDate
-                                    .ToString("dd/MM/yyyy HH:mm")
-
-                                </div>
-
-
-                                <div>
-
-                                    <strong>
-                                        Trả xe sau gia hạn:
-                                    </strong>
-
-                                    @approvedExtension
-                                    .RequestedReturnDate
-                                    .ToString("dd/MM/yyyy HH:mm")
-
-                                </div>
-
-
-                                <div>
-
-                                    <strong>
-                                        Số ngày tăng:
-                                    </strong>
-
-                                    @approvedExtension.AdditionalDays ngày
-
-                                </div>
-
+                            <h3 class="h6 mb-2">Thanh toán tiền gia hạn</h3>
+                            <div class="alert alert-info py-2 small">
+                                <div><strong>Trả xe ban đầu:</strong> @approvedExtension.OriginalReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+                                <div><strong>Trả xe sau gia hạn:</strong> @approvedExtension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+                                <div><strong>Số ngày tăng:</strong> @approvedExtension.AdditionalDays ngày</div>
                             </div>
-
-
                             <div class="text-center mb-3">
-
                                 <img src="@paymentQrImagePath"
                                      alt="QR thanh toán tiền gia hạn"
-                                     class="img-fluid
-                                border
-                                rounded
-                                bg-white
-                                p-2"
+                                     class="img-fluid border rounded bg-white p-2"
                                      style="max-width:240px;" />
-
                             </div>
-
-
                             <div class="small">
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Ngân hàng:
-                                    </span>
-
-                                    <strong>
-                                        @paymentBankName
-                                    </strong>
-
+                                <div class="d-flex justify-content-between mb-1"><span>Ngân hàng:</span><strong>@paymentBankName</strong></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Số tài khoản:</span><strong>@paymentAccountNumber</strong></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Chủ tài khoản:</span><strong>@paymentAccountHolder</strong></div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Số tiền:</span>
+                                    <strong class="text-danger">@((extensionPayment?.Amount ?? approvedExtension.AdditionalAmount).ToString("N0")) đ</strong>
                                 </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Số tài khoản:
-                                    </span>
-
-                                    <strong>
-                                        @paymentAccountNumber
-                                    </strong>
-
-                                </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Chủ tài khoản:
-                                    </span>
-
-                                    <strong>
-                                        @paymentAccountHolder
-                                    </strong>
-
-                                </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Số tiền:
-                                    </span>
-
-                                    <strong class="text-danger">
-
-                                        @((extensionPayment?.Amount ??
-                                           approvedExtension
-                                               .AdditionalAmount)
-                                            .ToString("N0")) đ
-
-                                    </strong>
-
-                                </div>
-
-
                                 <div class="mt-2">
-
-                                    <span>
-                                        Nội dung chuyển khoản:
-                                    </span>
-
-                                    <div class="border
-                                        rounded
-                                        bg-white
-                                        p-2
-                                        mt-1
-                                        text-center
-                                        fw-bold">
-
-                                        SC@(Model.BookingId)-EXT
-
-                                    </div>
-
+                                    <span>Nội dung chuyển khoản:</span>
+                                    <div class="border rounded bg-white p-2 mt-1 text-center fw-bold">SC@(Model.BookingId)-EXT</div>
                                 </div>
-
                             </div>
-
 
                             @if (extensionPayment is null)
                             {
-                                <div class="alert
-                                    alert-danger
-                                    small
-                                    mt-3
-                                    mb-0">
-
-                                    Yêu cầu gia hạn đã được duyệt
-                                    nhưng chưa tìm thấy khoản
-                                    thanh toán gia hạn.
-
-                                    Vui lòng liên hệ quản trị viên.
-
+                                <div class="alert alert-danger small mt-3 mb-0">
+                                    Yêu cầu gia hạn đã được duyệt nhưng chưa tìm thấy khoản thanh toán gia hạn. Vui lòng liên hệ quản trị viên.
                                 </div>
                             }
                             else
@@ -1550,315 +526,91 @@
                                       class="mt-3"
                                       data-loading-form
                                       data-confirm="Bạn xác nhận đã chuyển khoản tiền gia hạn?">
-
-                                    <input type="hidden"
-                                           name="bookingId"
-                                           value="@Model.BookingId" />
-
-                                    <input type="hidden"
-                                           name="type"
-                                           value="@PaymentType.Extension" />
-
-                                    <button class="btn
-                                        btn-success
-                                        w-100"
+                                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                    <input type="hidden" name="type" value="@PaymentType.Extension" />
+                                    <button class="btn btn-success w-100"
                                             type="submit"
-                                            data-loading-text="Đang gửi...">
-
-                                        Tôi đã chuyển khoản tiền gia hạn
-
-                                    </button>
-
+                                            data-loading-text="Đang gửi...">Tôi đã chuyển khoản tiền gia hạn</button>
                                 </form>
-
-
-                                <div class="text-center
-                                    text-muted
-                                    small
-                                    my-2">
-
-                                    hoặc thanh toán thử nghiệm
-
-                                </div>
-
-
+                                <div class="text-center text-muted small my-2">hoặc thanh toán thử nghiệm</div>
                                 <form asp-controller="Payments"
                                       asp-action="Pay"
                                       method="post"
                                       data-loading-form
                                       data-confirm="Xác nhận dùng thanh toán mô phỏng cho tiền gia hạn?">
-
-                                    <input type="hidden"
-                                           name="bookingId"
-                                           value="@Model.BookingId" />
-
-                                    <input type="hidden"
-                                           name="type"
-                                           value="@PaymentType.Extension" />
-
-                                    <button class="btn
-                                        btn-outline-primary
-                                        w-100"
+                                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                    <input type="hidden" name="type" value="@PaymentType.Extension" />
+                                    <button class="btn btn-outline-primary w-100"
                                             type="submit"
-                                            data-loading-text="Đang thanh toán...">
-
-                                        Thanh toán gia hạn mô phỏng
-
-                                    </button>
-
+                                            data-loading-text="Đang thanh toán...">Thanh toán gia hạn mô phỏng</button>
                                 </form>
                             }
-
                         </div>
-
                     </div>
                 }
             }
 
-
-            @* ====================================================
-               THANH TOÁN PHỤ PHÍ
-               ==================================================== *@
-
-            @if (Model.Status ==
-                     BookingStatus.PendingInspection &&
+            @if (Model.Status == BookingStatus.PendingInspection &&
                  Model.AdditionalAmount > 0 &&
                  !Model.AdditionalChargePaid)
             {
-                @if (additionalPayment?.Status ==
-                     PaymentStatus.AwaitingConfirmation)
+                @if (additionalPayment?.Status == PaymentStatus.AwaitingConfirmation)
                 {
-                    <div class="alert
-                        alert-warning
-                        mt-3
-                        mb-0">
-
-                        <div class="fw-bold">
-
-                            Phụ phí đang chờ xác nhận
-
-                        </div>
-
-                        <div class="small mt-1">
-
-                            Bạn đã báo chuyển khoản QR
-                            khoản phụ phí.
-
-                            SmartCar đang kiểm tra giao dịch.
-
-                        </div>
-
-
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <div class="fw-bold">Phụ phí đang chờ xác nhận</div>
+                        <div class="small mt-1">Bạn đã báo chuyển khoản QR khoản phụ phí. SmartCar đang kiểm tra giao dịch.</div>
                         <hr class="my-2" />
-
-
-                        <div class="d-flex
-                            justify-content-between">
-
-                            <span>
-                                Số tiền:
-                            </span>
-
-                            <strong>
-                                @additionalPayment.Amount.ToString("N0") đ
-                            </strong>
-
+                        <div class="d-flex justify-content-between">
+                            <span>Số tiền:</span>
+                            <strong>@additionalPayment.Amount.ToString("N0") đ</strong>
                         </div>
-
-
-                        <div class="small
-                            text-muted
-                            mt-2">
-
-                            Không cần thanh toán lại
-                            trong lúc đang chờ xác nhận.
-
-                        </div>
-
+                        <div class="small text-muted mt-2">Không cần thanh toán lại trong lúc đang chờ xác nhận.</div>
                     </div>
                 }
                 else
                 {
-                    <div class="card
-                        border-warning
-                        mt-3">
-
+                    <div class="card border-warning mt-3">
                         <div class="card-body">
-
-                            <h3 class="h6 mb-2">
-
-                                Thanh toán phụ phí
-
-                            </h3>
-
-
-                            <p class="small text-muted">
-
-                                Đây là khoản phụ phí được ghi nhận
-                                sau khi trả xe.
-
-                            </p>
-
+                            <h3 class="h6 mb-2">Thanh toán phụ phí</h3>
+                            <p class="small text-muted">Đây là khoản phụ phí được ghi nhận sau khi trả xe.</p>
 
                             @if (Model.AdditionalCharges.Count > 0)
                             {
-                                <div class="border
-                                    rounded
-                                    p-2
-                                    mb-3">
-
-                                    @foreach (
-                                        var charge
-                                        in Model.AdditionalCharges)
+                                <div class="border rounded p-2 mb-3">
+                                    @foreach (var charge in Model.AdditionalCharges)
                                     {
-                                        <div class="d-flex
-                                            justify-content-between
-                                            small
-                                            mb-1">
-
-                                            <span>
-
-                                                @charge.ChargeType
-                                                .ToVietnamese()
-
-                                            </span>
-
-                                            <strong>
-
-                                                @charge.Amount
-                                                .ToString("N0") đ
-
-                                            </strong>
-
+                                        <div class="d-flex justify-content-between small mb-1">
+                                            <span>@charge.ChargeType.ToVietnamese()</span>
+                                            <strong>@charge.Amount.ToString("N0") đ</strong>
                                         </div>
                                     }
-
-
                                     <hr class="my-2" />
-
-
-                                    <div class="d-flex
-                                        justify-content-between">
-
-                                        <strong>
-                                            Tổng phụ phí
-                                        </strong>
-
-                                        <strong class="text-danger">
-
-                                            @Model.AdditionalAmount
-                                            .ToString("N0") đ
-
-                                        </strong>
-
+                                    <div class="d-flex justify-content-between">
+                                        <strong>Tổng phụ phí</strong>
+                                        <strong class="text-danger">@Model.AdditionalAmount.ToString("N0") đ</strong>
                                     </div>
-
                                 </div>
                             }
 
-
                             <div class="text-center mb-3">
-
                                 <img src="@paymentQrImagePath"
                                      alt="QR thanh toán phụ phí"
-                                     class="img-fluid
-                                border
-                                rounded
-                                bg-white
-                                p-2"
+                                     class="img-fluid border rounded bg-white p-2"
                                      style="max-width:240px;" />
-
                             </div>
-
-
                             <div class="small">
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Ngân hàng:
-                                    </span>
-
-                                    <strong>
-                                        @paymentBankName
-                                    </strong>
-
+                                <div class="d-flex justify-content-between mb-1"><span>Ngân hàng:</span><strong>@paymentBankName</strong></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Số tài khoản:</span><strong>@paymentAccountNumber</strong></div>
+                                <div class="d-flex justify-content-between mb-1"><span>Chủ tài khoản:</span><strong>@paymentAccountHolder</strong></div>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Số tiền:</span>
+                                    <strong class="text-danger">@((additionalPayment?.Amount ?? Model.AdditionalAmount).ToString("N0")) đ</strong>
                                 </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Số tài khoản:
-                                    </span>
-
-                                    <strong>
-                                        @paymentAccountNumber
-                                    </strong>
-
-                                </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Chủ tài khoản:
-                                    </span>
-
-                                    <strong>
-                                        @paymentAccountHolder
-                                    </strong>
-
-                                </div>
-
-
-                                <div class="d-flex
-                                    justify-content-between
-                                    mb-1">
-
-                                    <span>
-                                        Số tiền:
-                                    </span>
-
-                                    <strong class="text-danger">
-
-                                        @((additionalPayment?.Amount ??
-                                           Model.AdditionalAmount)
-                                            .ToString("N0")) đ
-
-                                    </strong>
-
-                                </div>
-
-
                                 <div class="mt-2">
-
-                                    <span>
-                                        Nội dung chuyển khoản:
-                                    </span>
-
-                                    <div class="border
-                                        rounded
-                                        bg-white
-                                        p-2
-                                        mt-1
-                                        text-center
-                                        fw-bold">
-
-                                        SC@(Model.BookingId)-FEE
-
-                                    </div>
-
+                                    <span>Nội dung chuyển khoản:</span>
+                                    <div class="border rounded bg-white p-2 mt-1 text-center fw-bold">SC@(Model.BookingId)-FEE</div>
                                 </div>
-
                             </div>
-
 
                             <form asp-controller="Payments"
                                   asp-action="SubmitQr"
@@ -1866,194 +618,65 @@
                                   class="mt-3"
                                   data-loading-form
                                   data-confirm="Bạn xác nhận đã chuyển khoản phụ phí?">
-
-                                <input type="hidden"
-                                       name="bookingId"
-                                       value="@Model.BookingId" />
-
-                                <input type="hidden"
-                                       name="type"
-                                       value="@PaymentType.AdditionalCharge" />
-
-                                <button class="btn
-                                    btn-success
-                                    w-100"
+                                <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                <input type="hidden" name="type" value="@PaymentType.AdditionalCharge" />
+                                <button class="btn btn-success w-100"
                                         type="submit"
-                                        data-loading-text="Đang gửi...">
-
-                                    Tôi đã chuyển khoản phụ phí
-
-                                </button>
-
+                                        data-loading-text="Đang gửi...">Tôi đã chuyển khoản phụ phí</button>
                             </form>
-
-
-                            <div class="text-center
-                                text-muted
-                                small
-                                my-2">
-
-                                hoặc thanh toán thử nghiệm
-
-                            </div>
-
-
+                            <div class="text-center text-muted small my-2">hoặc thanh toán thử nghiệm</div>
                             <form asp-controller="Payments"
                                   asp-action="Pay"
                                   method="post"
                                   data-loading-form
                                   data-confirm="Xác nhận dùng thanh toán mô phỏng cho phụ phí?">
-
-                                <input type="hidden"
-                                       name="bookingId"
-                                       value="@Model.BookingId" />
-
-                                <input type="hidden"
-                                       name="type"
-                                       value="@PaymentType.AdditionalCharge" />
-
-                                <button class="btn
-                                    btn-outline-warning
-                                    w-100"
+                                <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                <input type="hidden" name="type" value="@PaymentType.AdditionalCharge" />
+                                <button class="btn btn-outline-warning w-100"
                                         type="submit"
-                                        data-loading-text="Đang thanh toán...">
-
-                                    Thanh toán phụ phí mô phỏng
-
-                                </button>
-
+                                        data-loading-text="Đang thanh toán...">Thanh toán phụ phí mô phỏng</button>
                             </form>
-
                         </div>
-
                     </div>
                 }
             }
-
-
-            @* ====================================================
-               THÔNG BÁO ĐÃ THANH TOÁN
-               ==================================================== *@
 
             @if (Model.RentalPaid)
             {
-                <div class="alert
-                    alert-success
-                    mt-3
-                    mb-0">
-
-                    ✓ Tiền thuê đã thanh toán.
-
-                </div>
+                <div class="alert alert-success mt-3 mb-0">✓ Tiền thuê đã thanh toán.</div>
             }
 
-
-            @if (Model.Extensions.Any(item =>
-                item.Status ==
-                    BookingExtensionStatus.Paid))
+            @if (Model.Extensions.Any(item => item.Status == BookingExtensionStatus.Paid))
             {
-                <div class="alert
-                    alert-success
-                    mt-3
-                    mb-0">
-
-                    ✓ Tiền gia hạn đã thanh toán.
-
-                </div>
+                <div class="alert alert-success mt-3 mb-0">✓ Tiền gia hạn đã thanh toán.</div>
             }
 
-
-            @if (Model.AdditionalAmount > 0 &&
-                 Model.AdditionalChargePaid)
+            @if (Model.AdditionalAmount > 0 && Model.AdditionalChargePaid)
             {
-                <div class="alert
-                    alert-success
-                    mt-3
-                    mb-0">
-
-                    ✓ Phụ phí đã thanh toán.
-
-                </div>
+                <div class="alert alert-success mt-3 mb-0">✓ Phụ phí đã thanh toán.</div>
             }
 
-
-            @* ====================================================
-               TRẠNG THÁI HOÀN TIỀN
-               ==================================================== *@
-
-            @if (Model.RefundAmount > 0 &&
-                 refundPayment is not null)
+            @if (Model.RefundAmount > 0 && refundPayment is not null)
             {
-                @if (refundPayment.Status ==
-                     PaymentStatus.AwaitingRefund)
+                @if (refundPayment.Status == PaymentStatus.AwaitingRefund)
                 {
-                    <div class="alert
-                        alert-info
-                        mt-3
-                        mb-0">
-
-                        <div class="fw-bold">
-
-                            Khoản hoàn đang chờ xử lý
-
-                        </div>
-
-                        <div>
-
-                            Số tiền dự kiến hoàn:
-
-                            <strong>
-                                @refundPayment.Amount.ToString("N0") đ
-                            </strong>
-
-                        </div>
-
+                    <div class="alert alert-info mt-3 mb-0">
+                        <div class="fw-bold">Khoản hoàn đang chờ xử lý</div>
+                        <div>Số tiền dự kiến hoàn: <strong>@refundPayment.Amount.ToString("N0") đ</strong></div>
                     </div>
                 }
-
-                else if (
-                    refundPayment.Status ==
-                    PaymentStatus.Refunded)
+                else if (refundPayment.Status == PaymentStatus.Refunded)
                 {
-                    <div class="alert
-                        alert-success
-                        mt-3
-                        mb-0">
-
-                        <div class="fw-bold">
-                            ✓ Đã hoàn tiền
-                        </div>
-
-                        <div>
-
-                            Số tiền:
-
-                            <strong>
-                                @refundPayment.Amount.ToString("N0") đ
-                            </strong>
-
-                        </div>
-
-
-                        @if (!string.IsNullOrWhiteSpace(
-                            refundPayment.TransactionCode))
+                    <div class="alert alert-success mt-3 mb-0">
+                        <div class="fw-bold">✓ Đã hoàn tiền</div>
+                        <div>Số tiền: <strong>@refundPayment.Amount.ToString("N0") đ</strong></div>
+                        @if (!string.IsNullOrWhiteSpace(refundPayment.TransactionCode))
                         {
-                            <div class="small mt-1">
-
-                                Mã giao dịch:
-
-                                <strong>
-                                    @refundPayment.TransactionCode
-                                </strong>
-
-                            </div>
+                            <div class="small mt-1">Mã giao dịch: <strong>@refundPayment.TransactionCode</strong></div>
                         }
-
                     </div>
                 }
             }
-
         </div>
-
     </div>
 </div>
