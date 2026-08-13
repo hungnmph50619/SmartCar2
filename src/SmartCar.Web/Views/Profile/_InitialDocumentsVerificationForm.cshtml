@@ -45,7 +45,7 @@
                     <input asp-for="CitizenIdVerification.DocumentNumber" class="form-control" inputmode="numeric" maxlength="12" pattern="[0-9]{12}" autocomplete="off" data-citizen-number data-client-error-id="citizenNumberError" required />
                     <span asp-validation-for="CitizenIdVerification.DocumentNumber" id="citizenNumberError" class="kyc-client-error d-block"></span>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label fw-semibold" for="CitizenDateOfBirth">Ngày sinh</label>
                     <input id="CitizenDateOfBirth"
                            name="CitizenIdVerification.DateOfBirth"
@@ -56,7 +56,17 @@
                            required />
                     <span asp-validation-for="CitizenIdVerification.DateOfBirth" class="kyc-client-error d-block"></span>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
+                    <label asp-for="CitizenIdVerification.Gender" class="form-label fw-semibold"></label>
+                    <select asp-for="CitizenIdVerification.Gender" class="form-select" required>
+                        <option value="">-- Chọn giới tính --</option>
+                        <option value="Nam">Nam</option>
+                        <option value="Nữ">Nữ</option>
+                        <option value="Khác">Khác</option>
+                    </select>
+                    <span asp-validation-for="CitizenIdVerification.Gender" class="kyc-client-error d-block"></span>
+                </div>
+                <div class="col-md-4">
                     <label class="form-label fw-semibold" for="CitizenExpiryDate">Ngày hết hạn</label>
                     <input id="CitizenExpiryDate"
                            name="CitizenIdVerification.ExpiryDate"
