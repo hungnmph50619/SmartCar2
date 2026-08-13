@@ -29,6 +29,7 @@ public sealed class NotificationsController : Controller
 
     [HttpGet]
     public async Task<IActionResult> Index(
+        string? tab,
         CancellationToken cancellationToken)
     {
         var userId =
@@ -39,6 +40,11 @@ public sealed class NotificationsController : Controller
         {
             return Challenge();
         }
+
+        ViewBag.ActiveTab =
+            tab is "work" or "unread" or "handled"
+                ? tab
+                : null;
 
         ViewBag.UnreadCount =
             await _notificationService

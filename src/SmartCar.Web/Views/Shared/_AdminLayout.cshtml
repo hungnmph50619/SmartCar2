@@ -149,7 +149,6 @@
     var systemActive =
         new[]
         {
-            "Notifications",
             "AuditLogs",
             "Profile"
         }.Contains(currentController);
@@ -408,27 +407,6 @@
                         Hệ thống
                     </div>
 
-                    <a class="admin-nav-link @(currentController == "Notifications" ? "active" : string.Empty)"
-                       asp-controller="Notifications"
-                       asp-action="Index">
-
-                        <span class="admin-nav-icon">
-                            ◇
-                        </span>
-                        <span>
-                            Thông báo
-                        </span>
-
-                        @if (unreadNotificationCount > 0)
-                        {
-                            <span class="badge rounded-pill text-bg-danger ms-auto">
-                                @(unreadNotificationCount > 99
-                                    ? "99+"
-                                    : unreadNotificationCount)
-                            </span>
-                        }
-                    </a>
-
                     <a class="admin-nav-link @(currentController == "AuditLogs" ? "active" : string.Empty)"
                        asp-controller="AuditLogs"
                        asp-action="Index">
@@ -469,31 +447,33 @@
                 </div>
 
                 <div class="admin-topbar-actions">
-                    @if (pendingWorkNotificationCount > 0)
-                    {
-                        <a class="admin-topbar-link"
-                           asp-controller="Notifications"
-                           asp-action="Index"
-                           aria-label="Việc cần xử lý">
+                    <a class="admin-topbar-link"
+                       asp-controller="Notifications"
+                       asp-action="Index"
+                       asp-route-tab="work"
+                       aria-label="Việc cần xử lý">
 
-                            <span aria-hidden="true">
-                                ✓
-                            </span>
-                            <span>
-                                Việc cần xử lý
-                            </span>
+                        <span aria-hidden="true">
+                            ✓
+                        </span>
+                        <span>
+                            Việc cần xử lý
+                        </span>
 
+                        @if (pendingWorkNotificationCount > 0)
+                        {
                             <span class="admin-notification-count bg-warning text-dark">
                                 @(pendingWorkNotificationCount > 99
                                     ? "99+"
                                     : pendingWorkNotificationCount)
                             </span>
-                        </a>
-                    }
+                        }
+                    </a>
 
                     <a class="admin-topbar-link"
                        asp-controller="Notifications"
                        asp-action="Index"
+                       asp-route-tab="unread"
                        aria-label="Thông báo">
 
                         <span aria-hidden="true">

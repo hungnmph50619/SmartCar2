@@ -1,10 +1,13 @@
 @model IReadOnlyList<SmartCar.Application.Features.Notifications.NotificationDto>
 @{
-    ViewData["Title"] = "Thông báo";
-
     var isAdmin =
         User.IsInRole(
             SmartCar.Domain.Constants.RoleNames.Admin);
+
+    ViewData["Title"] =
+        isAdmin
+            ? "Công việc & Thông báo"
+            : "Thông báo";
 
     var workPrefixes = new[]
     {
@@ -62,12 +65,17 @@
                 "xác minh giấy tờ",
                 StringComparison.Ordinal);
 
+    var requestedAdminFilter =
+        ViewBag.ActiveTab as string;
+
     var defaultAdminFilter =
-        pendingWorkCount > 0
-            ? "work"
-            : unreadRegularCount > 0
-                ? "unread"
-                : "handled";
+        requestedAdminFilter is "work" or "unread" or "handled"
+            ? requestedAdminFilter
+            : pendingWorkCount > 0
+                ? "work"
+                : unreadRegularCount > 0
+                    ? "unread"
+                    : "handled";
 }
 
 <style>
@@ -332,7 +340,7 @@
 
     <div class="notifications-header">
         <div>
-            <h1 class="h3 mb-1">Thông báo</h1>
+            <h1 class="h3 mb-1">@(isAdmin ? "Công việc & Thông báo" : "Thông báo")</h1>
 
             <p class="notifications-summary">
                 @if (isAdmin)
@@ -372,7 +380,7 @@
     {
         <div class="notifications-tabs"
              role="tablist"
-             aria-label="Lọc thông báo">
+             aria-label="Lọc công việc và thông báo">
 
             <button class="notifications-tab"
                     type="button"
@@ -606,9 +614,9 @@
                     </p>
 
                     <div class="notification-meta">
-                        @item.CreatedAt
+                        @(item.CreatedAt
                             .ToLocalTime()
-                            .ToString("HH:mm · dd/MM/yyyy")
+                            .ToString("HH:mm · dd/MM/yyyy"))
                     </div>
 
                     <div class="notification-actions">
