@@ -31,6 +31,12 @@ public sealed class KycCitizenIdInputViewModel
     [Display(Name = "Ngày sinh")]
     public DateTime? DateOfBirth { get; set; }
 
+    [Required(ErrorMessage = "Vui lòng chọn giới tính.")]
+    [RegularExpression(@"^(Nam|Nữ|Khác)$", ErrorMessage = "Giới tính không hợp lệ.")]
+    [StringLength(20)]
+    [Display(Name = "Giới tính")]
+    public string Gender { get; set; } = string.Empty;
+
     [Required(ErrorMessage = "Vui lòng nhập ngày hết hạn CCCD.")]
     [Display(Name = "Ngày hết hạn")]
     public DateTime? ExpiryDate { get; set; }
