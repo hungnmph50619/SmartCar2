@@ -51,6 +51,15 @@
                           drivingLicenseBack.Status == DocumentStatus.Verified &&
                           drivingLicense.HasRequiredData && drivingLicenseBack.HasRequiredData &&
                           drivingLicense.ExpiryDate.HasValue && drivingLicense.ExpiryDate.Value.Date >= DateTime.Today;
+
+    var citizenExpiryDays = citizenFront?.ExpiryDate.HasValue == true
+        ? (citizenFront.ExpiryDate.Value.Date - DateTime.Today).Days
+        : (int?)null;
+    var licenseExpiryDays = drivingLicense?.ExpiryDate.HasValue == true
+        ? (drivingLicense.ExpiryDate.Value.Date - DateTime.Today).Days
+        : (int?)null;
+    var citizenExpiringSoon = citizenVerified && citizenExpiryDays.HasValue && citizenExpiryDays.Value <= 30;
+    var licenseExpiringSoon = licenseVerified && licenseExpiryDays.HasValue && licenseExpiryDays.Value <= 30;
 }
 
 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
@@ -114,8 +123,12 @@
                 <div class="card-body p-4">
                     <span class="text-uppercase fw-bold small">Điều kiện thuê xe</span>
                     <h2 class="h4 fw-bold mt-2">@(Model.CanRent ? "Đủ điều kiện" : "Chưa đủ điều kiện")</h2>
-                    <p>Danh tính CCCD: <strong>@(citizenVerified ? "Đã xác minh" : "Chưa đạt")</strong></p>
+                    <p>CCCD: <strong>@(citizenVerified ? "Đã xác minh" : "Chưa đạt")</strong></p>
                     <p>GPLX: <strong>@(licenseVerified ? "Đã xác minh" : "Chưa đạt")</strong></p>
+                    @if (citizenExpiringSoon || licenseExpiringSoon)
+                    {
+                        <p class="mb-3"><strong>⚠ Có giấy tờ sắp hết hạn.</strong></p>
+                    }
                     @if (!Model.IsActive)
                     {
                         <p class="text-danger">Tài khoản đang bị khóa.</p>
@@ -131,7 +144,7 @@ else if (Model.ActiveTab == "documents")
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
         <div>
             <h2 class="h4 fw-bold mb-1">Đối chiếu hồ sơ giấy tờ</h2>
-            <p class="text-muted mb-0">Chỉ số CCCD được che một phần; các thông tin còn lại hiển thị đầy đủ để đối chiếu với ảnh.</p>
+            <p class="text-muted mb-0">Chỉ số CCCD được che một phần; các thông tin cần thiết hiển thị để đối chiếu với ảnh.</p>
         </div>
         <span class="badge @ProfileBadge(Model.ProfileStatusCode) fs-6">Hồ sơ: @Model.ProfileStatusText</span>
     </div>
@@ -144,7 +157,7 @@ else if (Model.ActiveTab == "documents")
                     <h3 class="h4 fw-bold mb-1">Xác minh danh tính — CCCD</h3>
                     <p class="text-muted mb-0">Đối chiếu thông tin trên CCCD và cả mặt trước lẫn mặt sau.</p>
                 </div>
-                <span class="badge @(citizenVerified ? "bg-success" : "bg-warning text-dark") px-3 py-2">@(citizenVerified ? "Đã xác minh" : citizenFront is null || citizenBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
+                <span class="badge @(citizenVerified ? (citizenExpiringSoon ? "bg-warning text-dark" : "bg-success") : "bg-warning text-dark") px-3 py-2">@(citizenVerified ? (citizenExpiringSoon ? "Đã xác minh · Sắp hết hạn" : "Đã xác minh") : citizenFront is null || citizenBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
             </div>
         </div>
         <div class="card-body p-4">
@@ -158,11 +171,24 @@ else if (Model.ActiveTab == "documents")
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Họ và tên trên CCCD</span><strong>@(citizenFront.FullNameOnDocument ?? "Chưa cập nhật")</strong></div></div>
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Số CCCD</span><strong>@MaskCitizenId(citizenFront.DocumentNumber)</strong></div></div>
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày sinh</span><strong>@(citizenFront.DateOfBirth?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Giới tính</span><strong>@(citizenFront.Gender ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày cấp</span><strong>@(citizenFront.IssuedDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-12"><div class="border rounded p-3"><span class="small text-muted d-block">Địa chỉ thường trú</span><strong>@(citizenFront.PermanentAddress ?? "Chưa cập nhật")</strong></div></div>
+                    <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Giới tính</span><strong>@(string.IsNullOrWhiteSpace(citizenFront.Gender) ? "Chưa cập nhật" : citizenFront.Gender)</strong></div></div>
+                    <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
+                    @if (citizenFront.IssuedDate.HasValue)
+                    {
+                        <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày cấp</span><strong>@citizenFront.IssuedDate.Value.ToString("dd/MM/yyyy")</strong></div></div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(citizenFront.PermanentAddress))
+                    {
+                        <div class="col-12"><div class="border rounded p-3"><span class="small text-muted d-block">Địa chỉ thường trú</span><strong>@citizenFront.PermanentAddress</strong></div></div>
+                    }
                 </div>
+
+                @if (citizenExpiringSoon)
+                {
+                    <div class="alert alert-warning">
+                        <strong>⚠ CCCD sắp hết hạn.</strong> Hết hạn ngày @citizenFront.ExpiryDate!.Value.ToString("dd/MM/yyyy") (còn @citizenExpiryDays ngày).
+                    </div>
+                }
 
                 <div class="row g-4 mb-4">
                     <div class="col-md-6">
@@ -183,9 +209,9 @@ else if (Model.ActiveTab == "documents")
                         <input type="hidden" name="backDocumentId" value="@citizenBack.CustomerDocumentId" />
                         <fieldset class="document-checklist">
                             <legend>Kiểm tra trước khi xác minh</legend>
-                            <label><input class="form-check-input" type="checkbox" required /> Họ tên, ngày sinh và giới tính khớp với ảnh</label>
-                            <label><input class="form-check-input" type="checkbox" required /> Số CCCD hiển thị trên hai mặt khớp nhau</label>
-                            <label><input class="form-check-input" type="checkbox" required /> Ngày cấp, ngày hết hạn và địa chỉ thường trú khớp với ảnh</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Họ tên, số CCCD, ngày sinh và giới tính khớp với ảnh</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Ngày hết hạn CCCD hợp lệ và khớp với ảnh</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Hai ảnh mặt trước/mặt sau thuộc cùng một CCCD</label>
                             <label><input class="form-check-input" type="checkbox" required /> Hai ảnh rõ chữ, đủ góc và không có dấu hiệu chỉnh sửa bất thường</label>
                         </fieldset>
                         <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh CCCD...">Xác minh CCCD hợp lệ</button>
@@ -206,8 +232,8 @@ else if (Model.ActiveTab == "documents")
                         <select name="reason" class="form-select" required>
                             <option value="">-- Chọn lý do --</option>
                             <option value="Thông tin khai báo không khớp với CCCD">Thông tin khai báo không khớp với CCCD</option>
-                            <option value="Địa chỉ thường trú chưa đầy đủ hoặc không khớp">Địa chỉ thường trú chưa đầy đủ hoặc không khớp</option>
                             <option value="Ảnh CCCD bị mờ, lóa hoặc mất góc">Ảnh CCCD bị mờ, lóa hoặc mất góc</option>
+                            <option value="Mặt trước và mặt sau CCCD không khớp">Mặt trước và mặt sau CCCD không khớp</option>
                             <option value="CCCD đã hoặc sắp hết hạn">CCCD đã hoặc sắp hết hạn</option>
                             <option value="Thông tin có dấu hiệu sai lệch">Thông tin có dấu hiệu sai lệch</option>
                             <option value="Lý do khác">Lý do khác</option>
@@ -229,7 +255,7 @@ else if (Model.ActiveTab == "documents")
                     <h3 class="h4 fw-bold mb-1">Xác minh giấy phép lái xe</h3>
                     <p class="text-muted mb-0">Đối chiếu thông tin và cả mặt trước lẫn mặt sau GPLX.</p>
                 </div>
-                <span class="badge @(licenseVerified ? "bg-success" : "bg-warning text-dark") px-3 py-2">@(licenseVerified ? "Đã xác minh" : drivingLicense is null || drivingLicenseBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
+                <span class="badge @(licenseVerified ? (licenseExpiringSoon ? "bg-warning text-dark" : "bg-success") : "bg-warning text-dark") px-3 py-2">@(licenseVerified ? (licenseExpiringSoon ? "Đã xác minh · Sắp hết hạn" : "Đã xác minh") : drivingLicense is null || drivingLicenseBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
             </div>
         </div>
         <div class="card-body p-4">
@@ -243,9 +269,19 @@ else if (Model.ActiveTab == "documents")
                     <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Họ và tên trên GPLX</span><strong>@(drivingLicense.FullNameOnDocument ?? "Chưa cập nhật")</strong></div></div>
                     <div class="col-md-3"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Số GPLX</span><strong>@drivingLicense.DocumentNumber</strong></div></div>
                     <div class="col-md-3"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Hạng GPLX</span><strong>@(drivingLicense.LicenseClass ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày cấp</span><strong>@(drivingLicense.IssuedDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(drivingLicense.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
+                    @if (drivingLicense.IssuedDate.HasValue)
+                    {
+                        <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày cấp</span><strong>@drivingLicense.IssuedDate.Value.ToString("dd/MM/yyyy")</strong></div></div>
+                    }
+                    <div class="@(drivingLicense.IssuedDate.HasValue ? "col-md-6" : "col-12")"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(drivingLicense.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
                 </div>
+
+                @if (licenseExpiringSoon)
+                {
+                    <div class="alert alert-warning">
+                        <strong>⚠ GPLX sắp hết hạn.</strong> Hết hạn ngày @drivingLicense.ExpiryDate!.Value.ToString("dd/MM/yyyy") (còn @licenseExpiryDays ngày).
+                    </div>
+                }
 
                 <div class="row g-4 mb-4">
                     <div class="col-md-6">
@@ -268,7 +304,7 @@ else if (Model.ActiveTab == "documents")
                             <legend>Kiểm tra trước khi xác minh</legend>
                             <label><input class="form-check-input" type="checkbox" required /> Họ tên và số GPLX khớp với ảnh</label>
                             <label><input class="form-check-input" type="checkbox" required /> Hạng GPLX khớp với ảnh</label>
-                            <label><input class="form-check-input" type="checkbox" required /> Ngày cấp và ngày hết hạn khớp với ảnh</label>
+                            <label><input class="form-check-input" type="checkbox" required /> Ngày hết hạn (và ngày cấp nếu có) khớp với ảnh</label>
                             <label><input class="form-check-input" type="checkbox" required /> Cả hai mặt ảnh rõ nét và thuộc cùng một GPLX</label>
                         </fieldset>
                         <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh GPLX...">Xác minh GPLX hợp lệ</button>
@@ -315,7 +351,7 @@ else if (Model.ActiveTab == "bookings")
         <div class="card-header bg-white border-0 p-4 pb-2"><h2 class="h4 fw-bold mb-1">Lịch sử đơn thuê</h2><p class="text-muted mb-0">@Model.Bookings.Count đơn thuê được ghi nhận cho khách hàng này.</p></div>
         @if (Model.Bookings.Count == 0)
         {
-            <div class="card-body text-center py-5 text-muted">Khách hàng chưa có đơn thuê nào.</div>
+            <div class="card-body text-center py-4 text-muted"><div class="fs-4 mb-2">—</div>Khách hàng chưa có đơn thuê nào.</div>
         }
         else
         {
@@ -334,7 +370,7 @@ else if (Model.ActiveTab == "payments")
         <div class="card-header bg-white border-0 p-4 pb-2"><h2 class="h4 fw-bold mb-1">Lịch sử thanh toán</h2><p class="text-muted mb-0">Theo dõi tiền thuê, gia hạn, phụ phí và hoàn tiền.</p></div>
         @if (Model.Payments.Count == 0)
         {
-            <div class="card-body text-center py-5 text-muted">Khách hàng chưa có giao dịch nào.</div>
+            <div class="card-body text-center py-4 text-muted"><div class="fs-4 mb-2">—</div>Khách hàng chưa có giao dịch nào.</div>
         }
         else
         {
@@ -353,7 +389,7 @@ else
         <div class="card-header bg-white border-0 p-4 pb-2"><h2 class="h4 fw-bold mb-1">Sự cố và vi phạm</h2><p class="text-muted mb-0">Các sự cố liên quan đến đơn thuê của khách hàng.</p></div>
         @if (Model.Incidents.Count == 0)
         {
-            <div class="card-body text-center py-5 text-muted">Không có sự cố hoặc vi phạm nào được ghi nhận.</div>
+            <div class="card-body text-center py-4 text-muted"><div class="fs-4 mb-2">✓</div>Không có sự cố hoặc vi phạm nào được ghi nhận.</div>
         }
         else
         {
