@@ -168,7 +168,7 @@ internal sealed class DocumentService : IDocumentService
                 request.DateOfBirth.Date,
                 request.Gender.Trim(),
                 request.IssuedDate.Date,
-                request.PermanentAddress.Trim(),
+                null,
                 null,
                 cancellationToken);
         }
@@ -185,7 +185,7 @@ internal sealed class DocumentService : IDocumentService
             "Submit",
             nameof(CustomerDocument),
             front.CustomerDocumentId.ToString(),
-            "Gửi hồ sơ CCCD gồm thông tin khai báo, địa chỉ thường trú và hai ảnh để xác minh.",
+            "Gửi hồ sơ CCCD gồm thông tin khai báo và hai ảnh để xác minh.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -434,7 +434,6 @@ internal sealed class DocumentService : IDocumentService
         if (string.IsNullOrWhiteSpace(request.FullNameOnDocument) ||
             string.IsNullOrWhiteSpace(request.DocumentNumber) ||
             string.IsNullOrWhiteSpace(request.Gender) ||
-            string.IsNullOrWhiteSpace(request.PermanentAddress) ||
             string.IsNullOrWhiteSpace(request.FrontImagePath) ||
             string.IsNullOrWhiteSpace(request.BackImagePath))
         {
@@ -591,8 +590,7 @@ internal sealed class DocumentService : IDocumentService
                 !string.IsNullOrWhiteSpace(document.ImagePath) &&
                 document.ExpiryDate.HasValue &&
                 !string.IsNullOrWhiteSpace(metadata.FullNameOnDocument) &&
-                metadata.DateOfBirth.HasValue &&
-                !string.IsNullOrWhiteSpace(metadata.PermanentAddress),
+                metadata.DateOfBirth.HasValue,
             DocumentTypes.CitizenIdBack =>
                 !string.IsNullOrWhiteSpace(document.DocumentNumber) &&
                 !string.IsNullOrWhiteSpace(document.ImagePath),

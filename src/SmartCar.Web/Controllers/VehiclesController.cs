@@ -143,6 +143,12 @@ public sealed class VehiclesController : Controller
         ViewBag.KycVerified = false;
         ViewBag.KycVerifiedCount = 0;
         ViewBag.KycTotal = 2;
+        ViewBag.CitizenApproved = false;
+        ViewBag.LicenseApproved = false;
+        ViewBag.CitizenValidForRental = false;
+        ViewBag.LicenseValidForRental = false;
+        ViewBag.CitizenExpiryDate = null;
+        ViewBag.LicenseExpiryDate = null;
         ViewBag.HasBankAccount = false;
 
         if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
@@ -156,34 +162,44 @@ public sealed class VehiclesController : Controller
                 var licenseFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
                 var licenseBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
-                var citizenVerified = citizenFront is not null &&
+                var citizenApproved = citizenFront is not null &&
                                       citizenBack is not null &&
                                       citizenFront.Status == DocumentStatus.Verified &&
                                       citizenBack.Status == DocumentStatus.Verified &&
                                       citizenFront.HasRequiredData &&
-                                      citizenBack.HasRequiredData &&
-                                      citizenFront.ExpiryDate.HasValue &&
-                                      citizenFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+                                      citizenBack.HasRequiredData;
 
-                var licenseVerified = licenseFront is not null &&
+                var licenseApproved = licenseFront is not null &&
                                       licenseBack is not null &&
                                       licenseFront.Status == DocumentStatus.Verified &&
                                       licenseBack.Status == DocumentStatus.Verified &&
                                       licenseFront.HasRequiredData &&
-                                      licenseBack.HasRequiredData &&
-                                      licenseFront.ExpiryDate.HasValue &&
-                                      licenseFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+                                      licenseBack.HasRequiredData;
 
-                var verifiedCount = (citizenVerified ? 1 : 0) + (licenseVerified ? 1 : 0);
-                ViewBag.KycVerifiedCount = verifiedCount;
-                ViewBag.KycVerified = verifiedCount == 2;
+                var citizenValidForRental = citizenApproved &&
+                                            citizenFront!.ExpiryDate.HasValue &&
+                                            citizenFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+
+                var licenseValidForRental = licenseApproved &&
+                                            licenseFront!.ExpiryDate.HasValue &&
+                                            licenseFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+
+                var approvedCount = (citizenApproved ? 1 : 0) + (licenseApproved ? 1 : 0);
+                ViewBag.KycVerifiedCount = approvedCount;
+                ViewBag.KycVerified = citizenValidForRental && licenseValidForRental;
+                ViewBag.CitizenApproved = citizenApproved;
+                ViewBag.LicenseApproved = licenseApproved;
+                ViewBag.CitizenValidForRental = citizenValidForRental;
+                ViewBag.LicenseValidForRental = licenseValidForRental;
+                ViewBag.CitizenExpiryDate = citizenFront?.ExpiryDate;
+                ViewBag.LicenseExpiryDate = licenseFront?.ExpiryDate;
                 ViewBag.HasBankAccount = await _bankAccountService.GetDefaultAsync(
                     customerId,
                     cancellationToken) is not null;
             }
         }
 
-        return View(vehicle);
+        return View("DetailsV2", vehicle);
     }
 
     private async Task LoadBrandsAsync(int? selectedId, CancellationToken cancellationToken)

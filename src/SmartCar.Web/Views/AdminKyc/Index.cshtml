@@ -7,30 +7,20 @@
     <div>
         <div class="text-uppercase small text-primary fw-semibold">HÀNG ĐỢI XÁC MINH GIẤY TỜ</div>
         <h1 class="h2 fw-bold mb-1">Hồ sơ xác minh chờ duyệt</h1>
-        <p class="text-muted mb-0">Quản trị viên đối chiếu CCCD và GPLX để xác minh danh tính và điều kiện giấy tờ của khách hàng. Chỉ hồ sơ đã gửi đủ 4 ảnh mới xuất hiện tại đây.</p>
+        <p class="text-muted mb-0">Xử lý cả hồ sơ xác minh lần đầu và các yêu cầu cập nhật riêng CCCD/GPLX khi giấy tờ sắp hết hạn, hết hạn hoặc cần gửi lại.</p>
     </div>
-    <span class="badge @(Model.Items.Count > 0 ? "bg-warning text-dark" : "bg-success") fs-6 px-3 py-2">
-        @Model.Items.Count hồ sơ cần xử lý
-    </span>
 </div>
 
-@if (Model.Items.Count == 0)
-{
-    <div class="card border-0 shadow-sm">
-        <div class="card-body p-5 text-center">
-            <div class="display-6 mb-3">✓</div>
-            <h2 class="h4 fw-bold">Không có hồ sơ xác minh đang chờ</h2>
-            <p class="text-muted mb-0">Khi khách hàng gửi đủ CCCD và GPLX, hồ sơ sẽ tự xuất hiện tại đây.</p>
-        </div>
-    </div>
-}
-else
+@if (Model.Items.Count > 0)
 {
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-white border-0 p-4 pb-2">
-            <div>
-                <h2 class="h5 fw-bold mb-1">Cần quản trị viên xử lý</h2>
-                <p class="text-muted mb-0">Mỗi khách hàng chỉ có một hồ sơ gồm CCCD + GPLX để duyệt hoặc yêu cầu cập nhật trong một lần.</p>
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h2 class="h5 fw-bold mb-1">Xác minh lần đầu</h2>
+                    <p class="text-muted mb-0">Khách hàng đã gửi đủ CCCD + GPLX và 4 ảnh. Quản trị viên đối chiếu toàn bộ hồ sơ trong một lần.</p>
+                </div>
+                <span class="badge bg-warning text-dark px-3 py-2">@Model.Items.Count hồ sơ</span>
             </div>
         </div>
         <div class="table-responsive">
@@ -57,7 +47,7 @@ else
                             <div>@item.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
                             <small class="text-muted">Đủ CCCD + GPLX · 4 ảnh</small>
                         </td>
-                        <td><span class="badge bg-warning text-dark">Mới gửi · Chờ duyệt</span></td>
+                        <td><span class="badge bg-warning text-dark">Chờ xác minh</span></td>
                         <td class="text-end">
                             <a class="btn btn-primary btn-sm"
                                asp-action="Review"
@@ -70,3 +60,12 @@ else
         </div>
     </div>
 }
+else
+{
+    <div class="alert alert-light border shadow-sm mb-0">
+        <strong>Không có hồ sơ xác minh lần đầu đang chờ.</strong>
+        <span class="text-muted"> Các yêu cầu cập nhật riêng CCCD/GPLX, nếu có, được hiển thị bên dưới.</span>
+    </div>
+}
+
+@await Component.InvokeAsync("IndividualDocumentRenewalQueue")

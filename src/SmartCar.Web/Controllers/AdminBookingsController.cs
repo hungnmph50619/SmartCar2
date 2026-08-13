@@ -37,10 +37,33 @@ public sealed class AdminBookingsController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(
         BookingStatus? status,
+        string? query,
         CancellationToken cancellationToken)
     {
         ViewBag.Status = status;
-        return View(await _bookingService.GetAdminBookingsAsync(status, cancellationToken));
+        ViewBag.Query = query;
+
+        var bookings = await _bookingService.GetAdminBookingsAsync(status, cancellationToken);
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return View(bookings);
+        }
+
+        var keyword = query.Trim();
+        var bookingIdText = keyword.TrimStart('#');
+        var hasBookingId = int.TryParse(bookingIdText, out var bookingId);
+
+        var filteredBookings = bookings
+            .Where(booking =>
+                (hasBookingId && booking.BookingId == bookingId) ||
+                booking.CustomerName.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(booking.CustomerPhone) &&
+                 booking.CustomerPhone.Contains(keyword, StringComparison.OrdinalIgnoreCase)) ||
+                booking.VehicleName.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                booking.LicensePlate.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return View(filteredBookings);
     }
 
     [HttpGet]

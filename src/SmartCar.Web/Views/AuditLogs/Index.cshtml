@@ -12,12 +12,19 @@
 
     string AuditBadgeClass(string action) => action switch
     {
-        "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "text-bg-danger",
-        "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "text-bg-success",
-        "ViewKycDocumentImage" => "text-bg-info",
-        "Submit" or "SubmitKycPackage" or "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "text-bg-primary",
-        "RequestResubmission" or "RequestUpdate" or "AddCharge" => "text-bg-warning",
-        _ => "text-bg-secondary"
+        "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "audit-action-danger",
+        "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "audit-action-success",
+        "ViewKycDocumentImage" => "audit-action-info",
+        "Submit" or "SubmitKycPackage" or "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "audit-action-primary",
+        "RequestResubmission" or "RequestUpdate" or "AddCharge" => "audit-action-warning",
+        _ => "audit-action-secondary"
+    };
+
+    string FriendlyIp(string? ip) => ip switch
+    {
+        null or "" => "Không ghi nhận",
+        "::1" or "127.0.0.1" => "Máy cục bộ",
+        _ => ip
     };
 
     bool IsGuidIdentifier(string? value) => Guid.TryParse(value, out _);
@@ -28,7 +35,7 @@
 <div class="audit-page">
     <div class="audit-page-heading mb-4">
         <h1 class="h2 fw-bold mb-1">Nhật ký thao tác</h1>
-        <p class="text-muted mb-0">Theo dõi các hoạt động quan trọng trong hệ thống.</p>
+        <p class="text-muted mb-0">Theo dõi ai đã thực hiện thao tác gì, trên dữ liệu nào và vào thời điểm nào.</p>
     </div>
 
     <section class="card border-0 shadow-sm audit-filter-card mb-3">
@@ -43,7 +50,7 @@
                                name="search"
                                value="@Model.Search"
                                class="form-control"
-                               placeholder="Nội dung, mã đối tượng, tên/email, IP..." />
+                               placeholder="Người thực hiện, nội dung, mã đối tượng, IP..." />
                     </div>
 
                     <div class="col-md-4 col-xl-2">
@@ -193,12 +200,12 @@
         <div class="card-header bg-white border-0 px-4 pt-4 pb-3 d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div>
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <h2 class="h5 fw-bold mb-0">Lịch sử thao tác</h2>
+                    <h2 class="h5 fw-bold mb-0">Nhật ký thao tác</h2>
                     <span class="badge rounded-pill text-bg-light border">@result.TotalCount.ToString("N0") bản ghi</span>
                 </div>
                 @if (result.TotalCount > 0)
                 {
-                    <p class="small text-muted mb-0 mt-1">Hiển thị @firstRow–@lastRow.</p>
+                    <p class="small text-muted mb-0 mt-1">Hiển thị @firstRow–@lastRow trên @result.TotalCount.ToString("N0") bản ghi.</p>
                 }
                 else
                 {
@@ -259,6 +266,7 @@
                     @foreach (var item in result.Items)
                     {
                         var showEntityId = !string.IsNullOrWhiteSpace(item.EntityId) && !IsGuidIdentifier(item.EntityId);
+                        var friendlyIp = FriendlyIp(item.IpAddress);
                         <tr>
                             <td class="text-nowrap audit-time-cell">
                                 @item.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm")
@@ -267,7 +275,7 @@
                                 <div class="fw-semibold audit-user-name">@(item.UserName ?? "Hệ thống")</div>
                             </td>
                             <td>
-                                <span class="badge audit-action-badge @AuditBadgeClass(item.Action)">@item.Action.ToVietnameseAuditAction()</span>
+                                <span class="audit-action-badge @AuditBadgeClass(item.Action)">@item.Action.ToVietnameseAuditAction()</span>
                             </td>
                             <td>
                                 <div class="fw-semibold audit-entity-name">
@@ -282,11 +290,15 @@
                             <td class="text-nowrap">
                                 @if (string.IsNullOrWhiteSpace(item.IpAddress))
                                 {
-                                    <span class="audit-no-ip">—</span>
+                                    <span class="audit-no-ip">@friendlyIp</span>
+                                }
+                                else if (item.IpAddress is "::1" or "127.0.0.1")
+                                {
+                                    <span class="audit-ip-friendly" title="@item.IpAddress">@friendlyIp</span>
                                 }
                                 else
                                 {
-                                    <code>@item.IpAddress</code>
+                                    <span class="audit-ip-friendly">@friendlyIp</span>
                                 }
                             </td>
                             <td class="text-end">

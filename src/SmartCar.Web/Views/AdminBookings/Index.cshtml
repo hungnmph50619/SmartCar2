@@ -3,6 +3,25 @@
 @{
     ViewData["Title"] = "Quản lý đơn thuê";
     var selectedStatus = ViewBag.Status as BookingStatus?;
+    var selectedQuery = ViewBag.Query as string ?? string.Empty;
+
+    static string StatusBadgeClass(BookingStatus status) => status switch
+    {
+        BookingStatus.PendingConfirmation => "bg-warning text-dark",
+        BookingStatus.Rejected => "bg-danger",
+        BookingStatus.PendingPayment => "bg-info text-dark",
+        BookingStatus.Paid => "bg-primary",
+        BookingStatus.ReadyForPickup => "bg-info text-dark",
+        BookingStatus.Rented => "bg-primary",
+        BookingStatus.PendingInspection => "bg-warning text-dark",
+        BookingStatus.Completed => "bg-success",
+        BookingStatus.Cancelled => "bg-danger",
+        BookingStatus.NoShow => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    static bool IsFinished(BookingStatus status) =>
+        status is BookingStatus.Rejected or BookingStatus.Completed or BookingStatus.Cancelled or BookingStatus.NoShow;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -12,8 +31,8 @@
     </div>
 </div>
 
-<form method="get" class="row g-2 mb-3">
-    <div class="col-md-4">
+<form method="get" class="row g-2 align-items-center mb-3">
+    <div class="col-lg-4 col-md-5">
         <select name="status" class="form-select" aria-label="Lọc theo trạng thái đơn">
             <option value="">Tất cả trạng thái</option>
             @foreach (var status in Enum.GetValues<BookingStatus>())
@@ -22,40 +41,90 @@
             }
         </select>
     </div>
-    <div class="col-auto"><button class="btn btn-outline-primary" type="submit">Lọc đơn</button></div>
+    <div class="col-lg-5 col-md-7">
+        <input type="search"
+               name="query"
+               value="@selectedQuery"
+               class="form-control"
+               placeholder="Tìm mã đơn, khách hàng, SĐT hoặc biển số"
+               aria-label="Tìm đơn thuê" />
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-primary" type="submit">Lọc đơn</button>
+    </div>
+    @if (selectedStatus.HasValue || !string.IsNullOrWhiteSpace(selectedQuery))
+    {
+        <div class="col-auto">
+            <a class="btn btn-link text-decoration-none" asp-action="Index">Xóa lọc</a>
+        </div>
+    }
 </form>
 
 <div class="table-responsive">
-<table class="table table-bordered align-middle">
-    <thead>
-        <tr><th>Mã</th><th>Khách hàng & liên hệ</th><th>Xe</th><th>Thời gian</th><th>Tổng tiền</th><th>Trạng thái</th><th></th></tr>
-    </thead>
-    <tbody>
-    @foreach (var booking in Model)
-    {
-        <tr>
-            <td>#@booking.BookingId</td>
-            <td>
-                <strong>@booking.CustomerName</strong>
-                @if (!string.IsNullOrWhiteSpace(booking.CustomerPhone))
-                {
-                    <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
-                        <a href="tel:@booking.CustomerPhone" class="text-decoration-none fw-semibold">☎ @booking.CustomerPhone</a>
-                        <a href="tel:@booking.CustomerPhone" class="btn btn-sm btn-outline-success">Gọi khách</a>
-                    </div>
-                }
-                else
-                {
-                    <span class="badge bg-danger mt-1">Thiếu số điện thoại</span>
-                }
-            </td>
-            <td>@booking.VehicleName<br /><small>@booking.LicensePlate</small></td>
-            <td>@booking.PickupDate.ToString("dd/MM HH:mm")<br />→ @booking.ReturnDate.ToString("dd/MM HH:mm")</td>
-            <td>@booking.TotalAmount.ToString("N0") đ</td>
-            <td><span class="badge bg-secondary">@booking.Status.ToVietnamese()</span></td>
-            <td><a class="btn btn-sm btn-primary" asp-action="Details" asp-route-id="@booking.BookingId">Xử lý</a></td>
-        </tr>
-    }
-    </tbody>
-</table>
+    <table class="table table-bordered table-hover align-middle mb-0">
+        <thead>
+            <tr>
+                <th>Mã</th>
+                <th>Khách hàng & liên hệ</th>
+                <th>Xe</th>
+                <th>Thời gian</th>
+                <th class="text-end">Tổng tiền</th>
+                <th>Trạng thái</th>
+                <th class="text-center">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+        @if (Model.Count == 0)
+        {
+            <tr>
+                <td colspan="7" class="text-center text-muted py-4">
+                    Không tìm thấy đơn thuê phù hợp với điều kiện lọc.
+                </td>
+            </tr>
+        }
+        else
+        {
+            @foreach (var booking in Model)
+            {
+                var isFinished = IsFinished(booking.Status);
+                <tr>
+                    <td class="fw-semibold">#@booking.BookingId</td>
+                    <td>
+                        <strong>@booking.CustomerName</strong>
+                        @if (!string.IsNullOrWhiteSpace(booking.CustomerPhone))
+                        {
+                            <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+                                <a href="tel:@booking.CustomerPhone" class="text-decoration-none fw-semibold">☎ @booking.CustomerPhone</a>
+                                <a href="tel:@booking.CustomerPhone" class="btn btn-sm btn-outline-success">Gọi khách</a>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger mt-1">Thiếu số điện thoại</span>
+                        }
+                    </td>
+                    <td>
+                        @booking.VehicleName<br />
+                        <small class="text-muted">@booking.LicensePlate</small>
+                    </td>
+                    <td>
+                        @booking.PickupDate.ToString("dd/MM HH:mm")<br />
+                        <span class="text-muted">→ @booking.ReturnDate.ToString("dd/MM HH:mm")</span>
+                    </td>
+                    <td class="text-end fw-semibold text-nowrap">@booking.TotalAmount.ToString("N0") đ</td>
+                    <td>
+                        <span class="badge @StatusBadgeClass(booking.Status)">@booking.Status.ToVietnamese()</span>
+                    </td>
+                    <td class="text-center text-nowrap">
+                        <a class="btn btn-sm @(isFinished ? "btn-outline-primary" : "btn-primary")"
+                           asp-action="Details"
+                           asp-route-id="@booking.BookingId">
+                            @(isFinished ? "Xem chi tiết" : "Xử lý")
+                        </a>
+                    </td>
+                </tr>
+            }
+        }
+        </tbody>
+    </table>
 </div>

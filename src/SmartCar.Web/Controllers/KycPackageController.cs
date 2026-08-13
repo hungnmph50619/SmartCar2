@@ -157,9 +157,9 @@ public sealed class KycPackageController : Controller
                     document.CustomerDocumentId,
                     holderName,
                     citizen.DateOfBirth!.Value.Date,
+                    citizen.Gender.Trim(),
                     null,
                     null,
-                    citizen.PermanentAddress.Trim(),
                     null,
                     cancellationToken);
             }

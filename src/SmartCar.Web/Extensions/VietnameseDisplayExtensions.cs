@@ -130,7 +130,7 @@ public static class VietnameseDisplayExtensions
         "Update" => "Cập nhật",
         "Delete" => "Xóa",
         "ChangeStatus" => "Đổi trạng thái",
-        "Submit" => "Gửi giấy tờ",
+        "Submit" => "Gửi giấy tờ xác minh",
         "SubmitKycPackage" => "Gửi hồ sơ xác minh",
         "Verify" => "Xác minh giấy tờ",
         "VerifyAll" => "Duyệt hồ sơ xác minh",
@@ -193,7 +193,12 @@ public static class VietnameseDisplayExtensions
         normalized = normalized
             .Replace("khách hàng .", "khách hàng.", StringComparison.OrdinalIgnoreCase)
             .Replace("khách hàng ,", "khách hàng,", StringComparison.OrdinalIgnoreCase)
-            .Replace(" #", " #", StringComparison.Ordinal);
+            .Replace("Gửi thông tin GPLX cùng ảnh mặt trước và mặt sau để xác minh.", "Khách hàng đã gửi GPLX cùng ảnh mặt trước và mặt sau để xác minh.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Gửi thông tin CCCD cùng ảnh mặt trước và mặt sau để xác minh.", "Khách hàng đã gửi CCCD cùng ảnh mặt trước và mặt sau để xác minh.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Xác minh GPLX mặt sau của khách hàng.", "Quản trị viên đã xác minh ảnh mặt sau GPLX của khách hàng.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Xác minh GPLX của khách hàng.", "Quản trị viên đã xác minh GPLX của khách hàng.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Xác minh CCCD mặt sau của khách hàng.", "Quản trị viên đã xác minh ảnh mặt sau CCCD của khách hàng.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Xác minh CCCD của khách hàng.", "Quản trị viên đã xác minh CCCD của khách hàng.", StringComparison.OrdinalIgnoreCase);
 
         return normalized;
     }
