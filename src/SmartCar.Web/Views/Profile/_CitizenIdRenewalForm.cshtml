@@ -5,7 +5,7 @@
     var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
 }
 
-<form asp-controller="Profile"
+<form asp-controller="DocumentRenewal"
       asp-action="SubmitCitizenId"
       method="post"
       enctype="multipart/form-data"
@@ -28,26 +28,14 @@
         <div class="row g-3">
             <div class="col-md-7">
                 <label asp-for="CitizenIdVerification.FullNameOnDocument" class="form-label fw-semibold"></label>
-                <input asp-for="CitizenIdVerification.FullNameOnDocument"
-                       class="form-control"
-                       maxlength="100"
-                       autocomplete="name"
-                       pattern="[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ '’\-]{2,100}"
-                       required />
+                <input asp-for="CitizenIdVerification.FullNameOnDocument" class="form-control" maxlength="100" autocomplete="name" required />
                 <span asp-validation-for="CitizenIdVerification.FullNameOnDocument" class="text-danger small"></span>
             </div>
             <div class="col-md-5">
                 <label asp-for="CitizenIdVerification.DocumentNumber" class="form-label fw-semibold"></label>
-                <input asp-for="CitizenIdVerification.DocumentNumber"
-                       class="form-control"
-                       inputmode="numeric"
-                       maxlength="12"
-                       pattern="[0-9]{12}"
-                       autocomplete="off"
-                       required />
+                <input asp-for="CitizenIdVerification.DocumentNumber" class="form-control" inputmode="numeric" maxlength="12" pattern="[0-9]{12}" autocomplete="off" required />
                 <span asp-validation-for="CitizenIdVerification.DocumentNumber" class="text-danger small"></span>
             </div>
-
             <div class="col-md-4">
                 <label asp-for="CitizenIdVerification.DateOfBirth" class="form-label fw-semibold"></label>
                 <input asp-for="CitizenIdVerification.DateOfBirth" type="date" class="form-control" max="@DateTime.Today.AddYears(-18).ToString("yyyy-MM-dd")" required />
@@ -64,12 +52,6 @@
                 <span asp-validation-for="CitizenIdVerification.Gender" class="text-danger small"></span>
             </div>
             <div class="col-md-4">
-                <label asp-for="CitizenIdVerification.IssuedDate" class="form-label fw-semibold"></label>
-                <input asp-for="CitizenIdVerification.IssuedDate" type="date" class="form-control" max="@DateTime.Today.ToString("yyyy-MM-dd")" required />
-                <span asp-validation-for="CitizenIdVerification.IssuedDate" class="text-danger small"></span>
-            </div>
-
-            <div class="col-md-4">
                 <label asp-for="CitizenIdVerification.ExpiryDate" class="form-label fw-semibold"></label>
                 <input asp-for="CitizenIdVerification.ExpiryDate" type="date" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" required />
                 <span asp-validation-for="CitizenIdVerification.ExpiryDate" class="text-danger small"></span>
@@ -79,12 +61,7 @@
         <div class="row g-3 mt-2">
             <div class="col-md-6">
                 <label class="kyc-upload-card" data-upload-card>
-                    <input asp-for="CitizenIdVerification.FrontImage"
-                           type="file"
-                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                           class="visually-hidden"
-                           data-upload-input
-                           required />
+                    <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />
                     <img alt="Xem trước CCCD mặt trước" class="kyc-upload-preview" data-upload-preview />
                     <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
                     <strong>CCCD mặt trước mới</strong>
@@ -95,12 +72,7 @@
             </div>
             <div class="col-md-6">
                 <label class="kyc-upload-card" data-upload-card>
-                    <input asp-for="CitizenIdVerification.BackImage"
-                           type="file"
-                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                           class="visually-hidden"
-                           data-upload-input
-                           required />
+                    <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />
                     <img alt="Xem trước CCCD mặt sau" class="kyc-upload-preview" data-upload-preview />
                     <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
                     <strong>CCCD mặt sau mới</strong>
