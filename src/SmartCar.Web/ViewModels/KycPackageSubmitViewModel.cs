@@ -35,9 +35,8 @@ public sealed class KycCitizenIdInputViewModel
     [Display(Name = "Ngày hết hạn")]
     public DateTime? ExpiryDate { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng nhập nơi cư trú trên CCCD.")]
-    [StringLength(500, MinimumLength = 5, ErrorMessage = "Nơi cư trú phải có từ 5 đến 500 ký tự.")]
-    [Display(Name = "Nơi cư trú trên CCCD")]
+    // Địa chỉ cư trú không còn yêu cầu người dùng nhập ở bước KYC ban đầu.
+    // Giữ thuộc tính để tương thích với dữ liệu/mã hiện có; có thể được bổ sung sau từ OCR/QR hoặc khi Admin đối chiếu.
     public string PermanentAddress { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng chọn ảnh CCCD mặt trước.")]
