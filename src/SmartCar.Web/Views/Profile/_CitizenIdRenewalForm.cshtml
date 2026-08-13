@@ -50,7 +50,7 @@
 
             <div class="col-md-4">
                 <label asp-for="CitizenIdVerification.DateOfBirth" class="form-label fw-semibold"></label>
-                <input asp-for="CitizenIdVerification.DateOfBirth" type="date" class="form-control" required />
+                <input asp-for="CitizenIdVerification.DateOfBirth" type="date" class="form-control" max="@DateTime.Today.AddYears(-18).ToString("yyyy-MM-dd")" required />
                 <span asp-validation-for="CitizenIdVerification.DateOfBirth" class="text-danger small"></span>
             </div>
             <div class="col-md-4">
@@ -73,11 +73,6 @@
                 <label asp-for="CitizenIdVerification.ExpiryDate" class="form-label fw-semibold"></label>
                 <input asp-for="CitizenIdVerification.ExpiryDate" type="date" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" required />
                 <span asp-validation-for="CitizenIdVerification.ExpiryDate" class="text-danger small"></span>
-            </div>
-            <div class="col-md-8">
-                <label asp-for="CitizenIdVerification.PermanentAddress" class="form-label fw-semibold"></label>
-                <input asp-for="CitizenIdVerification.PermanentAddress" class="form-control" minlength="5" maxlength="500" required />
-                <span asp-validation-for="CitizenIdVerification.PermanentAddress" class="text-danger small"></span>
             </div>
         </div>
 
