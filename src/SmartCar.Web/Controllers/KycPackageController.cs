@@ -159,7 +159,7 @@ public sealed class KycPackageController : Controller
                     citizen.DateOfBirth!.Value.Date,
                     null,
                     null,
-                    citizen.PermanentAddress.Trim(),
+                    null,
                     null,
                     cancellationToken);
             }
