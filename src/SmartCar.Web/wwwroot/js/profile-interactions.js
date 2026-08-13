@@ -266,7 +266,7 @@
         if (!packageForm || !packageSubmit) return;
 
         const requiredControls = Array.from(packageForm.querySelectorAll('[required]'));
-        const ready = requiredControls.every(control => control.checkValidity());
+        const ready = requiredControls.every(control => control.validity.valid);
         packageSubmit.disabled = !ready;
 
         if (submitHint) {
