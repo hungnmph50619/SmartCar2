@@ -17,8 +17,8 @@ public sealed class KycCitizenIdInputViewModel
     [Required(ErrorMessage = "Vui lòng nhập họ và tên trên CCCD.")]
     [StringLength(100, MinimumLength = 2, ErrorMessage = "Họ và tên phải có từ 2 đến 100 ký tự.")]
     [RegularExpression(
-        @"^ *[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ]+(?:(?: +|['’\-])[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ]+)* *$",
-        ErrorMessage = "Họ và tên chỉ được chứa chữ cái, khoảng trắng, dấu nháy hoặc dấu gạch nối.")]
+        @"^ *[\p{L}\p{M}]+(?: +[\p{L}\p{M}]+)* *$",
+        ErrorMessage = "Họ và tên chỉ được chứa chữ cái và khoảng trắng.")]
     [Display(Name = "Họ và tên trên CCCD")]
     public string FullNameOnDocument { get; set; } = string.Empty;
 
@@ -53,7 +53,7 @@ public sealed class KycCitizenIdInputViewModel
 public sealed class KycDrivingLicenseInputViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập số GPLX.")]
-    [RegularExpression(@"^[A-Za-z0-9]{8,12}$", ErrorMessage = "Số GPLX phải gồm từ 8 đến 12 ký tự chữ hoặc số, không có khoảng trắng.")]
+    [RegularExpression(@"^[0-9]{8,12}$", ErrorMessage = "Số GPLX phải gồm từ 8 đến 12 chữ số.")]
     [Display(Name = "Số GPLX")]
     public string DocumentNumber { get; set; } = string.Empty;
 
