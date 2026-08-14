@@ -320,13 +320,11 @@
                             </td>
 
                             <td>
-                                @booking.PickupDate
-                                    .ToString("dd/MM/yyyy HH:mm")
+                                @(booking.PickupDate.ToString("dd/MM/yyyy HH:mm"))
                                 <br />
                                 <small class="text-muted">
                                     đến
-                                    @booking.ReturnDate
-                                        .ToString("dd/MM/yyyy HH:mm")
+                                    @(booking.ReturnDate.ToString("dd/MM/yyyy HH:mm"))
                                 </small>
                             </td>
 
