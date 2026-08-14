@@ -1,4 +1,4 @@
-﻿using SmartCar.Application.Common;
+using SmartCar.Application.Common;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Application.Features.Bookings;
@@ -6,7 +6,9 @@ namespace SmartCar.Application.Features.Bookings;
 public sealed record CreateBookingRequest(
     int VehicleId,
     DateTime PickupDate,
-    DateTime ReturnDate);
+    DateTime ReturnDate,
+    string PickupLocation,
+    string ReturnLocation);
 
 public class BookingListItemDto
 {
@@ -20,6 +22,8 @@ public class BookingListItemDto
     public string? PrimaryImagePath { get; init; }
     public DateTime PickupDate { get; init; }
     public DateTime ReturnDate { get; init; }
+    public string? PickupLocation { get; init; }
+    public string? ReturnLocation { get; init; }
     public decimal TotalAmount { get; init; }
     public BookingStatus Status { get; init; }
     public DateTime CreatedAt { get; init; }
@@ -37,6 +41,7 @@ public sealed class BookingDetailsDto : BookingListItemDto
     public decimal RefundAmount { get; init; }
     public string? RefundReason { get; init; }
     public DateTime? NoShowMarkedAt { get; init; }
+    public string? ActualReturnLocation { get; init; }
     public bool HasHandover { get; init; }
     public bool HasReturn { get; init; }
     public bool HasReview { get; init; }
@@ -56,6 +61,7 @@ public sealed record PaymentSummaryDto(
     PaymentStatus Status,
     DateTime? PaidAt,
     string? TransactionCode);
+
 public sealed record ChargeSummaryDto(
     int AdditionalChargeId,
     AdditionalChargeType ChargeType,
