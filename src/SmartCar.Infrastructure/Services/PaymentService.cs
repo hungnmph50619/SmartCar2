@@ -273,6 +273,8 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Không tìm thấy khoản thanh toán đang chờ.");
         }
 
+        var previousReconciliationCode = payment.TransactionCode;
+
         payment.Method = PaymentMethods.BankQr;
         payment.Status = PaymentStatus.AwaitingConfirmation;
         payment.PaidAt = null;
@@ -299,7 +301,11 @@ internal sealed class PaymentService : IPaymentService
             "SubmitQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
-            $"Khách báo đã chuyển khoản QR {paymentType} cho đơn #{booking.BookingId}, số tiền {payment.Amount:N0} đồng.",
+            $"Khách báo đã chuyển khoản QR {paymentType} cho đơn #{booking.BookingId}, " +
+            $"số tiền {payment.Amount:N0} đồng, mã yêu cầu đối soát {payment.TransactionCode}." +
+            (string.IsNullOrWhiteSpace(previousReconciliationCode)
+                ? string.Empty
+                : $" Mã yêu cầu trước đó: {previousReconciliationCode}."),
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -479,8 +485,20 @@ internal sealed class PaymentService : IPaymentService
     public async Task<OperationResult> RejectQrPaymentAsync(
         int paymentId,
         string adminId,
+        string rejectionReason,
         CancellationToken cancellationToken = default)
     {
+        var normalizedReason = rejectionReason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(normalizedReason))
+        {
+            return OperationResult.Failure("Vui lòng nhập lý do chưa tìm thấy giao dịch.");
+        }
+
+        if (normalizedReason.Length > 500)
+        {
+            return OperationResult.Failure("Lý do chưa tìm thấy giao dịch không được vượt quá 500 ký tự.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
@@ -500,16 +518,20 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Giao dịch không ở trạng thái chờ xác nhận QR.");
         }
 
+        var reconciliationCode = payment.TransactionCode;
+
         payment.Status = PaymentStatus.Pending;
         payment.Method = PaymentMethods.NotSelected;
         payment.PaidAt = null;
-        payment.TransactionCode = null;
+        // Giữ nguyên TransactionCode để không xóa dấu vết lần khách đã báo chuyển khoản.
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = payment.Booking.CustomerId,
-            Title = "Chưa xác nhận được chuyển khoản",
-            Message = $"SmartCar chưa tìm thấy giao dịch của đơn #{payment.BookingId}. Vui lòng kiểm tra và thanh toán lại."
+            Title = "SmartCar chưa tìm thấy giao dịch chuyển khoản",
+            Message = $"SmartCar chưa đối soát được khoản {payment.Amount:N0} đồng của đơn #{payment.BookingId}. " +
+                      $"Mã yêu cầu: {reconciliationCode ?? "không có"}. Lý do đối soát: {normalizedReason}. " +
+                      "Khoản thanh toán được trả về trạng thái chờ thanh toán; lịch sử đối soát vẫn được lưu."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -517,10 +539,12 @@ internal sealed class PaymentService : IPaymentService
 
         await _auditService.WriteAsync(
             adminId,
-            "RejectQrPayment",
+            "QrPaymentNotFound",
             nameof(Payment),
             payment.PaymentId.ToString(),
-            $"Chưa xác nhận được chuyển khoản QR của đơn #{payment.BookingId}.",
+            $"Admin chưa tìm thấy chuyển khoản QR của đơn #{payment.BookingId}, số tiền {payment.Amount:N0} đồng. " +
+            $"Mã yêu cầu đối soát: {reconciliationCode ?? "không có"}. Lý do: {normalizedReason}. " +
+            "Dấu vết giao dịch được giữ lại để kiểm tra sau.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
