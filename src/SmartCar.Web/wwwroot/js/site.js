@@ -637,22 +637,40 @@ function initializeAdminCustomerNavigation() {
         document.head.appendChild(stylesheet);
     }
 
-    const customerLink = Array.from(document.querySelectorAll(".admin-sidebar a.admin-nav-link"))
-        .find((link) => link.getAttribute("href")?.includes("/AdminDocuments"));
-
-    if (!customerLink) {
+    if (!isCustomerAdminPage) {
         return;
     }
 
-    customerLink.setAttribute("href", "/AdminCustomers");
-    const label = customerLink.querySelector("span:last-child");
-    if (label) {
-        label.textContent = "Quản lý khách hàng";
-    }
+    const sidebarLinks = Array.from(document.querySelectorAll(".admin-sidebar a.admin-nav-link"));
+    const customerManagementLink = sidebarLinks.find((link) => {
+        const href = link.getAttribute("href");
+        if (!href) {
+            return false;
+        }
 
-    if (isCustomerAdminPage) {
-        customerLink.classList.add("active");
-    }
+        const url = new URL(href, window.location.origin);
+        return url.pathname.toLowerCase() === "/admincustomers" &&
+            !url.searchParams.has("profileStatus");
+    });
+
+    const verificationLink = sidebarLinks.find((link) => {
+        const href = link.getAttribute("href");
+        if (!href) {
+            return false;
+        }
+
+        const url = new URL(href, window.location.origin);
+        return url.pathname.toLowerCase() === "/admincustomers" &&
+            url.searchParams.get("profileStatus")?.toLowerCase() === "pending";
+    });
+
+    const currentUrl = new URL(window.location.href);
+    const isVerificationMode =
+        currentUrl.searchParams.get("profileStatus")?.toLowerCase() === "pending" ||
+        currentUrl.searchParams.get("tab")?.toLowerCase() === "documents";
+
+    customerManagementLink?.classList.toggle("active", !isVerificationMode);
+    verificationLink?.classList.toggle("active", isVerificationMode);
 }
 
 function formatBytes(bytes) {
