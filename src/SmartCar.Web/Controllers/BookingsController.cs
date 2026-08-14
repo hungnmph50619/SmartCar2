@@ -38,6 +38,48 @@ public sealed class BookingsController : Controller
     }
 
     [HttpGet]
+    public async Task<IActionResult> SearchLocations(
+        string query,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2)
+        {
+            return Json(new
+            {
+                succeeded = true,
+                results = Array.Empty<object>()
+            });
+        }
+
+        try
+        {
+            var locations = await _deliveryQuoteService.SearchLocationsAsync(
+                query,
+                6,
+                cancellationToken);
+
+            return Json(new
+            {
+                succeeded = true,
+                results = locations.Select(item => new
+                {
+                    displayName = item.DisplayName,
+                    latitude = item.Latitude,
+                    longitude = item.Longitude
+                })
+            });
+        }
+        catch
+        {
+            return Json(new
+            {
+                succeeded = false,
+                error = "Chưa thể tìm địa điểm lúc này. Vui lòng thử lại."
+            });
+        }
+    }
+
+    [HttpGet]
     public async Task<IActionResult> DeliveryQuote(
         string pickupMethod,
         string pickupLocation,
