@@ -308,9 +308,11 @@ internal sealed class ReturnService : IReturnService
         booking.AdditionalAmount = await _dbContext.AdditionalCharges
             .Where(charge => charge.VehicleReturn.BookingId == booking.BookingId)
             .SumAsync(charge => (decimal?)charge.Amount, cancellationToken) ?? 0;
+
+        // RentalAmount đã bao gồm tiền thuê sau các lần gia hạn; DeliveryFee là khoản giao/nhận đã chốt trước thanh toán.
         booking.TotalAmount = Math.Max(
             0,
-            booking.RentalAmount + booking.AdditionalAmount);
+            booking.RentalAmount + booking.DeliveryFee + booking.AdditionalAmount);
 
         var pendingPayment = booking.Payments.FirstOrDefault(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
