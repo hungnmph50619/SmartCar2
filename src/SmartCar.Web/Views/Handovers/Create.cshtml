@@ -9,12 +9,19 @@
     var abnormalConditionDetail = hasAbnormalCondition
         ? Model.ExteriorCondition!.Substring(abnormalPrefix.Length).Trim()
         : string.Empty;
+
+    var currentMileage = ViewBag.CurrentMileage is int mileage ? mileage : 0;
+    var vehicleFuelType = ViewBag.VehicleFuelType as string ?? string.Empty;
+    var isElectricVehicle = string.Equals(
+        vehicleFuelType,
+        "Điện",
+        StringComparison.OrdinalIgnoreCase);
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
         <h1 class="h3 mb-1">Lập biên bản giao xe - Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Ghi nhận số km, nhiên liệu, phụ kiện và bộ ảnh đối chiếu trước khi giao chìa khóa.</p>
+        <p class="text-muted mb-0">Ghi nhận ODO thực tế, nhiên liệu/pin, phụ kiện và bộ ảnh đối chiếu trước khi giao chìa khóa.</p>
     </div>
     <a class="btn btn-outline-secondary"
        asp-controller="AdminBookings"
@@ -24,7 +31,7 @@
 
 <div class="alert alert-info shadow-sm">
     <strong>Nguyên tắc bàn giao:</strong>
-    ảnh là bằng chứng đối chiếu chính. Hãy kiểm tra đúng khách, đúng xe và biển số; chụp đủ các góc xe, đồng hồ km/nhiên liệu và nội thất trước khi xác nhận giao chìa khóa.
+    ảnh là bằng chứng đối chiếu chính. Hãy nhìn trực tiếp đồng hồ trên xe để nhập đúng ODO và mức nhiên liệu/pin; đồng thời chụp rõ cụm đồng hồ cùng các góc xe trước khi giao chìa khóa.
 </div>
 
 <form asp-action="Create"
@@ -36,6 +43,7 @@
     <input asp-for="BookingId" type="hidden" />
     <input asp-for="ExteriorCondition" type="hidden" id="handover-condition-summary" />
     <input asp-for="InteriorCondition" type="hidden" id="handover-interior-summary" />
+    <input asp-for="FuelLevel" type="hidden" id="handover-fuel-level" />
 
     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
 
@@ -45,9 +53,15 @@
                 <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
                     <div>
                         <div class="text-uppercase small text-muted fw-semibold">Thông tin thực tế khi giao</div>
-                        <h2 class="h5 mb-0">Số km & nhiên liệu</h2>
+                        <h2 class="h5 mb-0">ODO & @(isElectricVehicle ? "mức pin" : "nhiên liệu")</h2>
                     </div>
-                    <span class="badge bg-light text-dark border">Bắt buộc</span>
+                    <div class="d-flex gap-2 flex-wrap">
+                        @if (!string.IsNullOrWhiteSpace(vehicleFuelType))
+                        {
+                            <span class="badge bg-light text-dark border">@vehicleFuelType</span>
+                        }
+                        <span class="badge bg-light text-dark border">Bắt buộc</span>
+                    </div>
                 </div>
 
                 <div class="row g-3">
@@ -58,26 +72,74 @@
                     </div>
 
                     <div class="col-md-6">
-                        <label asp-for="Mileage" class="form-label fw-semibold">Số km khi giao</label>
+                        <label asp-for="Mileage" class="form-label fw-semibold">ODO thực tế khi giao</label>
                         <div class="input-group">
-                            <input asp-for="Mileage" type="number" min="0" class="form-control" required />
+                            <input asp-for="Mileage"
+                                   type="number"
+                                   min="@currentMileage"
+                                   step="1"
+                                   class="form-control"
+                                   required />
                             <span class="input-group-text">km</span>
                         </div>
                         <span asp-validation-for="Mileage" class="text-danger small"></span>
+                        <div class="form-text">
+                            Số km hiện tại trên hệ thống:
+                            <strong>@currentMileage.ToString("N0") km</strong>.
+                            Nhập đúng chỉ số ODO đang hiển thị trên xe; không nhập quãng đường dự kiến của chuyến thuê.
+                        </div>
                     </div>
 
                     <div class="col-md-6">
-                        <label asp-for="FuelLevel" class="form-label fw-semibold">Mức nhiên liệu</label>
-                        <select asp-for="FuelLevel" class="form-select" required>
-                            <option value="">-- Chọn mức nhiên liệu --</option>
-                            <option value="100%">100% - Đầy bình</option>
-                            <option value="75%">75%</option>
-                            <option value="50%">50%</option>
-                            <option value="25%">25%</option>
-                            <option value="Dưới 25%">Dưới 25%</option>
-                        </select>
+                        <label class="form-label fw-semibold">
+                            @(isElectricVehicle ? "Mức pin (SOC) khi giao" : "Mức nhiên liệu khi giao")
+                        </label>
+
+                        @if (isElectricVehicle)
+                        {
+                            <div class="input-group">
+                                <input id="battery-percent-input"
+                                       type="number"
+                                       min="0"
+                                       max="100"
+                                       step="1"
+                                       class="form-control"
+                                       data-initial-fuel="@Model.FuelLevel"
+                                       placeholder="Ví dụ: 82"
+                                       required />
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text">
+                                Nhập đúng SOC (%) trên bảng đồng hồ xe điện tại thời điểm giao.
+                            </div>
+                        }
+                        else
+                        {
+                            <select id="fuel-gauge-select"
+                                    class="form-select"
+                                    data-initial-fuel="@Model.FuelLevel"
+                                    required>
+                                <option value="">-- Chọn đúng vạch trên đồng hồ --</option>
+                                <option value="8/8 (100%)">8/8 - 100% - Đầy bình</option>
+                                <option value="7/8 (~87.5%)">7/8 - khoảng 87,5%</option>
+                                <option value="6/8 (75%)">6/8 - 75%</option>
+                                <option value="5/8 (~62.5%)">5/8 - khoảng 62,5%</option>
+                                <option value="4/8 (50%)">4/8 - 50%</option>
+                                <option value="3/8 (~37.5%)">3/8 - khoảng 37,5%</option>
+                                <option value="2/8 (25%)">2/8 - 25%</option>
+                                <option value="1/8 (~12.5%)">1/8 - khoảng 12,5%</option>
+                                <option value="0/8 (Gần cạn)">0/8 - Gần cạn</option>
+                            </select>
+                            <div class="form-text">
+                                Chọn theo đúng số vạch thực tế trên đồng hồ nhiên liệu. Không ước lượng tùy ý bằng 25% / 50% / 75% nếu đồng hồ đang nằm ở vạch khác.
+                            </div>
+                        }
+
                         <span asp-validation-for="FuelLevel" class="text-danger small"></span>
-                        <div class="form-text">Nên chụp đồng hồ nhiên liệu cùng ảnh đồng hồ km.</div>
+                        <div class="alert alert-light border py-2 px-3 small mt-2 mb-0">
+                            <strong>Ảnh bắt buộc đối chiếu:</strong>
+                            chụp rõ cụm đồng hồ để nhìn thấy đồng thời ODO và @(isElectricVehicle ? "SOC pin" : "mức nhiên liệu") nếu có thể.
+                        </div>
                     </div>
 
                     <div class="col-md-6">
@@ -161,7 +223,7 @@
                     <div class="col-md-4"><div class="bg-light rounded p-2 h-100">② Phía sau xe</div></div>
                     <div class="col-md-4"><div class="bg-light rounded p-2 h-100">③ Bên trái thân xe</div></div>
                     <div class="col-md-4"><div class="bg-light rounded p-2 h-100">④ Bên phải thân xe</div></div>
-                    <div class="col-md-4"><div class="bg-light rounded p-2 h-100">⑤ Đồng hồ km + nhiên liệu</div></div>
+                    <div class="col-md-4"><div class="bg-light rounded p-2 h-100">⑤ Đồng hồ ODO + @(isElectricVehicle ? "pin" : "nhiên liệu")</div></div>
                     <div class="col-md-4"><div class="bg-light rounded p-2 h-100">⑥ Nội thất xe</div></div>
                 </div>
 
@@ -207,13 +269,19 @@
                     <div class="d-grid gap-2 small mt-3">
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đúng khách hàng và đúng xe/biển số</span></div>
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã đối chiếu CCCD/GPLX thực tế</span></div>
-                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã ghi số km và mức nhiên liệu</span></div>
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>ODO nhập đúng theo đồng hồ thật của xe</span></div>
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>@(isElectricVehicle ? "SOC pin" : "Mức nhiên liệu") nhập đúng theo đồng hồ</span></div>
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã kiểm tra phụ kiện/giấy tờ đi kèm</span></div>
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã chụp ít nhất 6 ảnh đối chiếu</span></div>
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>Bất thường hiện hữu đã được mô tả và chụp cận cảnh</span></div>
                     </div>
 
                     <hr />
+                    <div class="small mb-3">
+                        <div class="text-muted">ODO đang lưu trên hệ thống</div>
+                        <div class="fs-5 fw-bold">@currentMileage.ToString("N0") km</div>
+                        <div class="text-muted">Biên bản không chấp nhận ODO nhỏ hơn giá trị này.</div>
+                    </div>
                     <p class="small text-muted mb-0">
                         Sau khi lưu biên bản, hệ thống chuyển đơn sang <strong>Đang thuê</strong>. Chỉ xác nhận khi xe đã được kiểm tra cùng khách và sẵn sàng giao chìa khóa.
                     </p>
@@ -272,6 +340,49 @@
             form?.addEventListener('submit', syncCondition);
 
             syncCondition();
+        })();
+
+        (() => {
+            const fuelLevel = document.getElementById('handover-fuel-level');
+            const fuelGauge = document.getElementById('fuel-gauge-select');
+            const batteryPercent = document.getElementById('battery-percent-input');
+
+            if (!fuelLevel) {
+                return;
+            }
+
+            if (fuelGauge) {
+                const initialValue = fuelGauge.dataset.initialFuel || fuelLevel.value || '';
+                if (initialValue && Array.from(fuelGauge.options).some(option => option.value === initialValue)) {
+                    fuelGauge.value = initialValue;
+                }
+
+                const syncFuelGauge = () => {
+                    fuelLevel.value = fuelGauge.value;
+                };
+
+                fuelGauge.addEventListener('change', syncFuelGauge);
+                fuelGauge.closest('form')?.addEventListener('submit', syncFuelGauge);
+                syncFuelGauge();
+            }
+
+            if (batteryPercent) {
+                const initialValue = (batteryPercent.dataset.initialFuel || fuelLevel.value || '')
+                    .replace('%', '')
+                    .trim();
+                if (initialValue) {
+                    batteryPercent.value = initialValue;
+                }
+
+                const syncBattery = () => {
+                    const value = batteryPercent.value.trim();
+                    fuelLevel.value = value ? `${value}%` : '';
+                };
+
+                batteryPercent.addEventListener('input', syncBattery);
+                batteryPercent.closest('form')?.addEventListener('submit', syncBattery);
+                syncBattery();
+            }
         })();
     </script>
 }
