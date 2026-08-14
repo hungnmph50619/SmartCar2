@@ -164,8 +164,9 @@ internal sealed class NotificationService : INotificationService
     /// Work notification có hai trạng thái độc lập:
     /// ReadAt = Admin đã mở xem; IsRead = nghiệp vụ đã hoàn tất.
     /// Mỗi lần layout/trang notification hỏi dữ liệu, trạng thái thật trong DB
-    /// được đối chiếu. Chỉ khi nghiệp vụ không còn Pending/AwaitingConfirmation
-    /// thì work item mới chuyển sang đã xử lý.
+    /// được đối chiếu. Nếu nghiệp vụ vẫn Pending/AwaitingConfirmation thì một
+    /// work item từng bị đóng nhầm sẽ được mở lại; khi nghiệp vụ hoàn tất thì
+    /// work item mới chuyển sang đã xử lý.
     /// </summary>
     private async Task ReconcileAdminWorkNotificationsAsync(
         string userId,
@@ -200,14 +201,18 @@ internal sealed class NotificationService : INotificationService
             return;
         }
 
-        var activeCandidates =
+        // Dashboard có thể phát hiện một khoản QR đang chờ trong khi dữ liệu
+        // notification cũ bị thiếu. Tạo work item còn thiếu trước khi đối chiếu.
+        await EnsurePendingQrWorkNotificationsAsync(
+            userId,
+            cancellationToken);
+
+        var candidates =
             await _dbContext.Notifications
-                .Where(item =>
-                    item.UserId == userId &&
-                    !item.IsRead)
+                .Where(item => item.UserId == userId)
                 .ToListAsync(cancellationToken);
 
-        var workItems = activeCandidates
+        var workItems = candidates
             .Where(item =>
                 IsAdminWorkNotification(item.Title))
             .ToList();
@@ -221,19 +226,101 @@ internal sealed class NotificationService : INotificationService
 
         foreach (var item in workItems)
         {
-            if (await IsWorkItemStillActiveAsync(
+            var isStillActive =
+                await IsWorkItemStillActiveAsync(
                     item.Title,
-                    cancellationToken))
+                    cancellationToken);
+
+            if (isStillActive)
+            {
+                // Work item có thể đã bị MarkRead/MarkAllRead trong dữ liệu cũ.
+                // Nếu nghiệp vụ vẫn đang chờ thì phải đưa nó về Cần xử lý.
+                if (item.IsRead)
+                {
+                    item.IsRead = false;
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            if (!item.IsRead)
+            {
+                item.IsRead = true;
+                item.ReadAt ??= DateTime.UtcNow;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await _dbContext.SaveChangesAsync(
+                cancellationToken);
+        }
+    }
+
+    private async Task EnsurePendingQrWorkNotificationsAsync(
+        string adminId,
+        CancellationToken cancellationToken)
+    {
+        var pendingQrPayments =
+            await _dbContext.Payments
+                .AsNoTracking()
+                .Where(payment =>
+                    payment.Status == PaymentStatus.AwaitingConfirmation &&
+                    payment.Method == PaymentMethods.BankQr)
+                .Select(payment => new
+                {
+                    payment.PaymentId,
+                    payment.BookingId
+                })
+                .ToListAsync(cancellationToken);
+
+        if (pendingQrPayments.Count == 0)
+        {
+            return;
+        }
+
+        var existingTitles =
+            await _dbContext.Notifications
+                .AsNoTracking()
+                .Where(item =>
+                    item.UserId == adminId &&
+                    item.Title.StartsWith(
+                        "Thanh toán QR chờ xác nhận|"))
+                .Select(item => item.Title)
+                .ToListAsync(cancellationToken);
+
+        var existingTitleSet =
+            existingTitles.ToHashSet(StringComparer.Ordinal);
+
+        var added = false;
+
+        foreach (var payment in pendingQrPayments)
+        {
+            var title =
+                $"Thanh toán QR chờ xác nhận|{payment.PaymentId}";
+
+            if (existingTitleSet.Contains(title))
             {
                 continue;
             }
 
-            item.IsRead = true;
-            item.ReadAt ??= DateTime.UtcNow;
-            changed = true;
+            _dbContext.Notifications.Add(
+                new Notification
+                {
+                    UserId = adminId,
+                    Title = title,
+                    Message =
+                        $"Thanh toán QR của đơn #{payment.BookingId} đang chờ xác nhận. " +
+                        "Hãy kiểm tra tài khoản ngân hàng trước khi xác nhận đã nhận tiền."
+                });
+
+            existingTitleSet.Add(title);
+            added = true;
         }
 
-        if (changed)
+        if (added)
         {
             await _dbContext.SaveChangesAsync(
                 cancellationToken);
