@@ -9,6 +9,8 @@ public class Booking
     public int VehicleId { get; set; }
     public DateTime PickupDate { get; set; }
     public DateTime ReturnDate { get; set; }
+    public string? PickupLocation { get; set; }
+    public string? ReturnLocation { get; set; }
     public decimal DailyPrice { get; set; }
     public int NumberOfDays { get; set; }
     public decimal RentalAmount { get; set; }
