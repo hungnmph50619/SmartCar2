@@ -19,6 +19,7 @@ IF OBJECT_ID(N'[dbo].[Promotions]', N'U') IS NOT NULL
     DROP TABLE [dbo].[Promotions];
 
 DECLARE @ConstraintName sysname;
+DECLARE @Sql nvarchar(max);
 
 IF COL_LENGTH('dbo.Bookings', 'DiscountAmount') IS NOT NULL
 BEGIN
@@ -38,7 +39,10 @@ BEGIN
       AND c.name = N'DiscountAmount';
 
     IF @ConstraintName IS NOT NULL
-        EXEC(N'ALTER TABLE [dbo].[Bookings] DROP CONSTRAINT ' + QUOTENAME(@ConstraintName));
+    BEGIN
+        SET @Sql = N'ALTER TABLE [dbo].[Bookings] DROP CONSTRAINT ' + QUOTENAME(@ConstraintName) + N';';
+        EXEC sys.sp_executesql @Sql;
+    END;
 
     ALTER TABLE [dbo].[Bookings] DROP COLUMN [DiscountAmount];
 END;
@@ -61,7 +65,10 @@ BEGIN
       AND c.name = N'PromotionCode';
 
     IF @ConstraintName IS NOT NULL
-        EXEC(N'ALTER TABLE [dbo].[Bookings] DROP CONSTRAINT ' + QUOTENAME(@ConstraintName));
+    BEGIN
+        SET @Sql = N'ALTER TABLE [dbo].[Bookings] DROP CONSTRAINT ' + QUOTENAME(@ConstraintName) + N';';
+        EXEC sys.sp_executesql @Sql;
+    END;
 
     ALTER TABLE [dbo].[Bookings] DROP COLUMN [PromotionCode];
 END;
