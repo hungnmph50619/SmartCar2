@@ -20,6 +20,92 @@ internal sealed class DeliveryQuoteService : IDeliveryQuoteService
         _cache = cache;
     }
 
+    public async Task<IReadOnlyList<DeliveryLocationSuggestion>> SearchLocationsAsync(
+        string query,
+        int limit = 6,
+        CancellationToken cancellationToken = default)
+    {
+        var keyword = query?.Trim() ?? string.Empty;
+        if (keyword.Length < 2)
+        {
+            return Array.Empty<DeliveryLocationSuggestion>();
+        }
+
+        limit = Math.Clamp(limit, 1, 8);
+        var searchQuery = keyword.Contains("Hà Nội", StringComparison.OrdinalIgnoreCase) ||
+                          keyword.Contains("Hanoi", StringComparison.OrdinalIgnoreCase)
+            ? keyword
+            : $"{keyword}, Hà Nội, Việt Nam";
+
+        var cacheKey = $"delivery-search:{limit}:{searchQuery.ToLowerInvariant()}";
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<DeliveryLocationSuggestion>? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        await NominatimGate.WaitAsync(cancellationToken);
+        try
+        {
+            await WaitForNominatimSlotAsync(cancellationToken);
+
+            var url =
+                "https://nominatim.openstreetmap.org/search" +
+                $"?q={Uri.EscapeDataString(searchQuery)}" +
+                $"&format=jsonv2&limit={Math.Min(limit * 2, 10)}&countrycodes=vn&addressdetails=1";
+
+            using var response = await _httpClient.GetAsync(url, cancellationToken);
+            _lastNominatimRequest = DateTimeOffset.UtcNow;
+            response.EnsureSuccessStatusCode();
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+            if (json.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return Array.Empty<DeliveryLocationSuggestion>();
+            }
+
+            var results = new List<DeliveryLocationSuggestion>();
+            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in json.RootElement.EnumerateArray())
+            {
+                var displayName = item.TryGetProperty("display_name", out var displayNameElement)
+                    ? displayNameElement.GetString() ?? string.Empty
+                    : string.Empty;
+
+                if (string.IsNullOrWhiteSpace(displayName) ||
+                    (!displayName.Contains("Hà Nội", StringComparison.OrdinalIgnoreCase) &&
+                     !displayName.Contains("Hanoi", StringComparison.OrdinalIgnoreCase)) ||
+                    !seenNames.Add(displayName))
+                {
+                    continue;
+                }
+
+                if (!item.TryGetProperty("lat", out var latElement) ||
+                    !item.TryGetProperty("lon", out var lonElement) ||
+                    !double.TryParse(latElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var latitude) ||
+                    !double.TryParse(lonElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var longitude))
+                {
+                    continue;
+                }
+
+                results.Add(new DeliveryLocationSuggestion(displayName, latitude, longitude));
+                if (results.Count >= limit)
+                {
+                    break;
+                }
+            }
+
+            _cache.Set(cacheKey, results, TimeSpan.FromMinutes(30));
+            return results;
+        }
+        finally
+        {
+            NominatimGate.Release();
+        }
+    }
+
     public async Task<DeliveryQuoteResult> CalculateAsync(
         string pickupMethod,
         string pickupLocation,
@@ -99,7 +185,7 @@ internal sealed class DeliveryQuoteService : IDeliveryQuoteService
             if (pickupPoint is null)
             {
                 return DeliveryQuoteResult.Failure(
-                    "Không tìm thấy địa chỉ giao xe trong Hà Nội. Hãy nhập địa chỉ rõ hơn, ví dụ gồm số nhà, tên đường và quận.");
+                    "Không tìm thấy địa chỉ giao xe trong Hà Nội. Hãy chọn địa điểm từ danh sách gợi ý.");
             }
 
             pickupDistance = await GetRouteDistanceKmAsync(origin, pickupPoint, cancellationToken);
@@ -139,7 +225,7 @@ internal sealed class DeliveryQuoteService : IDeliveryQuoteService
             if (returnPoint is null)
             {
                 return DeliveryQuoteResult.Failure(
-                    "Không tìm thấy địa chỉ trả xe trong Hà Nội. Hãy nhập địa chỉ rõ hơn.");
+                    "Không tìm thấy địa chỉ trả xe trong Hà Nội. Hãy chọn địa điểm từ danh sách gợi ý.");
             }
 
             if (pickupPoint is not null && SameAddress(pickup, returnPlace))
@@ -199,12 +285,7 @@ internal sealed class DeliveryQuoteService : IDeliveryQuoteService
         await NominatimGate.WaitAsync(cancellationToken);
         try
         {
-            var elapsed = DateTimeOffset.UtcNow - _lastNominatimRequest;
-            var minimumDelay = TimeSpan.FromMilliseconds(1100);
-            if (elapsed < minimumDelay)
-            {
-                await Task.Delay(minimumDelay - elapsed, cancellationToken);
-            }
+            await WaitForNominatimSlotAsync(cancellationToken);
 
             var url =
                 "https://nominatim.openstreetmap.org/search" +
@@ -284,6 +365,16 @@ internal sealed class DeliveryQuoteService : IDeliveryQuoteService
         var distanceKm = Math.Round((decimal)(meters / 1000d), 1, MidpointRounding.AwayFromZero);
         _cache.Set(cacheKey, distanceKm, TimeSpan.FromHours(6));
         return distanceKm;
+    }
+
+    private static async Task WaitForNominatimSlotAsync(CancellationToken cancellationToken)
+    {
+        var elapsed = DateTimeOffset.UtcNow - _lastNominatimRequest;
+        var minimumDelay = TimeSpan.FromMilliseconds(1100);
+        if (elapsed < minimumDelay)
+        {
+            await Task.Delay(minimumDelay - elapsed, cancellationToken);
+        }
     }
 
     private static bool IsSmartCarLocation(string location) =>
