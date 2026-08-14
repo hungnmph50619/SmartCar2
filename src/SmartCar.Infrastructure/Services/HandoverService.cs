@@ -16,6 +16,17 @@ internal sealed class HandoverService : IHandoverService
         _dbContext = dbContext;
     }
 
+    public Task<HandoverVehicleContextDto?> GetVehicleContextAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default) =>
+        _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.BookingId == bookingId)
+            .Select(booking => new HandoverVehicleContextDto(
+                booking.Vehicle.CurrentMileage,
+                booking.Vehicle.FuelType))
+            .FirstOrDefaultAsync(cancellationToken);
+
     public async Task<OperationResult> CreateAsync(
         CreateHandoverRequest request,
         CancellationToken cancellationToken = default)
@@ -70,7 +81,8 @@ internal sealed class HandoverService : IHandoverService
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
         {
-            return OperationResult.Failure("Số km giao xe không được nhỏ hơn số km hiện tại.");
+            return OperationResult.Failure(
+                $"ODO khi giao không được nhỏ hơn số km hiện tại của xe ({booking.Vehicle.CurrentMileage:N0} km).");
         }
 
         if (string.IsNullOrWhiteSpace(request.FuelLevel))
