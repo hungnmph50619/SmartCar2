@@ -6,6 +6,7 @@ namespace SmartCar.Application.Features.Returns;
 public sealed record CreateReturnRequest(
     int BookingId,
     DateTime ReturnedAt,
+    string ReturnLocation,
     int Mileage,
     string FuelLevel,
     string? ExteriorCondition,
