@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Entities;
@@ -60,6 +60,18 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Vui lòng ghi nhận mức nhiên liệu khi trả xe.");
         }
 
+        if (string.IsNullOrWhiteSpace(request.ReturnLocation))
+        {
+            return OperationResult.Failure("Vui lòng ghi nhận địa điểm trả xe thực tế.");
+        }
+
+        var returnLocation = request.ReturnLocation.Trim();
+        if (returnLocation.Length > 250)
+        {
+            return OperationResult.Failure("Địa điểm trả xe tối đa 250 ký tự.");
+        }
+
+        var isEarlyReturn = request.ReturnedAt < booking.ReturnDate;
         var lateMinutes = request.ReturnedAt > booking.ReturnDate
             ? (int)Math.Ceiling((request.ReturnedAt - booking.ReturnDate).TotalMinutes)
             : 0;
@@ -71,6 +83,7 @@ internal sealed class ReturnService : IReturnService
         var vehicleReturn = new VehicleReturn
         {
             ReturnedAt = request.ReturnedAt,
+            ReturnLocation = returnLocation,
             Mileage = request.Mileage,
             FuelLevel = request.FuelLevel.Trim(),
             ExteriorCondition = Normalize(request.ExteriorCondition),
@@ -104,7 +117,28 @@ internal sealed class ReturnService : IReturnService
             {
                 UserId = booking.CustomerId,
                 Title = "Xe được ghi nhận trả muộn",
-                Message = $"Đơn #{booking.BookingId} trả muộn {lateMinutes} phút. Phí trả muộn tạm tính: {lateFee:N0} đồng."
+                Message = $"Đơn #{booking.BookingId} trả muộn {lateMinutes} phút tại {returnLocation}. Phí trả muộn tạm tính: {lateFee:N0} đồng."
+            });
+        }
+        else if (isEarlyReturn)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = "Đã tiếp nhận xe trả sớm",
+                Message =
+                    $"Đơn #{booking.BookingId} đã được SmartCar tiếp nhận xe lúc " +
+                    $"{request.ReturnedAt:dd/MM/yyyy HH:mm} tại {returnLocation}. " +
+                    "Xe đang chờ kiểm tra sau khi trả."
+            });
+        }
+        else
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = "Đã tiếp nhận xe trả",
+                Message = $"Đơn #{booking.BookingId} đã được tiếp nhận xe tại {returnLocation}. Xe đang chờ kiểm tra."
             });
         }
 
