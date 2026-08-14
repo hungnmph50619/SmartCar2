@@ -1,0 +1,148 @@
+@model SmartCar.Application.Features.Operations.NoShowPreparationDto
+@using SmartCar.Domain.Constants
+@{
+    ViewData["Title"] = $"Xác minh khách không đến - Đơn #{Model.BookingId}";
+    var isHomeDelivery = Model.PickupMethod == DeliveryConstants.HomeDelivery;
+    var overdueMinutes = Math.Max(0, (int)Math.Floor((DateTime.Now - Model.PickupDate).TotalMinutes));
+}
+
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
+    <div>
+        <div class="text-uppercase small text-muted fw-semibold">Xác minh trước khi kết thúc đơn</div>
+        <h1 class="h3 mb-1">Khách không đến nhận xe - Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">NoShow (Khách không đến nhận) chỉ được ghi sau khi Admin đã kiểm tra tình huống thực tế và liên hệ khách.</p>
+    </div>
+    <a class="btn btn-outline-secondary"
+       asp-controller="AdminBookings"
+       asp-action="Details"
+       asp-route-id="@Model.BookingId">Quay lại đơn</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card card-body shadow-sm mb-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-muted fw-semibold">Thông tin cuộc hẹn</div>
+                    <h2 class="h5 mb-0">Điểm giao xe đã thống nhất</h2>
+                </div>
+                <span class="badge @(isHomeDelivery ? "bg-primary" : "bg-success")">
+                    @(isHomeDelivery ? "SmartCar giao tận nơi" : "Khách tự đến SmartCar")
+                </span>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="bg-light rounded-3 p-3 h-100">
+                        <div class="small text-muted">Giờ nhận xe</div>
+                        <strong>@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="bg-light rounded-3 p-3 h-100">
+                        <div class="small text-muted">Đã quá giờ</div>
+                        <strong class="text-danger">@overdueMinutes phút</strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="bg-light rounded-3 p-3 h-100">
+                        <div class="small text-muted">Thời gian chờ tối thiểu</div>
+                        <strong>30 phút</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <div class="small text-muted">Địa điểm giao xe</div>
+                <div class="fw-semibold">@Model.PickupLocation</div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Model.CustomerPhone))
+            {
+                <div class="mt-3">
+                    <a class="btn btn-outline-success" href="tel:@Model.CustomerPhone">Gọi khách @Model.CustomerPhone</a>
+                </div>
+            }
+        </div>
+
+        <form asp-action="ConfirmNoShow"
+              method="post"
+              class="card card-body shadow-sm border-warning"
+              data-loading-form
+              data-confirm="Xác nhận khách không đến nhận xe? Đơn sẽ kết thúc với trạng thái NoShow và không hoàn tiền.">
+            <input type="hidden" name="bookingId" value="@Model.BookingId" />
+
+            <h2 class="h5">Checklist bắt buộc</h2>
+            <p class="text-muted small">Hệ thống lưu thao tác này vào Audit Log (Nhật ký thao tác) để truy vết khi có tranh chấp.</p>
+
+            @if (isHomeDelivery)
+            {
+                <div class="form-check border rounded-3 p-3 ps-5 mb-3">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           name="arrivedAtPickupLocation"
+                           value="true"
+                           id="arrivedAtPickupLocation"
+                           required />
+                    <label class="form-check-label fw-semibold" for="arrivedAtPickupLocation">
+                        Tôi xác nhận đã đến đúng địa điểm giao xe đã thỏa thuận
+                    </label>
+                    <div class="small text-muted mt-1">Đơn giao tận nơi không được ghi NoShow nếu Admin chưa thực sự đến điểm giao.</div>
+                </div>
+            }
+            else
+            {
+                <input type="hidden" name="arrivedAtPickupLocation" value="false" />
+            }
+
+            <div class="form-check border rounded-3 p-3 ps-5 mb-3">
+                <input class="form-check-input"
+                       type="checkbox"
+                       name="contactAttempted"
+                       value="true"
+                       id="contactAttempted"
+                       required />
+                <label class="form-check-label fw-semibold" for="contactAttempted">
+                    Tôi xác nhận đã gọi hoặc nhắn cho khách nhưng không thể tiếp tục bàn giao
+                </label>
+            </div>
+
+            <div class="mb-3">
+                <label for="contactNote" class="form-label fw-semibold">Ghi chú liên hệ</label>
+                <textarea name="contactNote"
+                          id="contactNote"
+                          class="form-control"
+                          rows="3"
+                          maxlength="500"
+                          required
+                          placeholder="Ví dụ: gọi lúc 21:05 và 21:27, khách không nghe máy; nhắn Zalo lúc 21:10 nhưng chưa phản hồi."></textarea>
+                <div class="form-text">Ghi thời gian và kết quả liên hệ cụ thể; nội dung này được lưu cùng Audit Log.</div>
+            </div>
+
+            <div class="alert alert-danger">
+                <strong>Hệ quả:</strong> đơn chuyển sang <strong>NoShow (Khách không đến nhận)</strong>, không lập biên bản giao xe, xe được giải phóng theo lịch vận hành và <strong>không hoàn tiền</strong> theo chính sách hiện tại.
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+                <button class="btn btn-warning"
+                        type="submit"
+                        data-loading-text="Đang ghi nhận...">Xác nhận NoShow</button>
+                <a class="btn btn-outline-secondary"
+                   asp-controller="AdminBookings"
+                   asp-action="Details"
+                   asp-route-id="@Model.BookingId">Khách đang đến / tiếp tục chờ</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card bg-light border-0 sticky-top" style="top:1rem">
+            <div class="card-body">
+                <div class="text-uppercase small text-muted fw-semibold">Phân biệt nghiệp vụ</div>
+                <h2 class="h5">NoShow không phải Admin hủy đơn</h2>
+                <p class="small mb-2"><strong>NoShow:</strong> khách không xuất hiện để nhận xe sau giờ hẹn và sau quy trình liên hệ.</p>
+                <p class="small mb-0"><strong>Admin hủy:</strong> SmartCar chủ động không thể cung cấp xe; trường hợp đó xử lý hoàn tiền theo chính sách Admin hủy.</p>
+            </div>
+        </div>
+    </div>
+</div>
