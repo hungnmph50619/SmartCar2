@@ -52,6 +52,14 @@
                           drivingLicense.HasRequiredData && drivingLicenseBack.HasRequiredData &&
                           drivingLicense.ExpiryDate.HasValue && drivingLicense.ExpiryDate.Value.Date >= DateTime.Today;
 
+    var citizenNeedsResubmission =
+        citizenFront?.Status == DocumentStatus.Rejected ||
+        citizenBack?.Status == DocumentStatus.Rejected;
+
+    var licenseNeedsResubmission =
+        drivingLicense?.Status == DocumentStatus.Rejected ||
+        drivingLicenseBack?.Status == DocumentStatus.Rejected;
+
     var citizenExpiryDays = citizenFront?.ExpiryDate.HasValue == true
         ? (citizenFront.ExpiryDate.Value.Date - DateTime.Today).Days
         : (int?)null;
@@ -122,9 +130,21 @@
             <section class="card border-0 shadow-sm customer-rental-eligibility @(Model.CanRent ? "eligible" : "not-eligible")">
                 <div class="card-body p-4">
                     <span class="text-uppercase fw-bold small">Điều kiện thuê xe</span>
-                    <h2 class="h4 fw-bold mt-2">@(Model.CanRent ? "Đủ điều kiện" : "Chưa đủ điều kiện")</h2>
-                    <p>CCCD: <strong>@(citizenVerified ? "Đã xác minh" : "Chưa đạt")</strong></p>
-                    <p>GPLX: <strong>@(licenseVerified ? "Đã xác minh" : "Chưa đạt")</strong></p>
+                    <h2 class="h4 fw-bold mt-2 mb-0">@(Model.CanRent ? "Đủ điều kiện" : "Chưa đủ điều kiện")</h2>
+
+                    <div class="eligibility-status-list">
+                        <div class="eligibility-status-item">
+                            <span class="eligibility-icon @(citizenVerified ? "is-ok" : "is-missing")">@(citizenVerified ? "✓" : "×")</span>
+                            <span>CCCD</span>
+                            <strong>@(citizenVerified ? "Đã xác minh" : "Chưa đạt")</strong>
+                        </div>
+                        <div class="eligibility-status-item">
+                            <span class="eligibility-icon @(licenseVerified ? "is-ok" : "is-missing")">@(licenseVerified ? "✓" : "×")</span>
+                            <span>GPLX</span>
+                            <strong>@(licenseVerified ? "Đã xác minh" : "Chưa đạt")</strong>
+                        </div>
+                    </div>
+
                     @if (citizenExpiringSoon || licenseExpiringSoon)
                     {
                         <p class="mb-3"><strong>⚠ Có giấy tờ sắp hết hạn.</strong></p>
@@ -141,7 +161,7 @@
 }
 else if (Model.ActiveTab == "documents")
 {
-    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-3">
         <div>
             <h2 class="h4 fw-bold mb-1">Đối chiếu hồ sơ giấy tờ</h2>
             <p class="text-muted mb-0">Chỉ số CCCD được che một phần; các thông tin cần thiết hiển thị để đối chiếu với ảnh.</p>
@@ -149,7 +169,12 @@ else if (Model.ActiveTab == "documents")
         <span class="badge @ProfileBadge(Model.ProfileStatusCode) fs-6">Hồ sơ: @Model.ProfileStatusText</span>
     </div>
 
-    <section class="card border-0 shadow-sm mb-4">
+    <nav class="document-step-nav" aria-label="Điều hướng xác minh giấy tờ">
+        <a href="#citizen-section"><span class="step-number">1</span> CCCD</a>
+        <a href="#license-section"><span class="step-number">2</span> GPLX</a>
+    </nav>
+
+    <section id="citizen-section" class="card border-0 shadow-sm mb-4 document-review-card">
         <div class="card-header bg-white border-0 p-4 pb-2">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
@@ -157,7 +182,7 @@ else if (Model.ActiveTab == "documents")
                     <h3 class="h4 fw-bold mb-1">Xác minh danh tính — CCCD</h3>
                     <p class="text-muted mb-0">Đối chiếu thông tin trên CCCD và cả mặt trước lẫn mặt sau.</p>
                 </div>
-                <span class="badge @(citizenVerified ? (citizenExpiringSoon ? "bg-warning text-dark" : "bg-success") : "bg-warning text-dark") px-3 py-2">@(citizenVerified ? (citizenExpiringSoon ? "Đã xác minh · Sắp hết hạn" : "Đã xác minh") : citizenFront is null || citizenBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
+                <span class="badge @(citizenVerified ? (citizenExpiringSoon ? "bg-warning text-dark" : "bg-success") : citizenNeedsResubmission ? "bg-danger" : "bg-warning text-dark") px-3 py-2">@(citizenVerified ? (citizenExpiringSoon ? "Đã xác minh · Sắp hết hạn" : "Đã xác minh") : citizenFront is null || citizenBack is null ? "Chưa đủ hồ sơ" : citizenNeedsResubmission ? "Cần khách cập nhật" : "Đang chờ xử lý")</span>
             </div>
         </div>
         <div class="card-body p-4">
@@ -193,17 +218,29 @@ else if (Model.ActiveTab == "documents")
                 <div class="row g-4 mb-4">
                     <div class="col-md-6">
                         <div class="small fw-semibold mb-2">Ảnh CCCD mặt trước</div>
-                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenFront.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link"><img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenFront.CustomerDocumentId })" alt="CCCD mặt trước" /><span>Mở ảnh kích thước đầy đủ</span></a>
+                        <div class="document-image-viewer">
+                            <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenFront.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link">
+                                <img id="citizen-front-image" src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenFront.CustomerDocumentId })" alt="CCCD mặt trước" />
+                                <span>Mở ảnh kích thước đầy đủ</span>
+                            </a>
+                            <button class="btn btn-sm document-rotate-btn" type="button" data-rotate-target="citizen-front-image">↻ Xoay ảnh</button>
+                        </div>
                     </div>
                     <div class="col-md-6">
                         <div class="small fw-semibold mb-2">Ảnh CCCD mặt sau</div>
-                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenBack.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link"><img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenBack.CustomerDocumentId })" alt="CCCD mặt sau" /><span>Mở ảnh kích thước đầy đủ</span></a>
+                        <div class="document-image-viewer">
+                            <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenBack.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link">
+                                <img id="citizen-back-image" src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = citizenBack.CustomerDocumentId })" alt="CCCD mặt sau" />
+                                <span>Mở ảnh kích thước đầy đủ</span>
+                            </a>
+                            <button class="btn btn-sm document-rotate-btn" type="button" data-rotate-target="citizen-back-image">↻ Xoay ảnh</button>
+                        </div>
                     </div>
                 </div>
 
                 @if (!citizenVerified)
                 {
-                    <form asp-action="VerifyCitizenId" method="post" data-loading-form data-confirm="Xác nhận toàn bộ thông tin và hai ảnh CCCD khớp nhau?">
+                    <form asp-action="VerifyCitizenId" method="post" class="document-decision-block" data-loading-form data-confirm="Xác nhận toàn bộ thông tin và hai ảnh CCCD khớp nhau?">
                         <input type="hidden" name="customerId" value="@Model.CustomerId" />
                         <input type="hidden" name="frontDocumentId" value="@citizenFront.CustomerDocumentId" />
                         <input type="hidden" name="backDocumentId" value="@citizenBack.CustomerDocumentId" />
@@ -214,7 +251,7 @@ else if (Model.ActiveTab == "documents")
                             <label><input class="form-check-input" type="checkbox" required /> Hai ảnh mặt trước/mặt sau thuộc cùng một CCCD</label>
                             <label><input class="form-check-input" type="checkbox" required /> Hai ảnh rõ chữ, đủ góc và không có dấu hiệu chỉnh sửa bất thường</label>
                         </fieldset>
-                        <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh CCCD...">Xác minh CCCD hợp lệ</button>
+                        <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh CCCD...">✓ Xác minh CCCD</button>
                     </form>
                 }
                 else
@@ -222,7 +259,9 @@ else if (Model.ActiveTab == "documents")
                     <div class="alert alert-success"><strong>✓ Danh tính đã xác minh.</strong> Thông tin CCCD và cả hai ảnh đã được duyệt.</div>
                 }
 
-                <button class="btn btn-outline-danger mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#citizen-resubmit">Yêu cầu khách cập nhật CCCD</button>
+                <div class="document-reject-action">
+                    <button class="btn btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#citizen-resubmit">Yêu cầu khách cập nhật CCCD</button>
+                </div>
                 <div class="collapse mt-3" id="citizen-resubmit">
                     <form asp-action="RequestCitizenIdResubmission" method="post" data-loading-form data-confirm="Gửi yêu cầu khách hàng cập nhật lại toàn bộ CCCD?">
                         <input type="hidden" name="customerId" value="@Model.CustomerId" />
@@ -247,7 +286,7 @@ else if (Model.ActiveTab == "documents")
         </div>
     </section>
 
-    <section class="card border-0 shadow-sm">
+    <section id="license-section" class="card border-0 shadow-sm document-review-card">
         <div class="card-header bg-white border-0 p-4 pb-2">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
@@ -255,7 +294,7 @@ else if (Model.ActiveTab == "documents")
                     <h3 class="h4 fw-bold mb-1">Xác minh giấy phép lái xe</h3>
                     <p class="text-muted mb-0">Đối chiếu thông tin và cả mặt trước lẫn mặt sau GPLX.</p>
                 </div>
-                <span class="badge @(licenseVerified ? (licenseExpiringSoon ? "bg-warning text-dark" : "bg-success") : "bg-warning text-dark") px-3 py-2">@(licenseVerified ? (licenseExpiringSoon ? "Đã xác minh · Sắp hết hạn" : "Đã xác minh") : drivingLicense is null || drivingLicenseBack is null ? "Chưa đủ hồ sơ" : "Chờ/Cần xử lý")</span>
+                <span class="badge @(licenseVerified ? (licenseExpiringSoon ? "bg-warning text-dark" : "bg-success") : licenseNeedsResubmission ? "bg-danger" : "bg-warning text-dark") px-3 py-2">@(licenseVerified ? (licenseExpiringSoon ? "Đã xác minh · Sắp hết hạn" : "Đã xác minh") : drivingLicense is null || drivingLicenseBack is null ? "Chưa đủ hồ sơ" : licenseNeedsResubmission ? "Cần khách cập nhật" : "Đang chờ xử lý")</span>
             </div>
         </div>
         <div class="card-body p-4">
@@ -286,17 +325,29 @@ else if (Model.ActiveTab == "documents")
                 <div class="row g-4 mb-4">
                     <div class="col-md-6">
                         <div class="small fw-semibold mb-2">Ảnh GPLX mặt trước</div>
-                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicense.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link"><img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicense.CustomerDocumentId })" alt="GPLX mặt trước" /><span>Mở ảnh kích thước đầy đủ</span></a>
+                        <div class="document-image-viewer">
+                            <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicense.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link">
+                                <img id="license-front-image" src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicense.CustomerDocumentId })" alt="GPLX mặt trước" />
+                                <span>Mở ảnh kích thước đầy đủ</span>
+                            </a>
+                            <button class="btn btn-sm document-rotate-btn" type="button" data-rotate-target="license-front-image">↻ Xoay ảnh</button>
+                        </div>
                     </div>
                     <div class="col-md-6">
                         <div class="small fw-semibold mb-2">Ảnh GPLX mặt sau</div>
-                        <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicenseBack.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link"><img src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicenseBack.CustomerDocumentId })" alt="GPLX mặt sau" /><span>Mở ảnh kích thước đầy đủ</span></a>
+                        <div class="document-image-viewer">
+                            <a href="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicenseBack.CustomerDocumentId })" target="_blank" rel="noopener" class="document-image-link">
+                                <img id="license-back-image" src="@Url.Action("ViewDocumentImage", "AdminCustomers", new { id = drivingLicenseBack.CustomerDocumentId })" alt="GPLX mặt sau" />
+                                <span>Mở ảnh kích thước đầy đủ</span>
+                            </a>
+                            <button class="btn btn-sm document-rotate-btn" type="button" data-rotate-target="license-back-image">↻ Xoay ảnh</button>
+                        </div>
                     </div>
                 </div>
 
                 @if (!licenseVerified && drivingLicense.Status == DocumentStatus.Pending && drivingLicenseBack.Status == DocumentStatus.Pending && drivingLicense.HasRequiredData && drivingLicenseBack.HasRequiredData)
                 {
-                    <form asp-controller="AdminKyc" asp-action="VerifyDrivingLicense" method="post" data-loading-form data-confirm="Xác nhận thông tin và hai mặt GPLX khớp nhau?">
+                    <form asp-controller="AdminKyc" asp-action="VerifyDrivingLicense" method="post" class="document-decision-block" data-loading-form data-confirm="Xác nhận thông tin và hai mặt GPLX khớp nhau?">
                         <input type="hidden" name="customerId" value="@Model.CustomerId" />
                         <input type="hidden" name="frontDocumentId" value="@drivingLicense.CustomerDocumentId" />
                         <input type="hidden" name="backDocumentId" value="@drivingLicenseBack.CustomerDocumentId" />
@@ -307,7 +358,7 @@ else if (Model.ActiveTab == "documents")
                             <label><input class="form-check-input" type="checkbox" required /> Ngày hết hạn (và ngày cấp nếu có) khớp với ảnh</label>
                             <label><input class="form-check-input" type="checkbox" required /> Cả hai mặt ảnh rõ nét và thuộc cùng một GPLX</label>
                         </fieldset>
-                        <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh GPLX...">Xác minh GPLX hợp lệ</button>
+                        <button class="btn btn-success mt-3" type="submit" data-loading-text="Đang xác minh GPLX...">✓ Xác minh GPLX</button>
                     </form>
                 }
                 else if (licenseVerified)
@@ -319,7 +370,9 @@ else if (Model.ActiveTab == "documents")
                     <div class="alert alert-danger">GPLX chưa có đủ dữ liệu hoặc đủ hai mặt ảnh để xác minh.</div>
                 }
 
-                <button class="btn btn-outline-danger mt-2" type="button" data-bs-toggle="collapse" data-bs-target="#license-resubmit">Yêu cầu khách cập nhật GPLX</button>
+                <div class="document-reject-action">
+                    <button class="btn btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#license-resubmit">Yêu cầu khách cập nhật GPLX</button>
+                </div>
                 <div class="collapse mt-3" id="license-resubmit">
                     <form asp-controller="AdminKyc" asp-action="RequestDrivingLicenseResubmission" method="post" data-loading-form data-confirm="Gửi yêu cầu khách hàng cập nhật lại GPLX?">
                         <input type="hidden" name="customerId" value="@Model.CustomerId" />
@@ -416,3 +469,34 @@ else
         </form>
     </div></div>
 </div>
+
+@if (Model.ActiveTab == "documents")
+{
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.document-rotate-btn').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const targetId = button.getAttribute('data-rotate-target');
+                    const image = document.getElementById(targetId);
+                    if (!image) return;
+
+                    const container = image.closest('.document-image-link');
+                    const currentRotation = Number(image.getAttribute('data-rotation') || '0');
+                    const nextRotation = (currentRotation + 90) % 360;
+                    image.setAttribute('data-rotation', nextRotation.toString());
+
+                    let scale = 1;
+                    if (container && nextRotation % 180 !== 0) {
+                        const width = container.clientWidth;
+                        const height = container.clientHeight;
+                        if (width > 0 && height > 0) {
+                            scale = Math.min(width / height, height / width);
+                        }
+                    }
+
+                    image.style.transform = `rotate(${nextRotation}deg) scale(${scale})`;
+                });
+            });
+        });
+    </script>
+}
