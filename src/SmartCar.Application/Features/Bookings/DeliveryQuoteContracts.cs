@@ -16,11 +16,21 @@ public sealed record DeliveryQuoteResult(
         new(false, error, string.Empty, string.Empty, 0, 0, 0, 0);
 }
 
+public sealed record DeliveryLocationSuggestion(
+    string DisplayName,
+    double Latitude,
+    double Longitude);
+
 public interface IDeliveryQuoteService
 {
     Task<DeliveryQuoteResult> CalculateAsync(
         string pickupMethod,
         string pickupLocation,
         string returnLocation,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<DeliveryLocationSuggestion>> SearchLocationsAsync(
+        string query,
+        int limit = 6,
         CancellationToken cancellationToken = default);
 }
