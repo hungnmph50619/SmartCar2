@@ -9,6 +9,19 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class HandoverService : IHandoverService
 {
+    private static readonly HashSet<string> FuelGaugeLevels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "8/8 (100%)",
+        "7/8 (~87.5%)",
+        "6/8 (75%)",
+        "5/8 (~62.5%)",
+        "4/8 (50%)",
+        "3/8 (~37.5%)",
+        "2/8 (25%)",
+        "1/8 (~12.5%)",
+        "0/8 (Gần cạn)"
+    };
+
     private readonly ApplicationDbContext _dbContext;
 
     public HandoverService(ApplicationDbContext dbContext)
@@ -85,16 +98,19 @@ internal sealed class HandoverService : IHandoverService
                 $"ODO khi giao không được nhỏ hơn số km hiện tại của xe ({booking.Vehicle.CurrentMileage:N0} km).");
         }
 
-        if (string.IsNullOrWhiteSpace(request.FuelLevel))
+        var fuelLevelResult = NormalizeFuelLevel(
+            booking.Vehicle.FuelType,
+            request.FuelLevel);
+        if (!fuelLevelResult.Succeeded)
         {
-            return OperationResult.Failure("Vui lòng ghi nhận mức nhiên liệu khi giao xe.");
+            return OperationResult.Failure(fuelLevelResult.Error!);
         }
 
         booking.Handover = new VehicleHandover
         {
             HandoverAt = request.HandoverAt,
             Mileage = request.Mileage,
-            FuelLevel = request.FuelLevel.Trim(),
+            FuelLevel = fuelLevelResult.Value!,
             ExteriorCondition = Normalize(request.ExteriorCondition),
             InteriorCondition = Normalize(request.InteriorCondition),
             Accessories = Normalize(request.Accessories),
@@ -116,6 +132,37 @@ internal sealed class HandoverService : IHandoverService
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
+    }
+
+    private static (bool Succeeded, string? Value, string? Error) NormalizeFuelLevel(
+        string vehicleFuelType,
+        string? rawFuelLevel)
+    {
+        if (string.IsNullOrWhiteSpace(rawFuelLevel))
+        {
+            return (false, null, "Vui lòng ghi nhận mức nhiên liệu khi giao xe.");
+        }
+
+        var value = rawFuelLevel.Trim();
+        if (string.Equals(vehicleFuelType, "Điện", StringComparison.OrdinalIgnoreCase))
+        {
+            var numericValue = value.TrimEnd('%').Trim();
+            if (!int.TryParse(numericValue, out var batteryPercent) ||
+                batteryPercent < 0 || batteryPercent > 100)
+            {
+                return (false, null, "Mức pin xe điện phải từ 0% đến 100%.");
+            }
+
+            return (true, $"{batteryPercent}%", null);
+        }
+
+        if (!FuelGaugeLevels.Contains(value))
+        {
+            return (false, null,
+                "Mức nhiên liệu xe xăng/dầu/hybrid phải được ghi theo vạch 0/8 đến 8/8 trên đồng hồ.");
+        }
+
+        return (true, value, null);
     }
 
     private static string? Normalize(string? value) =>
