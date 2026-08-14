@@ -12,15 +12,18 @@ internal sealed class NotificationService : INotificationService
 {
     private const int ExpiringSoonDays = 30;
 
-    private static readonly string[] AdminWorkPrefixes =
-    {
-        "Hồ sơ KYC chờ duyệt|",
-        "CCCD chờ xác minh|",
-        "GPLX chờ xác minh|",
-        "Đơn thuê chờ xử lý|",
-        "Yêu cầu gia hạn chờ xử lý|",
-        "Thanh toán QR chờ xác nhận|"
-    };
+    private static readonly HashSet<string> AdminWorkTitles =
+        new(StringComparer.Ordinal)
+        {
+            "Hồ sơ KYC chờ duyệt",
+            "CCCD chờ xác minh",
+            "GPLX chờ xác minh",
+            "CCCD cập nhật chờ duyệt",
+            "GPLX cập nhật chờ duyệt",
+            "Đơn thuê chờ xử lý",
+            "Yêu cầu gia hạn chờ xử lý",
+            "Thanh toán QR chờ xác nhận"
+        };
 
     private readonly ApplicationDbContext _dbContext;
 
@@ -72,8 +75,38 @@ internal sealed class NotificationService : INotificationService
         return await _dbContext.Notifications.CountAsync(
             item =>
                 item.UserId == userId &&
-                !item.IsRead,
+                item.ReadAt == null,
             cancellationToken);
+    }
+
+    public async Task<OperationResult> MarkViewedAsync(
+        int notificationId,
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        var notification =
+            await _dbContext.Notifications
+                .FirstOrDefaultAsync(
+                    item =>
+                        item.NotificationId == notificationId &&
+                        item.UserId == userId,
+                    cancellationToken);
+
+        if (notification is null)
+        {
+            return OperationResult.Failure(
+                "Không tìm thấy thông báo.");
+        }
+
+        if (notification.ReadAt is null)
+        {
+            notification.ReadAt = DateTime.UtcNow;
+
+            await _dbContext.SaveChangesAsync(
+                cancellationToken);
+        }
+
+        return OperationResult.Success();
     }
 
     public async Task<OperationResult> MarkReadAsync(
@@ -85,8 +118,7 @@ internal sealed class NotificationService : INotificationService
             await _dbContext.Notifications
                 .FirstOrDefaultAsync(
                     item =>
-                        item.NotificationId ==
-                        notificationId &&
+                        item.NotificationId == notificationId &&
                         item.UserId == userId,
                     cancellationToken);
 
@@ -97,7 +129,7 @@ internal sealed class NotificationService : INotificationService
         }
 
         notification.IsRead = true;
-        notification.ReadAt = DateTime.UtcNow;
+        notification.ReadAt ??= DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -119,7 +151,7 @@ internal sealed class NotificationService : INotificationService
         foreach (var notification in notifications)
         {
             notification.IsRead = true;
-            notification.ReadAt = DateTime.UtcNow;
+            notification.ReadAt ??= DateTime.UtcNow;
         }
 
         await _dbContext.SaveChangesAsync(
@@ -129,10 +161,11 @@ internal sealed class NotificationService : INotificationService
     }
 
     /// <summary>
-    /// Work notification không được đóng chỉ vì Admin đã mở xem.
-    /// Mỗi lần layout/trang notification hỏi số badge, trạng thái thật trong DB
+    /// Work notification có hai trạng thái độc lập:
+    /// ReadAt = Admin đã mở xem; IsRead = nghiệp vụ đã hoàn tất.
+    /// Mỗi lần layout/trang notification hỏi dữ liệu, trạng thái thật trong DB
     /// được đối chiếu. Chỉ khi nghiệp vụ không còn Pending/AwaitingConfirmation
-    /// thì notification mới tự chuyển sang đã xử lý.
+    /// thì work item mới chuyển sang đã xử lý.
     /// </summary>
     private async Task ReconcileAdminWorkNotificationsAsync(
         string userId,
@@ -167,19 +200,16 @@ internal sealed class NotificationService : INotificationService
             return;
         }
 
-        var unread =
+        var activeCandidates =
             await _dbContext.Notifications
                 .Where(item =>
                     item.UserId == userId &&
                     !item.IsRead)
                 .ToListAsync(cancellationToken);
 
-        var workItems = unread
+        var workItems = activeCandidates
             .Where(item =>
-                AdminWorkPrefixes.Any(prefix =>
-                    item.Title.StartsWith(
-                        prefix,
-                        StringComparison.Ordinal)))
+                IsAdminWorkNotification(item.Title))
             .ToList();
 
         if (workItems.Count == 0)
@@ -199,7 +229,7 @@ internal sealed class NotificationService : INotificationService
             }
 
             item.IsRead = true;
-            item.ReadAt = DateTime.UtcNow;
+            item.ReadAt ??= DateTime.UtcNow;
             changed = true;
         }
 
@@ -215,13 +245,18 @@ internal sealed class NotificationService : INotificationService
         CancellationToken cancellationToken)
     {
         var separatorIndex = title.IndexOf('|');
+        var prefix = GetRawTitle(title);
+
         if (separatorIndex <= 0 ||
             separatorIndex >= title.Length - 1)
         {
-            return false;
+            // Một số dữ liệu test/legacy cũ chưa có business key.
+            // Giữ chúng ở trạng thái cần xử lý thay vì tự đóng sai.
+            return prefix is
+                "CCCD cập nhật chờ duyệt" or
+                "GPLX cập nhật chờ duyệt";
         }
 
-        var prefix = title[..separatorIndex];
         var key = title[(separatorIndex + 1)..];
 
         switch (prefix)
@@ -255,6 +290,7 @@ internal sealed class NotificationService : INotificationService
             }
 
             case "CCCD chờ xác minh":
+            case "CCCD cập nhật chờ duyệt":
                 return await _dbContext.CustomerDocuments
                     .AsNoTracking()
                     .AnyAsync(
@@ -269,6 +305,7 @@ internal sealed class NotificationService : INotificationService
                         cancellationToken);
 
             case "GPLX chờ xác minh":
+            case "GPLX cập nhật chờ duyệt":
                 return await _dbContext.CustomerDocuments
                     .AsNoTracking()
                     .AnyAsync(
@@ -331,6 +368,20 @@ internal sealed class NotificationService : INotificationService
             default:
                 return false;
         }
+    }
+
+    private static bool IsAdminWorkNotification(
+        string title) =>
+        AdminWorkTitles.Contains(
+            GetRawTitle(title));
+
+    private static string GetRawTitle(
+        string title)
+    {
+        var separatorIndex = title.IndexOf('|');
+        return separatorIndex > 0
+            ? title[..separatorIndex]
+            : title;
     }
 
     private async Task EnsureDocumentExpiryNotificationsAsync(
