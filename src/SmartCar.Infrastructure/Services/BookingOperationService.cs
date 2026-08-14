@@ -191,6 +191,15 @@ internal sealed class BookingOperationService : IBookingOperationService
             }
         }
 
+        foreach (var pendingRentalPayment in booking.Payments.Where(payment =>
+                     payment.Type == PaymentType.Rental &&
+                     payment.Status == PaymentStatus.Pending))
+        {
+            pendingRentalPayment.Status = PaymentStatus.Failed;
+            pendingRentalPayment.PaidAt = null;
+            pendingRentalPayment.TransactionCode = null;
+        }
+
         booking.Status = BookingStatus.Cancelled;
         booking.CancelReason = request.Reason.Trim();
         booking.CancelledBy = isAdmin ? "Quản trị viên" : "Khách hàng";
