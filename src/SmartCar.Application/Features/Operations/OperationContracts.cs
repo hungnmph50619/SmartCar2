@@ -6,18 +6,32 @@ public sealed record CancelBookingRequest(
     int BookingId,
     string Reason);
 
+public sealed record ConfirmPickupDepartureRequest(
+    int BookingId,
+    bool CustomerConfirmed,
+    string ContactNote);
+
 public sealed record MarkNoShowRequest(
     int BookingId,
-    bool ContactAttempted,
+    int ContactAttemptCount,
     bool ArrivedAtPickupLocation,
     string ContactNote);
+
+public sealed record PickupPreparationDto(
+    int BookingId,
+    DateTime PickupDate,
+    string PickupMethod,
+    string PickupLocation,
+    string? CustomerPhone);
 
 public sealed record NoShowPreparationDto(
     int BookingId,
     DateTime PickupDate,
     string PickupMethod,
     string PickupLocation,
-    string? CustomerPhone);
+    string? CustomerPhone,
+    DateTime? PreDepartureConfirmedAt,
+    string? PreDepartureConfirmationNote);
 
 public sealed record RefundResult(
     bool Succeeded,
@@ -40,6 +54,13 @@ public interface IBookingOperationService
     Task<RefundResult> CancelByAdminAsync(
         string adminId,
         CancelBookingRequest request,
+        CancellationToken cancellationToken = default);
+    Task<PickupPreparationDto?> GetPickupPreparationAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
+    Task<OperationResult> ConfirmPickupDepartureAsync(
+        ConfirmPickupDepartureRequest request,
+        string adminId,
         CancellationToken cancellationToken = default);
     Task<NoShowPreparationDto?> GetNoShowPreparationAsync(
         int bookingId,
