@@ -10,11 +10,35 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class ReturnService : IReturnService
 {
+    private const int LateGraceMinutes = 30;
+    private const decimal HourlyLateRateFactor = 0.10m;
+    private const decimal MaximumLateFeePerDayFactor = 1.50m;
+
     private readonly ApplicationDbContext _dbContext;
 
     public ReturnService(ApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
+    }
+
+    public async Task<ReturnPreparationDto?> GetPreparationAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.BookingId == bookingId && booking.Handover != null)
+            .Select(booking => new ReturnPreparationDto(
+                booking.BookingId,
+                booking.ReturnDate,
+                booking.ReturnLocation ?? string.Empty,
+                booking.Handover!.HandoverAt,
+                booking.Handover.Mileage,
+                booking.Handover.FuelLevel,
+                booking.Handover.Accessories,
+                booking.Handover.ImagePaths,
+                booking.Vehicle.FuelType))
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<OperationResult> CreateAsync(
@@ -47,7 +71,8 @@ internal sealed class ReturnService : IReturnService
 
         if (request.Mileage < booking.Handover.Mileage)
         {
-            return OperationResult.Failure("Số km trả xe không được nhỏ hơn số km lúc giao.");
+            return OperationResult.Failure(
+                $"ODO khi nhận lại ({request.Mileage:N0} km) không được nhỏ hơn ODO lúc giao ({booking.Handover.Mileage:N0} km).");
         }
 
         if (request.ReturnedAt < booking.Handover.HandoverAt)
@@ -57,7 +82,7 @@ internal sealed class ReturnService : IReturnService
 
         if (string.IsNullOrWhiteSpace(request.FuelLevel))
         {
-            return OperationResult.Failure("Vui lòng ghi nhận mức nhiên liệu khi trả xe.");
+            return OperationResult.Failure("Vui lòng ghi nhận mức nhiên liệu hoặc mức pin khi trả xe.");
         }
 
         if (string.IsNullOrWhiteSpace(request.ReturnLocation))
@@ -75,10 +100,9 @@ internal sealed class ReturnService : IReturnService
         var lateMinutes = request.ReturnedAt > booking.ReturnDate
             ? (int)Math.Ceiling((request.ReturnedAt - booking.ReturnDate).TotalMinutes)
             : 0;
-        var lateDays = lateMinutes > 0
-            ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
-            : 0;
-        var lateFee = lateDays * booking.DailyPrice * 1.5m;
+
+        var (chargeableLateMinutes, chargeableLateHours, lateFee) =
+            CalculateLateFee(lateMinutes, booking.DailyPrice);
 
         var vehicleReturn = new VehicleReturn
         {
@@ -101,7 +125,10 @@ internal sealed class ReturnService : IReturnService
             vehicleReturn.AdditionalCharges.Add(new AdditionalCharge
             {
                 ChargeType = AdditionalChargeType.LateReturn,
-                Description = $"Phí trả xe muộn {lateMinutes} phút ({lateDays} ngày tính phí x 150%).",
+                Description =
+                    $"Trả xe muộn {lateMinutes} phút. SmartCar miễn phí 30 phút đầu; " +
+                    $"thời gian tính phí {chargeableLateMinutes} phút (~{chargeableLateHours} giờ), " +
+                    $"đơn giá theo giờ bằng 10% giá thuê ngày và tối đa 150% giá thuê ngày cho mỗi 24 giờ.",
                 Amount = lateFee
             });
         }
@@ -117,7 +144,20 @@ internal sealed class ReturnService : IReturnService
             {
                 UserId = booking.CustomerId,
                 Title = "Xe được ghi nhận trả muộn",
-                Message = $"Đơn #{booking.BookingId} trả muộn {lateMinutes} phút tại {returnLocation}. Phí trả muộn tạm tính: {lateFee:N0} đồng."
+                Message =
+                    $"Đơn #{booking.BookingId} trả muộn {lateMinutes} phút tại {returnLocation}. " +
+                    $"Sau 30 phút ân hạn, phí trả muộn tạm tính là {lateFee:N0} đồng."
+            });
+        }
+        else if (lateMinutes > 0)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = "Đã tiếp nhận xe trả",
+                Message =
+                    $"Đơn #{booking.BookingId} được tiếp nhận muộn {lateMinutes} phút tại {returnLocation}, " +
+                    "vẫn nằm trong thời gian ân hạn 30 phút nên không phát sinh phí trả muộn. Xe đang chờ kiểm tra."
             });
         }
         else if (isEarlyReturn)
@@ -293,6 +333,31 @@ internal sealed class ReturnService : IReturnService
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
+    }
+
+    private static (int ChargeableMinutes, int ChargeableHours, decimal Fee) CalculateLateFee(
+        int lateMinutes,
+        decimal dailyPrice)
+    {
+        if (lateMinutes <= LateGraceMinutes)
+        {
+            return (0, 0, 0);
+        }
+
+        var chargeableMinutes = lateMinutes - LateGraceMinutes;
+        var fullDays = chargeableMinutes / 1440;
+        var remainingMinutes = chargeableMinutes % 1440;
+        var remainingHours = remainingMinutes > 0
+            ? (int)Math.Ceiling(remainingMinutes / 60d)
+            : 0;
+
+        var hourlyRate = Math.Round(dailyPrice * HourlyLateRateFactor, 0);
+        var maximumPerDay = Math.Round(dailyPrice * MaximumLateFeePerDayFactor, 0);
+        var remainingFee = Math.Min(remainingHours * hourlyRate, maximumPerDay);
+        var fee = fullDays * maximumPerDay + remainingFee;
+        var totalChargeableHours = fullDays * 24 + remainingHours;
+
+        return (chargeableMinutes, totalChargeableHours, fee);
     }
 
     private IQueryable<Booking> ChargeQuery() =>
