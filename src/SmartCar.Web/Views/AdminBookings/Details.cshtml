@@ -19,6 +19,25 @@
     var drivingLicenseVerified = ViewBag.DrivingLicenseVerified is bool licenseValue && licenseValue;
     var customerKycVerified = ViewBag.CustomerKycVerified is bool kycValue && kycValue;
 
+    var pickupLocationText = string.IsNullOrWhiteSpace(Model.PickupLocation)
+        ? "Chưa cập nhật địa điểm nhận xe"
+        : Model.PickupLocation;
+    var returnLocationText = string.IsNullOrWhiteSpace(Model.ReturnLocation)
+        ? "Chưa cập nhật địa điểm trả xe"
+        : Model.ReturnLocation;
+    var isHomeDelivery = Model.PickupMethod == DeliveryConstants.HomeDelivery;
+    var pickupMethodLabel = isHomeDelivery ? "SmartCar giao xe tận nơi" : "Khách tự đến SmartCar";
+    var pickupLegFee = Math.Round(Model.PickupDeliveryDistanceKm * Model.DeliveryRatePerKm, 0);
+    var returnLegFee = Math.Round(Model.ReturnCollectionDistanceKm * Model.DeliveryRatePerKm, 0);
+    var pickupMapUrl = $"https://www.google.com/maps?q={Uri.EscapeDataString(pickupLocationText)}&output=embed";
+    var returnMapUrl = $"https://www.google.com/maps?q={Uri.EscapeDataString(returnLocationText)}&output=embed";
+    var pickupDirectionsUrl = isHomeDelivery
+        ? $"https://www.google.com/maps/dir/?api=1&origin={Uri.EscapeDataString(DeliveryConstants.SmartCarMapQuery)}&destination={Uri.EscapeDataString(pickupLocationText)}"
+        : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString(pickupLocationText)}";
+    var returnDirectionsUrl = Model.ReturnCollectionDistanceKm > 0
+        ? $"https://www.google.com/maps/dir/?api=1&origin={Uri.EscapeDataString(DeliveryConstants.SmartCarMapQuery)}&destination={Uri.EscapeDataString(returnLocationText)}"
+        : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString(returnLocationText)}";
+
     var nextAction = Model.Status switch
     {
         BookingStatus.PendingConfirmation => (
@@ -84,10 +103,10 @@
             </div>
             <hr />
             <div><strong>Nhận xe:</strong> @Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</div>
-            <div><strong>Hình thức nhận:</strong> @(Model.PickupMethod == DeliveryConstants.HomeDelivery ? "Giao xe tận nơi" : "Khách tự đến SmartCar")</div>
-            <div><strong>Địa điểm nhận:</strong> @(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "Chưa cập nhật" : Model.PickupLocation)</div>
+            <div><strong>Hình thức nhận:</strong> @pickupMethodLabel</div>
+            <div><strong>Địa điểm nhận:</strong> @pickupLocationText</div>
             <div class="mt-1"><strong>Trả xe:</strong> @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
-            <div><strong>Địa điểm trả:</strong> @(string.IsNullOrWhiteSpace(Model.ReturnLocation) ? "Chưa cập nhật" : Model.ReturnLocation)</div>
+            <div><strong>Địa điểm trả:</strong> @returnLocationText</div>
             @if (Model.HasReturn && !string.IsNullOrWhiteSpace(Model.ActualReturnLocation))
             {
                 <div class="mt-1 text-success"><strong>Địa điểm trả thực tế:</strong> @Model.ActualReturnLocation</div>
@@ -153,6 +172,129 @@
                     @Model.RefundReason
                 </div>
             }
+        </div>
+
+        <div class="card shadow-sm mb-4 border-0 overflow-hidden">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                    <div>
+                        <div class="text-uppercase small text-muted fw-semibold">Vận hành giao nhận</div>
+                        <h2 class="h4 mb-1">Kế hoạch giao xe & nhận lại xe</h2>
+                        <p class="text-muted small mb-0">Admin dùng khối này để biết phải đi đâu, khi nào cần liên hệ khách và bước tiếp theo tại điểm giao nhận.</p>
+                    </div>
+                    <span class="badge @(Model.RentalPaid ? "bg-success" : "bg-secondary") px-3 py-2">
+                        @(Model.RentalPaid ? "Đã thanh toán" : "Chưa thanh toán")
+                    </span>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="border rounded-3 h-100 overflow-hidden">
+                            <div class="p-3">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <div>
+                                        <div class="small text-muted text-uppercase fw-semibold">1. Giao xe</div>
+                                        <h3 class="h6 mb-0">@pickupMethodLabel</h3>
+                                    </div>
+                                    <span class="badge @(isHomeDelivery ? "bg-primary" : "bg-success")">@(isHomeDelivery ? "Admin đi giao" : "Khách tự đến")</span>
+                                </div>
+
+                                <div class="small text-muted">Thời gian</div>
+                                <div class="fw-semibold mb-2">@Model.PickupDate.ToString("HH:mm - dd/MM/yyyy")</div>
+
+                                <div class="small text-muted">Địa điểm</div>
+                                <div class="fw-semibold mb-2">@pickupLocationText</div>
+
+                                @if (isHomeDelivery)
+                                {
+                                    <div class="bg-light rounded-3 p-2 small mb-2">
+                                        <div class="d-flex justify-content-between"><span>Quãng đường</span><strong>@Model.PickupDeliveryDistanceKm.ToString("N1") km</strong></div>
+                                        <div class="d-flex justify-content-between"><span>Phí lượt giao</span><strong>@pickupLegFee.ToString("N0") đ</strong></div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="alert alert-success py-2 small mb-2">Khách tự đến điểm SmartCar; Admin không phải di chuyển để giao xe.</div>
+                                }
+
+                                <div class="d-flex gap-2 flex-wrap">
+                                    @if (!string.IsNullOrWhiteSpace(Model.CustomerPhone))
+                                    {
+                                        <a class="btn btn-sm btn-outline-success" href="tel:@Model.CustomerPhone">Gọi khách</a>
+                                    }
+                                    <a class="btn btn-sm btn-outline-primary" href="@pickupDirectionsUrl" target="_blank" rel="noopener noreferrer">@(isHomeDelivery ? "Mở chỉ đường" : "Xem điểm nhận")</a>
+                                    @if (Model.Status == BookingStatus.ReadyForPickup)
+                                    {
+                                        <a class="btn btn-sm btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao xe</a>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="ratio ratio-16x9 border-top">
+                                <iframe title="Bản đồ điểm giao xe" src="@pickupMapUrl" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="border:0" allowfullscreen></iframe>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="border rounded-3 h-100 overflow-hidden">
+                            <div class="p-3">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <div>
+                                        <div class="small text-muted text-uppercase fw-semibold">2. Nhận lại xe</div>
+                                        <h3 class="h6 mb-0">Điểm trả đã thỏa thuận</h3>
+                                    </div>
+                                    <span class="badge @(Model.ReturnCollectionDistanceKm > 0 ? "bg-primary" : "bg-success")">@(Model.ReturnCollectionDistanceKm > 0 ? "Admin đi nhận" : "Khách trả tại SmartCar")</span>
+                                </div>
+
+                                <div class="small text-muted">Thời gian dự kiến</div>
+                                <div class="fw-semibold mb-2">@Model.ReturnDate.ToString("HH:mm - dd/MM/yyyy")</div>
+
+                                <div class="small text-muted">Địa điểm</div>
+                                <div class="fw-semibold mb-2">@returnLocationText</div>
+
+                                @if (Model.ReturnCollectionDistanceKm > 0)
+                                {
+                                    <div class="bg-light rounded-3 p-2 small mb-2">
+                                        <div class="d-flex justify-content-between"><span>Quãng đường</span><strong>@Model.ReturnCollectionDistanceKm.ToString("N1") km</strong></div>
+                                        <div class="d-flex justify-content-between"><span>Phí lượt nhận lại</span><strong>@returnLegFee.ToString("N0") đ</strong></div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="alert alert-success py-2 small mb-2">Khách mang xe về SmartCar; không phát sinh chuyến đi nhận lại xe.</div>
+                                }
+
+                                <div class="d-flex gap-2 flex-wrap">
+                                    @if (!string.IsNullOrWhiteSpace(Model.CustomerPhone))
+                                    {
+                                        <a class="btn btn-sm btn-outline-success" href="tel:@Model.CustomerPhone">Gọi khách</a>
+                                    }
+                                    <a class="btn btn-sm btn-outline-primary" href="@returnDirectionsUrl" target="_blank" rel="noopener noreferrer">@(Model.ReturnCollectionDistanceKm > 0 ? "Mở chỉ đường" : "Xem điểm trả")</a>
+                                    @if (Model.Status == BookingStatus.Rented)
+                                    {
+                                        <a class="btn btn-sm btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">@(DateTime.Now < Model.ReturnDate ? "Tiếp nhận trả sớm" : "Lập biên bản trả xe")</a>
+                                    }
+                                </div>
+                            </div>
+
+                            <div class="ratio ratio-16x9 border-top">
+                                <iframe title="Bản đồ điểm nhận lại xe" src="@returnMapUrl" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="border:0" allowfullscreen></iframe>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border rounded-3 p-3 mt-3 bg-light">
+                    <div class="fw-semibold mb-2">Quy trình Admin tại thời điểm giao xe</div>
+                    <div class="row g-2 small">
+                        <div class="col-md-6"><strong>Trước khi đi:</strong> kiểm tra đơn đã thanh toán, gọi/nhắn khách để nhắc lại giờ và địa điểm.</div>
+                        <div class="col-md-6"><strong>Tại điểm giao:</strong> gặp đúng người thuê, đối chiếu giấy tờ và lập biên bản trước khi giao chìa khóa.</div>
+                        <div class="col-md-6"><strong>Nếu khách đến muộn:</strong> liên hệ và ghi nhận tình huống; không tự động kết thúc đơn khi khách có phản hồi và hai bên thống nhất chờ.</div>
+                        <div class="col-md-6"><strong>NoShow (Khách không đến nhận):</strong> với giao tận nơi, chỉ ghi nhận sau khi Admin đã đến đúng điểm giao, đúng thời gian và không liên hệ được khách theo quy định.</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="card card-body shadow-sm mb-4 border-0">
@@ -221,7 +363,7 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Chuẩn bị giao xe</h2>
-                <p>Khách hàng đã thanh toán. Hãy kiểm tra xe và đánh dấu sẵn sàng bàn giao.</p>
+                <p>Khách hàng đã thanh toán. Kiểm tra xe, gọi/nhắn khách để nhắc lại giờ và địa điểm, sau đó đánh dấu xe sẵn sàng bàn giao.</p>
                 <form asp-action="MarkReady" method="post" data-loading-form data-confirm="Xác nhận xe đã được kiểm tra và sẵn sàng bàn giao?">
                     <input type="hidden" name="id" value="@Model.BookingId" />
                     <button class="btn btn-primary" type="submit" data-loading-text="Đang cập nhật...">Xe đã sẵn sàng</button>
@@ -233,8 +375,8 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Bàn giao xe</h2>
-                <p class="text-muted">Biên bản cần ghi số km, nhiên liệu, tình trạng xe, phụ kiện và ảnh thực tế.</p>
-                <div class="mb-2"><strong>Điểm giao đã hẹn:</strong> @(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "Chưa cập nhật" : Model.PickupLocation)</div>
+                <p class="text-muted">Biên bản cần ghi số km, nhiên liệu, tình trạng xe, phụ kiện và ảnh thực tế. Chỉ chuyển sang Đang thuê sau khi giao xe thực tế và khách xác nhận.</p>
+                <div class="mb-2"><strong>Điểm giao đã hẹn:</strong> @pickupLocationText</div>
                 <a class="btn btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao xe</a>
             </div>
         }
@@ -243,8 +385,15 @@
         {
             <div class="card card-body border-warning shadow-sm mb-4">
                 <h2 class="h5">Khách không đến nhận xe</h2>
-                <p>Đã quá giờ nhận xe 30 phút. Khách không đến nhận xe sẽ không được hoàn tiền.</p>
-                <form asp-controller="AdminBookingOperations" asp-action="MarkNoShow" method="post" data-loading-form data-confirm="Ghi nhận khách không đến nhận xe? Đơn sẽ kết thúc và không hoàn tiền.">
+                @if (isHomeDelivery)
+                {
+                    <p>Đã quá giờ nhận xe 30 phút. Với đơn giao tận nơi, chỉ ghi nhận NoShow (Khách không đến nhận) khi Admin đã thực sự đến đúng địa điểm giao, đã gọi/nhắn khách và không thể tiếp tục bàn giao.</p>
+                }
+                else
+                {
+                    <p>Đã quá giờ nhận xe 30 phút. Hãy gọi/nhắn khách trước khi ghi nhận NoShow (Khách không đến nhận).</p>
+                }
+                <form asp-controller="AdminBookingOperations" asp-action="MarkNoShow" method="post" data-loading-form data-confirm="Bạn xác nhận đã kiểm tra tình huống thực tế và muốn ghi nhận khách không đến nhận xe? Đơn sẽ kết thúc và không hoàn tiền.">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <button class="btn btn-warning" type="submit" data-loading-text="Đang ghi nhận...">Ghi nhận khách không đến</button>
                 </form>
@@ -255,7 +404,7 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Đơn đang thuê</h2>
-                <div class="mb-2"><strong>Điểm trả đã hẹn:</strong> @(string.IsNullOrWhiteSpace(Model.ReturnLocation) ? "Chưa cập nhật" : Model.ReturnLocation)</div>
+                <div class="mb-2"><strong>Điểm trả đã hẹn:</strong> @returnLocationText</div>
                 @if (DateTime.Now < Model.ReturnDate)
                 {
                     <div class="alert alert-info py-2">Chưa đến giờ trả dự kiến <strong>@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong>. Nếu khách đã thực tế mang xe tới và hai bên đồng ý kết thúc sử dụng sớm, có thể tiếp nhận xe ngay.</div>
