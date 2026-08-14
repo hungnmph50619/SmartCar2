@@ -37,7 +37,7 @@
             "success"),
         BookingStatus.Rented => (
             "Theo dõi chuyến thuê",
-            "Xử lý yêu cầu gia hạn nếu có. Khi khách trả xe, lập biên bản trả xe.",
+            "Xử lý yêu cầu gia hạn nếu có. Khi khách trả xe, có thể tiếp nhận đúng hạn hoặc tiếp nhận trả sớm và lập biên bản trả xe.",
             "primary"),
         BookingStatus.PendingInspection => (
             "Kiểm tra xe sau khi trả",
@@ -82,8 +82,49 @@
             </div>
             <hr />
             <div><strong>Nhận xe:</strong> @Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</div>
-            <div><strong>Trả xe:</strong> @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
-            <div><strong>Số ngày:</strong> @Model.NumberOfDays</div>
+            <div><strong>Địa điểm nhận:</strong> @(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "Chưa cập nhật" : Model.PickupLocation)</div>
+            <div class="mt-1"><strong>Trả xe:</strong> @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div><strong>Địa điểm trả:</strong> @(string.IsNullOrWhiteSpace(Model.ReturnLocation) ? "Chưa cập nhật" : Model.ReturnLocation)</div>
+            @if (Model.HasReturn && !string.IsNullOrWhiteSpace(Model.ActualReturnLocation))
+            {
+                <div class="mt-1 text-success"><strong>Địa điểm trả thực tế:</strong> @Model.ActualReturnLocation</div>
+            }
+            <div class="mt-1"><strong>Số ngày:</strong> @Model.NumberOfDays</div>
+
+            @if (Model.Status is not (BookingStatus.Completed or BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.NoShow))
+            {
+                <form asp-action="UpdateLocations"
+                      method="post"
+                      class="row g-2 mt-3 pt-3 border-top"
+                      data-loading-form
+                      data-confirm="Cập nhật địa điểm nhận và trả xe cho đơn này? Khách hàng sẽ được thông báo.">
+                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                    <div class="col-md-5">
+                        <label class="form-label">Địa điểm nhận xe</label>
+                        <input name="pickupLocation"
+                               class="form-control"
+                               maxlength="250"
+                               required
+                               value="@Model.PickupLocation"
+                               placeholder="Nhập địa điểm nhận xe" />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Địa điểm trả xe</label>
+                        <input name="returnLocation"
+                               class="form-control"
+                               maxlength="250"
+                               required
+                               value="@Model.ReturnLocation"
+                               placeholder="Nhập địa điểm trả xe" />
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-outline-primary w-100"
+                                type="submit"
+                                data-loading-text="Đang lưu...">Cập nhật</button>
+                    </div>
+                </form>
+            }
+
             @if (!string.IsNullOrWhiteSpace(Model.CancelReason))
             {
                 <div class="alert alert-danger mt-3 mb-0">
@@ -171,7 +212,7 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Xác nhận yêu cầu</h2>
-                <p class="text-muted">Chỉ xác nhận sau khi danh tính CCCD, GPLX và lịch xe đều hợp lệ đến ngày trả.</p>
+                <p class="text-muted">Chỉ xác nhận sau khi danh tính CCCD, GPLX, lịch xe và địa điểm giao nhận đều hợp lệ.</p>
                 <form asp-action="Confirm"
                       method="post"
                       class="mb-3"
@@ -212,6 +253,7 @@
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Bàn giao xe</h2>
                 <p class="text-muted">Biên bản cần ghi số km, nhiên liệu, tình trạng xe, phụ kiện và ảnh thực tế.</p>
+                <div class="mb-2"><strong>Điểm giao đã hẹn:</strong> @(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "Chưa cập nhật" : Model.PickupLocation)</div>
                 <a class="btn btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao xe</a>
             </div>
         }
@@ -236,8 +278,18 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Đơn đang thuê</h2>
+                <div class="mb-2"><strong>Điểm trả đã hẹn:</strong> @(string.IsNullOrWhiteSpace(Model.ReturnLocation) ? "Chưa cập nhật" : Model.ReturnLocation)</div>
+                @if (DateTime.Now < Model.ReturnDate)
+                {
+                    <div class="alert alert-info py-2">
+                        Chưa đến giờ trả dự kiến <strong>@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong>.
+                        Nếu khách đã thực tế mang xe tới và hai bên đồng ý kết thúc sử dụng sớm, có thể tiếp nhận xe ngay.
+                    </div>
+                }
                 <div class="d-flex gap-2 flex-wrap">
-                    <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản trả xe</a>
+                    <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">
+                        @(DateTime.Now < Model.ReturnDate ? "Tiếp nhận xe trả sớm" : "Lập biên bản trả xe")
+                    </a>
                     <a class="btn btn-outline-primary" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a>
                 </div>
                 @if (Model.Extensions.Count > 0)
