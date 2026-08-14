@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Operations;
@@ -34,14 +34,33 @@ internal sealed class BookingOperationService : IBookingOperationService
         CancellationToken cancellationToken = default) =>
         CancelAsync(adminId, true, request, cancellationToken);
 
-    public async Task<OperationResult> MarkNoShowAsync(
+    public async Task<NoShowPreparationDto?> GetNoShowPreparationAsync(
         int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.BookingId == bookingId)
+            .Select(booking => new NoShowPreparationDto(
+                booking.BookingId,
+                booking.PickupDate,
+                booking.PickupMethod,
+                booking.PickupLocation ?? string.Empty,
+                _dbContext.Users
+                    .Where(user => user.Id == booking.CustomerId)
+                    .Select(user => user.PhoneNumber)
+                    .FirstOrDefault()))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<OperationResult> MarkNoShowAsync(
+        MarkNoShowRequest request,
         string adminId,
         CancellationToken cancellationToken = default)
     {
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
-            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == request.BookingId, cancellationToken);
 
         if (booking is null)
         {
@@ -59,10 +78,40 @@ internal sealed class BookingOperationService : IBookingOperationService
                 "Chỉ được ghi nhận khách không đến nhận xe sau giờ nhận ít nhất 30 phút.");
         }
 
+        if (!request.ContactAttempted)
+        {
+            return OperationResult.Failure(
+                "Admin phải xác nhận đã gọi hoặc nhắn cho khách trước khi ghi nhận NoShow (Khách không đến nhận)."
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ContactNote))
+        {
+            return OperationResult.Failure(
+                "Vui lòng ghi lại thời gian và kết quả liên hệ với khách trước khi ghi nhận NoShow."
+            );
+        }
+
+        var contactNote = request.ContactNote.Trim();
+        if (contactNote.Length > 500)
+        {
+            return OperationResult.Failure("Ghi chú liên hệ tối đa 500 ký tự.");
+        }
+
+        var isHomeDelivery = booking.PickupMethod == DeliveryConstants.HomeDelivery;
+        if (isHomeDelivery && !request.ArrivedAtPickupLocation)
+        {
+            return OperationResult.Failure(
+                "Đơn giao tận nơi chỉ được ghi NoShow sau khi Admin xác nhận đã đến đúng địa điểm giao đã thỏa thuận."
+            );
+        }
+
         booking.Status = BookingStatus.NoShow;
         booking.NoShowMarkedAt = DateTime.UtcNow;
         booking.CancelledBy = "Quản trị viên";
-        booking.CancelReason = "Khách không đến nhận xe đúng thời gian quy định.";
+        booking.CancelReason =
+            $"Khách không đến nhận xe sau thời gian chờ 30 phút. " +
+            $"Địa điểm giao: {booking.PickupLocation}. Liên hệ: {contactNote}";
         booking.RefundAmount = 0;
         booking.RefundReason = "Khách không đến nhận xe nên không được hoàn tiền.";
         booking.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
@@ -74,7 +123,9 @@ internal sealed class BookingOperationService : IBookingOperationService
         {
             UserId = booking.CustomerId,
             Title = "Đơn thuê ghi nhận khách không đến nhận xe",
-            Message = $"Đơn #{booking.BookingId} đã được ghi nhận khách không đến nhận xe và không được hoàn tiền."
+            Message =
+                $"Đơn #{booking.BookingId} đã được ghi nhận NoShow (Khách không đến nhận) " +
+                "sau thời gian chờ và liên hệ theo quy trình. Đơn không phát sinh khoản hoàn tiền."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -84,7 +135,10 @@ internal sealed class BookingOperationService : IBookingOperationService
             "MarkNoShow",
             nameof(Booking),
             booking.BookingId.ToString(),
-            $"Ghi nhận khách hàng {booking.CustomerId} không đến nhận xe; không hoàn tiền.",
+            $"Ghi nhận NoShow cho khách {booking.CustomerId}; giờ nhận {booking.PickupDate:dd/MM/yyyy HH:mm}; " +
+            $"địa điểm {booking.PickupLocation}; giao tận nơi: {(isHomeDelivery ? "Có" : "Không")}; " +
+            $"đã đến điểm giao: {(request.ArrivedAtPickupLocation ? "Có" : "Không áp dụng/Không")}; " +
+            $"đã liên hệ: Có; ghi chú: {contactNote}; không hoàn tiền.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
