@@ -138,6 +138,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasKey(booking => booking.BookingId);
             entity.Property(booking => booking.CustomerId).HasMaxLength(450).IsRequired();
+            entity.Property(booking => booking.PickupLocation).HasMaxLength(250);
+            entity.Property(booking => booking.ReturnLocation).HasMaxLength(250);
+            entity.Property(booking => booking.PickupMethod).HasMaxLength(30).IsRequired();
+            entity.Property(booking => booking.PickupDeliveryDistanceKm).HasPrecision(8, 1);
+            entity.Property(booking => booking.ReturnCollectionDistanceKm).HasPrecision(8, 1);
+            entity.Property(booking => booking.DeliveryRatePerKm).HasPrecision(18, 2);
+            entity.Property(booking => booking.DeliveryFee).HasPrecision(18, 2);
             entity.Property(booking => booking.DailyPrice).HasPrecision(18, 2);
             entity.Property(booking => booking.RentalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.AdditionalAmount).HasPrecision(18, 2);
