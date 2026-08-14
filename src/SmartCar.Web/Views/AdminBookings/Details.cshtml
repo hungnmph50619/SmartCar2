@@ -1,10 +1,12 @@
 @model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = $"Xử lý đơn #{Model.BookingId}";
     var canAdminCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
     var canMarkNoShow = (Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup) &&
         DateTime.Now >= Model.PickupDate.AddMinutes(30);
+    var canEditLocations = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment;
 
     var customerCreatedAt = ViewBag.CustomerCreatedAt is DateTime createdAtValue
         ? createdAtValue
@@ -21,11 +23,11 @@
     {
         BookingStatus.PendingConfirmation => (
             "Kiểm tra và quyết định đơn",
-            "Đối chiếu hồ sơ xác minh giấy tờ, lịch sử thuê xe, lịch xe và thông tin thuê. Sau đó xác nhận hoặc nhập lý do từ chối.",
+            "Đối chiếu hồ sơ, lịch xe, địa chỉ giao nhận và chi phí. Sau đó xác nhận hoặc nhập lý do từ chối.",
             "warning"),
         BookingStatus.PendingPayment => (
             "Chờ khách hàng thanh toán",
-            "Đơn đã được xác nhận. Chưa chuẩn bị giao xe cho đến khi tiền thuê được ghi nhận đã thanh toán.",
+            "Đơn đã được xác nhận. Tiền thuê và phí giao nhận đã được chốt; chưa chuẩn bị giao xe cho đến khi thanh toán được ghi nhận.",
             "primary"),
         BookingStatus.Paid => (
             "Kiểm tra và chuẩn bị xe",
@@ -82,6 +84,7 @@
             </div>
             <hr />
             <div><strong>Nhận xe:</strong> @Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</div>
+            <div><strong>Hình thức nhận:</strong> @(Model.PickupMethod == DeliveryConstants.HomeDelivery ? "Giao xe tận nơi" : "Khách tự đến SmartCar")</div>
             <div><strong>Địa điểm nhận:</strong> @(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "Chưa cập nhật" : Model.PickupLocation)</div>
             <div class="mt-1"><strong>Trả xe:</strong> @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
             <div><strong>Địa điểm trả:</strong> @(string.IsNullOrWhiteSpace(Model.ReturnLocation) ? "Chưa cập nhật" : Model.ReturnLocation)</div>
@@ -91,13 +94,27 @@
             }
             <div class="mt-1"><strong>Số ngày:</strong> @Model.NumberOfDays</div>
 
-            @if (Model.Status is not (BookingStatus.Completed or BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.NoShow))
+            <div class="bg-light rounded-3 p-3 mt-3">
+                <div class="fw-semibold mb-2">Chi phí giao nhận đã tính</div>
+                @if (Model.PickupDeliveryDistanceKm > 0)
+                {
+                    <div class="d-flex justify-content-between small"><span>Quãng đường giao xe</span><strong>@Model.PickupDeliveryDistanceKm.ToString("N1") km</strong></div>
+                }
+                @if (Model.ReturnCollectionDistanceKm > 0)
+                {
+                    <div class="d-flex justify-content-between small"><span>Quãng đường đến nhận lại xe</span><strong>@Model.ReturnCollectionDistanceKm.ToString("N1") km</strong></div>
+                }
+                <div class="d-flex justify-content-between small"><span>Đơn giá giao nhận</span><strong>@Model.DeliveryRatePerKm.ToString("N0") đ/km/lượt</strong></div>
+                <div class="d-flex justify-content-between mt-2"><span>Phí giao nhận</span><strong class="@(Model.DeliveryFee > 0 ? "text-primary" : "text-success")">@(Model.DeliveryFee > 0 ? $"{Model.DeliveryFee:N0} đ" : "Miễn phí")</strong></div>
+            </div>
+
+            @if (canEditLocations)
             {
                 <form asp-action="UpdateLocations"
                       method="post"
                       class="row g-2 mt-3 pt-3 border-top"
                       data-loading-form
-                      data-confirm="Cập nhật địa điểm nhận và trả xe cho đơn này? Khách hàng sẽ được thông báo.">
+                      data-confirm="Cập nhật địa điểm giao nhận? Hệ thống sẽ tính lại quãng đường, phí giao nhận và số tiền khách cần thanh toán.">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <div class="col-md-5">
                         <label class="form-label">Địa điểm nhận xe</label>
@@ -106,6 +123,7 @@
                                maxlength="250"
                                required
                                value="@Model.PickupLocation"
+                               readonly="@(Model.PickupMethod == DeliveryConstants.SelfPickup ? "readonly" : null)"
                                placeholder="Nhập địa điểm nhận xe" />
                     </div>
                     <div class="col-md-5">
@@ -120,8 +138,9 @@
                     <div class="col-md-2 d-flex align-items-end">
                         <button class="btn btn-outline-primary w-100"
                                 type="submit"
-                                data-loading-text="Đang lưu...">Cập nhật</button>
+                                data-loading-text="Đang tính lại...">Cập nhật</button>
                     </div>
+                    <div class="col-12"><div class="form-text">Chỉ thay đổi trước khi khách thanh toán; hệ thống sẽ tính lại phí giao nhận theo tuyến đường.</div></div>
                 </form>
             }
 
@@ -168,43 +187,15 @@
             </div>
 
             <div class="row g-3">
-                <div class="col-6 col-md-3">
-                    <div class="bg-light rounded p-3 h-100">
-                        <div class="small text-muted">Tổng đơn</div>
-                        <div class="fs-4 fw-bold">@customerTotalBookingCount</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="bg-light rounded p-3 h-100">
-                        <div class="small text-muted">Hoàn thành</div>
-                        <div class="fs-4 fw-bold text-success">@customerCompletedBookingCount</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="bg-light rounded p-3 h-100">
-                        <div class="small text-muted">Hủy / bị từ chối</div>
-                        <div class="fs-4 fw-bold">@customerCancelledBookingCount</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="bg-light rounded p-3 h-100">
-                        <div class="small text-muted">Không đến nhận xe</div>
-                        <div class="fs-4 fw-bold @(customerNoShowCount > 0 ? "text-danger" : string.Empty)">@customerNoShowCount</div>
-                    </div>
-                </div>
+                <div class="col-6 col-md-3"><div class="bg-light rounded p-3 h-100"><div class="small text-muted">Tổng đơn</div><div class="fs-4 fw-bold">@customerTotalBookingCount</div></div></div>
+                <div class="col-6 col-md-3"><div class="bg-light rounded p-3 h-100"><div class="small text-muted">Hoàn thành</div><div class="fs-4 fw-bold text-success">@customerCompletedBookingCount</div></div></div>
+                <div class="col-6 col-md-3"><div class="bg-light rounded p-3 h-100"><div class="small text-muted">Hủy / bị từ chối</div><div class="fs-4 fw-bold">@customerCancelledBookingCount</div></div></div>
+                <div class="col-6 col-md-3"><div class="bg-light rounded p-3 h-100"><div class="small text-muted">Không đến nhận xe</div><div class="fs-4 fw-bold @(customerNoShowCount > 0 ? "text-danger" : string.Empty)">@customerNoShowCount</div></div></div>
             </div>
 
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3 pt-3 border-top">
-                <div class="small text-muted">
-                    Thành viên từ: <strong>@(customerCreatedAt.HasValue ? customerCreatedAt.Value.ToLocalTime().ToString("dd/MM/yyyy") : "Không xác định")</strong>
-                </div>
-                <a class="btn btn-sm btn-outline-primary"
-                   asp-controller="AdminCustomers"
-                   asp-action="Details"
-                   asp-route-id="@Model.CustomerId"
-                   asp-route-tab="documents">
-                    Xem và đối chiếu giấy tờ
-                </a>
+                <div class="small text-muted">Thành viên từ: <strong>@(customerCreatedAt.HasValue ? customerCreatedAt.Value.ToLocalTime().ToString("dd/MM/yyyy") : "Không xác định")</strong></div>
+                <a class="btn btn-sm btn-outline-primary" asp-controller="AdminCustomers" asp-action="Details" asp-route-id="@Model.CustomerId" asp-route-tab="documents">Xem và đối chiếu giấy tờ</a>
             </div>
         </div>
 
@@ -212,19 +203,12 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Xác nhận yêu cầu</h2>
-                <p class="text-muted">Chỉ xác nhận sau khi danh tính CCCD, GPLX, lịch xe và địa điểm giao nhận đều hợp lệ.</p>
-                <form asp-action="Confirm"
-                      method="post"
-                      class="mb-3"
-                      data-loading-form
-                      data-confirm="Xác nhận đơn thuê này và chuyển khách hàng sang bước thanh toán?">
+                <p class="text-muted">Chỉ xác nhận sau khi danh tính CCCD, GPLX, lịch xe, địa điểm và phí giao nhận đều hợp lệ.</p>
+                <form asp-action="Confirm" method="post" class="mb-3" data-loading-form data-confirm="Xác nhận đơn thuê này và chuyển khách hàng sang bước thanh toán?">
                     <input type="hidden" name="id" value="@Model.BookingId" />
                     <button class="btn btn-success" type="submit" data-loading-text="Đang xác nhận...">Xác nhận đơn</button>
                 </form>
-                <form asp-action="Reject"
-                      method="post"
-                      data-loading-form
-                      data-confirm="Từ chối đơn và gửi lý do cho khách hàng?">
+                <form asp-action="Reject" method="post" data-loading-form data-confirm="Từ chối đơn và gửi lý do cho khách hàng?">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <label class="form-label">Lý do không duyệt</label>
                     <textarea name="Reason" maxlength="500" class="form-control mb-2" required placeholder="Nêu rõ lý do để khách hàng biết cách xử lý tiếp theo."></textarea>
@@ -238,10 +222,7 @@
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Chuẩn bị giao xe</h2>
                 <p>Khách hàng đã thanh toán. Hãy kiểm tra xe và đánh dấu sẵn sàng bàn giao.</p>
-                <form asp-action="MarkReady"
-                      method="post"
-                      data-loading-form
-                      data-confirm="Xác nhận xe đã được kiểm tra và sẵn sàng bàn giao?">
+                <form asp-action="MarkReady" method="post" data-loading-form data-confirm="Xác nhận xe đã được kiểm tra và sẵn sàng bàn giao?">
                     <input type="hidden" name="id" value="@Model.BookingId" />
                     <button class="btn btn-primary" type="submit" data-loading-text="Đang cập nhật...">Xe đã sẵn sàng</button>
                 </form>
@@ -263,11 +244,7 @@
             <div class="card card-body border-warning shadow-sm mb-4">
                 <h2 class="h5">Khách không đến nhận xe</h2>
                 <p>Đã quá giờ nhận xe 30 phút. Khách không đến nhận xe sẽ không được hoàn tiền.</p>
-                <form asp-controller="AdminBookingOperations"
-                      asp-action="MarkNoShow"
-                      method="post"
-                      data-loading-form
-                      data-confirm="Ghi nhận khách không đến nhận xe? Đơn sẽ kết thúc và không hoàn tiền.">
+                <form asp-controller="AdminBookingOperations" asp-action="MarkNoShow" method="post" data-loading-form data-confirm="Ghi nhận khách không đến nhận xe? Đơn sẽ kết thúc và không hoàn tiền.">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <button class="btn btn-warning" type="submit" data-loading-text="Đang ghi nhận...">Ghi nhận khách không đến</button>
                 </form>
@@ -281,31 +258,20 @@
                 <div class="mb-2"><strong>Điểm trả đã hẹn:</strong> @(string.IsNullOrWhiteSpace(Model.ReturnLocation) ? "Chưa cập nhật" : Model.ReturnLocation)</div>
                 @if (DateTime.Now < Model.ReturnDate)
                 {
-                    <div class="alert alert-info py-2">
-                        Chưa đến giờ trả dự kiến <strong>@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong>.
-                        Nếu khách đã thực tế mang xe tới và hai bên đồng ý kết thúc sử dụng sớm, có thể tiếp nhận xe ngay.
-                    </div>
+                    <div class="alert alert-info py-2">Chưa đến giờ trả dự kiến <strong>@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong>. Nếu khách đã thực tế mang xe tới và hai bên đồng ý kết thúc sử dụng sớm, có thể tiếp nhận xe ngay.</div>
                 }
                 <div class="d-flex gap-2 flex-wrap">
-                    <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">
-                        @(DateTime.Now < Model.ReturnDate ? "Tiếp nhận xe trả sớm" : "Lập biên bản trả xe")
-                    </a>
+                    <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">@(DateTime.Now < Model.ReturnDate ? "Tiếp nhận xe trả sớm" : "Lập biên bản trả xe")</a>
                     <a class="btn btn-outline-primary" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a>
                 </div>
                 @if (Model.Extensions.Count > 0)
                 {
-                    <div class="table-responsive">
-                        <table class="table mt-3 mb-0">
-                        @foreach (var extension in Model.Extensions)
-                        {
-                            <tr>
-                                <td>Đến @extension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
-                                <td>@extension.AdditionalAmount.ToString("N0") đ</td>
-                                <td><span class="badge bg-secondary">@extension.Status.ToVietnamese()</span></td>
-                            </tr>
-                        }
-                        </table>
-                    </div>
+                    <div class="table-responsive"><table class="table mt-3 mb-0">
+                    @foreach (var extension in Model.Extensions)
+                    {
+                        <tr><td>Đến @extension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td><td>@extension.AdditionalAmount.ToString("N0") đ</td><td><span class="badge bg-secondary">@extension.Status.ToVietnamese()</span></td></tr>
+                    }
+                    </table></div>
                 }
             </div>
         }
@@ -316,14 +282,7 @@
                 <h2 class="h5">Phụ phí sau khi trả xe</h2>
                 <form asp-controller="Returns" asp-action="AddCharge" method="post" class="row g-2 mb-3" data-loading-form>
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                    <div class="col-md-3">
-                        <select name="ChargeType" class="form-select" aria-label="Loại phụ phí">
-                            @foreach (var type in Enum.GetValues<AdditionalChargeType>())
-                            {
-                                <option value="@type">@type.ToVietnamese()</option>
-                            }
-                        </select>
-                    </div>
+                    <div class="col-md-3"><select name="ChargeType" class="form-select" aria-label="Loại phụ phí">@foreach (var type in Enum.GetValues<AdditionalChargeType>()) { <option value="@type">@type.ToVietnamese()</option> }</select></div>
                     <div class="col-md-5"><input name="Description" maxlength="250" class="form-control" placeholder="Mô tả và căn cứ phụ phí" required /></div>
                     <div class="col-md-2"><input name="Amount" type="number" min="1" class="form-control" placeholder="Số tiền" required /></div>
                     <div class="col-md-2"><button class="btn btn-warning w-100" type="submit" data-loading-text="Đang thêm...">Thêm</button></div>
@@ -331,29 +290,12 @@
 
                 @if (Model.AdditionalCharges.Count > 0)
                 {
-                    <div class="table-responsive">
-                        <table class="table">
-                        @foreach (var charge in Model.AdditionalCharges)
-                        {
-                            <tr>
-                                <td>@charge.ChargeType.ToVietnamese()</td>
-                                <td>@charge.Description</td>
-                                <td class="text-end">@charge.Amount.ToString("N0") đ</td>
-                                <td class="text-end">
-                                    <form asp-controller="Returns"
-                                          asp-action="RemoveCharge"
-                                          method="post"
-                                          data-loading-form
-                                          data-confirm="Xóa khoản phụ phí này khỏi đơn?">
-                                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                                        <input type="hidden" name="additionalChargeId" value="@charge.AdditionalChargeId" />
-                                        <button class="btn btn-sm btn-outline-danger" type="submit" data-loading-text="Đang xóa...">Xóa</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        }
-                        </table>
-                    </div>
+                    <div class="table-responsive"><table class="table">
+                    @foreach (var charge in Model.AdditionalCharges)
+                    {
+                        <tr><td>@charge.ChargeType.ToVietnamese()</td><td>@charge.Description</td><td class="text-end">@charge.Amount.ToString("N0") đ</td><td class="text-end"><form asp-controller="Returns" asp-action="RemoveCharge" method="post" data-loading-form data-confirm="Xóa khoản phụ phí này khỏi đơn?"><input type="hidden" name="bookingId" value="@Model.BookingId" /><input type="hidden" name="additionalChargeId" value="@charge.AdditionalChargeId" /><button class="btn btn-sm btn-outline-danger" type="submit" data-loading-text="Đang xóa...">Xóa</button></form></td></tr>
+                    }
+                    </table></div>
                 }
 
                 @if (Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid)
@@ -367,16 +309,9 @@
 
                 <hr />
                 <h3 class="h6">Hoàn tất kiểm tra</h3>
-                <form asp-controller="Returns"
-                      asp-action="Complete"
-                      method="post"
-                      data-loading-form
-                      data-confirm="Hoàn tất đơn và cập nhật trạng thái xe? Hãy chắc chắn mọi phụ phí đã được xử lý.">
+                <form asp-controller="Returns" asp-action="Complete" method="post" data-loading-form data-confirm="Hoàn tất đơn và cập nhật trạng thái xe? Hãy chắc chắn mọi phụ phí đã được xử lý.">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="requiresMaintenance" />
-                        <label class="form-check-label" for="requiresMaintenance">Xe cần bảo trì hoặc sửa chữa sau lượt thuê</label>
-                    </div>
+                    <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="requiresMaintenance" /><label class="form-check-label" for="requiresMaintenance">Xe cần bảo trì hoặc sửa chữa sau lượt thuê</label></div>
                     <textarea name="MaintenanceNote" maxlength="1000" class="form-control mb-2" placeholder="Nội dung bảo trì nếu có"></textarea>
                     <button class="btn btn-success" type="submit" data-loading-text="Đang hoàn tất...">Hoàn tất đơn và cập nhật xe</button>
                 </form>
@@ -388,12 +323,7 @@
             <div class="card card-body border-danger shadow-sm">
                 <h2 class="h5 text-danger">Quản trị viên hủy đơn</h2>
                 <p class="text-muted">Quản trị viên hủy trước khi giao xe sẽ hoàn 100% số tiền khách hàng đã thanh toán.</p>
-                <form asp-controller="AdminBookingOperations"
-                      asp-action="Cancel"
-                      method="post"
-                      class="row g-2"
-                      data-loading-form
-                      data-confirm="Hủy đơn và hoàn 100% số tiền khách đã thanh toán?">
+                <form asp-controller="AdminBookingOperations" asp-action="Cancel" method="post" class="row g-2" data-loading-form data-confirm="Hủy đơn và hoàn 100% số tiền khách đã thanh toán?">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-9"><input name="Reason" maxlength="500" class="form-control" required placeholder="Lý do Quản trị viên hủy" /></div>
                     <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit" data-loading-text="Đang hủy...">Hủy và hoàn tiền</button></div>
@@ -404,13 +334,15 @@
 
     <div class="col-lg-4">
         <div class="card card-body shadow-sm sticky-top" style="top:1rem">
+            <div class="text-uppercase small text-muted fw-semibold">Chi tiết chi phí</div>
             <h2 class="h5">Tổng tiền</h2>
             <div class="d-flex justify-content-between"><span>Tiền thuê và gia hạn</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
-            <div class="d-flex justify-content-between"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+            <div class="d-flex justify-content-between"><span>Phí giao nhận</span><strong class="@(Model.DeliveryFee > 0 ? "text-primary" : "text-success")">@(Model.DeliveryFee > 0 ? $"{Model.DeliveryFee:N0} đ" : "Miễn phí")</strong></div>
+            <div class="d-flex justify-content-between"><span>Phụ phí sau trả xe</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
             <hr />
             <div class="d-flex justify-content-between fs-5"><span>Tổng cộng</span><strong>@Model.TotalAmount.ToString("N0") đ</strong></div>
             <div class="mt-3">
-                <div>Tiền thuê: <strong>@(Model.RentalPaid ? "Đã thanh toán" : "Chưa thanh toán")</strong></div>
+                <div>Tiền thuê + giao nhận: <strong>@(Model.RentalPaid ? "Đã thanh toán" : "Chưa thanh toán")</strong></div>
                 <div>Gia hạn: <strong>@(Model.ExtensionPaid ? "Đã thanh toán hoặc không có" : "Chưa thanh toán")</strong></div>
                 <div>Phụ phí: <strong>@(Model.AdditionalChargePaid ? "Đã thanh toán hoặc không có" : "Chưa thanh toán")</strong></div>
             </div>
