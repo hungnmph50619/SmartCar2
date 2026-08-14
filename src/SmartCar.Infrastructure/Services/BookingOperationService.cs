@@ -197,7 +197,8 @@ internal sealed class BookingOperationService : IBookingOperationService
         {
             pendingRentalPayment.Status = PaymentStatus.Failed;
             pendingRentalPayment.PaidAt = null;
-            pendingRentalPayment.TransactionCode = null;
+            // Không xóa TransactionCode: mã QRREQ gần nhất là bằng chứng đối soát
+            // nếu trước đó Admin đã ghi nhận chưa tìm thấy giao dịch.
         }
 
         booking.Status = BookingStatus.Cancelled;
