@@ -112,6 +112,16 @@ public sealed class CreateBookingViewModel
     public int VehicleId { get; set; }
     public DateTime PickupDate { get; set; }
     public DateTime ReturnDate { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập địa điểm nhận xe.")]
+    [StringLength(250, ErrorMessage = "Địa điểm nhận xe tối đa 250 ký tự.")]
+    [Display(Name = "Địa điểm nhận xe")]
+    public string PickupLocation { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập địa điểm trả xe.")]
+    [StringLength(250, ErrorMessage = "Địa điểm trả xe tối đa 250 ký tự.")]
+    [Display(Name = "Địa điểm trả xe")]
+    public string ReturnLocation { get; set; } = string.Empty;
 }
 
 public sealed class RejectBookingViewModel
@@ -147,6 +157,11 @@ public sealed class ReturnViewModel
 {
     public int BookingId { get; set; }
     public DateTime ReturnedAt { get; set; } = DateTime.Now;
+
+    [Required(ErrorMessage = "Vui lòng nhập địa điểm trả xe thực tế.")]
+    [StringLength(250, ErrorMessage = "Địa điểm trả xe tối đa 250 ký tự.")]
+    [Display(Name = "Địa điểm trả xe thực tế")]
+    public string ReturnLocation { get; set; } = string.Empty;
 
     [Range(0, int.MaxValue)]
     public int Mileage { get; set; }
