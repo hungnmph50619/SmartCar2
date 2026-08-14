@@ -316,7 +316,9 @@ internal sealed class PaymentService : IPaymentService
 
         var payment = await _dbContext.Payments
             .Include(item => item.Booking)
-            .ThenInclude(booking => booking.Extensions)
+                .ThenInclude(booking => booking.Extensions)
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.Payments)
             .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
 
         if (payment is null)
@@ -336,12 +338,15 @@ internal sealed class PaymentService : IPaymentService
         }
 
         var booking = payment.Booking;
+        var confirmingCancelledRental =
+            payment.Type == PaymentType.Rental &&
+            booking.Status == BookingStatus.Cancelled;
 
         if (payment.Type == PaymentType.Rental)
         {
-            if (booking.Status != BookingStatus.PendingPayment)
+            if (booking.Status is not (BookingStatus.PendingPayment or BookingStatus.Cancelled))
             {
-                return OperationResult.Failure("Đơn không còn ở trạng thái chờ thanh toán tiền thuê.");
+                return OperationResult.Failure("Đơn không còn ở trạng thái có thể xác nhận tiền thuê.");
             }
         }
         else if (payment.Type == PaymentType.Extension)
@@ -376,33 +381,96 @@ internal sealed class PaymentService : IPaymentService
         payment.PaidAt = DateTime.UtcNow;
         payment.TransactionCode = $"QR{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}";
 
-        if (payment.Type == PaymentType.Rental)
+        if (payment.Type == PaymentType.Rental && !confirmingCancelledRental)
         {
             booking.Status = BookingStatus.Paid;
         }
 
-        _dbContext.Notifications.Add(new Notification
+        if (confirmingCancelledRental)
         {
-            UserId = booking.CustomerId,
-            Title = "Thanh toán đã được xác nhận",
-            Message = payment.Type switch
+            var cancellationTime = booking.CancelledAt?.ToLocalTime() ?? DateTime.Now;
+            var hoursBeforePickup = (booking.PickupDate - cancellationTime).TotalHours;
+
+            decimal refundAmount;
+            string refundReason;
+
+            if (string.Equals(booking.CancelledBy, "Quản trị viên", StringComparison.OrdinalIgnoreCase))
             {
-                PaymentType.Rental => $"SmartCar đã xác nhận tiền thuê {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
-                PaymentType.Extension => $"SmartCar đã xác nhận tiền gia hạn {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
-                PaymentType.AdditionalCharge => $"SmartCar đã xác nhận phụ phí {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
-                _ => $"SmartCar đã xác nhận khoản thanh toán {payment.Amount:N0} đồng của đơn #{booking.BookingId}."
+                refundAmount = payment.Amount;
+                refundReason = "SmartCar chủ động hủy trước khi giao xe: hoàn 100% số tiền đã thanh toán.";
             }
-        });
+            else if (hoursBeforePickup >= 48)
+            {
+                refundAmount = payment.Amount;
+                refundReason = "Khách hủy trước thời gian nhận xe từ 48 giờ trở lên: hoàn 100%.";
+            }
+            else if (hoursBeforePickup >= 24)
+            {
+                refundAmount = Math.Round(payment.Amount * 0.5m, 0);
+                refundReason = "Khách hủy trước thời gian nhận xe từ 24 đến dưới 48 giờ: hoàn 50%.";
+            }
+            else
+            {
+                refundAmount = 0;
+                refundReason = "Khách hủy trước thời gian nhận xe dưới 24 giờ: không hoàn tiền.";
+            }
+
+            booking.RefundAmount = refundAmount;
+            booking.RefundReason = refundReason;
+
+            if (refundAmount > 0 &&
+                !booking.Payments.Any(item => item.Type == PaymentType.Refund))
+            {
+                booking.Payments.Add(new Payment
+                {
+                    Type = PaymentType.Refund,
+                    Amount = refundAmount,
+                    Method = PaymentMethods.BankTransferRefund,
+                    Status = PaymentStatus.AwaitingRefund,
+                    PaidAt = null,
+                    TransactionCode = null
+                });
+            }
+
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = refundAmount > 0
+                    ? "Khoản hoàn tiền đã được tạo"
+                    : "Đã xác nhận khoản chuyển của đơn đã hủy",
+                Message = refundAmount > 0
+                    ? $"SmartCar đã xác nhận khoản chuyển {payment.Amount:N0} đồng của đơn #{booking.BookingId}. " +
+                      $"Theo chính sách hủy, khoản hoàn {refundAmount:N0} đồng đã được tạo và đang chờ xử lý."
+                    : $"SmartCar đã xác nhận khoản chuyển {payment.Amount:N0} đồng của đơn #{booking.BookingId}. {refundReason}"
+            });
+        }
+        else
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = "Thanh toán đã được xác nhận",
+                Message = payment.Type switch
+                {
+                    PaymentType.Rental => $"SmartCar đã xác nhận tiền thuê {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
+                    PaymentType.Extension => $"SmartCar đã xác nhận tiền gia hạn {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
+                    PaymentType.AdditionalCharge => $"SmartCar đã xác nhận phụ phí {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
+                    _ => $"SmartCar đã xác nhận khoản thanh toán {payment.Amount:N0} đồng của đơn #{booking.BookingId}."
+                }
+            });
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
             adminId,
-            "ConfirmQrPayment",
+            confirmingCancelledRental ? "ConfirmCancelledBookingPayment" : "ConfirmQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
-            $"Xác nhận chuyển khoản QR {payment.Type} cho đơn #{booking.BookingId}, {payment.Amount:N0} đồng.",
+            confirmingCancelledRental
+                ? $"Xác nhận chuyển khoản QR tiền thuê cho đơn đã hủy #{booking.BookingId}, {payment.Amount:N0} đồng; hoàn dự kiến {booking.RefundAmount:N0} đồng."
+                : $"Xác nhận chuyển khoản QR {payment.Type} cho đơn #{booking.BookingId}, {payment.Amount:N0} đồng.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
