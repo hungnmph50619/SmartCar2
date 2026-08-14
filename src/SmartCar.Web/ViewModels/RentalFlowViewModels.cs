@@ -113,6 +113,10 @@ public sealed class CreateBookingViewModel
     public DateTime PickupDate { get; set; }
     public DateTime ReturnDate { get; set; }
 
+    [Required(ErrorMessage = "Vui lòng chọn hình thức nhận xe.")]
+    [RegularExpression(@"^(SelfPickup|HomeDelivery)$", ErrorMessage = "Hình thức nhận xe không hợp lệ.")]
+    public string PickupMethod { get; set; } = "SelfPickup";
+
     [Required(ErrorMessage = "Vui lòng nhập địa điểm nhận xe.")]
     [StringLength(250, ErrorMessage = "Địa điểm nhận xe tối đa 250 ký tự.")]
     [Display(Name = "Địa điểm nhận xe")]
