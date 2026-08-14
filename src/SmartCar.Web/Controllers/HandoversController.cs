@@ -15,7 +15,8 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class HandoversController : Controller
 {
-    private const int MaximumImages = 10;
+    private const int MinimumImages = 6;
+    private const int MaximumImages = 15;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IHandoverService _handoverService;
@@ -65,7 +66,9 @@ public sealed class HandoversController : Controller
             BookingId = bookingId,
             HandoverAt = DateTime.Now > booking.PickupDate
                 ? DateTime.Now
-                : booking.PickupDate
+                : booking.PickupDate,
+            ExteriorCondition = "Không phát hiện bất thường tại thời điểm bàn giao.",
+            InteriorCondition = "Không phát hiện bất thường tại thời điểm bàn giao."
         });
     }
 
@@ -75,7 +78,9 @@ public sealed class HandoversController : Controller
         HandoverViewModel model,
         CancellationToken cancellationToken)
     {
+        NormalizeConditionSummary(model);
         await ValidateImagesAsync(model.Images, cancellationToken);
+
         if (!ModelState.IsValid)
         {
             return View(model);
@@ -116,12 +121,42 @@ public sealed class HandoversController : Controller
             "CreateHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập biên bản giao xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh.",
+            $"Lập biên bản giao xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh đối chiếu, tình trạng: {model.ExteriorCondition}.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lập biên bản giao xe và lưu ảnh bàn giao.";
+        TempData["SuccessMessage"] = "Đã lập biên bản giao xe và lưu bộ ảnh đối chiếu.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+    }
+
+    private void NormalizeConditionSummary(HandoverViewModel model)
+    {
+        var exterior = model.ExteriorCondition?.Trim();
+
+        if (string.IsNullOrWhiteSpace(exterior))
+        {
+            model.ExteriorCondition = "Không phát hiện bất thường tại thời điểm bàn giao.";
+            model.InteriorCondition = "Không phát hiện bất thường tại thời điểm bàn giao.";
+            return;
+        }
+
+        if (exterior.StartsWith("Có bất thường:", StringComparison.OrdinalIgnoreCase))
+        {
+            var detail = exterior["Có bất thường:".Length..].Trim();
+            if (string.IsNullOrWhiteSpace(detail))
+            {
+                ModelState.AddModelError(nameof(HandoverViewModel.ExteriorCondition),
+                    "Vui lòng mô tả bất thường đã phát hiện trên xe.");
+                return;
+            }
+
+            model.ExteriorCondition = $"Có bất thường: {detail}";
+            model.InteriorCondition = "Tình trạng nội thất được đối chiếu bằng bộ ảnh bàn giao; bất thường nếu có được ghi trong tình trạng chung.";
+            return;
+        }
+
+        model.ExteriorCondition = "Không phát hiện bất thường tại thời điểm bàn giao.";
+        model.InteriorCondition = "Không phát hiện bất thường tại thời điểm bàn giao.";
     }
 
     private async Task ValidateImagesAsync(
@@ -129,10 +164,10 @@ public sealed class HandoversController : Controller
         CancellationToken cancellationToken)
     {
         var selectedImages = images.Where(file => file.Length > 0).ToList();
-        if (selectedImages.Count == 0)
+        if (selectedImages.Count < MinimumImages)
         {
             ModelState.AddModelError(nameof(HandoverViewModel.Images),
-                "Vui lòng tải ít nhất một ảnh tình trạng xe khi bàn giao.");
+                $"Vui lòng tải tối thiểu {MinimumImages} ảnh đối chiếu khi bàn giao: trước xe, sau xe, hai bên thân xe, đồng hồ km/nhiên liệu và nội thất.");
             return;
         }
 
