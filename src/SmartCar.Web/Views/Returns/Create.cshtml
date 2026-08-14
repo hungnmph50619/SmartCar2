@@ -1,6 +1,10 @@
-﻿@model SmartCar.Web.ViewModels.ReturnViewModel
+@model SmartCar.Web.ViewModels.ReturnViewModel
 @{
     ViewData["Title"] = "Biên bản trả xe";
+    var isEarlyReturn = ViewBag.IsEarlyReturn is bool early && early;
+    var scheduledReturnDate = ViewBag.ScheduledReturnDate is DateTime scheduled
+        ? scheduled
+        : (DateTime?)null;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
@@ -11,8 +15,18 @@
     <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại đơn</a>
 </div>
 
+@if (isEarlyReturn && scheduledReturnDate.HasValue)
+{
+    <div class="alert alert-primary">
+        <strong>Khách đang trả xe sớm.</strong>
+        Thời gian trả dự kiến ban đầu là
+        <strong>@scheduledReturnDate.Value.ToString("dd/MM/yyyy HH:mm")</strong>.
+        SmartCar có thể tiếp nhận xe ngay; việc trả sớm không tự hoàn tiền và không tự hoàn tất chuyến.
+    </div>
+}
+
 <div class="alert alert-info">
-    <strong>Kiểm tra trước khi xác nhận:</strong> thời gian trả, số km, nhiên liệu, ngoại thất, nội thất, phụ kiện và hư hỏng mới. Phụ phí được thêm sau khi biên bản trả xe được lập.
+    <strong>Kiểm tra trước khi xác nhận:</strong> thời gian trả thực tế, địa điểm trả thực tế, số km, nhiên liệu, ngoại thất, nội thất, phụ kiện và hư hỏng mới. Phụ phí được thêm sau khi biên bản trả xe được lập.
 </div>
 
 <form asp-action="Create"
@@ -20,15 +34,25 @@
       enctype="multipart/form-data"
       class="card card-body shadow-sm"
       data-loading-form
-      data-confirm="Xác nhận đã nhận xe trả? Đơn sẽ chuyển sang bước kiểm tra và xử lý phụ phí.">
+      data-confirm="Xác nhận SmartCar đã thực tế nhận lại xe? Đơn sẽ chuyển sang bước kiểm tra và xử lý phụ phí.">
     <input asp-for="BookingId" type="hidden" />
     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
 
     <div class="row g-3">
         <div class="col-md-6">
-            <label asp-for="ReturnedAt" class="form-label fw-semibold">Thời gian trả</label>
+            <label asp-for="ReturnedAt" class="form-label fw-semibold">Thời gian trả thực tế</label>
             <input asp-for="ReturnedAt" type="datetime-local" class="form-control" required />
             <span asp-validation-for="ReturnedAt" class="text-danger small"></span>
+        </div>
+        <div class="col-md-6">
+            <label asp-for="ReturnLocation" class="form-label fw-semibold">Địa điểm trả thực tế</label>
+            <input asp-for="ReturnLocation"
+                   class="form-control"
+                   maxlength="250"
+                   required
+                   placeholder="Địa điểm SmartCar thực tế nhận lại xe" />
+            <span asp-validation-for="ReturnLocation" class="text-danger small"></span>
+            <div class="form-text">Mặc định lấy theo địa điểm trả đã thỏa thuận trong đơn. Nếu hai bên thống nhất đổi nơi trả, ghi địa điểm thực tế tại đây.</div>
         </div>
         <div class="col-md-6">
             <label asp-for="Mileage" class="form-label fw-semibold">Số km khi trả</label>
@@ -80,7 +104,9 @@
     </div>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
-        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu biên bản...">Xác nhận nhận xe trả</button>
+        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu biên bản...">
+            @(isEarlyReturn ? "Xác nhận tiếp nhận xe trả sớm" : "Xác nhận nhận xe trả")
+        </button>
         <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy thao tác</a>
     </div>
 </form>
