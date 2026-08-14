@@ -35,11 +35,12 @@ public sealed class AdminPaymentsController : Controller
 
         return View(payments);
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ConfirmQr(
-    int paymentId,
-    CancellationToken cancellationToken)
+        int paymentId,
+        CancellationToken cancellationToken)
     {
         var adminId =
             User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -64,6 +65,7 @@ public sealed class AdminPaymentsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RejectQr(
         int paymentId,
+        string rejectionReason,
         CancellationToken cancellationToken)
     {
         var adminId =
@@ -74,22 +76,24 @@ public sealed class AdminPaymentsController : Controller
             await _paymentService.RejectQrPaymentAsync(
                 paymentId,
                 adminId,
+                rejectionReason,
                 cancellationToken);
 
         TempData[result.Succeeded
             ? "SuccessMessage"
             : "ErrorMessage"] = result.Succeeded
-                ? "Đã trả giao dịch về trạng thái chờ thanh toán."
+                ? "Đã ghi nhận chưa tìm thấy giao dịch. Mã yêu cầu và lý do đối soát vẫn được lưu trong lịch sử."
                 : string.Join("; ", result.Errors);
 
         return RedirectToAction(nameof(Index));
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ConfirmRefund(
-    int paymentId,
-    string transactionCode,
-    CancellationToken cancellationToken)
+        int paymentId,
+        string transactionCode,
+        CancellationToken cancellationToken)
     {
         var adminId =
             User.FindFirstValue(ClaimTypes.NameIdentifier)
