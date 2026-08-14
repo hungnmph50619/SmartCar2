@@ -71,12 +71,12 @@
         BookingStatus.ReadyForPickup => (
             "Xe đã sẵn sàng giao",
             "Xe đã được kiểm tra và có thể lập biên bản bàn giao.",
-            $"Đến nhận xe lúc {Model.PickupDate:dd/MM/yyyy HH:mm} và mang theo CCCD, GPLX bản gốc.",
+            $"Đến nhận xe lúc {Model.PickupDate:dd/MM/yyyy HH:mm} tại {(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "địa điểm đã thỏa thuận" : Model.PickupLocation)} và mang theo CCCD, GPLX bản gốc.",
             "success"),
         BookingStatus.Rented => (
             "Bạn đang trong thời gian thuê xe",
             "Xe đã được bàn giao thành công.",
-            $"Trả xe trước {Model.ReturnDate:dd/MM/yyyy HH:mm}. Gửi yêu cầu gia hạn sớm nếu cần.",
+            $"Trả xe trước {Model.ReturnDate:dd/MM/yyyy HH:mm} tại {(string.IsNullOrWhiteSpace(Model.ReturnLocation) ? "địa điểm đã thỏa thuận" : Model.ReturnLocation)}. Nếu muốn trả sớm, hãy liên hệ SmartCar để thống nhất thời gian tiếp nhận.",
             "primary"),
         BookingStatus.PendingInspection => (
             "Xe đang được kiểm tra sau khi trả",
@@ -164,7 +164,13 @@
                     <h2 class="h5">@Model.VehicleName</h2>
                     <p class="text-muted">@Model.LicensePlate</p>
                     <div>Nhận: <strong>@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div class="small text-muted mb-2">Địa điểm nhận: <strong>@(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "Chưa cập nhật" : Model.PickupLocation)</strong></div>
                     <div>Trả: <strong>@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div class="small text-muted">Địa điểm trả: <strong>@(string.IsNullOrWhiteSpace(Model.ReturnLocation) ? "Chưa cập nhật" : Model.ReturnLocation)</strong></div>
+                    @if (Model.HasReturn && !string.IsNullOrWhiteSpace(Model.ActualReturnLocation))
+                    {
+                        <div class="small text-success mt-1">Đã trả thực tế tại: <strong>@Model.ActualReturnLocation</strong></div>
+                    }
                 </div>
             </div>
         </div>
