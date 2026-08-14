@@ -38,6 +38,48 @@ public sealed class AdminBookingOperationsController : Controller
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
+    [HttpGet]
+    public async Task<IActionResult> PreparePickup(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var preparation = await _operationService.GetPickupPreparationAsync(
+            bookingId,
+            cancellationToken);
+
+        if (preparation is null)
+        {
+            TempData["ErrorMessage"] = "Không tìm thấy đơn đã thanh toán để chuẩn bị giao xe.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        return View("PreparePickup", preparation);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmPickupDeparture(
+        int bookingId,
+        bool customerConfirmed,
+        string contactNote,
+        CancellationToken cancellationToken)
+    {
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var result = await _operationService.ConfirmPickupDepartureAsync(
+            new ConfirmPickupDepartureRequest(
+                bookingId,
+                customerConfirmed,
+                contactNote ?? string.Empty),
+            adminId,
+            cancellationToken);
+
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã lưu xác nhận của khách trước khi xuất phát. Đơn chuyển sang Sẵn sàng giao xe."
+            : string.Join("; ", result.Errors);
+
+        return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> MarkNoShow(
@@ -68,7 +110,7 @@ public sealed class AdminBookingOperationsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ConfirmNoShow(
         int bookingId,
-        bool contactAttempted,
+        int contactAttemptCount,
         bool arrivedAtPickupLocation,
         string contactNote,
         CancellationToken cancellationToken)
@@ -77,14 +119,14 @@ public sealed class AdminBookingOperationsController : Controller
         var result = await _operationService.MarkNoShowAsync(
             new MarkNoShowRequest(
                 bookingId,
-                contactAttempted,
+                contactAttemptCount,
                 arrivedAtPickupLocation,
                 contactNote ?? string.Empty),
             adminId,
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã ghi nhận khách không đến nhận xe sau khi hoàn tất bước xác minh liên hệ. Đơn kết thúc và không hoàn tiền."
+            ? "Đã ghi nhận NoShow sau khi xác minh đủ các bước. Hệ thống đã tính phí NoShow và tạo khoản hoàn tiền nếu còn số dư phải hoàn."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
