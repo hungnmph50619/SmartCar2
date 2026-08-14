@@ -10,7 +10,7 @@
     <div>
         <div class="text-uppercase small text-muted fw-semibold">Xác minh trước khi kết thúc đơn</div>
         <h1 class="h3 mb-1">Khách không đến nhận xe - Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">NoShow (Khách không đến nhận) chỉ được ghi sau khi Admin đã kiểm tra tình huống thực tế và liên hệ khách.</p>
+        <p class="text-muted mb-0">NoShow chỉ được ghi sau khi đủ 30 phút chờ, Admin đã liên hệ lại ít nhất 2 lần và có bằng chứng khách từng xác nhận nhận xe trước khi Admin xuất phát.</p>
     </div>
     <a class="btn btn-outline-secondary"
        asp-controller="AdminBookings"
@@ -65,15 +65,34 @@
             }
         </div>
 
+        @if (Model.PreDepartureConfirmedAt.HasValue)
+        {
+            <div class="alert alert-success shadow-sm">
+                <strong>Đã có xác nhận trước khi Admin xuất phát.</strong><br />
+                Ghi nhận lúc @Model.PreDepartureConfirmedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm").
+                @if (!string.IsNullOrWhiteSpace(Model.PreDepartureConfirmationNote))
+                {
+                    <div class="small mt-1">@Model.PreDepartureConfirmationNote</div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-danger shadow-sm">
+                <strong>Thiếu bằng chứng xác nhận trước khi xuất phát.</strong>
+                Backend sẽ không cho ghi NoShow cho đến khi quy trình trước giao xe đã được thực hiện đúng.
+            </div>
+        }
+
         <form asp-action="ConfirmNoShow"
               method="post"
               class="card card-body shadow-sm border-warning"
               data-loading-form
-              data-confirm="Xác nhận khách không đến nhận xe? Đơn sẽ kết thúc với trạng thái NoShow và không hoàn tiền.">
+              data-confirm="Xác nhận khách không đến nhận xe? Đơn sẽ chuyển sang NoShow; hệ thống giữ 40% tiền thuê cộng phí lượt giao đã phát sinh và hoàn phần còn lại nếu có.">
             <input type="hidden" name="bookingId" value="@Model.BookingId" />
 
-            <h2 class="h5">Checklist bắt buộc</h2>
-            <p class="text-muted small">Hệ thống lưu thao tác này vào Audit Log (Nhật ký thao tác) để truy vết khi có tranh chấp.</p>
+            <h2 class="h5">Checklist bắt buộc tại điểm giao</h2>
+            <p class="text-muted small">Hệ thống lưu số lần liên hệ, ghi chú và kết quả xử lý tiền vào Audit Log để truy vết khi có tranh chấp.</p>
 
             @if (isHomeDelivery)
             {
@@ -95,32 +114,37 @@
                 <input type="hidden" name="arrivedAtPickupLocation" value="false" />
             }
 
-            <div class="form-check border rounded-3 p-3 ps-5 mb-3">
-                <input class="form-check-input"
-                       type="checkbox"
-                       name="contactAttempted"
-                       value="true"
-                       id="contactAttempted"
+            <div class="mb-3">
+                <label for="contactAttemptCount" class="form-label fw-semibold">Số lần đã liên hệ lại khách trong thời gian chờ</label>
+                <input type="number"
+                       name="contactAttemptCount"
+                       id="contactAttemptCount"
+                       class="form-control"
+                       min="2"
+                       max="10"
+                       value="2"
                        required />
-                <label class="form-check-label fw-semibold" for="contactAttempted">
-                    Tôi xác nhận đã gọi hoặc nhắn cho khách nhưng không thể tiếp tục bàn giao
-                </label>
+                <div class="form-text">Tối thiểu 2 lần gọi/nhắn sau khi đến điểm giao và chờ khách.</div>
             </div>
 
             <div class="mb-3">
-                <label for="contactNote" class="form-label fw-semibold">Ghi chú liên hệ</label>
+                <label for="contactNote" class="form-label fw-semibold">Lịch sử liên hệ</label>
                 <textarea name="contactNote"
                           id="contactNote"
                           class="form-control"
-                          rows="3"
+                          rows="4"
                           maxlength="500"
                           required
-                          placeholder="Ví dụ: gọi lúc 21:05 và 21:27, khách không nghe máy; nhắn Zalo lúc 21:10 nhưng chưa phản hồi."></textarea>
-                <div class="form-text">Ghi thời gian và kết quả liên hệ cụ thể; nội dung này được lưu cùng Audit Log.</div>
+                          placeholder="Ví dụ: 20:05 gọi lần 1 không nghe máy; 20:15 nhắn Zalo chưa phản hồi; 20:28 gọi lần 2 không nghe máy; đến 20:30 khách vẫn không xuất hiện."></textarea>
+                <div class="form-text">Ghi thời gian và kết quả từng lần liên hệ cụ thể.</div>
+            </div>
+
+            <div class="alert alert-warning">
+                <strong>Xử lý tài chính NoShow:</strong> SmartCar giữ <strong>40% tiền thuê</strong> để bù việc giữ lịch xe và cộng <strong>phí lượt giao xe thực tế đã phát sinh</strong> nếu giao tận nơi. Phần tiền còn lại được tạo thành khoản hoàn cho khách.
             </div>
 
             <div class="alert alert-danger">
-                <strong>Hệ quả:</strong> đơn chuyển sang <strong>NoShow (Khách không đến nhận)</strong>, không lập biên bản giao xe, xe được giải phóng theo lịch vận hành và <strong>không hoàn tiền</strong> theo chính sách hiện tại.
+                <strong>Hệ quả vận hành:</strong> đơn chuyển sang <strong>NoShow</strong>, không lập biên bản giao xe, xe không chuyển sang Rented và được giải phóng theo lịch vận hành.
             </div>
 
             <div class="d-flex gap-2 flex-wrap">
@@ -140,7 +164,7 @@
             <div class="card-body">
                 <div class="text-uppercase small text-muted fw-semibold">Phân biệt nghiệp vụ</div>
                 <h2 class="h5">NoShow không phải Admin hủy đơn</h2>
-                <p class="small mb-2"><strong>NoShow:</strong> khách không xuất hiện để nhận xe sau giờ hẹn và sau quy trình liên hệ.</p>
+                <p class="small mb-2"><strong>NoShow:</strong> khách đã xác nhận lịch nhận nhưng sau đó không xuất hiện, không phản hồi sau thời gian chờ và các lần liên hệ lại.</p>
                 <p class="small mb-0"><strong>Admin hủy:</strong> SmartCar chủ động không thể cung cấp xe; trường hợp đó xử lý hoàn tiền theo chính sách Admin hủy.</p>
             </div>
         </div>
