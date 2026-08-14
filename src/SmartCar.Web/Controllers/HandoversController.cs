@@ -61,12 +61,23 @@ public sealed class HandoversController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
+        var vehicleContext = await _handoverService.GetVehicleContextAsync(
+            bookingId,
+            cancellationToken);
+        if (vehicleContext is null)
+        {
+            return NotFound();
+        }
+
+        SetVehicleContext(vehicleContext);
+
         return View(new HandoverViewModel
         {
             BookingId = bookingId,
             HandoverAt = DateTime.Now > booking.PickupDate
                 ? DateTime.Now
                 : booking.PickupDate,
+            Mileage = vehicleContext.CurrentMileage,
             ExteriorCondition = "Không phát hiện bất thường tại thời điểm bàn giao.",
             InteriorCondition = "Không phát hiện bất thường tại thời điểm bàn giao."
         });
@@ -78,6 +89,19 @@ public sealed class HandoversController : Controller
         HandoverViewModel model,
         CancellationToken cancellationToken)
     {
+        var vehicleContext = await _handoverService.GetVehicleContextAsync(
+            model.BookingId,
+            cancellationToken);
+
+        if (vehicleContext is null)
+        {
+            ModelState.AddModelError(string.Empty, "Không tìm thấy thông tin xe của đơn thuê.");
+        }
+        else
+        {
+            SetVehicleContext(vehicleContext);
+        }
+
         NormalizeConditionSummary(model);
         await ValidateImagesAsync(model.Images, cancellationToken);
 
@@ -112,6 +136,11 @@ public sealed class HandoversController : Controller
                 ModelState.AddModelError(string.Empty, error);
             }
 
+            if (vehicleContext is not null)
+            {
+                SetVehicleContext(vehicleContext);
+            }
+
             return View(model);
         }
 
@@ -121,12 +150,18 @@ public sealed class HandoversController : Controller
             "CreateHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập biên bản giao xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh đối chiếu, tình trạng: {model.ExteriorCondition}.",
+            $"Lập biên bản giao xe cho đơn #{model.BookingId}, ODO {model.Mileage:N0} km, nhiên liệu {model.FuelLevel}, {imagePaths.Count} ảnh đối chiếu, tình trạng: {model.ExteriorCondition}.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = "Đã lập biên bản giao xe và lưu bộ ảnh đối chiếu.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+    }
+
+    private void SetVehicleContext(HandoverVehicleContextDto context)
+    {
+        ViewBag.CurrentMileage = context.CurrentMileage;
+        ViewBag.VehicleFuelType = context.FuelType;
     }
 
     private void NormalizeConditionSummary(HandoverViewModel model)
