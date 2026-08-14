@@ -3,6 +3,17 @@ using SmartCar.Domain.Enums;
 
 namespace SmartCar.Application.Features.Returns;
 
+public sealed record ReturnPreparationDto(
+    int BookingId,
+    DateTime ScheduledReturnDate,
+    string ScheduledReturnLocation,
+    DateTime HandoverAt,
+    int HandoverMileage,
+    string HandoverFuelLevel,
+    string? HandoverAccessories,
+    string? HandoverImagePaths,
+    string VehicleFuelType);
+
 public sealed record CreateReturnRequest(
     int BookingId,
     DateTime ReturnedAt,
@@ -23,6 +34,9 @@ public sealed record AddChargeRequest(
 
 public interface IReturnService
 {
+    Task<ReturnPreparationDto?> GetPreparationAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
     Task<OperationResult> CreateAsync(
         CreateReturnRequest request,
         CancellationToken cancellationToken = default);
