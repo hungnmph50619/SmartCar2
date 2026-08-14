@@ -11,6 +11,11 @@ public class Booking
     public DateTime ReturnDate { get; set; }
     public string? PickupLocation { get; set; }
     public string? ReturnLocation { get; set; }
+    public string PickupMethod { get; set; } = string.Empty;
+    public decimal PickupDeliveryDistanceKm { get; set; }
+    public decimal ReturnCollectionDistanceKm { get; set; }
+    public decimal DeliveryRatePerKm { get; set; }
+    public decimal DeliveryFee { get; set; }
     public decimal DailyPrice { get; set; }
     public int NumberOfDays { get; set; }
     public decimal RentalAmount { get; set; }
