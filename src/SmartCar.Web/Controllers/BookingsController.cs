@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -50,6 +50,20 @@ public sealed class BookingsController : Controller
         if (customer is null)
         {
             return Challenge();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            TempData["ErrorMessage"] = string.Join(
+                "; ",
+                ModelState.Values.SelectMany(value => value.Errors).Select(error => error.ErrorMessage));
+
+            return RedirectToAction("Details", "Vehicles", new
+            {
+                id = model.VehicleId,
+                pickupDate = model.PickupDate,
+                returnDate = model.ReturnDate
+            });
         }
 
         if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
@@ -114,7 +128,12 @@ public sealed class BookingsController : Controller
 
         var result = await _bookingService.CreateAsync(
             customerId,
-            new CreateBookingRequest(model.VehicleId, model.PickupDate, model.ReturnDate),
+            new CreateBookingRequest(
+                model.VehicleId,
+                model.PickupDate,
+                model.ReturnDate,
+                model.PickupLocation,
+                model.ReturnLocation),
             cancellationToken);
 
         if (!result.Succeeded || !result.BookingId.HasValue)
