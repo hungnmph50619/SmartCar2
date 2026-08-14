@@ -21,35 +21,141 @@
     var allDocumentsApproved = citizenApproved && licenseApproved;
     var hasBankAccount = ViewBag.HasBankAccount is bool hasBank && hasBank;
 
-    // Cấu hình demo cho đồ án. Sau này có thể chuyển sang bảng/cấu hình hệ thống.
-    const string smartCarPickupLocation = "Điểm giao nhận SmartCar - Quận 5, TP.HCM";
+    // Cấu hình demo cho đồ án. Sau này nên chuyển sang cấu hình hệ thống.
+    const string smartCarPickupLocation = "Điểm giao nhận SmartCar - 273 An Dương Vương, Quận 5, TP.HCM";
+    const string smartCarMapQuery = "273 An Dương Vương, Quận 5, TP.HCM";
     const decimal deliveryRatePerKm = 15000m;
     const int maxDeliveryKm = 10;
 }
 
-<div class="row g-4">
+<div class="row g-4 align-items-start">
     <div class="col-lg-7">
         @if (Model.Images.Count > 0)
         {
-            <div class="row g-2">
+            <div class="row g-2 mb-4">
             @foreach (var image in Model.Images)
             {
                 <div class="col-6">
-                    <img src="@image.ImagePath" class="img-fluid rounded w-100" style="height:240px;object-fit:cover" alt="@Model.VehicleName" />
+                    <img src="@image.ImagePath" class="img-fluid rounded-3 w-100 shadow-sm" style="height:240px;object-fit:cover" alt="@Model.VehicleName" />
                 </div>
             }
             </div>
         }
         else
         {
-            <div class="bg-light rounded d-flex align-items-center justify-content-center" style="height:360px">Xe chưa có ảnh</div>
+            <div class="bg-light rounded-3 d-flex align-items-center justify-content-center mb-4 shadow-sm" style="height:360px">Xe chưa có ảnh</div>
         }
+
+        <div class="card card-body shadow-sm border-0 mb-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-muted fw-semibold">Thông tin xe</div>
+                    <h2 class="h4 mb-1">@Model.VehicleName</h2>
+                    <div class="text-muted">@Model.BrandName · @Model.Model · @Model.LicensePlate</div>
+                </div>
+                <div class="text-end">
+                    <div class="text-warning fw-semibold">★ @(reviews.Count == 0 ? "Chưa có đánh giá" : $"{averageRating:F1}/5")</div>
+                    @if (reviews.Count > 0)
+                    {
+                        <small class="text-muted">@reviews.Count lượt đánh giá</small>
+                    }
+                </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-6 col-md-3"><div class="bg-light rounded-3 p-3 h-100"><div class="small text-muted">Số chỗ</div><strong>@Model.Seats chỗ</strong></div></div>
+                <div class="col-6 col-md-3"><div class="bg-light rounded-3 p-3 h-100"><div class="small text-muted">Hộp số</div><strong>@Model.Transmission</strong></div></div>
+                <div class="col-6 col-md-3"><div class="bg-light rounded-3 p-3 h-100"><div class="small text-muted">Nhiên liệu</div><strong>@Model.FuelType</strong></div></div>
+                <div class="col-6 col-md-3"><div class="bg-light rounded-3 p-3 h-100"><div class="small text-muted">Năm sản xuất</div><strong>@Model.ManufactureYear</strong></div></div>
+            </div>
+
+            <h3 class="h6">Mô tả</h3>
+            <p class="text-muted mb-0">@(string.IsNullOrWhiteSpace(Model.Description) ? "Xe thuộc đội xe SmartCar và được kiểm tra trước mỗi lượt thuê." : Model.Description)</p>
+        </div>
+
+        <div class="card shadow-sm border-0 mb-4" id="pickup-map">
+            <div class="card-body pb-0">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                    <div>
+                        <div class="text-uppercase small text-muted fw-semibold">Vị trí giao nhận</div>
+                        <h2 class="h4 mb-1">Điểm giao nhận SmartCar</h2>
+                        <div class="text-muted">273 An Dương Vương, Quận 5, TP.HCM</div>
+                    </div>
+                    <span class="badge bg-light text-dark border">Địa chỉ demo</span>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="small text-muted">Tự đến lấy xe</div>
+                            <strong class="text-success">Miễn phí</strong>
+                            <div class="small text-muted mt-1">Khách nhận và trả xe tại điểm SmartCar đã xác nhận trong đơn.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="small text-muted">Giao xe tận nơi</div>
+                            <strong>@deliveryRatePerKm.ToString("N0") đ/km/lượt</strong>
+                            <div class="small text-muted mt-1">Hỗ trợ tối đa @maxDeliveryKm km. Admin xác nhận khoảng cách và phí trước thanh toán.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ratio ratio-16x9 border-top">
+                <iframe
+                    title="Bản đồ điểm giao nhận SmartCar"
+                    src="https://www.google.com/maps?q=273%20An%20D%C6%B0%C6%A1ng%20V%C6%B0%C6%A1ng%2C%20Qu%E1%BA%ADn%205%2C%20TP.HCM&output=embed"
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    style="border:0"
+                    allowfullscreen>
+                </iframe>
+            </div>
+
+            <div class="card-body pt-3">
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <div class="small text-muted">Bản đồ dùng để định vị điểm SmartCar; địa chỉ giao tận nơi của khách sẽ được Admin kiểm tra riêng.</div>
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="https://www.google.com/maps/search/?api=1&query=273%20An%20D%C6%B0%C6%A1ng%20V%C6%B0%C6%A1ng%2C%20Qu%E1%BA%ADn%205%2C%20TP.HCM"
+                       target="_blank"
+                       rel="noopener noreferrer">Mở Google Maps</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-body shadow-sm border-0 mb-4">
+            <div class="text-uppercase small text-muted fw-semibold">Chính sách chi phí</div>
+            <h2 class="h4 mb-3">Phụ phí có thể phát sinh</h2>
+
+            <div class="d-flex justify-content-between py-2 border-bottom gap-3">
+                <div><strong>Giao nhận tận nơi</strong><div class="small text-muted">Tính theo khoảng cách được Admin xác nhận.</div></div>
+                <div class="text-end fw-semibold">@deliveryRatePerKm.ToString("N0") đ/km/lượt</div>
+            </div>
+            <div class="d-flex justify-content-between py-2 border-bottom gap-3">
+                <div><strong>Trả xe quá giờ</strong><div class="small text-muted">Chỉ tính khi thời gian trả thực tế vượt thời gian đã chốt.</div></div>
+                <div class="text-end text-muted">Theo quy định đơn thuê</div>
+            </div>
+            <div class="d-flex justify-content-between py-2 border-bottom gap-3">
+                <div><strong>Nhiên liệu / vệ sinh</strong><div class="small text-muted">Đối chiếu biên bản giao xe và biên bản trả xe.</div></div>
+                <div class="text-end text-muted">Theo phát sinh thực tế</div>
+            </div>
+            <div class="d-flex justify-content-between pt-2 gap-3">
+                <div><strong>Hư hỏng / vi phạm</strong><div class="small text-muted">Phải có bằng chứng, biên bản hoặc căn cứ xử lý.</div></div>
+                <div class="text-end text-muted">Xác nhận sau kiểm tra</div>
+            </div>
+        </div>
     </div>
 
     <div class="col-lg-5">
-        <div class="card card-body shadow-sm sticky-top" style="top:1rem">
-            <h1 class="h3">@Model.VehicleName</h1>
-            <p class="text-muted">@Model.BrandName · @Model.Model · @Model.LicensePlate</p>
+        <div class="card card-body shadow-sm sticky-top border-0" style="top:1rem">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                <div>
+                    <h1 class="h3 mb-1">@Model.VehicleName</h1>
+                    <p class="text-muted mb-0">@Model.BrandName · @Model.Model · @Model.LicensePlate</p>
+                </div>
+                <span class="badge bg-light text-dark border">@Model.Seats chỗ</span>
+            </div>
 
             <div class="mb-3">
                 <span class="text-warning fs-5">★</span>
@@ -60,27 +166,19 @@
                 }
             </div>
 
-            <dl class="row mb-3">
-                <dt class="col-5">Số chỗ</dt><dd class="col-7">@Model.Seats</dd>
-                <dt class="col-5">Hộp số</dt><dd class="col-7">@Model.Transmission</dd>
-                <dt class="col-5">Nhiên liệu</dt><dd class="col-7">@Model.FuelType</dd>
-                <dt class="col-5">Năm sản xuất</dt><dd class="col-7">@Model.ManufactureYear</dd>
-            </dl>
-
-            <p>@Model.Description</p>
-            <hr />
-
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span><strong>Nhận xe</strong></span>
-                <span>@pickupDate.ToString("dd/MM/yyyy HH:mm")</span>
-            </div>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span><strong>Trả xe</strong></span>
-                <span>@returnDate.ToString("dd/MM/yyyy HH:mm")</span>
-            </div>
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <span><strong>Số ngày tính phí</strong></span>
-                <span>@numberOfDays</span>
+            <div class="border rounded-3 p-3 mb-3 bg-light">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span><strong>Nhận xe</strong></span>
+                    <span>@pickupDate.ToString("dd/MM/yyyy HH:mm")</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span><strong>Trả xe</strong></span>
+                    <span>@returnDate.ToString("dd/MM/yyyy HH:mm")</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span><strong>Số ngày tính phí</strong></span>
+                    <span>@numberOfDays</span>
+                </div>
             </div>
 
             @if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
@@ -107,7 +205,10 @@
                                                 <span class="text-success fw-semibold">Miễn phí</span>
                                             </div>
                                             <div class="small text-muted mt-1">@smartCarPickupLocation</div>
-                                            <div class="small text-muted">Giờ nhận: @pickupDate.ToString("HH:mm dd/MM/yyyy")</div>
+                                            <div class="d-flex justify-content-between align-items-center gap-2 mt-1">
+                                                <span class="small text-muted">Giờ nhận: @pickupDate.ToString("HH:mm dd/MM/yyyy")</span>
+                                                <a href="#pickup-map" class="small text-decoration-none">Xem vị trí</a>
+                                            </div>
                                         </div>
                                     </div>
                                 </label>
@@ -120,7 +221,7 @@
                                                 <strong>Tôi muốn được giao xe tận nơi</strong>
                                                 <span class="text-primary fw-semibold">@deliveryRatePerKm.ToString("N0") đ/km/lượt</span>
                                             </div>
-                                            <div class="small text-muted mt-1">Hỗ trợ trong bán kính tối đa @maxDeliveryKm km tính từ điểm giao nhận SmartCar.</div>
+                                            <div class="small text-muted mt-1">Hỗ trợ trong bán kính tối đa @maxDeliveryKm km tính từ điểm SmartCar.</div>
                                             <div class="small text-muted">Khoảng cách và phí chính thức được Admin xác nhận trước khi bạn thanh toán.</div>
                                         </div>
                                     </div>
@@ -136,6 +237,7 @@
                                            readonly
                                            value="@smartCarPickupLocation" />
                                     <div class="form-text" id="pickupLocationHelp">Địa điểm nhận xe mặc định của SmartCar.</div>
+                                    <a id="deliveryDirectionsLink" class="small text-decoration-none d-none mt-2" href="#" target="_blank" rel="noopener noreferrer">Mở chỉ đường SmartCar → địa chỉ giao xe</a>
 
                                     <div class="alert alert-primary py-2 mt-3 mb-0 small">
                                         <strong>Cách tính phí:</strong> khoảng cách được Admin xác nhận × @deliveryRatePerKm.ToString("N0") đ/km × số lượt giao/nhận thực tế.
@@ -177,14 +279,12 @@
                                     <span>Tiền thuê tạm tính</span>
                                     <strong>@estimatedAmount.ToString("N0") đ</strong>
                                 </div>
-                                <div class="d-flex justify-content-between mb-2" id="deliveryFeeRow">
+                                <div class="d-flex justify-content-between mb-2">
                                     <span>Phí giao nhận</span>
                                     <strong id="deliveryFeeText" class="text-success">Miễn phí</strong>
                                 </div>
                                 <hr class="my-2" />
-                                <div class="small text-muted" id="priceNote">
-                                    Nếu chọn giao tận nơi, tổng thanh toán cuối cùng chỉ được chốt sau khi Admin xác nhận khoảng cách và phí giao nhận.
-                                </div>
+                                <div class="small text-muted" id="priceNote">Nếu chọn giao tận nơi, tổng thanh toán cuối cùng chỉ được chốt sau khi Admin xác nhận khoảng cách và phí giao nhận.</div>
                             </div>
 
                             <div class="alert alert-success py-2 mb-3">
@@ -192,9 +292,7 @@
                                 Giấy tờ và tài khoản nhận hoàn tiền đã sẵn sàng.
                             </div>
 
-                            <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">
-                                Gửi yêu cầu thuê xe
-                            </button>
+                            <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">Gửi yêu cầu thuê xe</button>
                         </form>
                     }
                     else
@@ -210,20 +308,8 @@
                 {
                     <div class="border border-warning rounded-3 p-3 mb-3 bg-light">
                         <div class="fw-bold mb-2">⚠ Giấy tờ không đủ thời hạn cho chuyến thuê</div>
-                        <div class="small mb-1">
-                            <strong>CCCD:</strong> ✓ Đã xác minh · Hết hạn @(citizenExpiryDate?.ToString("dd/MM/yyyy") ?? "chưa xác định")
-                            @if (!citizenValidForRental)
-                            {
-                                <span class="text-danger fw-semibold"> · Không đủ hiệu lực</span>
-                            }
-                        </div>
-                        <div class="small mb-2">
-                            <strong>GPLX:</strong> ✓ Đã xác minh · Hết hạn @(licenseExpiryDate?.ToString("dd/MM/yyyy") ?? "chưa xác định")
-                            @if (!licenseValidForRental)
-                            {
-                                <span class="text-danger fw-semibold"> · Không đủ hiệu lực</span>
-                            }
-                        </div>
+                        <div class="small mb-1"><strong>CCCD:</strong> ✓ Đã xác minh · Hết hạn @(citizenExpiryDate?.ToString("dd/MM/yyyy") ?? "chưa xác định") @if (!citizenValidForRental) { <span class="text-danger fw-semibold"> · Không đủ hiệu lực</span> }</div>
+                        <div class="small mb-2"><strong>GPLX:</strong> ✓ Đã xác minh · Hết hạn @(licenseExpiryDate?.ToString("dd/MM/yyyy") ?? "chưa xác định") @if (!licenseValidForRental) { <span class="text-danger fw-semibold"> · Không đủ hiệu lực</span> }</div>
                         <div class="small text-muted">Chuyến thuê kết thúc ngày <strong>@returnDate.ToString("dd/MM/yyyy")</strong>. CCCD và GPLX phải còn hiệu lực ít nhất đến ngày trả xe.</div>
                     </div>
                     <a class="btn btn-primary btn-lg w-100" asp-controller="Profile" asp-action="Index" asp-route-tab="documents" asp-route-returnVehicleId="@Model.VehicleId" asp-route-pickupDate="@pickupDate.ToString("O")" asp-route-returnDate="@returnDate.ToString("O")">Cập nhật giấy tờ để tiếp tục</a>
@@ -232,10 +318,7 @@
                 {
                     <div class="border rounded-3 p-3 mb-3 bg-light">
                         <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
-                            <div>
-                                <div class="fw-bold">🔒 Cần xác minh để thuê xe</div>
-                                <div class="small text-muted mt-1">Hoàn tất xác minh CCCD và GPLX trước khi gửi yêu cầu.</div>
-                            </div>
+                            <div><div class="fw-bold">🔒 Cần xác minh để thuê xe</div><div class="small text-muted mt-1">Hoàn tất xác minh CCCD và GPLX trước khi gửi yêu cầu.</div></div>
                             <span class="badge bg-warning text-dark">@kycVerifiedCount/@kycTotal</span>
                         </div>
                         <div class="small text-muted">① CCCD: thông tin + 2 ảnh &nbsp;·&nbsp; ② GPLX: thông tin + 2 ảnh</div>
@@ -251,8 +334,18 @@
     </div>
 </div>
 
-<div class="card card-body shadow-sm mt-4">
-    <h2 class="h4">Đánh giá từ khách hàng</h2>
+<div class="card card-body shadow-sm border-0 mt-4">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-uppercase small text-muted fw-semibold">Trải nghiệm thực tế</div>
+            <h2 class="h4 mb-0">Đánh giá từ khách hàng</h2>
+        </div>
+        @if (reviews.Count > 0)
+        {
+            <div><span class="text-warning">★</span> <strong>@averageRating.ToString("F1")/5</strong> <span class="text-muted">· @reviews.Count lượt</span></div>
+        }
+    </div>
+
     @if (reviews.Count == 0)
     {
         <p class="text-muted mb-0">Xe chưa có đánh giá sau chuyến thuê.</p>
@@ -263,11 +356,8 @@
         @foreach (var review in reviews)
         {
             <div class="col-md-6">
-                <div class="border rounded p-3 h-100">
-                    <div class="d-flex justify-content-between">
-                        <strong>@review.CustomerName</strong>
-                        <span class="text-warning">@string.Concat(Enumerable.Repeat("★", review.Rating))</span>
-                    </div>
+                <div class="border rounded-3 p-3 h-100">
+                    <div class="d-flex justify-content-between"><strong>@review.CustomerName</strong><span class="text-warning">@string.Concat(Enumerable.Repeat("★", review.Rating))</span></div>
                     <p class="mb-1 mt-2">@(string.IsNullOrWhiteSpace(review.Comment) ? "Khách hàng không để lại nhận xét." : review.Comment)</p>
                     <small class="text-muted">@review.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</small>
                 </div>
@@ -292,7 +382,22 @@
         const returnHelp = document.getElementById("returnLocationHelp");
         const deliveryFeeText = document.getElementById("deliveryFeeText");
         const priceNote = document.getElementById("priceNote");
+        const directionsLink = document.getElementById("deliveryDirectionsLink");
         const smartCarLocation = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(smartCarPickupLocation));
+        const smartCarMapQuery = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(smartCarMapQuery));
+
+        function updateDirectionsLink() {
+            if (!directionsLink) return;
+            const destination = pickupLocation.value.trim();
+            if (!pickupDelivery.checked || !destination) {
+                directionsLink.classList.add("d-none");
+                directionsLink.href = "#";
+                return;
+            }
+
+            directionsLink.href = "https://www.google.com/maps/dir/?api=1&origin=" + encodeURIComponent(smartCarMapQuery) + "&destination=" + encodeURIComponent(destination);
+            directionsLink.classList.remove("d-none");
+        }
 
         function syncReturnLocation() {
             if (sameReturnLocation.checked) {
@@ -320,9 +425,7 @@
                 priceNote.textContent = "Tự đến nhận và trả tại điểm SmartCar không phát sinh phí giao nhận.";
             } else {
                 deliveryAddressPanel.classList.remove("d-none");
-                if (pickupLocation.value === smartCarLocation) {
-                    pickupLocation.value = "";
-                }
+                if (pickupLocation.value === smartCarLocation) pickupLocation.value = "";
                 pickupLocation.readOnly = false;
                 pickupLocation.required = true;
                 pickupLocation.placeholder = "Nhập địa chỉ giao xe tận nơi";
@@ -333,11 +436,15 @@
                 setTimeout(() => pickupLocation.focus(), 0);
             }
             syncReturnLocation();
+            updateDirectionsLink();
         }
 
         pickupAtSmartCar.addEventListener("change", setPickupMode);
         pickupDelivery.addEventListener("change", setPickupMode);
-        pickupLocation.addEventListener("input", syncReturnLocation);
+        pickupLocation.addEventListener("input", function () {
+            syncReturnLocation();
+            updateDirectionsLink();
+        });
         sameReturnLocation.addEventListener("change", syncReturnLocation);
 
         setPickupMode();
