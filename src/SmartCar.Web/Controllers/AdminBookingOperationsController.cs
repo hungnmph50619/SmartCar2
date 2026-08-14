@@ -44,14 +44,47 @@ public sealed class AdminBookingOperationsController : Controller
         int bookingId,
         CancellationToken cancellationToken)
     {
+        var preparation = await _operationService.GetNoShowPreparationAsync(
+            bookingId,
+            cancellationToken);
+
+        if (preparation is null)
+        {
+            TempData["ErrorMessage"] = "Không tìm thấy đơn thuê để xử lý khách không đến nhận xe.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        if (DateTime.Now < preparation.PickupDate.AddMinutes(30))
+        {
+            TempData["ErrorMessage"] =
+                "Chưa đủ 30 phút kể từ giờ nhận xe. Hãy tiếp tục liên hệ khách trước khi ghi nhận NoShow.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        return View("ConfirmNoShow", preparation);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmNoShow(
+        int bookingId,
+        bool contactAttempted,
+        bool arrivedAtPickupLocation,
+        string contactNote,
+        CancellationToken cancellationToken)
+    {
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var result = await _operationService.MarkNoShowAsync(
-            bookingId,
+            new MarkNoShowRequest(
+                bookingId,
+                contactAttempted,
+                arrivedAtPickupLocation,
+                contactNote ?? string.Empty),
             adminId,
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã ghi nhận khách không đến nhận xe."
+            ? "Đã ghi nhận khách không đến nhận xe sau khi hoàn tất bước xác minh liên hệ. Đơn kết thúc và không hoàn tiền."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
