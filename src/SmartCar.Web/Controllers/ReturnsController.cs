@@ -54,12 +54,14 @@ public sealed class ReturnsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
+        ViewBag.ScheduledReturnDate = booking.ReturnDate;
+        ViewBag.IsEarlyReturn = DateTime.Now < booking.ReturnDate;
+
         return View(new ReturnViewModel
         {
             BookingId = bookingId,
-            ReturnedAt = DateTime.Now > booking.ReturnDate
-                ? DateTime.Now
-                : booking.ReturnDate
+            ReturnedAt = DateTime.Now,
+            ReturnLocation = booking.ReturnLocation ?? string.Empty
         });
     }
 
@@ -84,6 +86,7 @@ public sealed class ReturnsController : Controller
             new CreateReturnRequest(
                 model.BookingId,
                 model.ReturnedAt,
+                model.ReturnLocation,
                 model.Mileage,
                 model.FuelLevel,
                 model.ExteriorCondition,
@@ -104,10 +107,10 @@ public sealed class ReturnsController : Controller
             "CreateReturn",
             nameof(VehicleReturn),
             model.BookingId,
-            $"Lập biên bản trả xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh, có hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
+            $"Lập biên bản trả xe cho đơn #{model.BookingId}, địa điểm {model.ReturnLocation}, số km {model.Mileage}, {imagePaths.Count} ảnh, có hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
             cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lập biên bản trả xe và lưu ảnh tình trạng xe. Xe chuyển sang chờ kiểm tra.";
+        TempData["SuccessMessage"] = "Đã tiếp nhận xe trả và lưu biên bản. Xe chuyển sang chờ kiểm tra.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
