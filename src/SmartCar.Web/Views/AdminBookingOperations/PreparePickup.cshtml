@@ -1,0 +1,115 @@
+@model SmartCar.Application.Features.Operations.PickupPreparationDto
+@using SmartCar.Domain.Constants
+@{
+    ViewData["Title"] = $"Xác nhận trước khi giao xe - Đơn #{Model.BookingId}";
+    var isHomeDelivery = Model.PickupMethod == DeliveryConstants.HomeDelivery;
+}
+
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
+    <div>
+        <div class="text-uppercase small text-muted fw-semibold">Bước bắt buộc trước khi xuất phát</div>
+        <h1 class="h3 mb-1">Xác nhận khách nhận xe - Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">
+            @(isHomeDelivery
+                ? "Chỉ đưa xe đi giao sau khi khách đã phản hồi và xác nhận sẽ có mặt tại điểm nhận."
+                : "Xác nhận lại với khách rằng họ vẫn đến nhận xe đúng giờ trước khi chuyển đơn sang sẵn sàng bàn giao.")
+        </p>
+    </div>
+    <a class="btn btn-outline-secondary"
+       asp-controller="AdminBookings"
+       asp-action="Details"
+       asp-route-id="@Model.BookingId">Quay lại đơn</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card card-body shadow-sm mb-4">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="bg-light rounded-3 p-3 h-100">
+                        <div class="small text-muted">Giờ nhận xe</div>
+                        <strong>@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="bg-light rounded-3 p-3 h-100">
+                        <div class="small text-muted">Hình thức</div>
+                        <strong>@(isHomeDelivery ? "SmartCar giao tận nơi" : "Khách tự đến SmartCar")</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <div class="small text-muted">Địa điểm nhận xe</div>
+                <div class="fw-semibold">@Model.PickupLocation</div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Model.CustomerPhone))
+            {
+                <div class="mt-3">
+                    <a class="btn btn-outline-success" href="tel:@Model.CustomerPhone">Gọi khách @Model.CustomerPhone</a>
+                </div>
+            }
+        </div>
+
+        <form asp-action="ConfirmPickupDeparture"
+              method="post"
+              class="card card-body shadow-sm border-primary"
+              data-loading-form
+              data-confirm="Xác nhận khách đã phản hồi và đồng ý nhận xe đúng giờ, đúng địa điểm?">
+            <input type="hidden" name="bookingId" value="@Model.BookingId" />
+
+            <h2 class="h5">Xác nhận trước khi đi giao</h2>
+            <p class="text-muted small">
+                Thao tác này được lưu vào Audit Log. Nếu sau đó khách không xuất hiện, đây là bằng chứng rằng khách đã xác nhận lịch nhận trước khi Admin xuất phát.
+            </p>
+
+            <div class="form-check border rounded-3 p-3 ps-5 mb-3">
+                <input class="form-check-input"
+                       type="checkbox"
+                       name="customerConfirmed"
+                       value="true"
+                       id="customerConfirmed"
+                       required />
+                <label class="form-check-label fw-semibold" for="customerConfirmed">
+                    Tôi xác nhận khách đã nghe máy/nhắn lại và đồng ý nhận xe đúng giờ, đúng địa điểm
+                </label>
+            </div>
+
+            <div class="mb-3">
+                <label for="contactNote" class="form-label fw-semibold">Ghi chú xác nhận</label>
+                <textarea name="contactNote"
+                          id="contactNote"
+                          class="form-control"
+                          rows="3"
+                          maxlength="500"
+                          required
+                          placeholder="Ví dụ: gọi lúc 19:15, khách xác nhận có mặt tại 25 Nguyễn Trãi lúc 20:00 để nhận xe."></textarea>
+                <div class="form-text">Ghi rõ thời gian liên hệ và nội dung khách xác nhận.</div>
+            </div>
+
+            <div class="alert alert-warning py-2">
+                <strong>Nếu khách chưa phản hồi:</strong> không xác nhận bước này và chưa đưa xe đi giao. Tiếp tục liên hệ hoặc xử lý theo quy trình hủy/thay đổi lịch phù hợp.
+            </div>
+
+            <button class="btn btn-primary"
+                    type="submit"
+                    data-loading-text="Đang xác nhận...">Khách đã xác nhận - Sẵn sàng giao xe</button>
+        </form>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card bg-light border-0 sticky-top" style="top:1rem">
+            <div class="card-body">
+                <div class="text-uppercase small text-muted fw-semibold">Quy trình</div>
+                <h2 class="h5">Không xuất phát khi chưa có xác nhận</h2>
+                <ol class="small ps-3 mb-0">
+                    <li>Kiểm tra đơn đã thanh toán và xe sẵn sàng.</li>
+                    <li>Gọi/nhắn khách xác nhận giờ, địa điểm nhận.</li>
+                    <li>Chỉ xác nhận màn này khi khách đã phản hồi.</li>
+                    <li>Sau đó mới đưa xe đến điểm giao và lập biên bản khi khách thực sự có mặt.</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
