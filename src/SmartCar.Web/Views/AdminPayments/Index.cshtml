@@ -235,7 +235,7 @@ else
                         Mã giao dịch
                     </th>
 
-                    <th style="min-width:280px;">
+                    <th style="min-width:300px;">
                         Thao tác
                     </th>
 
@@ -247,8 +247,6 @@ else
 
                 @foreach (var payment in Model)
                 {
-                    // Chỉ cần đọc tài khoản ngân hàng
-                    // khi đây là khoản hoàn tiền đang chờ xử lý.
                     UserBankAccountDto? refundBankAccount = null;
 
                     if (payment.Type == PaymentType.Refund &&
@@ -261,30 +259,20 @@ else
 
                     <tr>
 
-                        @* MÃ GIAO DỊCH *@
                         <td class="fw-semibold">
                             #@payment.PaymentId
                         </td>
 
-
-                        @* ĐƠN THUÊ *@
                         <td>
-
                             <a asp-controller="AdminBookings"
                                asp-action="Details"
                                asp-route-id="@payment.BookingId"
                                class="text-decoration-none fw-semibold">
-
                                 #@payment.BookingId
-
                             </a>
-
                         </td>
 
-
-                        @* KHÁCH HÀNG *@
                         <td>
-
                             <div class="fw-semibold">
                                 @payment.CustomerName
                             </div>
@@ -293,140 +281,74 @@ else
                                asp-action="Details"
                                asp-route-id="@payment.CustomerId"
                                class="small text-decoration-none">
-
                                 Xem khách hàng
-
                             </a>
-
                         </td>
 
-
-                        @* XE *@
                         <td>
-
                             <strong>
                                 @payment.VehicleName
                             </strong>
-
                             <br />
-
                             <small class="text-muted">
                                 @payment.LicensePlate
                             </small>
-
                         </td>
 
-
-                        @* LOẠI THANH TOÁN *@
                         <td>
-
                             @payment.Type.ToVietnamese()
-
                         </td>
 
-
-                        @* PHƯƠNG THỨC *@
                         <td>
-
-                            @if (string.IsNullOrWhiteSpace(
-                                payment.Method))
+                            @if (string.IsNullOrWhiteSpace(payment.Method))
                             {
-                                <span class="text-muted">
-                                    -
-                                </span>
+                                <span class="text-muted">-</span>
                             }
                             else
                             {
                                 @payment.Method
                             }
-
                         </td>
 
-
-                        @* SỐ TIỀN *@
                         <td class="text-end fw-semibold">
-
                             @payment.Amount.ToString("N0") đ
-
                         </td>
 
-
-                        @* TRẠNG THÁI *@
                         <td>
-
-                            <span class="badge
-                                @GetStatusBadgeClass(payment.Status)">
-
+                            <span class="badge @GetStatusBadgeClass(payment.Status)">
                                 @payment.Status.ToVietnamese()
-
                             </span>
-
                         </td>
 
-
-                        @* THỜI GIAN *@
                         <td class="small">
-
                             @GetPaymentTimeText(
                                 payment.Status,
                                 payment.PaidAt)
-
                         </td>
 
-
-                        @* MÃ GIAO DỊCH NGÂN HÀNG *@
                         <td>
-
-                            @if (string.IsNullOrWhiteSpace(
-                                payment.TransactionCode))
+                            @if (string.IsNullOrWhiteSpace(payment.TransactionCode))
                             {
-                                <span class="text-muted">
-                                    -
-                                </span>
+                                <span class="text-muted">-</span>
                             }
                             else
                             {
-                                <code>
+                                <code class="user-select-all">
                                     @payment.TransactionCode
                                 </code>
                             }
-
                         </td>
 
-
-                        @* =================================================
-                           THAO TÁC
-                           ================================================= *@
-
                         <td>
-
-                            @* =============================================
-                               1. KHÁCH ĐÃ BÁO CHUYỂN QR
-                               ============================================= *@
-
-                            @if (payment.Status ==
-                                 PaymentStatus.AwaitingConfirmation)
+                            @if (payment.Status == PaymentStatus.AwaitingConfirmation)
                             {
-                                <div class="alert
-                                    alert-warning
-                                    py-2
-                                    px-2
-                                    small
-                                    mb-2">
-
-                                    <strong>
-                                        Khách báo đã chuyển khoản QR
-                                    </strong>
-
+                                <div class="alert alert-warning py-2 px-2 small mb-2">
+                                    <strong>Khách báo đã chuyển khoản QR</strong>
                                     <div class="mt-1">
-                                        Kiểm tra tài khoản ngân hàng
-                                        trước khi xác nhận.
+                                        Kiểm tra tài khoản ngân hàng trước khi xác nhận. Nếu chưa thấy tiền,
+                                        chỉ ghi nhận là <strong>chưa tìm thấy giao dịch</strong>; mã yêu cầu và lý do xử lý sẽ được giữ trong lịch sử đối soát.
                                     </div>
-
                                 </div>
-
-
-                                @* XÁC NHẬN ĐÃ NHẬN TIỀN *@
 
                                 <form asp-action="ConfirmQr"
                                       method="post"
@@ -439,151 +361,88 @@ else
                                            value="@payment.PaymentId" />
 
                                     <button type="submit"
-                                            class="btn
-                                        btn-success
-                                        btn-sm
-                                        w-100"
+                                            class="btn btn-success btn-sm w-100"
                                             data-loading-text="Đang xác nhận...">
-
                                         ✓ Xác nhận đã nhận tiền
-
                                     </button>
-
                                 </form>
-
-
-                                @* TỪ CHỐI / CHƯA NHẬN ĐƯỢC *@
 
                                 <form asp-action="RejectQr"
                                       method="post"
                                       data-loading-form
-                                      data-confirm="Xác nhận chưa nhận được khoản chuyển này?">
+                                      data-confirm="Bạn xác nhận hiện chưa tìm thấy giao dịch này? Lý do và mã yêu cầu sẽ được ghi vào lịch sử đối soát.">
 
                                     <input type="hidden"
                                            name="paymentId"
                                            value="@payment.PaymentId" />
 
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-semibold">
+                                            Lý do chưa tìm thấy giao dịch
+                                        </label>
+                                        <textarea name="rejectionReason"
+                                                  class="form-control form-control-sm"
+                                                  rows="2"
+                                                  maxlength="500"
+                                                  required
+                                                  placeholder="Ví dụ: Đã kiểm tra MB Bank đến 21:10 nhưng chưa thấy giao dịch đúng số tiền/mã nội dung."></textarea>
+                                    </div>
+
                                     <button type="submit"
-                                            class="btn
-                                        btn-outline-danger
-                                        btn-sm
-                                        w-100"
-                                            data-loading-text="Đang xử lý...">
-
-                                        Chưa nhận được tiền
-
+                                            class="btn btn-outline-danger btn-sm w-100"
+                                            data-loading-text="Đang ghi nhận...">
+                                        ⚠ Chưa tìm thấy giao dịch
                                     </button>
-
                                 </form>
                             }
-
-
-                            @* =============================================
-                               2. KHOẢN HOÀN TIỀN ĐANG CHỜ XỬ LÝ
-                               ============================================= *@
-
                             else if (
                                 payment.Type == PaymentType.Refund &&
-                                payment.Status ==
-                                    PaymentStatus.AwaitingRefund)
+                                payment.Status == PaymentStatus.AwaitingRefund)
                             {
                                 <div class="fw-semibold mb-2">
                                     Hoàn tiền cho khách
                                 </div>
 
-
                                 @if (refundBankAccount is null)
                                 {
-                                    <div class="alert
-                                        alert-danger
-                                        py-2
-                                        px-2
-                                        small
-                                        mb-2">
-
-                                        Khách chưa lưu tài khoản
-                                        ngân hàng nhận hoàn tiền.
-
+                                    <div class="alert alert-danger py-2 px-2 small mb-2">
+                                        Khách chưa lưu tài khoản ngân hàng nhận hoàn tiền.
                                     </div>
 
                                     <a asp-controller="AdminCustomers"
                                        asp-action="Details"
                                        asp-route-id="@payment.CustomerId"
-                                       class="btn
-                                        btn-outline-secondary
-                                        btn-sm
-                                        w-100">
-
+                                       class="btn btn-outline-secondary btn-sm w-100">
                                         Xem thông tin khách hàng
-
                                     </a>
                                 }
                                 else
                                 {
-                                    @* THÔNG TIN NGÂN HÀNG KHÁCH *@
-
-                                    <div class="border
-                                        rounded
-                                        bg-light
-                                        p-2
-                                        mb-2
-                                        small">
-
+                                    <div class="border rounded bg-light p-2 mb-2 small">
                                         <div class="mb-1">
-
-                                            <span class="text-muted">
-                                                Ngân hàng:
-                                            </span>
-
-                                            <strong>
-                                                @refundBankAccount.BankName
-                                            </strong>
-
+                                            <span class="text-muted">Ngân hàng:</span>
+                                            <strong>@refundBankAccount.BankName</strong>
                                         </div>
 
-
                                         <div class="mb-1">
-
-                                            <span class="text-muted">
-                                                Số tài khoản:
-                                            </span>
-
+                                            <span class="text-muted">Số tài khoản:</span>
                                             <strong class="user-select-all">
                                                 @refundBankAccount.AccountNumber
                                             </strong>
-
                                         </div>
-
 
                                         <div class="mb-1">
-
-                                            <span class="text-muted">
-                                                Chủ tài khoản:
-                                            </span>
-
-                                            <strong>
-                                                @refundBankAccount.AccountHolderName
-                                            </strong>
-
+                                            <span class="text-muted">Chủ tài khoản:</span>
+                                            <strong>@refundBankAccount.AccountHolderName</strong>
                                         </div>
 
-
                                         <div>
-
-                                            <span class="text-muted">
-                                                Cần hoàn:
-                                            </span>
-
+                                            <span class="text-muted">Cần hoàn:</span>
                                             <strong class="text-danger">
                                                 @payment.Amount.ToString("N0") đ
                                             </strong>
-
                                         </div>
-
                                     </div>
-
-
-                                    @* FORM XÁC NHẬN HOÀN TIỀN *@
 
                                     <form asp-action="ConfirmRefund"
                                           method="post"
@@ -594,89 +453,68 @@ else
                                                name="paymentId"
                                                value="@payment.PaymentId" />
 
-
                                         <div class="mb-2">
-
-                                            <label class="form-label
-                                                small
-                                                fw-semibold">
-
+                                            <label class="form-label small fw-semibold">
                                                 Mã giao dịch ngân hàng
-
                                             </label>
 
                                             <input type="text"
                                                    name="transactionCode"
-                                                   class="form-control
-                                            form-control-sm"
+                                                   class="form-control form-control-sm"
                                                    maxlength="100"
                                                    placeholder="Ví dụ: FT260812123456"
                                                    required />
-
                                         </div>
 
-
                                         <button type="submit"
-                                                class="btn
-                                            btn-success
-                                            btn-sm
-                                            w-100"
+                                                class="btn btn-success btn-sm w-100"
                                                 data-loading-text="Đang xác nhận...">
-
                                             ✓ Xác nhận đã hoàn tiền
-
                                         </button>
-
                                     </form>
                                 }
                             }
-
-
-                            @* =============================================
-                               3. GIAO DỊCH ĐÃ XỬ LÝ
-                               ============================================= *@
-
-                            else if (
-                                payment.Status == PaymentStatus.Paid)
+                            else if (payment.Status == PaymentStatus.Paid)
                             {
                                 <span class="text-success small fw-semibold">
                                     ✓ Đã thanh toán
                                 </span>
                             }
-
-                            else if (
-                                payment.Status == PaymentStatus.Refunded)
+                            else if (payment.Status == PaymentStatus.Refunded)
                             {
                                 <span class="text-success small fw-semibold">
                                     ✓ Đã hoàn tiền
                                 </span>
                             }
-
-                            else if (
-                                payment.Status == PaymentStatus.Pending)
+                            else if (payment.Status == PaymentStatus.Pending)
                             {
-                                <span class="text-muted small">
-                                    Chờ khách thanh toán
-                                </span>
+                                <div class="small">
+                                    <span class="text-muted">Chờ khách thanh toán</span>
+                                    @if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
+                                    {
+                                        <div class="text-warning-emphasis mt-1">
+                                            Có lịch sử đối soát trước đó. Mã gần nhất vẫn được giữ lại.
+                                        </div>
+                                    }
+                                </div>
                             }
-
-                            else if (
-                                payment.Status == PaymentStatus.Failed)
+                            else if (payment.Status == PaymentStatus.Failed)
                             {
-                                <span class="text-danger small">
-                                    Giao dịch thất bại
-                                </span>
+                                <div class="small">
+                                    <span class="text-danger">Giao dịch không còn hiệu lực</span>
+                                    @if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
+                                    {
+                                        <div class="text-muted mt-1">
+                                            Mã đối soát gần nhất vẫn được lưu để kiểm tra lịch sử.
+                                        </div>
+                                    }
+                                </div>
                             }
-
                             else
                             {
-                                <span class="text-muted">
-                                    -
-                                </span>
+                                <span class="text-muted">-</span>
                             }
-
                         </td>
-
                     </tr>
                 }
 
