@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
@@ -47,6 +47,21 @@ internal sealed class BookingService : IBookingService
         {
             return BookingMutationResult.Failure(
                 "Thời gian nhận xe phải ở tương lai và trước thời gian trả xe.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.PickupLocation) ||
+            string.IsNullOrWhiteSpace(request.ReturnLocation))
+        {
+            return BookingMutationResult.Failure(
+                "Vui lòng nhập đầy đủ địa điểm nhận xe và địa điểm trả xe.");
+        }
+
+        var pickupLocation = request.PickupLocation.Trim();
+        var returnLocation = request.ReturnLocation.Trim();
+        if (pickupLocation.Length > 250 || returnLocation.Length > 250)
+        {
+            return BookingMutationResult.Failure(
+                "Địa điểm nhận xe và địa điểm trả xe tối đa 250 ký tự.");
         }
 
         var documentsValid = await _documentService.HasValidRentalDocumentsAsync(
@@ -138,6 +153,8 @@ internal sealed class BookingService : IBookingService
             VehicleId = vehicle.VehicleId,
             PickupDate = request.PickupDate,
             ReturnDate = request.ReturnDate,
+            PickupLocation = pickupLocation,
+            ReturnLocation = returnLocation,
             DailyPrice = vehicle.DailyPrice,
             NumberOfDays = numberOfDays,
             RentalAmount = rentalAmount,
@@ -215,6 +232,13 @@ internal sealed class BookingService : IBookingService
         if (booking.PickupDate <= DateTime.Now)
         {
             return OperationResult.Failure("Đã quá thời gian nhận xe, không thể xác nhận đơn.");
+        }
+
+        if (string.IsNullOrWhiteSpace(booking.PickupLocation) ||
+            string.IsNullOrWhiteSpace(booking.ReturnLocation))
+        {
+            return OperationResult.Failure(
+                "Đơn chưa có đủ địa điểm nhận xe và địa điểm trả xe.");
         }
 
         var documentsValid = await _documentService.HasValidRentalDocumentsAsync(
@@ -323,12 +347,21 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure("Đơn phải thanh toán tiền thuê trước khi chuẩn bị giao xe.");
         }
 
+        if (string.IsNullOrWhiteSpace(booking.PickupLocation) ||
+            string.IsNullOrWhiteSpace(booking.ReturnLocation))
+        {
+            return OperationResult.Failure(
+                "Vui lòng chốt địa điểm nhận và trả xe trước khi đánh dấu xe sẵn sàng giao.");
+        }
+
         booking.Status = BookingStatus.ReadyForPickup;
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
             Title = "Xe đã sẵn sàng bàn giao",
-            Message = $"Xe của đơn #{booking.BookingId} đã sẵn sàng để nhận."
+            Message =
+                $"Xe của đơn #{booking.BookingId} đã sẵn sàng. " +
+                $"Nhận xe tại {booking.PickupLocation} lúc {booking.PickupDate:dd/MM/yyyy HH:mm}."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -360,6 +393,8 @@ internal sealed class BookingService : IBookingService
                     .FirstOrDefault(),
                 PickupDate = booking.PickupDate,
                 ReturnDate = booking.ReturnDate,
+                PickupLocation = booking.PickupLocation,
+                ReturnLocation = booking.ReturnLocation,
                 TotalAmount = booking.TotalAmount,
                 Status = booking.Status,
                 CreatedAt = booking.CreatedAt
@@ -425,6 +460,8 @@ internal sealed class BookingService : IBookingService
                 .FirstOrDefault(),
             PickupDate = booking.PickupDate,
             ReturnDate = booking.ReturnDate,
+            PickupLocation = booking.PickupLocation,
+            ReturnLocation = booking.ReturnLocation,
             DailyPrice = booking.DailyPrice,
             NumberOfDays = booking.NumberOfDays,
             RentalAmount = booking.RentalAmount,
@@ -438,6 +475,7 @@ internal sealed class BookingService : IBookingService
             RefundAmount = booking.RefundAmount,
             RefundReason = booking.RefundReason,
             NoShowMarkedAt = booking.NoShowMarkedAt,
+            ActualReturnLocation = booking.VehicleReturn?.ReturnLocation,
             HasHandover = booking.Handover is not null,
             HasReturn = booking.VehicleReturn is not null,
             HasReview = booking.Review is not null,
