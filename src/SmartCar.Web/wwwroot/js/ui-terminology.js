@@ -100,6 +100,30 @@
         }
     }
 
+    function syncAdminCustomerSidebar() {
+        const pathname = window.location.pathname.toLowerCase();
+        if (!pathname.startsWith("/admincustomers")) {
+            return;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const isVerificationMode =
+            params.get("profileStatus")?.toLowerCase() === "pending" ||
+            params.get("tab")?.toLowerCase() === "documents";
+
+        const links = Array.from(
+            document.querySelectorAll(".admin-sidebar a.admin-nav-link"));
+
+        const customerManagementLink = links.find((link) =>
+            link.textContent?.includes("Quản lý khách hàng"));
+
+        const verificationLink = links.find((link) =>
+            link.textContent?.includes("Xác minh giấy tờ"));
+
+        customerManagementLink?.classList.toggle("active", !isVerificationMode);
+        verificationLink?.classList.toggle("active", isVerificationMode);
+    }
+
     function initializeTerminology() {
         if (!document.body) {
             return;
@@ -107,6 +131,10 @@
 
         document.title = translateText(document.title);
         translateTree(document.body);
+
+        // Chạy sau site.js để trạng thái menu Admin không bị script cũ ghi đè.
+        syncAdminCustomerSidebar();
+        window.setTimeout(syncAdminCustomerSidebar, 0);
 
         const observer = new MutationObserver((mutations) => {
             for (const mutation of mutations) {
