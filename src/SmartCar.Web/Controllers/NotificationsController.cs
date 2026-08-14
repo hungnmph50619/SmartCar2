@@ -9,15 +9,18 @@ namespace SmartCar.Web.Controllers;
 [Authorize]
 public sealed class NotificationsController : Controller
 {
-    private static readonly string[] AdminWorkPrefixes =
-    {
-        "Hồ sơ KYC chờ duyệt|",
-        "CCCD chờ xác minh|",
-        "GPLX chờ xác minh|",
-        "Đơn thuê chờ xử lý|",
-        "Yêu cầu gia hạn chờ xử lý|",
-        "Thanh toán QR chờ xác nhận|"
-    };
+    private static readonly HashSet<string> AdminWorkTitles =
+        new(StringComparer.Ordinal)
+        {
+            "Hồ sơ KYC chờ duyệt",
+            "CCCD chờ xác minh",
+            "GPLX chờ xác minh",
+            "CCCD cập nhật chờ duyệt",
+            "GPLX cập nhật chờ duyệt",
+            "Đơn thuê chờ xử lý",
+            "Yêu cầu gia hạn chờ xử lý",
+            "Thanh toán QR chờ xác nhận"
+        };
 
     private readonly INotificationService _notificationService;
 
@@ -73,6 +76,28 @@ public sealed class NotificationsController : Controller
             return Challenge();
         }
 
+        if (User.IsInRole(RoleNames.Admin))
+        {
+            var notification =
+                (await _notificationService.GetAsync(
+                    userId,
+                    cancellationToken))
+                .FirstOrDefault(item =>
+                    item.NotificationId == id);
+
+            if (notification is not null &&
+                IsAdminWorkNotification(
+                    notification.Title))
+            {
+                TempData["ErrorMessage"] =
+                    "Đây là việc cần xử lý. Hãy hoàn tất nghiệp vụ thay vì chỉ đánh dấu đã đọc.";
+
+                return RedirectToAction(
+                    nameof(Index),
+                    new { tab = "work" });
+            }
+        }
+
         await _notificationService.MarkReadAsync(
             id,
             userId,
@@ -121,8 +146,7 @@ public sealed class NotificationsController : Controller
         }
 
         // Work item: chỉ mở trang xử lý, không đánh dấu đã đọc.
-        // NotificationService sẽ tự đóng khi trạng thái nghiệp vụ
-        // thực sự không còn Pending.
+        // Notification chỉ được đóng khi nghiệp vụ thực sự hoàn tất.
         return RedirectToAction(
             "Review",
             "AdminKyc",
@@ -164,7 +188,7 @@ public sealed class NotificationsController : Controller
             }
 
             TempData["SuccessMessage"] =
-                "Đã đánh dấu các thông báo thường là đã đọc. " +
+                "Đã đánh dấu tất cả thông báo là đã đọc. " +
                 "Các việc cần xử lý vẫn được giữ cho đến khi bạn hoàn tất nghiệp vụ.";
         }
         else
@@ -183,8 +207,15 @@ public sealed class NotificationsController : Controller
 
     private static bool IsAdminWorkNotification(
         string title) =>
-        AdminWorkPrefixes.Any(prefix =>
-            title.StartsWith(
-                prefix,
-                StringComparison.Ordinal));
+        AdminWorkTitles.Contains(
+            GetRawTitle(title));
+
+    private static string GetRawTitle(
+        string title)
+    {
+        var separatorIndex = title.IndexOf('|');
+        return separatorIndex > 0
+            ? title[..separatorIndex]
+            : title;
+    }
 }
