@@ -270,21 +270,12 @@ public sealed class AdminBookingsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> MarkReady(int id, CancellationToken cancellationToken)
+    public IActionResult MarkReady(int id)
     {
-        var result = await _bookingService.MarkReadyForPickupAsync(id, cancellationToken);
-        SetMessage(result, "Đã đánh dấu xe sẵn sàng bàn giao.");
-
-        if (result.Succeeded)
-        {
-            await WriteAuditAsync(
-                "MarkReady",
-                id,
-                $"Đánh dấu xe của đơn #{id} đã sẵn sàng bàn giao.",
-                cancellationToken);
-        }
-
-        return RedirectToAction(nameof(Details), new { id });
+        return RedirectToAction(
+            "PreparePickup",
+            "AdminBookingOperations",
+            new { bookingId = id });
     }
 
     private void SetMessage(OperationResult result, string successMessage)
