@@ -7,6 +7,7 @@ public sealed record CreateBookingRequest(
     int VehicleId,
     DateTime PickupDate,
     DateTime ReturnDate,
+    string PickupMethod,
     string PickupLocation,
     string ReturnLocation);
 
@@ -24,6 +25,11 @@ public class BookingListItemDto
     public DateTime ReturnDate { get; init; }
     public string? PickupLocation { get; init; }
     public string? ReturnLocation { get; init; }
+    public string PickupMethod { get; init; } = string.Empty;
+    public decimal PickupDeliveryDistanceKm { get; init; }
+    public decimal ReturnCollectionDistanceKm { get; init; }
+    public decimal DeliveryRatePerKm { get; init; }
+    public decimal DeliveryFee { get; init; }
     public decimal TotalAmount { get; init; }
     public BookingStatus Status { get; init; }
     public DateTime CreatedAt { get; init; }
