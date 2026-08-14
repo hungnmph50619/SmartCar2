@@ -18,17 +18,20 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminBookingsController : Controller
 {
     private readonly IBookingService _bookingService;
+    private readonly IDeliveryQuoteService _deliveryQuoteService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
     private readonly IDocumentService _documentService;
 
     public AdminBookingsController(
         IBookingService bookingService,
+        IDeliveryQuoteService deliveryQuoteService,
         IAuditService auditService,
         ApplicationDbContext dbContext,
         IDocumentService documentService)
     {
         _bookingService = bookingService;
+        _deliveryQuoteService = deliveryQuoteService;
         _auditService = auditService;
         _dbContext = dbContext;
         _documentService = documentService;
@@ -200,6 +203,7 @@ public sealed class AdminBookingsController : Controller
         }
 
         var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (booking is null)
@@ -207,20 +211,48 @@ public sealed class AdminBookingsController : Controller
             return NotFound();
         }
 
-        if (booking.Status is BookingStatus.Completed or BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.NoShow)
+        if (booking.Status is not (BookingStatus.PendingConfirmation or BookingStatus.PendingPayment))
         {
-            TempData["ErrorMessage"] = "Đơn đã kết thúc nên không thể thay đổi địa điểm giao nhận.";
+            TempData["ErrorMessage"] =
+                "Chỉ được thay đổi địa điểm giao nhận trước khi khách thanh toán. Sau thanh toán, hai bên cần xử lý thay đổi theo quy trình riêng.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
-        booking.PickupLocation = pickupLocation;
-        booking.ReturnLocation = returnLocation;
+        var quote = await _deliveryQuoteService.CalculateAsync(
+            booking.PickupMethod,
+            pickupLocation,
+            returnLocation,
+            cancellationToken);
+
+        if (!quote.Succeeded)
+        {
+            TempData["ErrorMessage"] = quote.Error ?? "Không thể tính lại phí giao nhận cho địa điểm mới.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        booking.PickupLocation = quote.PickupLocation;
+        booking.ReturnLocation = quote.ReturnLocation;
+        booking.PickupDeliveryDistanceKm = quote.PickupDeliveryDistanceKm;
+        booking.ReturnCollectionDistanceKm = quote.ReturnCollectionDistanceKm;
+        booking.DeliveryRatePerKm = quote.DeliveryRatePerKm;
+        booking.DeliveryFee = quote.DeliveryFee;
+        booking.TotalAmount = booking.RentalAmount + booking.DeliveryFee + booking.AdditionalAmount;
+
+        var pendingRentalPayment = booking.Payments.FirstOrDefault(payment =>
+            payment.Type == PaymentType.Rental &&
+            payment.Status == PaymentStatus.Pending);
+        if (pendingRentalPayment is not null)
+        {
+            pendingRentalPayment.Amount = booking.RentalAmount + booking.DeliveryFee;
+        }
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Địa điểm giao nhận đã được cập nhật",
-            Message = $"Đơn #{booking.BookingId}: nhận xe tại {pickupLocation}; trả xe tại {returnLocation}."
+            Title = "Địa điểm và phí giao nhận đã được cập nhật",
+            Message =
+                $"Đơn #{booking.BookingId}: nhận xe tại {booking.PickupLocation}; " +
+                $"trả xe tại {booking.ReturnLocation}; phí giao nhận {booking.DeliveryFee:N0} đồng."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -228,10 +260,11 @@ public sealed class AdminBookingsController : Controller
         await WriteAuditAsync(
             "UpdateBookingLocations",
             bookingId,
-            $"Cập nhật địa điểm giao nhận đơn #{bookingId}. Nhận: {pickupLocation}; Trả: {returnLocation}.",
+            $"Cập nhật địa điểm giao nhận đơn #{bookingId}. Nhận: {booking.PickupLocation}; " +
+            $"Trả: {booking.ReturnLocation}; phí giao nhận: {booking.DeliveryFee:N0} đồng.",
             cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã cập nhật địa điểm nhận và trả xe.";
+        TempData["SuccessMessage"] = "Đã cập nhật địa điểm và tính lại phí giao nhận.";
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
