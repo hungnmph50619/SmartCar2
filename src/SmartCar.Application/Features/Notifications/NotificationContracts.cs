@@ -18,6 +18,10 @@ public interface INotificationService
     Task<int> GetUnreadCountAsync(
         string userId,
         CancellationToken cancellationToken = default);
+    Task<OperationResult> MarkViewedAsync(
+        int notificationId,
+        string userId,
+        CancellationToken cancellationToken = default);
     Task<OperationResult> MarkReadAsync(
         int notificationId,
         string userId,
