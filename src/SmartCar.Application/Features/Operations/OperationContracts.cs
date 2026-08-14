@@ -6,6 +6,19 @@ public sealed record CancelBookingRequest(
     int BookingId,
     string Reason);
 
+public sealed record MarkNoShowRequest(
+    int BookingId,
+    bool ContactAttempted,
+    bool ArrivedAtPickupLocation,
+    string ContactNote);
+
+public sealed record NoShowPreparationDto(
+    int BookingId,
+    DateTime PickupDate,
+    string PickupMethod,
+    string PickupLocation,
+    string? CustomerPhone);
+
 public sealed record RefundResult(
     bool Succeeded,
     decimal RefundAmount,
@@ -28,8 +41,11 @@ public interface IBookingOperationService
         string adminId,
         CancelBookingRequest request,
         CancellationToken cancellationToken = default);
-    Task<OperationResult> MarkNoShowAsync(
+    Task<NoShowPreparationDto?> GetNoShowPreparationAsync(
         int bookingId,
+        CancellationToken cancellationToken = default);
+    Task<OperationResult> MarkNoShowAsync(
+        MarkNoShowRequest request,
         string adminId,
         CancellationToken cancellationToken = default);
 }
