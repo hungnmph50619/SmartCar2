@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
-using SmartCar.Domain.Constants;
 
 namespace SmartCar.Infrastructure.Services;
 
@@ -24,13 +24,16 @@ internal sealed class BookingService : IBookingService
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IDocumentService _documentService;
+    private readonly IDeliveryQuoteService _deliveryQuoteService;
 
     public BookingService(
         ApplicationDbContext dbContext,
-        IDocumentService documentService)
+        IDocumentService documentService,
+        IDeliveryQuoteService deliveryQuoteService)
     {
         _dbContext = dbContext;
         _documentService = documentService;
+        _deliveryQuoteService = deliveryQuoteService;
     }
 
     public async Task<BookingMutationResult> CreateAsync(
@@ -47,6 +50,11 @@ internal sealed class BookingService : IBookingService
         {
             return BookingMutationResult.Failure(
                 "Thời gian nhận xe phải ở tương lai và trước thời gian trả xe.");
+        }
+
+        if (request.PickupMethod is not (DeliveryConstants.SelfPickup or DeliveryConstants.HomeDelivery))
+        {
+            return BookingMutationResult.Failure("Hình thức nhận xe không hợp lệ.");
         }
 
         if (string.IsNullOrWhiteSpace(request.PickupLocation) ||
@@ -74,6 +82,21 @@ internal sealed class BookingService : IBookingService
             return BookingMutationResult.Failure(
                 "Bạn cần xác minh CCCD và GPLX còn hiệu lực đến ngày trả xe.");
         }
+
+        var deliveryQuote = await _deliveryQuoteService.CalculateAsync(
+            request.PickupMethod,
+            pickupLocation,
+            returnLocation,
+            cancellationToken);
+
+        if (!deliveryQuote.Succeeded)
+        {
+            return BookingMutationResult.Failure(
+                deliveryQuote.Error ?? "Không thể tính phí giao nhận cho địa chỉ đã chọn.");
+        }
+
+        pickupLocation = deliveryQuote.PickupLocation;
+        returnLocation = deliveryQuote.ReturnLocation;
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
@@ -146,6 +169,7 @@ internal sealed class BookingService : IBookingService
             1,
             (int)Math.Ceiling((request.ReturnDate - request.PickupDate).TotalHours / 24d));
         var rentalAmount = numberOfDays * vehicle.DailyPrice;
+        var totalAmount = rentalAmount + deliveryQuote.DeliveryFee;
 
         var booking = new Booking
         {
@@ -155,11 +179,16 @@ internal sealed class BookingService : IBookingService
             ReturnDate = request.ReturnDate,
             PickupLocation = pickupLocation,
             ReturnLocation = returnLocation,
+            PickupMethod = request.PickupMethod,
+            PickupDeliveryDistanceKm = deliveryQuote.PickupDeliveryDistanceKm,
+            ReturnCollectionDistanceKm = deliveryQuote.ReturnCollectionDistanceKm,
+            DeliveryRatePerKm = deliveryQuote.DeliveryRatePerKm,
+            DeliveryFee = deliveryQuote.DeliveryFee,
             DailyPrice = vehicle.DailyPrice,
             NumberOfDays = numberOfDays,
             RentalAmount = rentalAmount,
             AdditionalAmount = 0,
-            TotalAmount = rentalAmount,
+            TotalAmount = totalAmount,
             Status = BookingStatus.PendingConfirmation,
             CreatedAt = DateTime.UtcNow
         };
@@ -264,7 +293,7 @@ internal sealed class BookingService : IBookingService
         }
 
         booking.Status = BookingStatus.PendingPayment;
-        var rentalPaymentAmount = booking.RentalAmount;
+        var rentalPaymentAmount = booking.RentalAmount + booking.DeliveryFee;
 
         if (!booking.Payments.Any(payment => payment.Type == PaymentType.Rental))
         {
@@ -281,7 +310,9 @@ internal sealed class BookingService : IBookingService
         {
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã được xác nhận",
-            Message = $"Đơn #{booking.BookingId} đã được xác nhận. Vui lòng thanh toán để giữ xe."
+            Message = booking.DeliveryFee > 0
+                ? $"Đơn #{booking.BookingId} đã được xác nhận. Tiền thuê {booking.RentalAmount:N0} đồng + phí giao nhận {booking.DeliveryFee:N0} đồng. Vui lòng thanh toán để giữ xe."
+                : $"Đơn #{booking.BookingId} đã được xác nhận. Vui lòng thanh toán để giữ xe."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -395,6 +426,11 @@ internal sealed class BookingService : IBookingService
                 ReturnDate = booking.ReturnDate,
                 PickupLocation = booking.PickupLocation,
                 ReturnLocation = booking.ReturnLocation,
+                PickupMethod = booking.PickupMethod,
+                PickupDeliveryDistanceKm = booking.PickupDeliveryDistanceKm,
+                ReturnCollectionDistanceKm = booking.ReturnCollectionDistanceKm,
+                DeliveryRatePerKm = booking.DeliveryRatePerKm,
+                DeliveryFee = booking.DeliveryFee,
                 TotalAmount = booking.TotalAmount,
                 Status = booking.Status,
                 CreatedAt = booking.CreatedAt
@@ -462,6 +498,11 @@ internal sealed class BookingService : IBookingService
             ReturnDate = booking.ReturnDate,
             PickupLocation = booking.PickupLocation,
             ReturnLocation = booking.ReturnLocation,
+            PickupMethod = booking.PickupMethod,
+            PickupDeliveryDistanceKm = booking.PickupDeliveryDistanceKm,
+            ReturnCollectionDistanceKm = booking.ReturnCollectionDistanceKm,
+            DeliveryRatePerKm = booking.DeliveryRatePerKm,
+            DeliveryFee = booking.DeliveryFee,
             DailyPrice = booking.DailyPrice,
             NumberOfDays = booking.NumberOfDays,
             RentalAmount = booking.RentalAmount,
