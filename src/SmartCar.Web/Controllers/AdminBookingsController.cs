@@ -177,6 +177,66 @@ public sealed class AdminBookingsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateLocations(
+        int bookingId,
+        string pickupLocation,
+        string returnLocation,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(pickupLocation) ||
+            string.IsNullOrWhiteSpace(returnLocation))
+        {
+            TempData["ErrorMessage"] = "Địa điểm nhận xe và địa điểm trả xe không được để trống.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        pickupLocation = pickupLocation.Trim();
+        returnLocation = returnLocation.Trim();
+
+        if (pickupLocation.Length > 250 || returnLocation.Length > 250)
+        {
+            TempData["ErrorMessage"] = "Địa điểm nhận xe và địa điểm trả xe tối đa 250 ký tự.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var booking = await _dbContext.Bookings
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        if (booking.Status is BookingStatus.Completed or BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.NoShow)
+        {
+            TempData["ErrorMessage"] = "Đơn đã kết thúc nên không thể thay đổi địa điểm giao nhận.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        booking.PickupLocation = pickupLocation;
+        booking.ReturnLocation = returnLocation;
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Địa điểm giao nhận đã được cập nhật",
+            Message = $"Đơn #{booking.BookingId}: nhận xe tại {pickupLocation}; trả xe tại {returnLocation}."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await WriteAuditAsync(
+            "UpdateBookingLocations",
+            bookingId,
+            $"Cập nhật địa điểm giao nhận đơn #{bookingId}. Nhận: {pickupLocation}; Trả: {returnLocation}.",
+            cancellationToken);
+
+        TempData["SuccessMessage"] = "Đã cập nhật địa điểm nhận và trả xe.";
+        return RedirectToAction(nameof(Details), new { id = bookingId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> MarkReady(int id, CancellationToken cancellationToken)
     {
         var result = await _bookingService.MarkReadyForPickupAsync(id, cancellationToken);
