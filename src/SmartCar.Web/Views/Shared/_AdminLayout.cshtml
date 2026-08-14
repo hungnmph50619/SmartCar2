@@ -112,6 +112,32 @@
             ?.ToString() ??
         string.Empty;
 
+    var currentProfileStatus =
+        ViewContext.HttpContext.Request.Query["profileStatus"]
+            .ToString();
+
+    var currentCustomerTab =
+        ViewContext.HttpContext.Request.Query["tab"]
+            .ToString();
+
+    var customerVerificationActive =
+        currentController is "AdminKyc" or "AdminDocuments" ||
+        (currentController == "AdminCustomers" &&
+         (
+             string.Equals(
+                 currentProfileStatus,
+                 "Pending",
+                 StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(
+                 currentCustomerTab,
+                 "documents",
+                 StringComparison.OrdinalIgnoreCase)
+         ));
+
+    var customerManagementActive =
+        currentController == "AdminCustomers" &&
+        !customerVerificationActive;
+
     var bookingActive =
         new[]
         {
@@ -119,14 +145,6 @@
             "AdminBookingOperations",
             "Handovers",
             "Returns"
-        }.Contains(currentController);
-
-    var customerActive =
-        new[]
-        {
-            "AdminCustomers",
-            "AdminDocuments",
-            "AdminKyc"
         }.Contains(currentController);
 
     var vehicleActive =
@@ -271,7 +289,7 @@
                         Khách hàng
                     </div>
 
-                    <a class="admin-nav-link @(currentController == "AdminCustomers" ? "active" : string.Empty)"
+                    <a class="admin-nav-link @(customerManagementActive ? "active" : string.Empty)"
                        asp-controller="AdminCustomers"
                        asp-action="Index">
 
@@ -283,7 +301,7 @@
                         </span>
                     </a>
 
-                    <a class="admin-nav-link @(currentController is "AdminKyc" or "AdminDocuments" ? "active" : string.Empty)"
+                    <a class="admin-nav-link @(customerVerificationActive ? "active" : string.Empty)"
                        asp-controller="AdminCustomers"
                        asp-action="Index"
                        asp-route-profileStatus="Pending">
