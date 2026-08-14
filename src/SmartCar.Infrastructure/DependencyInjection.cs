@@ -74,6 +74,14 @@ public static class DependencyInjection
             options.SlidingExpiration = true;
         });
 
+        services.AddMemoryCache();
+        services.AddHttpClient<IDeliveryQuoteService, DeliveryQuoteService>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(12);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("SmartCarStudentDemo/1.0");
+            client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("vi-VN,vi;q=0.9,en;q=0.7");
+        });
+
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IEmailService, SmtpEmailService>();
         services.AddScoped<IBrandService, BrandService>();
