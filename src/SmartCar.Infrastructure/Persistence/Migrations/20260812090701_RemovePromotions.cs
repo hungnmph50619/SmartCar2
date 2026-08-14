@@ -11,17 +11,60 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Hỗ trợ cả database cũ đã từng có module khuyến mãi và database mới
-            // được tạo từ migration history đã loại bỏ module này.
+            // Hỗ trợ cả database cũ đã từng có module khuyến mãi và database mới.
+            // SQL Server không cho DROP COLUMN nếu cột còn default constraint,
+            // vì vậy cần gỡ constraint động trước khi xóa cột.
             migrationBuilder.Sql(@"
 IF OBJECT_ID(N'[dbo].[Promotions]', N'U') IS NOT NULL
     DROP TABLE [dbo].[Promotions];
 
+DECLARE @ConstraintName sysname;
+
 IF COL_LENGTH('dbo.Bookings', 'DiscountAmount') IS NOT NULL
+BEGIN
+    SET @ConstraintName = NULL;
+
+    SELECT @ConstraintName = dc.name
+    FROM sys.default_constraints dc
+    INNER JOIN sys.columns c
+        ON c.object_id = dc.parent_object_id
+       AND c.column_id = dc.parent_column_id
+    INNER JOIN sys.tables t
+        ON t.object_id = c.object_id
+    INNER JOIN sys.schemas s
+        ON s.schema_id = t.schema_id
+    WHERE s.name = N'dbo'
+      AND t.name = N'Bookings'
+      AND c.name = N'DiscountAmount';
+
+    IF @ConstraintName IS NOT NULL
+        EXEC(N'ALTER TABLE [dbo].[Bookings] DROP CONSTRAINT ' + QUOTENAME(@ConstraintName));
+
     ALTER TABLE [dbo].[Bookings] DROP COLUMN [DiscountAmount];
+END;
 
 IF COL_LENGTH('dbo.Bookings', 'PromotionCode') IS NOT NULL
+BEGIN
+    SET @ConstraintName = NULL;
+
+    SELECT @ConstraintName = dc.name
+    FROM sys.default_constraints dc
+    INNER JOIN sys.columns c
+        ON c.object_id = dc.parent_object_id
+       AND c.column_id = dc.parent_column_id
+    INNER JOIN sys.tables t
+        ON t.object_id = c.object_id
+    INNER JOIN sys.schemas s
+        ON s.schema_id = t.schema_id
+    WHERE s.name = N'dbo'
+      AND t.name = N'Bookings'
+      AND c.name = N'PromotionCode';
+
+    IF @ConstraintName IS NOT NULL
+        EXEC(N'ALTER TABLE [dbo].[Bookings] DROP CONSTRAINT ' + QUOTENAME(@ConstraintName));
+
     ALTER TABLE [dbo].[Bookings] DROP COLUMN [PromotionCode];
+END;
 ");
         }
 
