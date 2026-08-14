@@ -1,18 +1,30 @@
 ﻿@model SmartCar.Web.ViewModels.HandoverViewModel
 @{
     ViewData["Title"] = "Biên bản giao xe";
+
+    var abnormalPrefix = "Có bất thường:";
+    var hasAbnormalCondition = Model.ExteriorCondition?.StartsWith(
+        abnormalPrefix,
+        StringComparison.OrdinalIgnoreCase) == true;
+    var abnormalConditionDetail = hasAbnormalCondition
+        ? Model.ExteriorCondition!.Substring(abnormalPrefix.Length).Trim()
+        : string.Empty;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
         <h1 class="h3 mb-1">Lập biên bản giao xe - Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Ghi nhận tình trạng thực tế trước khi bàn giao xe cho khách hàng.</p>
+        <p class="text-muted mb-0">Ghi nhận số km, nhiên liệu, phụ kiện và bộ ảnh đối chiếu trước khi giao chìa khóa.</p>
     </div>
-    <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại đơn</a>
+    <a class="btn btn-outline-secondary"
+       asp-controller="AdminBookings"
+       asp-action="Details"
+       asp-route-id="@Model.BookingId">Quay lại đơn</a>
 </div>
 
-<div class="alert alert-info">
-    <strong>Kiểm tra trước khi xác nhận:</strong> đúng khách hàng, đúng xe và biển số; số km; mức nhiên liệu; ngoại thất; nội thất; phụ kiện; ảnh đủ các góc.
+<div class="alert alert-info shadow-sm">
+    <strong>Nguyên tắc bàn giao:</strong>
+    ảnh là bằng chứng đối chiếu chính. Hãy kiểm tra đúng khách, đúng xe và biển số; chụp đủ các góc xe, đồng hồ km/nhiên liệu và nội thất trước khi xác nhận giao chìa khóa.
 </div>
 
 <form asp-action="Create"
@@ -22,67 +34,244 @@
       data-loading-form
       data-confirm="Xác nhận bàn giao xe? Sau thao tác này đơn sẽ chuyển sang trạng thái đang thuê.">
     <input asp-for="BookingId" type="hidden" />
+    <input asp-for="ExteriorCondition" type="hidden" id="handover-condition-summary" />
+    <input asp-for="InteriorCondition" type="hidden" id="handover-interior-summary" />
+
     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
 
-    <div class="row g-3">
-        <div class="col-md-6">
-            <label asp-for="HandoverAt" class="form-label fw-semibold">Thời gian giao</label>
-            <input asp-for="HandoverAt" type="datetime-local" class="form-control" required />
-            <span asp-validation-for="HandoverAt" class="text-danger small"></span>
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <section class="border rounded-3 p-3 mb-4">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                    <div>
+                        <div class="text-uppercase small text-muted fw-semibold">Thông tin thực tế khi giao</div>
+                        <h2 class="h5 mb-0">Số km & nhiên liệu</h2>
+                    </div>
+                    <span class="badge bg-light text-dark border">Bắt buộc</span>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="HandoverAt" class="form-label fw-semibold">Thời gian giao</label>
+                        <input asp-for="HandoverAt" type="datetime-local" class="form-control" required />
+                        <span asp-validation-for="HandoverAt" class="text-danger small"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="Mileage" class="form-label fw-semibold">Số km khi giao</label>
+                        <div class="input-group">
+                            <input asp-for="Mileage" type="number" min="0" class="form-control" required />
+                            <span class="input-group-text">km</span>
+                        </div>
+                        <span asp-validation-for="Mileage" class="text-danger small"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="FuelLevel" class="form-label fw-semibold">Mức nhiên liệu</label>
+                        <select asp-for="FuelLevel" class="form-select" required>
+                            <option value="">-- Chọn mức nhiên liệu --</option>
+                            <option value="100%">100% - Đầy bình</option>
+                            <option value="75%">75%</option>
+                            <option value="50%">50%</option>
+                            <option value="25%">25%</option>
+                            <option value="Dưới 25%">Dưới 25%</option>
+                        </select>
+                        <span asp-validation-for="FuelLevel" class="text-danger small"></span>
+                        <div class="form-text">Nên chụp đồng hồ nhiên liệu cùng ảnh đồng hồ km.</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện / giấy tờ đi kèm</label>
+                        <input asp-for="Accessories"
+                               class="form-control"
+                               placeholder="Ví dụ: 2 chìa khóa, đăng ký xe, lốp dự phòng, bộ dụng cụ..." />
+                    </div>
+                </div>
+            </section>
+
+            <section class="border rounded-3 p-3 mb-4">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                    <div>
+                        <div class="text-uppercase small text-muted fw-semibold">Tình trạng xe</div>
+                        <h2 class="h5 mb-0">Chỉ ghi khi có bất thường</h2>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Ảnh là căn cứ chính</span>
+                </div>
+
+                <p class="text-muted small mb-3">
+                    Không cần mô tả dài riêng ngoại thất và nội thất. Nếu xe bình thường, chỉ cần xác nhận không phát hiện bất thường; nếu có vết xước, móp, hư hỏng hoặc vấn đề nội thất thì ghi rõ và chụp cận cảnh.
+                </p>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="border rounded-3 p-3 w-100 h-100 d-flex gap-3 align-items-start" for="condition-normal">
+                            <input class="form-check-input mt-1"
+                                   type="radio"
+                                   name="conditionState"
+                                   id="condition-normal"
+                                   value="normal"
+                                   checked="@(!hasAbnormalCondition)" />
+                            <span>
+                                <strong class="d-block">Không phát hiện bất thường</strong>
+                                <span class="small text-muted">Tình trạng xe được xác nhận bằng bộ ảnh bàn giao.</span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="border rounded-3 p-3 w-100 h-100 d-flex gap-3 align-items-start" for="condition-abnormal">
+                            <input class="form-check-input mt-1"
+                                   type="radio"
+                                   name="conditionState"
+                                   id="condition-abnormal"
+                                   value="abnormal"
+                                   checked="@hasAbnormalCondition" />
+                            <span>
+                                <strong class="d-block">Có bất thường</strong>
+                                <span class="small text-muted">Phải mô tả vị trí/vấn đề và chụp ảnh cận cảnh.</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="abnormal-condition-wrap" class="mt-3 @(hasAbnormalCondition ? string.Empty : "d-none")">
+                    <label for="abnormal-condition-detail" class="form-label fw-semibold">Mô tả bất thường</label>
+                    <textarea id="abnormal-condition-detail"
+                              class="form-control"
+                              rows="3"
+                              maxlength="1000"
+                              placeholder="Ví dụ: xước cản trước bên phải khoảng 5 cm; ghế sau có vết bẩn nhỏ...">@abnormalConditionDetail</textarea>
+                    <div class="form-text">Mô tả ngắn, xác định được vị trí. Ảnh cận cảnh dùng để đối chiếu khi trả xe.</div>
+                </div>
+
+                <span asp-validation-for="ExteriorCondition" class="text-danger small d-block mt-2"></span>
+            </section>
+
+            <section class="border rounded-3 p-3 mb-4">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                    <div>
+                        <div class="text-uppercase small text-muted fw-semibold">Bằng chứng bàn giao</div>
+                        <h2 class="h5 mb-0">Bộ ảnh đối chiếu khi giao xe</h2>
+                    </div>
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Tối thiểu 6 ảnh</span>
+                </div>
+
+                <div class="row g-2 mb-3 small">
+                    <div class="col-md-4"><div class="bg-light rounded p-2 h-100">① Chính diện xe</div></div>
+                    <div class="col-md-4"><div class="bg-light rounded p-2 h-100">② Phía sau xe</div></div>
+                    <div class="col-md-4"><div class="bg-light rounded p-2 h-100">③ Bên trái thân xe</div></div>
+                    <div class="col-md-4"><div class="bg-light rounded p-2 h-100">④ Bên phải thân xe</div></div>
+                    <div class="col-md-4"><div class="bg-light rounded p-2 h-100">⑤ Đồng hồ km + nhiên liệu</div></div>
+                    <div class="col-md-4"><div class="bg-light rounded p-2 h-100">⑥ Nội thất xe</div></div>
+                </div>
+
+                <div class="alert alert-warning py-2 small">
+                    Nếu có vết xước/hư hỏng hiện hữu, hãy tải thêm ảnh cận cảnh. Bộ ảnh này sẽ được đối chiếu với ảnh khi nhận lại xe.
+                </div>
+
+                <label asp-for="Images" class="form-label fw-semibold">Chọn ảnh bàn giao</label>
+                <input asp-for="Images"
+                       type="file"
+                       multiple
+                       accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                       class="form-control"
+                       data-image-input
+                       data-max-files="15"
+                       data-preview-target="#handover-image-preview"
+                       data-file-info-target="#handover-file-info" />
+                <span asp-validation-for="Images" class="text-danger small"></span>
+                <div class="form-text">Tải từ 6 đến 15 ảnh, mỗi ảnh tối đa 5 MB. Hỗ trợ JPG, JPEG, PNG và WEBP.</div>
+
+                <div id="handover-file-info" class="small text-muted mt-2 d-none"></div>
+                <div id="handover-image-preview" class="mt-3 d-none">
+                    <div class="row g-2" data-preview-list></div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn lại ảnh</button>
+                </div>
+            </section>
+
+            <section class="border rounded-3 p-3">
+                <label asp-for="Notes" class="form-label fw-semibold">Ghi chú bàn giao</label>
+                <textarea asp-for="Notes"
+                          class="form-control"
+                          rows="3"
+                          placeholder="Thông tin bổ sung đã thống nhất với khách hàng (nếu có)"></textarea>
+            </section>
         </div>
-        <div class="col-md-6">
-            <label asp-for="Mileage" class="form-label fw-semibold">Số km khi giao</label>
-            <input asp-for="Mileage" type="number" min="0" class="form-control" required />
-            <span asp-validation-for="Mileage" class="text-danger small"></span>
-        </div>
-        <div class="col-md-6">
-            <label asp-for="FuelLevel" class="form-label fw-semibold">Mức nhiên liệu</label>
-            <input asp-for="FuelLevel" class="form-control" placeholder="Ví dụ: 100% hoặc 8/8" required />
-            <span asp-validation-for="FuelLevel" class="text-danger small"></span>
-        </div>
-        <div class="col-md-6">
-            <label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện bàn giao</label>
-            <input asp-for="Accessories" class="form-control" placeholder="Chìa khóa, đăng ký xe, lốp dự phòng..." />
-        </div>
-        <div class="col-md-6">
-            <label asp-for="ExteriorCondition" class="form-label fw-semibold">Ngoại thất</label>
-            <textarea asp-for="ExteriorCondition" class="form-control" rows="3" placeholder="Mô tả vết xước, móp hoặc tình trạng bình thường"></textarea>
-        </div>
-        <div class="col-md-6">
-            <label asp-for="InteriorCondition" class="form-label fw-semibold">Nội thất</label>
-            <textarea asp-for="InteriorCondition" class="form-control" rows="3" placeholder="Ghế, màn hình, điều hòa, vệ sinh nội thất..."></textarea>
-        </div>
-        <div class="col-12">
-            <label asp-for="Images" class="form-label fw-semibold">Ảnh tình trạng xe khi giao</label>
-            <input asp-for="Images"
-                   type="file"
-                   multiple
-                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                   class="form-control"
-                   data-image-input
-                   data-max-files="10"
-                   data-preview-target="#vehicle-image-preview"
-                   data-file-info-target="#vehicle-file-info" />
-            <span asp-validation-for="Images" class="text-danger small"></span>
-            <div class="form-text">Tải từ 1 đến 10 ảnh, mỗi ảnh tối đa 5 MB. Nên có ảnh bốn góc xe, nội thất, đồng hồ km và mức nhiên liệu.</div>
-            <div id="handover-file-info" class="small text-muted mt-2 d-none"></div>
-            <div id="handover-image-preview" class="mt-3 d-none">
-                <div class="row g-2" data-preview-list></div>
-                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn lại ảnh</button>
+
+        <div class="col-lg-4">
+            <div class="card bg-light border-0 sticky-top" style="top: 1rem;">
+                <div class="card-body">
+                    <div class="text-uppercase small text-muted fw-semibold mb-2">Checklist trước khi giao chìa khóa</div>
+                    <h2 class="h5">Admin cần xác nhận đủ</h2>
+
+                    <div class="d-grid gap-2 small mt-3">
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đúng khách hàng và đúng xe/biển số</span></div>
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã đối chiếu CCCD/GPLX thực tế</span></div>
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã ghi số km và mức nhiên liệu</span></div>
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã kiểm tra phụ kiện/giấy tờ đi kèm</span></div>
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã chụp ít nhất 6 ảnh đối chiếu</span></div>
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Bất thường hiện hữu đã được mô tả và chụp cận cảnh</span></div>
+                    </div>
+
+                    <hr />
+                    <p class="small text-muted mb-0">
+                        Sau khi lưu biên bản, hệ thống chuyển đơn sang <strong>Đang thuê</strong>. Chỉ xác nhận khi xe đã được kiểm tra cùng khách và sẵn sàng giao chìa khóa.
+                    </p>
+                </div>
             </div>
-        </div>
-        <div class="col-12">
-            <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
-            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Thông tin bổ sung đã thống nhất với khách hàng"></textarea>
         </div>
     </div>
 
-    <div class="mt-4 d-flex gap-2 flex-wrap">
-        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu biên bản...">Xác nhận giao xe</button>
-        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy thao tác</a>
+    <div class="mt-4 d-flex gap-2 flex-wrap border-top pt-3">
+        <button class="btn btn-primary px-4"
+                type="submit"
+                data-loading-text="Đang lưu biên bản...">Xác nhận giao xe</button>
+        <a class="btn btn-outline-secondary"
+           asp-controller="AdminBookings"
+           asp-action="Details"
+           asp-route-id="@Model.BookingId">Hủy thao tác</a>
     </div>
 </form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        (() => {
+            const normalRadio = document.getElementById('condition-normal');
+            const abnormalRadio = document.getElementById('condition-abnormal');
+            const abnormalWrap = document.getElementById('abnormal-condition-wrap');
+            const abnormalDetail = document.getElementById('abnormal-condition-detail');
+            const conditionSummary = document.getElementById('handover-condition-summary');
+            const interiorSummary = document.getElementById('handover-interior-summary');
+
+            if (!normalRadio || !abnormalRadio || !abnormalWrap || !abnormalDetail || !conditionSummary || !interiorSummary) {
+                return;
+            }
+
+            const syncCondition = () => {
+                if (abnormalRadio.checked) {
+                    abnormalWrap.classList.remove('d-none');
+                    abnormalDetail.required = true;
+                    conditionSummary.value = `Có bất thường: ${abnormalDetail.value.trim()}`;
+                    interiorSummary.value = 'Tình trạng nội thất được đối chiếu bằng bộ ảnh bàn giao; bất thường nếu có được ghi trong tình trạng chung.';
+                    return;
+                }
+
+                abnormalWrap.classList.add('d-none');
+                abnormalDetail.required = false;
+                conditionSummary.value = 'Không phát hiện bất thường tại thời điểm bàn giao.';
+                interiorSummary.value = 'Không phát hiện bất thường tại thời điểm bàn giao.';
+            };
+
+            normalRadio.addEventListener('change', syncCondition);
+            abnormalRadio.addEventListener('change', syncCondition);
+            abnormalDetail.addEventListener('input', syncCondition);
+
+            const form = normalRadio.closest('form');
+            form?.addEventListener('submit', syncCondition);
+
+            syncCondition();
+        })();
+    </script>
 }
