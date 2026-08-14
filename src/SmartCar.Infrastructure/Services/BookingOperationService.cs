@@ -127,6 +127,18 @@ internal sealed class BookingOperationService : IBookingOperationService
             return RefundResult.Failure("Trạng thái hiện tại không cho phép hủy đơn.");
         }
 
+        var hasRentalPaymentAwaitingConfirmation = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Rental &&
+            payment.Status == PaymentStatus.AwaitingConfirmation);
+
+        if (hasRentalPaymentAwaitingConfirmation)
+        {
+            return RefundResult.Failure(
+                "Khoản chuyển khoản tiền thuê đang chờ SmartCar xác nhận. " +
+                "Vui lòng xử lý giao dịch trước khi hủy đơn: nếu đã nhận tiền thì xác nhận thanh toán rồi thực hiện hủy để hệ thống tạo khoản hoàn; " +
+                "nếu chưa nhận được tiền thì trả giao dịch về trạng thái chờ thanh toán rồi mới hủy đơn.");
+        }
+
         var paidAmount = booking.Payments
             .Where(payment =>
                 payment.Status == PaymentStatus.Paid &&
