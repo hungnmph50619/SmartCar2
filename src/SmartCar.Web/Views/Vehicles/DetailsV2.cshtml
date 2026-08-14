@@ -40,10 +40,12 @@
             <div class="bg-light rounded d-flex align-items-center justify-content-center" style="height:360px">Xe chưa có ảnh</div>
         }
     </div>
+
     <div class="col-lg-5">
         <div class="card card-body shadow-sm sticky-top" style="top:1rem">
             <h1 class="h3">@Model.VehicleName</h1>
             <p class="text-muted">@Model.BrandName · @Model.Model · @Model.LicensePlate</p>
+
             <div class="mb-3">
                 <span class="text-warning fs-5">★</span>
                 <strong>@(reviews.Count == 0 ? "Chưa có đánh giá" : $"{averageRating:F1}/5")</strong>
@@ -52,17 +54,29 @@
                     <span class="text-muted">(@reviews.Count lượt)</span>
                 }
             </div>
+
             <dl class="row mb-3">
                 <dt class="col-5">Số chỗ</dt><dd class="col-7">@Model.Seats</dd>
                 <dt class="col-5">Hộp số</dt><dd class="col-7">@Model.Transmission</dd>
                 <dt class="col-5">Nhiên liệu</dt><dd class="col-7">@Model.FuelType</dd>
                 <dt class="col-5">Năm sản xuất</dt><dd class="col-7">@Model.ManufactureYear</dd>
             </dl>
+
             <p>@Model.Description</p>
             <hr />
-            <div class="mb-2"><strong>Nhận xe:</strong> @pickupDate.ToString("dd/MM/yyyy HH:mm")</div>
-            <div class="mb-2"><strong>Trả xe:</strong> @returnDate.ToString("dd/MM/yyyy HH:mm")</div>
-            <div class="mb-2"><strong>Số ngày tính phí:</strong> @numberOfDays</div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span><strong>Nhận xe</strong></span>
+                <span>@pickupDate.ToString("dd/MM/yyyy HH:mm")</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span><strong>Trả xe</strong></span>
+                <span>@returnDate.ToString("dd/MM/yyyy HH:mm")</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span><strong>Số ngày tính phí</strong></span>
+                <span>@numberOfDays</span>
+            </div>
             <div class="fs-4 fw-bold text-primary mb-3">Dự kiến: @estimatedAmount.ToString("N0") đ</div>
 
             @if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
@@ -71,14 +85,87 @@
                 {
                     @if (hasBankAccount)
                     {
-                        <div class="alert alert-success py-2 mb-3">
-                            <strong>✓ Giấy tờ và tài khoản nhận hoàn tiền đã sẵn sàng.</strong> Bạn có thể gửi yêu cầu thuê xe.
-                        </div>
-                        <form asp-controller="Bookings" asp-action="Create" method="post" data-loading-form>
+                        <form asp-controller="Bookings" asp-action="Create" method="post" data-loading-form id="booking-location-form">
                             <input type="hidden" name="VehicleId" value="@Model.VehicleId" />
                             <input type="hidden" name="PickupDate" value="@pickupDate.ToString("O")" />
                             <input type="hidden" name="ReturnDate" value="@returnDate.ToString("O")" />
-                            <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">Gửi yêu cầu thuê xe</button>
+
+                            <div class="border rounded-3 p-3 mb-3 bg-light">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <div>
+                                        <div class="text-uppercase small text-muted fw-semibold">Nhận xe</div>
+                                        <div class="fw-bold">Chọn cách nhận xe</div>
+                                    </div>
+                                    <span class="badge bg-primary-subtle text-primary">@pickupDate.ToString("HH:mm dd/MM")</span>
+                                </div>
+
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="PickupMethodOption" id="pickupAtSmartCar" value="smartcar" checked />
+                                    <label class="form-check-label" for="pickupAtSmartCar">
+                                        <strong>Nhận tại SmartCar</strong>
+                                        <span class="d-block small text-muted">Đến điểm giao nhận của SmartCar để nhận xe.</span>
+                                    </label>
+                                </div>
+
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="radio" name="PickupMethodOption" id="pickupDelivery" value="delivery" />
+                                    <label class="form-check-label" for="pickupDelivery">
+                                        <strong>Giao xe tận nơi</strong>
+                                        <span class="d-block small text-muted">Nhập địa chỉ để quản trị viên kiểm tra khả năng giao xe trước khi duyệt đơn.</span>
+                                    </label>
+                                </div>
+
+                                <label class="form-label fw-semibold" for="pickupLocation">Địa điểm nhận xe</label>
+                                <input id="pickupLocation"
+                                       name="PickupLocation"
+                                       class="form-control"
+                                       maxlength="250"
+                                       required
+                                       readonly
+                                       value="SmartCar - Điểm giao nhận của chủ xe" />
+                                <div class="form-text" id="pickupLocationHelp">Đây là địa điểm nhận xe mặc định.</div>
+                            </div>
+
+                            <div class="border rounded-3 p-3 mb-3">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <div>
+                                        <div class="text-uppercase small text-muted fw-semibold">Trả xe</div>
+                                        <div class="fw-bold">Xác định nơi trả xe</div>
+                                    </div>
+                                    <span class="badge bg-secondary-subtle text-secondary">@returnDate.ToString("HH:mm dd/MM")</span>
+                                </div>
+
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="sameReturnLocation" checked />
+                                    <label class="form-check-label" for="sameReturnLocation">
+                                        <strong>Trả xe tại cùng địa điểm nhận</strong>
+                                        <span class="d-block small text-muted">Đây là lựa chọn mặc định và thuận tiện nhất.</span>
+                                    </label>
+                                </div>
+
+                                <label class="form-label fw-semibold" for="returnLocation">Địa điểm trả xe</label>
+                                <input id="returnLocation"
+                                       name="ReturnLocation"
+                                       class="form-control"
+                                       maxlength="250"
+                                       required
+                                       readonly
+                                       value="SmartCar - Điểm giao nhận của chủ xe" />
+                                <div class="form-text" id="returnLocationHelp">Nếu muốn trả ở nơi khác, tắt lựa chọn “cùng địa điểm nhận” và nhập địa chỉ mới.</div>
+                            </div>
+
+                            <div class="alert alert-success py-2 mb-3">
+                                <strong>✓ Hồ sơ đã đủ điều kiện.</strong>
+                                Giấy tờ và tài khoản nhận hoàn tiền đã sẵn sàng.
+                            </div>
+
+                            <div class="alert alert-light border small py-2 mb-3">
+                                Địa điểm nhận/trả sẽ được gửi cùng yêu cầu thuê. Quản trị viên kiểm tra tính khả thi trước khi xác nhận đơn; sau khi đã xác nhận, mọi thay đổi cần được hai bên thống nhất lại.
+                            </div>
+
+                            <button class="btn btn-primary btn-lg w-100" type="submit" data-loading-text="Đang gửi yêu cầu...">
+                                Gửi yêu cầu thuê xe
+                            </button>
                         </form>
                     }
                     else
@@ -160,3 +247,57 @@
         </div>
     }
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const form = document.getElementById("booking-location-form");
+        if (!form) return;
+
+        const pickupAtSmartCar = document.getElementById("pickupAtSmartCar");
+        const pickupDelivery = document.getElementById("pickupDelivery");
+        const pickupLocation = document.getElementById("pickupLocation");
+        const pickupHelp = document.getElementById("pickupLocationHelp");
+        const sameReturnLocation = document.getElementById("sameReturnLocation");
+        const returnLocation = document.getElementById("returnLocation");
+        const returnHelp = document.getElementById("returnLocationHelp");
+        const smartCarLocation = "SmartCar - Điểm giao nhận của chủ xe";
+
+        function syncReturnLocation() {
+            if (sameReturnLocation.checked) {
+                returnLocation.value = pickupLocation.value;
+                returnLocation.readOnly = true;
+                returnHelp.textContent = "Địa điểm trả đang được đồng bộ theo địa điểm nhận xe.";
+            } else {
+                returnLocation.readOnly = false;
+                if (returnLocation.value === pickupLocation.value || returnLocation.value === smartCarLocation) {
+                    returnLocation.value = "";
+                }
+                returnLocation.placeholder = "Nhập địa điểm trả xe khác";
+                returnHelp.textContent = "Địa điểm khác sẽ được quản trị viên kiểm tra trước khi xác nhận đơn.";
+            }
+        }
+
+        function setPickupMode() {
+            if (pickupAtSmartCar.checked) {
+                pickupLocation.value = smartCarLocation;
+                pickupLocation.readOnly = true;
+                pickupLocation.placeholder = "";
+                pickupHelp.textContent = "Đây là địa điểm nhận xe mặc định.";
+            } else if (pickupDelivery.checked) {
+                pickupLocation.value = "";
+                pickupLocation.readOnly = false;
+                pickupLocation.placeholder = "Nhập địa chỉ giao xe tận nơi";
+                pickupHelp.textContent = "Quản trị viên sẽ kiểm tra địa chỉ và xác nhận khả năng giao xe.";
+                pickupLocation.focus();
+            }
+            syncReturnLocation();
+        }
+
+        pickupAtSmartCar.addEventListener("change", setPickupMode);
+        pickupDelivery.addEventListener("change", setPickupMode);
+        pickupLocation.addEventListener("input", syncReturnLocation);
+        sameReturnLocation.addEventListener("change", syncReturnLocation);
+
+        setPickupMode();
+    });
+</script>
