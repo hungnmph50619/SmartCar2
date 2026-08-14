@@ -1,4 +1,5 @@
 @model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 
 @{
@@ -50,6 +51,7 @@
     var paymentAccountNumber = ViewBag.PaymentAccountNumber as string ?? string.Empty;
     var paymentAccountHolder = ViewBag.PaymentAccountHolder as string ?? "SMARTCAR";
     var paymentQrImagePath = ViewBag.PaymentQrImagePath as string ?? "/images/payment/bank-qr.png";
+    var initialRentalPaymentAmount = Model.RentalAmount + Model.DeliveryFee;
 
     var statusInfo = Model.Status switch
     {
@@ -61,7 +63,7 @@
         BookingStatus.PendingPayment => (
             "Đơn đã được xác nhận",
             "Xe đã được giữ tạm thời cho khoảng thời gian bạn chọn.",
-            "Thanh toán tiền thuê để hoàn tất giữ xe.",
+            "Kiểm tra chi tiết tiền thuê và phí giao nhận bên dưới, sau đó thanh toán để hoàn tất giữ xe.",
             "primary"),
         BookingStatus.Paid => (
             "Đã thanh toán tiền thuê",
@@ -71,7 +73,7 @@
         BookingStatus.ReadyForPickup => (
             "Xe đã sẵn sàng giao",
             "Xe đã được kiểm tra và có thể lập biên bản bàn giao.",
-            $"Đến nhận xe lúc {Model.PickupDate:dd/MM/yyyy HH:mm} tại {(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "địa điểm đã thỏa thuận" : Model.PickupLocation)} và mang theo CCCD, GPLX bản gốc.",
+            $"Nhận xe lúc {Model.PickupDate:dd/MM/yyyy HH:mm} tại {(string.IsNullOrWhiteSpace(Model.PickupLocation) ? "địa điểm đã thỏa thuận" : Model.PickupLocation)} và mang theo CCCD, GPLX bản gốc.",
             "success"),
         BookingStatus.Rented => (
             "Bạn đang trong thời gian thuê xe",
@@ -160,7 +162,7 @@
                          class="rounded"
                          alt="Ảnh @Model.VehicleName" />
                 }
-                <div>
+                <div class="flex-grow-1">
                     <h2 class="h5">@Model.VehicleName</h2>
                     <p class="text-muted">@Model.LicensePlate</p>
                     <div>Nhận: <strong>@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
@@ -173,6 +175,31 @@
                     }
                 </div>
             </div>
+
+            <div class="border-top mt-3 pt-3">
+                <div class="d-flex justify-content-between gap-3 mb-1">
+                    <span>Hình thức nhận xe</span>
+                    <strong>@(Model.PickupMethod == DeliveryConstants.HomeDelivery ? "Giao xe tận nơi" : "Tự đến SmartCar")</strong>
+                </div>
+                @if (Model.PickupDeliveryDistanceKm > 0)
+                {
+                    <div class="d-flex justify-content-between gap-3 small text-muted mb-1">
+                        <span>Quãng đường giao xe</span>
+                        <strong>@Model.PickupDeliveryDistanceKm.ToString("N1") km</strong>
+                    </div>
+                }
+                @if (Model.ReturnCollectionDistanceKm > 0)
+                {
+                    <div class="d-flex justify-content-between gap-3 small text-muted mb-1">
+                        <span>Quãng đường SmartCar đến nhận lại xe</span>
+                        <strong>@Model.ReturnCollectionDistanceKm.ToString("N1") km</strong>
+                    </div>
+                }
+                <div class="d-flex justify-content-between gap-3 mt-2">
+                    <span>Phí giao nhận</span>
+                    <strong class="@(Model.DeliveryFee > 0 ? "text-primary" : "text-success")">@(Model.DeliveryFee > 0 ? $"{Model.DeliveryFee:N0} đ" : "Miễn phí")</strong>
+                </div>
+            </div>
         </div>
 
         <div class="card card-body shadow-sm mb-4">
@@ -180,7 +207,7 @@
             <ol class="mb-0">
                 <li>Gửi yêu cầu và kiểm tra giấy tờ</li>
                 <li>Quản trị viên xác nhận hoặc từ chối</li>
-                <li>Thanh toán tiền thuê</li>
+                <li>Thanh toán tiền thuê và phí giao nhận đã chốt</li>
                 <li>Kiểm tra và bàn giao xe</li>
                 <li>Gia hạn nếu cần và được duyệt</li>
                 <li>Trả xe, xử lý phụ phí và hoàn tất</li>
@@ -378,27 +405,54 @@
         </div>
 
         <div class="card card-body shadow-sm sticky-top" style="top:1rem" id="payment-panel">
+            <div class="text-uppercase small text-muted fw-semibold">Chi tiết thanh toán</div>
             <h2 class="h5">Thanh toán</h2>
-            <div class="d-flex justify-content-between">
-                <span>Tiền thuê và gia hạn</span>
+
+            <div class="d-flex justify-content-between mb-1">
+                <span>Tiền thuê xe</span>
                 <strong>@Model.RentalAmount.ToString("N0") đ</strong>
             </div>
-            <div class="d-flex justify-content-between">
-                <span>Phụ phí</span>
+
+            <div class="d-flex justify-content-between mb-1">
+                <span>Phí giao nhận</span>
+                <strong class="@(Model.DeliveryFee > 0 ? "text-primary" : "text-success")">@(Model.DeliveryFee > 0 ? $"{Model.DeliveryFee:N0} đ" : "Miễn phí")</strong>
+            </div>
+
+            @if (Model.DeliveryFee > 0)
+            {
+                <div class="bg-light rounded p-2 small mb-2">
+                    @if (Model.PickupDeliveryDistanceKm > 0)
+                    {
+                        <div class="d-flex justify-content-between"><span>Giao xe</span><span>@Model.PickupDeliveryDistanceKm.ToString("N1") km</span></div>
+                    }
+                    @if (Model.ReturnCollectionDistanceKm > 0)
+                    {
+                        <div class="d-flex justify-content-between"><span>Nhận lại xe</span><span>@Model.ReturnCollectionDistanceKm.ToString("N1") km</span></div>
+                    }
+                    <div class="d-flex justify-content-between"><span>Đơn giá</span><span>@Model.DeliveryRatePerKm.ToString("N0") đ/km/lượt</span></div>
+                </div>
+            }
+
+            <div class="d-flex justify-content-between mb-1">
+                <span>Phụ phí sau trả xe</span>
                 <strong>@Model.AdditionalAmount.ToString("N0") đ</strong>
             </div>
             <hr />
             <div class="d-flex justify-content-between fs-5">
                 <span>Tổng cộng</span>
-                <strong>@Model.TotalAmount.ToString("N0") đ</strong>
+                <strong class="text-primary">@Model.TotalAmount.ToString("N0") đ</strong>
             </div>
 
             @if (Model.Status == BookingStatus.PendingPayment && !Model.RentalPaid)
             {
+                <div class="alert alert-info py-2 small mt-3 mb-0">
+                    Khoản cần thanh toán lúc này gồm <strong>tiền thuê xe + phí giao nhận</strong>. Phụ phí sau trả xe chỉ phát sinh nếu có căn cứ kiểm tra thực tế.
+                </div>
+
                 @if (rentalPayment?.Status == PaymentStatus.AwaitingConfirmation)
                 {
                     <div class="alert alert-warning mt-3 mb-0">
-                        <div class="fw-bold">Tiền thuê đang chờ xác nhận</div>
+                        <div class="fw-bold">Khoản thuê xe đang chờ xác nhận</div>
                         <div class="small mt-1">Bạn đã báo chuyển khoản QR. SmartCar đang kiểm tra giao dịch.</div>
                         <hr class="my-2" />
                         <div class="d-flex justify-content-between">
@@ -412,7 +466,13 @@
                 {
                     <div class="card bg-light border mt-3">
                         <div class="card-body">
-                            <h3 class="h6 mb-3">Thanh toán tiền thuê bằng QR</h3>
+                            <h3 class="h6 mb-3">Thanh toán tiền thuê + giao nhận bằng QR</h3>
+                            <div class="border rounded bg-white p-2 mb-3 small">
+                                <div class="d-flex justify-content-between"><span>Tiền thuê xe</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
+                                <div class="d-flex justify-content-between"><span>Phí giao nhận</span><strong>@Model.DeliveryFee.ToString("N0") đ</strong></div>
+                                <hr class="my-2" />
+                                <div class="d-flex justify-content-between"><strong>Cần chuyển khoản</strong><strong class="text-danger">@((rentalPayment?.Amount ?? initialRentalPaymentAmount).ToString("N0")) đ</strong></div>
+                            </div>
                             <div class="text-center mb-3">
                                 <img src="@paymentQrImagePath"
                                      alt="QR thanh toán tiền thuê"
@@ -425,7 +485,7 @@
                                 <div class="d-flex justify-content-between mb-1"><span>Chủ tài khoản:</span><strong>@paymentAccountHolder</strong></div>
                                 <div class="d-flex justify-content-between mb-1">
                                     <span>Số tiền:</span>
-                                    <strong class="text-danger">@((rentalPayment?.Amount ?? Model.RentalAmount).ToString("N0")) đ</strong>
+                                    <strong class="text-danger">@((rentalPayment?.Amount ?? initialRentalPaymentAmount).ToString("N0")) đ</strong>
                                 </div>
                                 <div class="mt-2">
                                     <span>Nội dung chuyển khoản:</span>
@@ -446,24 +506,24 @@
                                       method="post"
                                       class="mt-3"
                                       data-loading-form
-                                      data-confirm="Bạn xác nhận đã thực hiện chuyển khoản tiền thuê?">
+                                      data-confirm="Bạn xác nhận đã thực hiện chuyển khoản tiền thuê và phí giao nhận?">
                                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                                     <input type="hidden" name="type" value="@PaymentType.Rental" />
                                     <button class="btn btn-success w-100"
                                             type="submit"
-                                            data-loading-text="Đang gửi...">Tôi đã chuyển khoản tiền thuê</button>
+                                            data-loading-text="Đang gửi...">Tôi đã chuyển khoản</button>
                                 </form>
                                 <div class="text-center text-muted small my-2">hoặc thanh toán thử nghiệm</div>
                                 <form asp-controller="Payments"
                                       asp-action="Pay"
                                       method="post"
                                       data-loading-form
-                                      data-confirm="Xác nhận dùng thanh toán mô phỏng cho tiền thuê?">
+                                      data-confirm="Xác nhận dùng thanh toán mô phỏng cho tiền thuê và phí giao nhận?">
                                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                                     <input type="hidden" name="type" value="@PaymentType.Rental" />
                                     <button class="btn btn-outline-primary w-100"
                                             type="submit"
-                                            data-loading-text="Đang thanh toán...">Thanh toán tiền thuê mô phỏng</button>
+                                            data-loading-text="Đang thanh toán...">Thanh toán mô phỏng</button>
                                 </form>
                             }
                         </div>
@@ -649,7 +709,7 @@
 
             @if (Model.RentalPaid)
             {
-                <div class="alert alert-success mt-3 mb-0">✓ Tiền thuê đã thanh toán.</div>
+                <div class="alert alert-success mt-3 mb-0">✓ Tiền thuê và phí giao nhận đã thanh toán.</div>
             }
 
             @if (Model.Extensions.Any(item => item.Status == BookingExtensionStatus.Paid))
