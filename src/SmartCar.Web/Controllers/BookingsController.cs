@@ -15,6 +15,7 @@ namespace SmartCar.Web.Controllers;
 public sealed class BookingsController : Controller
 {
     private readonly IBookingService _bookingService;
+    private readonly IDeliveryQuoteService _deliveryQuoteService;
     private readonly IDocumentService _documentService;
     private readonly IUserBankAccountService _bankAccountService;
     private readonly UserManager<ApplicationUser> _userManager;
@@ -22,16 +23,54 @@ public sealed class BookingsController : Controller
 
     public BookingsController(
         IBookingService bookingService,
+        IDeliveryQuoteService deliveryQuoteService,
         IDocumentService documentService,
         IUserBankAccountService bankAccountService,
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration)
     {
         _bookingService = bookingService;
+        _deliveryQuoteService = deliveryQuoteService;
         _documentService = documentService;
         _bankAccountService = bankAccountService;
         _userManager = userManager;
         _configuration = configuration;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> DeliveryQuote(
+        string pickupMethod,
+        string pickupLocation,
+        string returnLocation,
+        CancellationToken cancellationToken)
+    {
+        var quote = await _deliveryQuoteService.CalculateAsync(
+            pickupMethod,
+            pickupLocation,
+            returnLocation,
+            cancellationToken);
+
+        if (!quote.Succeeded)
+        {
+            return Json(new
+            {
+                succeeded = false,
+                error = quote.Error
+            });
+        }
+
+        return Json(new
+        {
+            succeeded = true,
+            pickupLocation = quote.PickupLocation,
+            returnLocation = quote.ReturnLocation,
+            pickupDeliveryDistanceKm = quote.PickupDeliveryDistanceKm,
+            returnCollectionDistanceKm = quote.ReturnCollectionDistanceKm,
+            totalDistanceKm = quote.TotalDistanceKm,
+            deliveryRatePerKm = quote.DeliveryRatePerKm,
+            deliveryFee = quote.DeliveryFee,
+            smartCarLocation = DeliveryConstants.SmartCarLocation
+        });
     }
 
     [HttpPost]
@@ -132,6 +171,7 @@ public sealed class BookingsController : Controller
                 model.VehicleId,
                 model.PickupDate,
                 model.ReturnDate,
+                model.PickupMethod,
                 model.PickupLocation,
                 model.ReturnLocation),
             cancellationToken);
