@@ -1,0 +1,241 @@
+@model IReadOnlyList<SmartCar.Application.Features.Payments.AdminPaymentListItemDto>
+
+@using SmartCar.Domain.Enums
+@using SmartCar.Web.Services
+
+@inject IUserBankAccountService BankAccountService
+
+@{
+    var first = Model.First();
+    ViewData["Title"] = $"Hoàn tiền đơn #{first.BookingId}";
+
+    var refundItems = Model
+        .Where(item => item.Type is PaymentType.Refund or PaymentType.DepositRefund)
+        .ToList();
+    var pendingRefunds = refundItems
+        .Where(item => item.Status == PaymentStatus.AwaitingRefund)
+        .ToList();
+
+    var paidTripAmount = Model
+        .Where(item => item.Type == PaymentType.Rental && item.Status == PaymentStatus.Paid)
+        .Sum(item => item.Amount);
+    var paidDepositAmount = Model
+        .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
+        .Sum(item => item.Amount);
+
+    var tripRefundAmount = refundItems
+        .Where(item => item.Type == PaymentType.Refund)
+        .Sum(item => item.Amount);
+    var depositRefundAmount = refundItems
+        .Where(item => item.Type == PaymentType.DepositRefund)
+        .Sum(item => item.Amount);
+    var totalRefundAmount = tripRefundAmount + depositRefundAmount;
+    var retainedAmount = Math.Max(0, paidTripAmount - tripRefundAmount);
+    var pendingTotal = pendingRefunds.Sum(item => item.Amount);
+    var refundedTotal = refundItems
+        .Where(item => item.Status == PaymentStatus.Refunded)
+        .Sum(item => item.Amount);
+
+    var refundBankAccount = await BankAccountService.GetDefaultAsync(first.CustomerId);
+    var transferContent = $"SC{first.BookingId}-REFUND-TOTAL";
+    var allRefunded = refundItems.Count > 0 && refundItems.All(item => item.Status == PaymentStatus.Refunded);
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <div class="text-uppercase small text-muted fw-semibold">Hoàn tiền theo đơn</div>
+        <h1 class="h3 mb-1">Đơn #@first.BookingId · @first.CustomerName</h1>
+        <div class="text-muted">@first.VehicleName · @first.LicensePlate</div>
+    </div>
+    <a class="btn btn-outline-secondary"
+       asp-action="Index"
+       asp-route-status="@PaymentStatus.AwaitingRefund">Danh sách khoản hoàn</a>
+</div>
+
+<div class="alert alert-primary shadow-sm mb-4">
+    <div class="fw-bold">Một lần chuyển tiền cho toàn bộ khoản hoàn của đơn</div>
+    <div class="small mt-1">
+        Hệ thống vẫn lưu riêng phần hoàn tiền chuyến và hoàn cọc để kế toán/truy vết,
+        nhưng Admin chỉ cần chuyển <strong>một tổng tiền</strong> với một mã giao dịch ngân hàng.
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                    <div>
+                        <div class="text-uppercase small text-muted fw-semibold">Đối soát số tiền</div>
+                        <h2 class="h4 mb-0">Tổng khoản hoàn</h2>
+                    </div>
+                    <div class="text-end">
+                        <div class="small text-muted">Tổng theo hồ sơ</div>
+                        <div class="fs-3 fw-bold text-success">@totalRefundAmount.ToString("N0") đ</div>
+                    </div>
+                </div>
+
+                <div class="border rounded-3 overflow-hidden">
+                    <div class="d-flex justify-content-between gap-3 p-3 border-bottom">
+                        <span>Tiền thuê/phí giao nhận đã thu</span>
+                        <strong>@paidTripAmount.ToString("N0") đ</strong>
+                    </div>
+                    <div class="d-flex justify-content-between gap-3 p-3 border-bottom">
+                        <span>SmartCar giữ lại theo chính sách</span>
+                        <strong class="@(retainedAmount > 0 ? "text-danger" : "text-muted")">@retainedAmount.ToString("N0") đ</strong>
+                    </div>
+                    <div class="d-flex justify-content-between gap-3 p-3 border-bottom bg-light">
+                        <span>Hoàn phần tiền chuyến</span>
+                        <strong class="text-success">@tripRefundAmount.ToString("N0") đ</strong>
+                    </div>
+                    <div class="d-flex justify-content-between gap-3 p-3 border-bottom">
+                        <span>Cọc đã thu</span>
+                        <strong>@paidDepositAmount.ToString("N0") đ</strong>
+                    </div>
+                    <div class="d-flex justify-content-between gap-3 p-3 border-bottom bg-light">
+                        <span>Hoàn cọc bảo đảm</span>
+                        <strong class="text-success">@depositRefundAmount.ToString("N0") đ</strong>
+                    </div>
+                    <div class="d-flex justify-content-between gap-3 p-3 bg-success-subtle">
+                        <span class="fw-bold">TỔNG CẦN HOÀN CHO KHÁCH</span>
+                        <strong class="fs-4 text-success">@totalRefundAmount.ToString("N0") đ</strong>
+                    </div>
+                </div>
+
+                @if (refundedTotal > 0 && pendingTotal > 0)
+                {
+                    <div class="alert alert-warning mt-3 mb-0 small">
+                        Đã xác nhận hoàn <strong>@refundedTotal.ToString("N0") đ</strong> trước đó;
+                        còn phải xử lý <strong>@pendingTotal.ToString("N0") đ</strong>.
+                    </div>
+                }
+                else if (allRefunded)
+                {
+                    <div class="alert alert-success mt-3 mb-0">
+                        <strong>✓ Toàn bộ khoản hoàn của đơn đã được ghi nhận hoàn tất.</strong>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <div class="text-uppercase small text-muted fw-semibold">Cấu phần kế toán</div>
+                <h2 class="h5">Hệ thống vẫn theo dõi riêng</h2>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Khoản</th>
+                                <th class="text-end">Số tiền</th>
+                                <th>Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var refund in refundItems.OrderBy(item => item.Type))
+                            {
+                                <tr>
+                                    <td>@(refund.Type == PaymentType.DepositRefund ? "Hoàn cọc bảo đảm" : "Hoàn phần tiền chuyến")</td>
+                                    <td class="text-end fw-semibold">@refund.Amount.ToString("N0") đ</td>
+                                    <td>
+                                        @if (refund.Status == PaymentStatus.Refunded)
+                                        {
+                                            <span class="badge bg-success">Đã hoàn</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-info text-dark">Chờ hoàn</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-warning sticky-top" style="top:1rem">
+            <div class="card-body p-4">
+                <div class="text-uppercase small text-warning fw-semibold">Thao tác Admin</div>
+                <h2 class="h4">Chuyển khoản hoàn tiền</h2>
+
+                @if (allRefunded)
+                {
+                    <div class="alert alert-success mb-0">
+                        <strong>✓ Đơn #@first.BookingId đã hoàn đủ @totalRefundAmount.ToString("N0") đ.</strong>
+                    </div>
+                }
+                else if (refundBankAccount is null)
+                {
+                    <div class="alert alert-danger">
+                        Khách chưa lưu tài khoản ngân hàng mặc định để nhận khoản hoàn.
+                    </div>
+                    <a asp-controller="AdminCustomers"
+                       asp-action="Details"
+                       asp-route-id="@first.CustomerId"
+                       class="btn btn-outline-secondary w-100">Xem thông tin khách hàng</a>
+                }
+                else
+                {
+                    <div class="border rounded-3 bg-light p-3 mb-3">
+                        <div class="mb-2"><span class="text-muted">Ngân hàng:</span> <strong>@refundBankAccount.BankName</strong></div>
+                        <div class="mb-2"><span class="text-muted">Số tài khoản:</span> <strong class="user-select-all">@refundBankAccount.AccountNumber</strong></div>
+                        <div class="mb-2"><span class="text-muted">Chủ tài khoản:</span> <strong>@refundBankAccount.AccountHolderName</strong></div>
+                        <hr />
+                        <div class="d-flex justify-content-between gap-3 mb-2">
+                            <span>Số tiền cần chuyển lần này</span>
+                            <strong class="text-danger fs-5">@pendingTotal.ToString("N0") đ</strong>
+                        </div>
+                        <div><span class="text-muted">Nội dung chuyển:</span> <strong class="user-select-all">@transferContent</strong></div>
+                    </div>
+
+                    <div class="alert alert-info small">
+                        <strong>Trình tự</strong>
+                        <div>1. Chuyển đúng <strong>@pendingTotal.ToString("N0") đ</strong> vào tài khoản trên.</div>
+                        <div>2. Dùng nội dung <strong>@transferContent</strong>.</div>
+                        <div>3. Sau khi ngân hàng báo thành công, nhập mã giao dịch và xác nhận một lần.</div>
+                    </div>
+
+                    <form asp-action="ConfirmBookingRefund"
+                          method="post"
+                          data-loading-form
+                          data-confirm="Bạn xác nhận đã thực tế chuyển tổng @pendingTotal.ToString("N0") đ cho @refundBankAccount.AccountHolderName?">
+                        <input type="hidden" name="bookingId" value="@first.BookingId" />
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Mã giao dịch ngân hàng sau khi chuyển</label>
+                            <input type="text"
+                                   name="transactionCode"
+                                   class="form-control"
+                                   minlength="4"
+                                   maxlength="100"
+                                   autocomplete="off"
+                                   placeholder="Ví dụ: FT260816123456"
+                                   required />
+                            <div class="form-text">Dùng mã/reference do ngân hàng sinh sau khi giao dịch thành công.</div>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   name="transferCompleted"
+                                   value="true"
+                                   id="transferCompleted"
+                                   required />
+                            <label class="form-check-label" for="transferCompleted">
+                                Tôi xác nhận đã chuyển đúng người nhận và đúng tổng số tiền <strong>@pendingTotal.ToString("N0") đ</strong>.
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100" data-loading-text="Đang ghi nhận...">
+                            ✓ Ghi nhận đã hoàn tổng @pendingTotal.ToString("N0") đ
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+</div>
