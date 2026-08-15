@@ -165,16 +165,6 @@ public sealed class ProfileSettingsController : Controller
             return RedirectToProfile("banking", returnVehicleId, pickupDate, returnDate);
         }
 
-        var documents = await _documentService.GetCustomerDocumentsAsync(user.Id, cancellationToken);
-        var citizenName = documents
-            .FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId)
-            ?.FullNameOnDocument;
-        var referenceName = string.IsNullOrWhiteSpace(citizenName) ? user.FullName : citizenName;
-        var holderMatches = string.Equals(
-            NormalizePersonName(referenceName ?? string.Empty),
-            NormalizePersonName(model.AccountHolderName),
-            StringComparison.Ordinal);
-
         await _auditService.WriteAsync(
             user.Id,
             "UpdateBankAccount",
@@ -185,11 +175,6 @@ public sealed class ProfileSettingsController : Controller
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = "Đã lưu tài khoản ngân hàng mặc định để nhận các khoản hoàn tiền từ SmartCar.";
-        if (!holderMatches)
-        {
-            TempData["WarningMessage"] = "Tên chủ tài khoản ngân hàng chưa khớp với tên trên hồ sơ CCCD. Hệ thống vẫn lưu nhưng quản trị viên có thể yêu cầu bạn kiểm tra lại trước khi hoàn tiền.";
-        }
-
         return RedirectToProfile("banking", returnVehicleId, pickupDate, returnDate);
     }
 
