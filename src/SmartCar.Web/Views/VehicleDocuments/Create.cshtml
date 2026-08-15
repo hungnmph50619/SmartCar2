@@ -8,7 +8,7 @@
     <div class="col-lg-8">
         <div class="card card-body shadow-sm">
             <h1 class="h3 mb-3">Thêm giấy tờ pháp lý xe</h1>
-            <form asp-action="Create" method="post" class="row g-3">
+            <form asp-action="Create" method="post" enctype="multipart/form-data" class="row g-3">
                 <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                 <div class="col-md-6">
                     <label class="form-label">Xe</label>
@@ -32,14 +32,21 @@
                 <div class="col-md-3">
                     <label class="form-label">Ngày cấp</label>
                     <input asp-for="IssuedDate" type="date" class="form-control" />
+                    <span asp-validation-for="IssuedDate" class="text-danger"></span>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Ngày hết hạn</label>
                     <input asp-for="ExpiryDate" type="date" class="form-control" />
+                    <span asp-validation-for="ExpiryDate" class="text-danger"></span>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">Đường dẫn ảnh hoặc tệp</label>
-                    <input asp-for="ImagePath" class="form-control" placeholder="/uploads/documents/... hoặc địa chỉ lưu trữ" />
+                    <label asp-for="ImageFile" class="form-label"></label>
+                    <input asp-for="ImageFile"
+                           type="file"
+                           class="form-control"
+                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+                    <div class="form-text">Tối đa 5 MB. Chấp nhận JPG, PNG hoặc WEBP.</div>
+                    <span asp-validation-for="ImageFile" class="text-danger"></span>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Ghi chú</label>

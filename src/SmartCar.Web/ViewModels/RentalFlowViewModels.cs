@@ -67,7 +67,7 @@ public sealed class VehicleFormViewModel
     public string? Description { get; set; }
 
     [Display(Name = "Ảnh xe")]
-    public List<IFormFile> Images { get; set; } = new();
+    public List<IFormFile>? Images { get; set; }
 
     public string? RowVersionBase64 { get; set; }
 }
@@ -138,7 +138,7 @@ public sealed class HandoverViewModel
     public string? Accessories { get; set; }
 
     [Display(Name = "Ảnh bàn giao")]
-    public List<IFormFile> Images { get; set; } = new();
+    public List<IFormFile>? Images { get; set; }
 
     public string? Notes { get; set; }
 }
@@ -158,7 +158,7 @@ public sealed class ReturnViewModel
     public bool HasDamage { get; set; }
 
     [Display(Name = "Ảnh khi trả xe")]
-    public List<IFormFile> Images { get; set; } = new();
+    public List<IFormFile>? Images { get; set; }
 
     public string? Notes { get; set; }
 }

@@ -92,18 +92,21 @@ internal sealed class BookingService : IBookingService
         var hasValidRegistration = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Registration,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: true,
             cancellationToken);
         var hasValidInspection = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Inspection,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: false,
             cancellationToken);
         var hasValidInsurance = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Insurance,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: false,
             cancellationToken);
@@ -493,13 +496,15 @@ internal sealed class BookingService : IBookingService
     private Task<bool> HasValidVehicleDocumentAsync(
         int vehicleId,
         VehicleDocumentType documentType,
+        DateTime requiredFrom,
         DateTime requiredUntil,
         bool allowNoExpiry,
         CancellationToken cancellationToken) =>
         _dbContext.VehicleDocuments.AnyAsync(document =>
             document.VehicleId == vehicleId &&
             document.DocumentType == documentType &&
+            document.IssuedDate.Date <= requiredFrom.Date &&
             ((allowNoExpiry && !document.ExpiryDate.HasValue) ||
-             (document.ExpiryDate.HasValue && document.ExpiryDate.Value >= requiredUntil)),
+             (document.ExpiryDate.HasValue && document.ExpiryDate.Value.Date >= requiredUntil.Date)),
             cancellationToken);
 }

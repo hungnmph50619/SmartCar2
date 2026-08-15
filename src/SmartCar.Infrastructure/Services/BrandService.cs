@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Brands;
 using SmartCar.Domain.Entities;
+using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 
 namespace SmartCar.Infrastructure.Services;
@@ -117,6 +118,22 @@ internal sealed class BrandService : IBrandService
         if (brand is null)
         {
             return OperationResult.Failure("Không tìm thấy hãng xe.");
+        }
+
+        // Chỉ chặn khi Admin muốn ngừng một hãng vẫn còn xe đang hoạt động.
+        // Kích hoạt lại hãng luôn được phép.
+        if (!isActive)
+        {
+            var hasActiveVehicles = await _dbContext.Vehicles.AnyAsync(
+                vehicle => vehicle.BrandId == brandId &&
+                           vehicle.Status != VehicleStatus.Inactive,
+                cancellationToken);
+
+            if (hasActiveVehicles)
+            {
+                return OperationResult.Failure(
+                    "Không thể ngừng hoạt động hãng xe vì vẫn còn xe đang hoạt động thuộc hãng này.");
+            }
         }
 
         brand.IsActive = isActive;
