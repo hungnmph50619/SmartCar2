@@ -13,6 +13,22 @@
         : Model.ReturnLocation;
     var earlyReturnMin = DateTime.Now.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm");
     var earlyReturnMax = Model.ReturnDate.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm");
+    var awaitingHandoverSignature = Model.Status == BookingStatus.ReadyForPickup && Model.HasHandover;
+}
+
+@if (awaitingHandoverSignature)
+{
+    <div class="alert alert-warning shadow-sm mb-4 d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div>
+            <div class="text-uppercase small fw-semibold">Cần bạn xác nhận trước khi nhận chìa khóa</div>
+            <div class="fw-bold fs-5">Biên bản bàn giao đã sẵn sàng để ký</div>
+            <div class="small mt-1">SmartCar đã ghi nhận bộ ảnh, ODO, nhiên liệu/pin, phụ kiện và ghi chú hiện trạng. Hãy xem đúng biên bản này và ký trực tiếp trên tài khoản của bạn.</div>
+        </div>
+        <a class="btn btn-dark"
+           asp-controller="CustomerHandovers"
+           asp-action="Sign"
+           asp-route-bookingId="@Model.BookingId">Xem & ký biên bản →</a>
+    </div>
 }
 
 <partial name="Details" model="Model" />
