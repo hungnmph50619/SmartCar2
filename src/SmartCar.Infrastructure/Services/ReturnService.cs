@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Returns;
@@ -14,22 +13,6 @@ internal sealed class ReturnService : IReturnService
     private const int LateGraceMinutes = 30;
     private const decimal HourlyLateRateFactor = 0.10m;
     private const decimal MaximumLateFeePerDayFactor = 1.50m;
-
-    private const string CustomerCheckInAction = "CustomerVehicleCheckInCompleted";
-    private const string CustomerCheckOutAction = "CustomerVehicleCheckOutCompleted";
-
-    private const string ReturnReviewPendingAction = "ReturnEvidencePendingCustomerReview";
-    private const string ReturnReviewAcceptedAction = "CustomerAcceptedReturnEvidence";
-    private const string ReturnReviewDisputedAction = "CustomerDisputedReturnEvidence";
-    private const string ReturnReviewResolvedAction = "AdminResolvedReturnEvidenceDispute";
-
-    private static readonly string[] ReturnReviewActions =
-    {
-        ReturnReviewPendingAction,
-        ReturnReviewAcceptedAction,
-        ReturnReviewDisputedAction,
-        ReturnReviewResolvedAction
-    };
 
     private readonly ApplicationDbContext _dbContext;
 
@@ -53,7 +36,6 @@ internal sealed class ReturnService : IReturnService
                 HandoverAt = item.Handover!.HandoverAt,
                 HandoverMileage = item.Handover.Mileage,
                 HandoverFuelLevel = item.Handover.FuelLevel,
-                HandoverAccessories = item.Handover.Accessories,
                 HandoverImagePaths = item.Handover.ImagePaths,
                 VehicleFuelType = item.Vehicle.FuelType
             })
@@ -64,44 +46,13 @@ internal sealed class ReturnService : IReturnService
             return null;
         }
 
-        var checkInJson = await _dbContext.AuditLogs
-            .AsNoTracking()
-            .Where(log =>
-                log.Action == CustomerCheckInAction &&
-                log.EntityId == bookingId.ToString())
-            .OrderByDescending(log => log.CreatedAt)
-            .Select(log => log.NewValues)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        CustomerEvidenceData checkIn;
-        if (!string.IsNullOrWhiteSpace(checkInJson))
-        {
-            checkIn = ParseCustomerEvidence(checkInJson);
-        }
-        else
-        {
-            // Tương thích dữ liệu thử nghiệm cũ trước khi chuyển từ chữ ký canvas sang check-in ảnh bắt buộc.
-            var legacySignedJson = await _dbContext.AuditLogs
-                .AsNoTracking()
-                .Where(log =>
-                    log.Action == "CustomerSignedHandover" &&
-                    log.EntityName == nameof(VehicleHandover) &&
-                    log.EntityId == bookingId.ToString())
-                .OrderByDescending(log => log.CreatedAt)
-                .Select(log => log.NewValues)
-                .FirstOrDefaultAsync(cancellationToken);
-            checkIn = ParseLegacyCustomerHandoverEvidence(legacySignedJson);
-        }
-
-        var checkOutJson = await _dbContext.AuditLogs
-            .AsNoTracking()
-            .Where(log =>
-                log.Action == CustomerCheckOutAction &&
-                log.EntityId == bookingId.ToString())
-            .OrderByDescending(log => log.CreatedAt)
-            .Select(log => log.NewValues)
-            .FirstOrDefaultAsync(cancellationToken);
-        var checkOut = ParseCustomerEvidence(checkOutJson);
+        var handoverPaths = SplitPaths(booking.HandoverImagePaths);
+        var vehicleImages = handoverPaths
+            .Where(path => !path.Contains("/handover-documents/", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var documentImages = handoverPaths
+            .Where(path => path.Contains("/handover-documents/", StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
         return new ReturnPreparationDto(
             booking.BookingId,
@@ -110,14 +61,8 @@ internal sealed class ReturnService : IReturnService
             booking.HandoverAt,
             booking.HandoverMileage,
             booking.HandoverFuelLevel,
-            booking.HandoverAccessories,
-            booking.HandoverImagePaths,
-            checkIn.ImagePaths,
-            checkIn.Note,
-            checkOut.ImagePaths,
-            checkOut.Note,
-            checkOut.Mileage,
-            checkOut.FuelLevel,
+            JoinPaths(vehicleImages),
+            JoinPaths(documentImages),
             booking.VehicleFuelType);
     }
 
@@ -149,43 +94,10 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Đơn đã có biên bản trả xe.");
         }
 
-        var hasNewCustomerCheckIn = await _dbContext.AuditLogs
-            .AsNoTracking()
-            .AnyAsync(log =>
-                log.Action == CustomerCheckInAction &&
-                log.EntityId == booking.BookingId.ToString(),
-                cancellationToken);
-
-        if (hasNewCustomerCheckIn)
-        {
-            var customerCheckOutJson = await _dbContext.AuditLogs
-                .AsNoTracking()
-                .Where(log =>
-                    log.Action == CustomerCheckOutAction &&
-                    log.EntityId == booking.BookingId.ToString())
-                .OrderByDescending(log => log.CreatedAt)
-                .Select(log => log.NewValues)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            var customerCheckOut = ParseCustomerEvidence(customerCheckOutJson);
-            if (string.IsNullOrWhiteSpace(customerCheckOut.ImagePaths) ||
-                SplitPaths(customerCheckOut.ImagePaths).Count < 6)
-            {
-                return OperationResult.Failure(
-                    "Khách chưa hoàn tất bộ ảnh check-out 6 góc trên tài khoản của mình. Với chuyến sử dụng quy trình bằng chứng mới, SmartCar chỉ được lập biên bản nhận lại sau khi khách đã khóa check-out.");
-            }
-
-            if (customerCheckOut.Mileage.HasValue && request.Mileage < customerCheckOut.Mileage.Value)
-            {
-                return OperationResult.Failure(
-                    $"ODO SmartCar ghi khi nhận lại ({request.Mileage:N0} km) nhỏ hơn ODO khách đã khóa tại check-out ({customerCheckOut.Mileage.Value:N0} km). Hãy kiểm tra lại trước khi lập biên bản.");
-            }
-        }
-
         if (request.Mileage < booking.Handover.Mileage)
         {
             return OperationResult.Failure(
-                $"ODO khi nhận lại ({request.Mileage:N0} km) không được nhỏ hơn ODO lúc giao ({booking.Handover.Mileage:N0} km).");
+                $"Số km khi nhận lại ({request.Mileage:N0} km) không được nhỏ hơn số km lúc giao ({booking.Handover.Mileage:N0} km).");
         }
 
         if (request.ReturnedAt < booking.Handover.HandoverAt)
@@ -201,6 +113,11 @@ internal sealed class ReturnService : IReturnService
         if (string.IsNullOrWhiteSpace(request.ReturnLocation))
         {
             return OperationResult.Failure("Vui lòng ghi nhận địa điểm trả xe thực tế.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ImagePaths))
+        {
+            return OperationResult.Failure("Thiếu ảnh hiện trạng khi trả xe hoặc ảnh biên bản trả xe đã ký.");
         }
 
         var returnLocation = request.ReturnLocation.Trim();
@@ -251,83 +168,14 @@ internal sealed class ReturnService : IReturnService
         booking.Vehicle.Status = VehicleStatus.Inspection;
         booking.Vehicle.CurrentMileage = request.Mileage;
 
-        var reviewCreatedAt = DateTime.UtcNow;
-        _dbContext.AuditLogs.Add(new AuditLog
+        _dbContext.Notifications.Add(new Notification
         {
-            UserId = null,
-            Action = ReturnReviewPendingAction,
-            EntityName = nameof(VehicleReturn),
-            EntityId = booking.BookingId.ToString(),
-            Description =
-                $"SmartCar đã tiếp nhận xe đơn #{booking.BookingId} và tạo bộ bằng chứng trả xe để đối chiếu với customer check-in/check-out và ảnh bàn giao của SmartCar. " +
-                "Đơn chưa được hoàn tất cho đến khi khách xác nhận hiện trạng hoặc tranh chấp được xử lý.",
-            NewValues = JsonSerializer.Serialize(new
-            {
-                booking.BookingId,
-                request.ReturnedAt,
-                ReturnLocation = returnLocation,
-                request.Mileage,
-                FuelLevel = request.FuelLevel.Trim(),
-                request.HasDamage,
-                ReturnCondition = Normalize(request.ExteriorCondition),
-                ReturnImagePaths = Normalize(request.ImagePaths)
-            }),
-            CreatedAt = reviewCreatedAt
+            UserId = booking.CustomerId,
+            Title = isEarlyReturn ? "Đã tiếp nhận xe trả sớm" : "Đã tiếp nhận xe trả",
+            Message = lateFee > 0
+                ? $"Đơn #{booking.BookingId} đã được SmartCar tiếp nhận. Phí trả muộn tạm tính {lateFee:N0} đồng. Ảnh hiện trạng và ảnh biên bản trả xe có chữ ký đã được lưu; xe đang chờ kiểm tra và quyết toán cọc."
+                : $"Đơn #{booking.BookingId} đã được SmartCar tiếp nhận. Ảnh hiện trạng và ảnh biên bản trả xe có chữ ký đã được lưu; xe đang chờ kiểm tra và quyết toán cọc."
         });
-
-        var reviewInstruction =
-            " Mở chi tiết đơn để xem bộ bằng chứng check-in ↔ check-out cùng ảnh kiểm tra SmartCar và chọn Đồng ý hoặc Không đồng ý/Yêu cầu xem xét.";
-
-        if (lateFee > 0)
-        {
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = booking.CustomerId,
-                Title = "Xe được ghi nhận trả muộn",
-                Message =
-                    $"Đơn #{booking.BookingId} trả muộn {lateMinutes} phút tại {returnLocation}. " +
-                    $"Sau 30 phút ân hạn, phí trả muộn tạm tính là {lateFee:N0} đồng. " +
-                    "Phụ phí cuối cùng sẽ được đối trừ với cọc bảo đảm trước khi yêu cầu khách thanh toán thêm." +
-                    reviewInstruction
-            });
-        }
-        else if (lateMinutes > 0)
-        {
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = booking.CustomerId,
-                Title = "Đã tiếp nhận xe trả",
-                Message =
-                    $"Đơn #{booking.BookingId} được tiếp nhận muộn {lateMinutes} phút tại {returnLocation}, " +
-                    "vẫn nằm trong thời gian ân hạn 30 phút nên không phát sinh phí trả muộn. Xe đang chờ kiểm tra và quyết toán cọc." +
-                    reviewInstruction
-            });
-        }
-        else if (isEarlyReturn)
-        {
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = booking.CustomerId,
-                Title = "Đã tiếp nhận xe trả sớm",
-                Message =
-                    $"Đơn #{booking.BookingId} đã được SmartCar tiếp nhận xe lúc " +
-                    $"{request.ReturnedAt:dd/MM/yyyy HH:mm} tại {returnLocation}. " +
-                    "Xe đang chờ kiểm tra và quyết toán cọc bảo đảm." +
-                    reviewInstruction
-            });
-        }
-        else
-        {
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = booking.CustomerId,
-                Title = "Đã tiếp nhận xe trả",
-                Message =
-                    $"Đơn #{booking.BookingId} đã được tiếp nhận xe tại {returnLocation}. " +
-                    "Xe đang chờ kiểm tra và quyết toán cọc bảo đảm." +
-                    reviewInstruction
-            });
-        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
@@ -434,28 +282,6 @@ internal sealed class ReturnService : IReturnService
         if (booking.Status != BookingStatus.PendingInspection)
         {
             return OperationResult.Failure("Đơn chưa ở trạng thái chờ hoàn tất kiểm tra.");
-        }
-
-        var latestReviewAction = await _dbContext.AuditLogs
-            .AsNoTracking()
-            .Where(log =>
-                log.EntityName == nameof(VehicleReturn) &&
-                log.EntityId == bookingId.ToString() &&
-                ReturnReviewActions.Contains(log.Action))
-            .OrderByDescending(log => log.CreatedAt)
-            .Select(log => log.Action)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (latestReviewAction == ReturnReviewPendingAction)
-        {
-            return OperationResult.Failure(
-                "Khách chưa phản hồi bộ ảnh/hiện trạng trả xe. Hãy chờ khách xác nhận hoặc kiểm tra mục Đối chiếu & phản hồi khách trước khi hoàn tất đơn.");
-        }
-
-        if (latestReviewAction == ReturnReviewDisputedAction)
-        {
-            return OperationResult.Failure(
-                "Khách đang không đồng ý với hiện trạng trả xe. Phải ghi nhận xử lý tranh chấp và căn cứ kết luận trước khi hoàn tất đơn hoặc quyết toán cọc.");
         }
 
         var rentalPaid = booking.Payments.Any(payment =>
@@ -637,77 +463,16 @@ internal sealed class ReturnService : IReturnService
             payment.Type == PaymentType.AdditionalCharge &&
             payment.Status == PaymentStatus.Paid);
 
-    private sealed record CustomerEvidenceData(
-        string? ImagePaths,
-        string? Note,
-        int? Mileage,
-        string? FuelLevel);
-
-    private static CustomerEvidenceData ParseCustomerEvidence(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return new CustomerEvidenceData(null, null, null, null);
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            var imagePaths = root.TryGetProperty("ImagePaths", out var imagesElement) &&
-                             imagesElement.ValueKind == JsonValueKind.String
-                ? Normalize(imagesElement.GetString())
-                : null;
-            var note = root.TryGetProperty("Note", out var noteElement) &&
-                       noteElement.ValueKind == JsonValueKind.String
-                ? Normalize(noteElement.GetString())
-                : null;
-            int? mileage = root.TryGetProperty("Mileage", out var mileageElement) && mileageElement.TryGetInt32(out var mileageValue)
-                ? mileageValue
-                : null;
-            var fuelLevel = root.TryGetProperty("FuelLevel", out var fuelElement) &&
-                            fuelElement.ValueKind == JsonValueKind.String
-                ? Normalize(fuelElement.GetString())
-                : null;
-            return new CustomerEvidenceData(imagePaths, note, mileage, fuelLevel);
-        }
-        catch (JsonException)
-        {
-            return new CustomerEvidenceData(null, null, null, null);
-        }
-    }
-
-    private static CustomerEvidenceData ParseLegacyCustomerHandoverEvidence(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return new CustomerEvidenceData(null, null, null, null);
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            var imagePaths = root.TryGetProperty("CustomerImagePaths", out var imagesElement) &&
-                             imagesElement.ValueKind == JsonValueKind.String
-                ? Normalize(imagesElement.GetString())
-                : null;
-            var note = root.TryGetProperty("CustomerNote", out var noteElement) &&
-                       noteElement.ValueKind == JsonValueKind.String
-                ? Normalize(noteElement.GetString())
-                : null;
-            return new CustomerEvidenceData(imagePaths, note, null, null);
-        }
-        catch (JsonException)
-        {
-            return new CustomerEvidenceData(null, null, null, null);
-        }
-    }
-
     private static IReadOnlyList<string> SplitPaths(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? Array.Empty<string>()
             : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static string? JoinPaths(IEnumerable<string> paths)
+    {
+        var value = string.Join(';', paths);
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
