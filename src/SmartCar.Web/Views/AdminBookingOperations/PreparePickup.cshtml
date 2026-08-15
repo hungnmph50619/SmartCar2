@@ -61,6 +61,7 @@
               data-loading-form
               data-confirm="Xác nhận khách đã phản hồi và đồng ý nhận xe đúng giờ, đúng địa điểm?">
             <input type="hidden" name="bookingId" value="@Model.BookingId" />
+            <input type="hidden" name="contactNote" value="Khách đã xác nhận lịch nhận xe." />
 
             <div class="card-body p-4">
                 <div class="text-uppercase small text-primary fw-semibold">Kết quả liên hệ</div>
@@ -75,24 +76,12 @@
                            required />
                     <span>
                         <strong class="d-block">Có, khách đã xác nhận sẽ nhận xe theo lịch trên</strong>
-                        <span class="small text-muted">Admin đã gọi/nhắn và nhận được phản hồi rõ ràng từ khách.</span>
+                        <span class="small text-muted">Admin đã gọi hoặc nhắn và nhận được phản hồi rõ ràng từ khách.</span>
                     </span>
                 </label>
 
-                <div class="mb-3">
-                    <label for="contactNote" class="form-label fw-semibold">Ghi chú cuộc liên hệ</label>
-                    <textarea name="contactNote"
-                              id="contactNote"
-                              class="form-control"
-                              rows="3"
-                              maxlength="500"
-                              required
-                              placeholder="Ví dụ: gọi 19:15, khách xác nhận có mặt lúc 20:00 tại 25 Nguyễn Trãi."></textarea>
-                    <div class="form-text">Ghi thời điểm liên hệ và nội dung xác nhận để truy vết khi cần.</div>
-                </div>
-
                 <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                    <div class="small text-muted">Sau bước này: <strong>Booking → ReadyForPickup</strong>.</div>
+                    <div class="small text-muted">Sau khi xác nhận, đơn chuyển sang trạng thái <strong>Sẵn sàng giao xe</strong>.</div>
                     <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang xác nhận...">✓ Xác nhận lịch giao xe</button>
                 </div>
             </div>
