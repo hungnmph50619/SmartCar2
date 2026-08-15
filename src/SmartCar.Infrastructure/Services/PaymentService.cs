@@ -81,9 +81,10 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Không tìm thấy đơn thuê của bạn.");
         }
 
-        if (paymentType == PaymentType.Refund)
+        if (paymentType is PaymentType.Refund or PaymentType.DepositRefund or PaymentType.Deposit)
         {
-            return OperationResult.Failure("Khoản hoàn tiền chỉ do hệ thống và quản trị viên xử lý.");
+            return OperationResult.Failure(
+                "Tiền cọc và các khoản hoàn chỉ do SmartCar ghi nhận/xử lý tại bước giao nhận xe.");
         }
 
         if (paymentType == PaymentType.Rental && booking.Status != BookingStatus.PendingPayment)
@@ -118,11 +119,19 @@ internal sealed class PaymentService : IPaymentService
             paymentType == PaymentType.AdditionalCharge &&
             booking.AdditionalAmount > 0)
         {
+            var depositAmount = GetPaidDepositAmount(booking);
+            var amountDueAfterDeposit = Math.Max(0, booking.AdditionalAmount - depositAmount);
+            if (amountDueAfterDeposit <= 0)
+            {
+                return OperationResult.Failure(
+                    "Toàn bộ phụ phí hiện tại đã được cọc bảo đảm bao phủ. Vui lòng chờ SmartCar hoàn tất kiểm tra và quyết toán cọc.");
+            }
+
             payment = new Payment
             {
                 BookingId = booking.BookingId,
                 Type = PaymentType.AdditionalCharge,
-                Amount = booking.AdditionalAmount,
+                Amount = amountDueAfterDeposit,
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending
             };
@@ -173,7 +182,7 @@ internal sealed class PaymentService : IPaymentService
             {
                 PaymentType.Rental => $"Đơn #{booking.BookingId} đã thanh toán tiền thuê thành công.",
                 PaymentType.Extension => $"Đơn #{booking.BookingId} đã thanh toán tiền gia hạn thành công.",
-                PaymentType.AdditionalCharge => $"Đơn #{booking.BookingId} đã thanh toán phụ phí thành công.",
+                PaymentType.AdditionalCharge => $"Đơn #{booking.BookingId} đã thanh toán phần phụ phí vượt cọc thành công.",
                 _ => $"Đơn #{booking.BookingId} đã thanh toán thành công."
             }
         });
@@ -214,9 +223,10 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Không tìm thấy đơn thuê của bạn.");
         }
 
-        if (paymentType == PaymentType.Refund)
+        if (paymentType is PaymentType.Refund or PaymentType.DepositRefund or PaymentType.Deposit)
         {
-            return OperationResult.Failure("Khách hàng không thể tự thực hiện khoản hoàn tiền.");
+            return OperationResult.Failure(
+                "Tiền cọc và các khoản hoàn chỉ do SmartCar ghi nhận/xử lý tại bước giao nhận xe.");
         }
 
         if (paymentType == PaymentType.Rental && booking.Status != BookingStatus.PendingPayment)
@@ -256,11 +266,19 @@ internal sealed class PaymentService : IPaymentService
             paymentType == PaymentType.AdditionalCharge &&
             booking.AdditionalAmount > 0)
         {
+            var depositAmount = GetPaidDepositAmount(booking);
+            var amountDueAfterDeposit = Math.Max(0, booking.AdditionalAmount - depositAmount);
+            if (amountDueAfterDeposit <= 0)
+            {
+                return OperationResult.Failure(
+                    "Toàn bộ phụ phí hiện tại đã được cọc bảo đảm bao phủ. Vui lòng chờ SmartCar hoàn tất kiểm tra và quyết toán cọc.");
+            }
+
             payment = new Payment
             {
                 BookingId = booking.BookingId,
                 Type = PaymentType.AdditionalCharge,
-                Amount = booking.AdditionalAmount,
+                Amount = amountDueAfterDeposit,
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending
             };
@@ -288,7 +306,7 @@ internal sealed class PaymentService : IPaymentService
             {
                 PaymentType.Rental => $"Tiền thuê của đơn #{booking.BookingId} đang chờ SmartCar xác nhận.",
                 PaymentType.Extension => $"Tiền gia hạn của đơn #{booking.BookingId} đang chờ SmartCar xác nhận.",
-                PaymentType.AdditionalCharge => $"Phụ phí của đơn #{booking.BookingId} đang chờ SmartCar xác nhận.",
+                PaymentType.AdditionalCharge => $"Phần phụ phí vượt cọc của đơn #{booking.BookingId} đang chờ SmartCar xác nhận.",
                 _ => $"Khoản thanh toán của đơn #{booking.BookingId} đang chờ SmartCar xác nhận."
             }
         });
@@ -338,9 +356,9 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Giao dịch không ở trạng thái chờ xác nhận QR.");
         }
 
-        if (payment.Type == PaymentType.Refund)
+        if (payment.Type is PaymentType.Refund or PaymentType.DepositRefund or PaymentType.Deposit)
         {
-            return OperationResult.Failure("Khoản hoàn tiền không được xác nhận bằng luồng thanh toán QR.");
+            return OperationResult.Failure("Giao dịch cọc/hoàn tiền không được xác nhận bằng luồng thanh toán QR của khách.");
         }
 
         var booking = payment.Booking;
@@ -460,7 +478,7 @@ internal sealed class PaymentService : IPaymentService
                 {
                     PaymentType.Rental => $"SmartCar đã xác nhận tiền thuê {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
                     PaymentType.Extension => $"SmartCar đã xác nhận tiền gia hạn {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
-                    PaymentType.AdditionalCharge => $"SmartCar đã xác nhận phụ phí {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
+                    PaymentType.AdditionalCharge => $"SmartCar đã xác nhận phần phụ phí vượt cọc {payment.Amount:N0} đồng của đơn #{booking.BookingId}.",
                     _ => $"SmartCar đã xác nhận khoản thanh toán {payment.Amount:N0} đồng của đơn #{booking.BookingId}."
                 }
             });
@@ -566,31 +584,37 @@ internal sealed class PaymentService : IPaymentService
 
         if (payment is null)
         {
-            return OperationResult.Failure("Không tìm thấy khoản hoàn tiền.");
+            return OperationResult.Failure("Không tìm thấy khoản hoàn tiền/hoàn cọc.");
         }
 
-        if (payment.Type != PaymentType.Refund)
+        if (payment.Type is not (PaymentType.Refund or PaymentType.DepositRefund))
         {
-            return OperationResult.Failure("Giao dịch này không phải khoản hoàn tiền.");
+            return OperationResult.Failure("Giao dịch này không phải khoản hoàn tiền hoặc hoàn cọc.");
         }
 
         if (payment.Status != PaymentStatus.AwaitingRefund)
         {
-            return OperationResult.Failure("Khoản hoàn tiền không còn ở trạng thái chờ xử lý.");
+            return OperationResult.Failure("Khoản hoàn không còn ở trạng thái chờ xử lý.");
         }
 
+        var isDepositRefund = payment.Type == PaymentType.DepositRefund;
+
         payment.Status = PaymentStatus.Refunded;
-        payment.Method = PaymentMethods.BankTransferRefund;
+        payment.Method = isDepositRefund
+            ? RentalPolicyConstants.SecurityDepositRefundMethod
+            : PaymentMethods.BankTransferRefund;
         payment.PaidAt = DateTime.UtcNow;
         payment.TransactionCode = string.IsNullOrWhiteSpace(transactionCode)
-            ? $"RF{DateTime.UtcNow:yyyyMMddHHmmssfff}{payment.BookingId}"
+            ? $"{(isDepositRefund ? "DRF" : "RF")}{DateTime.UtcNow:yyyyMMddHHmmssfff}{payment.BookingId}"
             : transactionCode.Trim();
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = payment.Booking.CustomerId,
-            Title = "Hoàn tiền thành công",
-            Message = $"SmartCar đã hoàn {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}."
+            Title = isDepositRefund ? "Hoàn cọc thành công" : "Hoàn tiền thành công",
+            Message = isDepositRefund
+                ? $"SmartCar đã hoàn cọc {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}."
+                : $"SmartCar đã hoàn {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -598,12 +622,21 @@ internal sealed class PaymentService : IPaymentService
 
         await _auditService.WriteAsync(
             adminId,
-            "Refund",
+            isDepositRefund ? "DepositRefund" : "Refund",
             nameof(Payment),
             payment.PaymentId.ToString(),
-            $"Hoàn {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}.",
+            isDepositRefund
+                ? $"Hoàn cọc {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}."
+                : $"Hoàn {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
     }
+
+    private static decimal GetPaidDepositAmount(Booking booking) =>
+        booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
 }
