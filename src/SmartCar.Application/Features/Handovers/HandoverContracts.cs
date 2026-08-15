@@ -37,6 +37,9 @@ public sealed record ConfirmCustomerHandoverRequest(
     string CustomerId,
     string SnapshotHash,
     string SignaturePath,
+    string? CustomerNote,
+    string? CustomerImagePaths,
+    string EvidenceHash,
     string? IpAddress,
     string? UserAgent);
 
