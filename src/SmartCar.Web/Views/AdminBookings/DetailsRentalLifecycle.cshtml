@@ -107,15 +107,13 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
         return;
     }
 
-    // Trước giờ trả, chỉ cho tiếp nhận sớm khi khách đã gửi yêu cầu và Admin đã chấp thuận.
+    // Trước giờ trả, không cho đi tắt bằng nút tiếp nhận trả sớm trong màn chi tiết cũ.
+    // Nếu yêu cầu đã được duyệt, nút tiếp nhận chính nằm ở banner xanh phía trên.
     const earlyReturnLink = Array.from(rentedCard.querySelectorAll('a')).find(link =>
         link.textContent?.includes('Tiếp nhận xe trả sớm'));
 
     const isBeforeScheduledReturn = @isBeforeScheduledReturn.ToString().ToLowerInvariant();
-    const earlyReturnApproved = '@(earlyReturn?.Status ?? string.Empty)' === 'Approved';
-
     if (isBeforeScheduledReturn && earlyReturnLink) {
-        // Nếu đã duyệt, nút tiếp nhận đã có ở banner xanh phía trên; nếu chưa duyệt thì không cho đi tắt.
         earlyReturnLink.remove();
     }
 })();
