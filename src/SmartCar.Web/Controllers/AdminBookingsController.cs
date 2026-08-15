@@ -134,14 +134,14 @@ public sealed class AdminBookingsController : Controller
     public async Task<IActionResult> Confirm(int id, CancellationToken cancellationToken)
     {
         var result = await _bookingService.ConfirmAsync(id, cancellationToken);
-        SetMessage(result, "Đã xác nhận đơn thuê và tạo khoản thanh toán.");
+        SetMessage(result, "Đã xác nhận đơn thuê và tạo khoản thanh toán tiền thuê + cọc bảo đảm.");
 
         if (result.Succeeded)
         {
             await WriteAuditAsync(
                 "Confirm",
                 id,
-                $"Xác nhận đơn thuê #{id} và chuyển sang chờ thanh toán.",
+                $"Xác nhận đơn thuê #{id} và chuyển sang chờ thanh toán tiền thuê + cọc bảo đảm.",
                 cancellationToken);
         }
 
@@ -252,7 +252,8 @@ public sealed class AdminBookingsController : Controller
             Title = "Địa điểm và phí giao nhận đã được cập nhật",
             Message =
                 $"Đơn #{booking.BookingId}: nhận xe tại {booking.PickupLocation}; " +
-                $"trả xe tại {booking.ReturnLocation}; phí giao nhận {booking.DeliveryFee:N0} đồng."
+                $"trả xe tại {booking.ReturnLocation}; phí giao nhận {booking.DeliveryFee:N0} đồng. " +
+                $"Cọc bảo đảm vẫn là {RentalPolicyConstants.SecurityDepositAmount:N0} đồng và được thanh toán cùng tiền thuê."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -286,11 +287,14 @@ public sealed class AdminBookingsController : Controller
         var rentalPaid = booking.Payments.Any(payment =>
             payment.Type == PaymentType.Rental &&
             payment.Status == PaymentStatus.Paid);
+        var depositPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Deposit &&
+            payment.Status == PaymentStatus.Paid);
 
-        if (booking.Status != BookingStatus.Paid || !rentalPaid)
+        if (booking.Status != BookingStatus.Paid || !rentalPaid || !depositPaid)
         {
             TempData["ErrorMessage"] =
-                "Chỉ đơn đã thanh toán tiền thuê mới được ghi nhận xe đã chuẩn bị xong.";
+                "Chỉ đơn đã được xác nhận đủ tiền thuê và cọc bảo đảm mới được ghi nhận xe đã chuẩn bị xong.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -313,8 +317,7 @@ public sealed class AdminBookingsController : Controller
                     $"SmartCar đã hoàn tất kiểm tra và chuẩn bị xe cho đơn #{booking.BookingId}. " +
                     $"Chúng tôi sẽ liên hệ xác nhận trước khi giao tại {booking.PickupLocation} " +
                     $"lúc {booking.PickupDate:dd/MM/yyyy HH:mm}. " +
-                    $"Khi nhận xe, khách cần cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng; " +
-                    "cọc sẽ được quyết toán sau khi trả xe."
+                    $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng đã được thanh toán cùng tiền thuê; bạn không cần thanh toán cọc lần nữa khi nhận xe."
             });
 
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -322,7 +325,7 @@ public sealed class AdminBookingsController : Controller
             await WriteAuditAsync(
                 "VehiclePrepared",
                 id,
-                $"Xe của đơn #{id} đã được kiểm tra và chuẩn bị xong; tiếp theo Admin liên hệ khách xác nhận trước khi xuất phát giao xe.",
+                $"Xe của đơn #{id} đã được kiểm tra và chuẩn bị xong; tiền thuê và cọc đã thanh toán; tiếp theo Admin liên hệ khách xác nhận trước khi xuất phát giao xe.",
                 cancellationToken);
         }
 
