@@ -283,7 +283,18 @@ public sealed class BookingsController : Controller
             .Select(log => (DateTime?)log.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-        ViewBag.VehiclePreparedAt = vehiclePreparedAt?.ToLocalTime();
+        var vehiclePreparedLocal = vehiclePreparedAt?.ToLocalTime();
+        ViewBag.VehiclePreparedAt = vehiclePreparedLocal;
+
+        if (booking.Status == SmartCar.Domain.Enums.BookingStatus.Paid &&
+            vehiclePreparedLocal.HasValue &&
+            TempData["SuccessMessage"] is null)
+        {
+            TempData["SuccessMessage"] =
+                $"Xe của đơn #{booking.BookingId} đã được SmartCar chuẩn bị xong lúc {vehiclePreparedLocal.Value:dd/MM/yyyy HH:mm}. " +
+                $"SmartCar sẽ liên hệ xác nhận lịch nhận trước khi giao. Khi nhận xe cần cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng; cọc được quyết toán sau khi trả xe.";
+        }
+
         ViewBag.SmartCarSupportPhone = GetSupportPhone();
 
         ViewBag.PaymentBankName =
