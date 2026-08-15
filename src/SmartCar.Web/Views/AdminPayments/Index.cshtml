@@ -44,6 +44,8 @@
         PaymentType.Rental or PaymentType.Deposit => $"SC{bookingId}-BOOKING",
         PaymentType.Extension => $"SC{bookingId}-EXT",
         PaymentType.AdditionalCharge => $"SC{bookingId}-FEE",
+        PaymentType.Refund => $"SC{bookingId}-REFUND",
+        PaymentType.DepositRefund => $"SC{bookingId}-DEPOSIT-REFUND",
         _ => null
     };
 }
@@ -52,8 +54,8 @@
     <div>
         <h1 class="h3 mb-1">Quản lý thanh toán</h1>
         <p class="text-muted mb-0">
-            Đối chiếu giao dịch theo <strong>số tiền + nội dung chuyển khoản</strong> trên tài khoản ngân hàng SmartCar.
-            Mã <code>QRREQ...</code> chỉ là mã yêu cầu nội bộ của hệ thống, không phải mã giao dịch ngân hàng.
+            Giao dịch tiền vào được đối chiếu theo <strong>số tiền + nội dung chuyển khoản</strong>.
+            Khi hoàn tiền/cọc, chỉ xác nhận sau khi đã chuyển thực tế và có <strong>mã giao dịch ngân hàng</strong>.
         </p>
     </div>
 </div>
@@ -79,7 +81,7 @@
                 <option value="@type" selected="@(selectedType == type)">@type.ToVietnamese()</option>
             }
         </select>
-        <div class="form-text">Chỉ dùng bộ lọc này khi cần kiểm tra cấu phần kế toán riêng.</div>
+        <div class="form-text">Chỉ lọc theo loại khi cần xem cấu phần kế toán riêng.</div>
     </div>
 
     <div class="col-md-auto d-flex align-items-end">
@@ -109,8 +111,8 @@ else
                     <th class="text-end">Số tiền</th>
                     <th>Trạng thái</th>
                     <th>Thời gian</th>
-                    <th style="min-width:175px;">Nội dung chuyển khoản</th>
-                    <th style="min-width:330px;">Thao tác</th>
+                    <th style="min-width:190px;">Nội dung / mã GD</th>
+                    <th style="min-width:350px;">Thao tác</th>
                 </tr>
             </thead>
             <tbody>
@@ -131,13 +133,10 @@ else
                             string.Equals(item.TransactionCode, payment.TransactionCode, StringComparison.Ordinal))
                         : null;
 
-                    var isGroupedCheckout =
-                        selectedType is null &&
+                    var isGroupedCheckout = selectedType is null &&
                         isInitialCheckoutPart &&
                         pairedCheckoutPayment is not null;
 
-                    // Khi xem tất cả loại thanh toán, Deposit được ẩn và Rental đại diện cho cả giao dịch.
-                    // Dữ liệu DB vẫn giữ hai Payment riêng để hạch toán chính xác.
                     if (isGroupedCheckout && payment.Type == PaymentType.Deposit)
                     {
                         continue;
@@ -146,9 +145,7 @@ else
                     var displayAmount = isGroupedCheckout
                         ? payment.Amount + pairedCheckoutPayment!.Amount
                         : payment.Amount;
-                    var displayType = isGroupedCheckout
-                        ? "Tiền thuê + cọc"
-                        : payment.Type.ToVietnamese();
+                    var displayType = isGroupedCheckout ? "Tiền thuê + cọc" : payment.Type.ToVietnamese();
                     var displayPaymentId = isGroupedCheckout
                         ? $"#{Math.Min(payment.PaymentId, pairedCheckoutPayment!.PaymentId)} + #{Math.Max(payment.PaymentId, pairedCheckoutPayment.PaymentId)}"
                         : $"#{payment.PaymentId}";
@@ -205,14 +202,7 @@ else
                             }
                         </td>
                         <td>
-                            @if (string.IsNullOrWhiteSpace(payment.Method))
-                            {
-                                <span class="text-muted">-</span>
-                            }
-                            else
-                            {
-                                @payment.Method
-                            }
+                            @(string.IsNullOrWhiteSpace(payment.Method) ? "-" : payment.Method)
                         </td>
                         <td class="text-end">
                             <strong class="@(isGroupedCheckout ? "text-primary fs-6" : string.Empty)">@displayAmount.ToString("N0") đ</strong>
@@ -221,20 +211,26 @@ else
                                 <div class="small text-muted">Khách chuyển 1 lần</div>
                             }
                         </td>
-                        <td>
-                            <span class="badge @GetStatusBadgeClass(payment.Status)">@payment.Status.ToVietnamese()</span>
-                        </td>
+                        <td><span class="badge @GetStatusBadgeClass(payment.Status)">@payment.Status.ToVietnamese()</span></td>
                         <td class="small">@GetPaymentTimeText(payment.Status, payment.PaidAt)</td>
                         <td>
                             @if (!string.IsNullOrWhiteSpace(transferContent))
                             {
-                                <code class="user-select-all fs-6">@transferContent</code>
+                                <div class="small text-muted">Nội dung chuyển khoản</div>
+                                <code class="user-select-all">@transferContent</code>
+
                                 @if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
                                 {
-                                    <div class="small text-muted mt-1">
-                                        Mã nội bộ:<br />
-                                        <span class="user-select-all">@payment.TransactionCode</span>
-                                    </div>
+                                    if (isRefund && payment.Status == PaymentStatus.Refunded)
+                                    {
+                                        <div class="small text-muted mt-2">Mã GD ngân hàng</div>
+                                        <code class="user-select-all">@payment.TransactionCode</code>
+                                    }
+                                    else
+                                    {
+                                        <div class="small text-muted mt-2">Mã nội bộ</div>
+                                        <span class="small user-select-all">@payment.TransactionCode</span>
+                                    }
                                 }
                             }
                             else if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
@@ -262,43 +258,26 @@ else
                                             <strong class="user-select-all">@transferContent</strong>
                                         </div>
                                     </div>
-                                    <div class="mt-2">
-                                        Chỉ xác nhận khi giao dịch tiền vào khớp <strong>đúng số tiền</strong> và <strong>đúng nội dung chuyển khoản</strong>.
-                                    </div>
-                                    @if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
-                                    {
-                                        <div class="text-muted mt-1">Mã yêu cầu nội bộ: @payment.TransactionCode</div>
-                                    }
+                                    <div class="mt-2">Chỉ xác nhận khi tiền vào khớp đúng số tiền và nội dung chuyển khoản.</div>
                                 </div>
 
-                                <form asp-action="ConfirmQr"
-                                      method="post"
-                                      class="mb-2"
-                                      data-loading-form
-                                      data-confirm="Bạn đã kiểm tra tài khoản ngân hàng và thấy giao dịch vào đúng @displayAmount.ToString("N0") đ với nội dung @transferContent?">
+                                <form asp-action="ConfirmQr" method="post" class="mb-2" data-loading-form
+                                      data-confirm="Bạn đã thấy giao dịch vào đúng @displayAmount.ToString("N0") đ với nội dung @transferContent?">
                                     <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                    <button type="submit"
-                                            class="btn btn-success btn-sm w-100"
-                                            data-loading-text="Đang xác nhận...">✓ Đã thấy tiền - xác nhận @displayAmount.ToString("N0") đ</button>
+                                    <button type="submit" class="btn btn-success btn-sm w-100" data-loading-text="Đang xác nhận...">
+                                        ✓ Đã thấy tiền - xác nhận @displayAmount.ToString("N0") đ
+                                    </button>
                                 </form>
 
-                                <form asp-action="RejectQr"
-                                      method="post"
-                                      data-loading-form
+                                <form asp-action="RejectQr" method="post" data-loading-form
                                       data-confirm="Bạn xác nhận hiện chưa tìm thấy giao dịch đúng số tiền và nội dung chuyển khoản này?">
                                     <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <div class="mb-2">
                                         <label class="form-label small fw-semibold">Lý do chưa tìm thấy giao dịch</label>
-                                        <textarea name="rejectionReason"
-                                                  class="form-control form-control-sm"
-                                                  rows="2"
-                                                  maxlength="500"
-                                                  required
-                                                  placeholder="Ví dụ: Đã kiểm tra tài khoản nhưng chưa thấy giao dịch +5.750.000 đ có nội dung SC11-BOOKING."></textarea>
+                                        <textarea name="rejectionReason" class="form-control form-control-sm" rows="2" maxlength="500" required
+                                                  placeholder="Ví dụ: Đã kiểm tra tài khoản nhưng chưa thấy giao dịch đúng tổng tiền/nội dung."></textarea>
                                     </div>
-                                    <button type="submit"
-                                            class="btn btn-outline-danger btn-sm w-100"
-                                            data-loading-text="Đang ghi nhận...">⚠ Chưa tìm thấy giao dịch</button>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100" data-loading-text="Đang ghi nhận...">⚠ Chưa tìm thấy giao dịch</button>
                                 </form>
                             }
                             else if (payment.Status == PaymentStatus.AwaitingConfirmation)
@@ -307,22 +286,20 @@ else
                                     @if (isInitialCheckoutPart)
                                     {
                                         <strong>Đang xem cấu phần kế toán</strong>
-                                        <div class="mt-1">Khoản này thuộc giao dịch thanh toán ban đầu tiền thuê + cọc. Backend vẫn xác nhận đồng thời cả gói.</div>
+                                        <div class="mt-1">Khoản này thuộc giao dịch thanh toán ban đầu tiền thuê + cọc.</div>
                                     }
                                     else
                                     {
                                         <strong>Đối chiếu trên tài khoản ngân hàng</strong>
-                                        <div class="border rounded bg-white p-2 mt-2">
-                                            <div class="d-flex justify-content-between gap-2"><span>Số tiền:</span><strong class="text-danger">@displayAmount.ToString("N0") đ</strong></div>
-                                            @if (!string.IsNullOrWhiteSpace(transferContent))
-                                            {
-                                                <div class="d-flex justify-content-between gap-2 mt-1"><span>Nội dung CK:</span><strong class="user-select-all">@transferContent</strong></div>
-                                            }
-                                        </div>
+                                        <div class="mt-1">Số tiền: <strong>@displayAmount.ToString("N0") đ</strong></div>
+                                        @if (!string.IsNullOrWhiteSpace(transferContent))
+                                        {
+                                            <div>Nội dung CK: <strong class="user-select-all">@transferContent</strong></div>
+                                        }
                                     }
                                 </div>
 
-                                <form asp-action="ConfirmQr" method="post" class="mb-2" data-loading-form data-confirm="Bạn đã kiểm tra tài khoản ngân hàng và chắc chắn đã nhận được tiền?">
+                                <form asp-action="ConfirmQr" method="post" class="mb-2" data-loading-form data-confirm="Bạn đã kiểm tra ngân hàng và chắc chắn đã nhận được tiền?">
                                     <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <button type="submit" class="btn btn-success btn-sm w-100" data-loading-text="Đang xác nhận...">✓ Đã thấy tiền - xác nhận</button>
                                 </form>
@@ -331,7 +308,7 @@ else
                                     <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <div class="mb-2">
                                         <label class="form-label small fw-semibold">Lý do chưa tìm thấy giao dịch</label>
-                                        <textarea name="rejectionReason" class="form-control form-control-sm" rows="2" maxlength="500" required placeholder="Ví dụ: Chưa thấy giao dịch đúng số tiền/nội dung chuyển khoản."></textarea>
+                                        <textarea name="rejectionReason" class="form-control form-control-sm" rows="2" maxlength="500" required></textarea>
                                     </div>
                                     <button type="submit" class="btn btn-outline-danger btn-sm w-100" data-loading-text="Đang ghi nhận...">⚠ Chưa tìm thấy giao dịch</button>
                                 </form>
@@ -342,10 +319,8 @@ else
 
                                 @if (refundBankAccount is null)
                                 {
-                                    <div class="alert alert-danger py-2 px-2 small mb-2">Khách chưa lưu tài khoản ngân hàng nhận khoản hoàn.</div>
-                                    <a asp-controller="AdminCustomers"
-                                       asp-action="Details"
-                                       asp-route-id="@payment.CustomerId"
+                                    <div class="alert alert-danger py-2 px-2 small mb-2">Khách chưa lưu tài khoản ngân hàng mặc định để nhận khoản hoàn.</div>
+                                    <a asp-controller="AdminCustomers" asp-action="Details" asp-route-id="@payment.CustomerId"
                                        class="btn btn-outline-secondary btn-sm w-100">Xem thông tin khách hàng</a>
                                 }
                                 else
@@ -354,25 +329,44 @@ else
                                         <div class="mb-1"><span class="text-muted">Ngân hàng:</span> <strong>@refundBankAccount.BankName</strong></div>
                                         <div class="mb-1"><span class="text-muted">Số tài khoản:</span> <strong class="user-select-all">@refundBankAccount.AccountNumber</strong></div>
                                         <div class="mb-1"><span class="text-muted">Chủ tài khoản:</span> <strong>@refundBankAccount.AccountHolderName</strong></div>
-                                        <div><span class="text-muted">Cần hoàn:</span> <strong class="text-danger">@payment.Amount.ToString("N0") đ</strong></div>
+                                        <div class="mb-1"><span class="text-muted">Số tiền:</span> <strong class="text-danger">@payment.Amount.ToString("N0") đ</strong></div>
+                                        <div><span class="text-muted">Nội dung chuyển:</span> <strong class="user-select-all">@transferContent</strong></div>
                                     </div>
 
-                                    <form asp-action="ConfirmRefund"
-                                          method="post"
-                                          data-loading-form
-                                          data-confirm="@(isDepositRefund ? "Bạn đã thực sự chuyển khoản hoàn cọc cho khách?" : "Bạn đã thực sự chuyển khoản hoàn phần tiền chuyến cho khách?")">
+                                    <div class="alert alert-info py-2 px-2 small mb-2">
+                                        <strong>Trình tự xác nhận</strong>
+                                        <div>1. Chuyển đúng số tiền vào đúng tài khoản ở trên.</div>
+                                        <div>2. Dùng đúng nội dung <strong>@transferContent</strong>.</div>
+                                        <div>3. Sau khi ngân hàng báo thành công, copy mã giao dịch ngân hàng rồi mới xác nhận.</div>
+                                    </div>
+
+                                    <form asp-action="ConfirmRefund" method="post" data-loading-form
+                                          data-confirm="Bạn xác nhận đã thực sự chuyển @payment.Amount.ToString("N0") đ cho @refundBankAccount.AccountHolderName với nội dung @transferContent?">
                                         <input type="hidden" name="paymentId" value="@payment.PaymentId" />
+
                                         <div class="mb-2">
-                                            <label class="form-label small fw-semibold">Mã giao dịch ngân hàng</label>
+                                            <label class="form-label small fw-semibold">Mã giao dịch ngân hàng sau khi chuyển</label>
                                             <input type="text"
                                                    name="transactionCode"
                                                    class="form-control form-control-sm"
+                                                   minlength="4"
                                                    maxlength="100"
-                                                   placeholder="Ví dụ: FT260812123456"
+                                                   autocomplete="off"
+                                                   placeholder="Ví dụ: FT260815123456"
                                                    required />
+                                            <div class="form-text">Nhập mã/reference do ngân hàng sinh sau khi giao dịch thành công, không tự đặt mã.</div>
                                         </div>
+
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" name="transferCompleted" value="true"
+                                                   id="transferCompleted-@payment.PaymentId" required />
+                                            <label class="form-check-label small" for="transferCompleted-@payment.PaymentId">
+                                                Tôi xác nhận đã thực tế chuyển khoản cho đúng người nhận, đúng số tiền và đúng nội dung trên.
+                                            </label>
+                                        </div>
+
                                         <button type="submit" class="btn btn-success btn-sm w-100" data-loading-text="Đang xác nhận...">
-                                            ✓ @(isDepositRefund ? "Xác nhận đã hoàn cọc" : "Xác nhận đã hoàn tiền")
+                                            ✓ @(isDepositRefund ? "Ghi nhận đã hoàn cọc" : "Ghi nhận đã hoàn tiền")
                                         </button>
                                     </form>
                                 }
@@ -383,34 +377,19 @@ else
                             }
                             else if (payment.Status == PaymentStatus.Refunded)
                             {
-                                <span class="text-success small fw-semibold">✓ @(isDepositRefund ? "Đã hoàn cọc" : "Đã hoàn tiền")</span>
+                                <div class="text-success small fw-semibold">✓ @(isDepositRefund ? "Đã hoàn cọc" : "Đã hoàn tiền")</div>
+                                @if (isRefund)
+                                {
+                                    <div class="small text-muted mt-1">Khoản này đã khóa, không thể xác nhận hoàn lần hai.</div>
+                                }
                             }
                             else if (payment.Status == PaymentStatus.Pending)
                             {
-                                <div class="small">
-                                    @if (isInitialCheckoutPart)
-                                    {
-                                        <span class="text-muted">Chờ khách thanh toán gói tiền thuê + cọc</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-muted">Chờ khách thanh toán</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
-                                    {
-                                        <div class="text-warning-emphasis mt-1">Có lịch sử đối soát trước đó. Mã nội bộ gần nhất vẫn được giữ lại.</div>
-                                    }
-                                </div>
+                                <span class="text-muted small">@(isInitialCheckoutPart ? "Chờ khách thanh toán gói tiền thuê + cọc" : "Chờ khách thanh toán")</span>
                             }
                             else if (payment.Status == PaymentStatus.Failed)
                             {
-                                <div class="small">
-                                    <span class="text-danger">Giao dịch không còn hiệu lực</span>
-                                    @if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
-                                    {
-                                        <div class="text-muted mt-1">Mã nội bộ gần nhất vẫn được lưu để kiểm tra lịch sử.</div>
-                                    }
-                                </div>
+                                <span class="text-danger small">Giao dịch không còn hiệu lực</span>
                             }
                             else
                             {
