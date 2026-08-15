@@ -10,6 +10,8 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class HandoverService : IHandoverService
 {
+    private const string CustomerCheckInAction = "CustomerVehicleCheckInCompleted";
+
     private static readonly HashSet<string> FuelGaugeLevels = new(StringComparer.OrdinalIgnoreCase)
     {
         "8/8 (100%)",
@@ -106,7 +108,7 @@ internal sealed class HandoverService : IHandoverService
 
         if (booking.Handover is not null)
         {
-            return OperationResult.Failure("Đơn đã có biên bản bàn giao và đang chờ khách xác nhận.");
+            return OperationResult.Failure("Đơn đã có hồ sơ bàn giao và đang chờ khách check-in tình trạng xe.");
         }
 
         var rentalPaid = booking.Payments.Any(payment =>
@@ -117,7 +119,7 @@ internal sealed class HandoverService : IHandoverService
         if (!rentalPaid || !depositPaid)
         {
             return OperationResult.Failure(
-                "Chỉ được lập biên bản bàn giao sau khi SmartCar đã xác nhận đủ tiền thuê và cọc bảo đảm trong giao dịch thanh toán ban đầu.");
+                "Chỉ được lập hồ sơ bàn giao sau khi SmartCar đã xác nhận đủ tiền thuê và cọc bảo đảm trong giao dịch thanh toán ban đầu.");
         }
 
         if (booking.Vehicle.Status != VehicleStatus.Available)
@@ -166,10 +168,10 @@ internal sealed class HandoverService : IHandoverService
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Biên bản bàn giao đang chờ bạn ký",
+            Title = "Cần check-in tình trạng xe trước khi nhận",
             Message =
-                $"SmartCar đã lập biên bản bàn giao cho đơn #{booking.BookingId}. " +
-                "Vui lòng mở chi tiết đơn, kiểm tra ảnh, ODO, nhiên liệu và phụ kiện. Nếu cần, bạn có thể bổ sung ảnh/ghi chú của mình trước khi ký xác nhận nhận xe."
+                $"SmartCar đã lập hồ sơ bàn giao cho đơn #{booking.BookingId}. " +
+                "Trước khi nhận chìa khóa, bạn phải tự chụp bộ ảnh check-in theo 6 góc bắt buộc trên tài khoản của mình và khai hư hỏng có sẵn nếu có."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -177,16 +179,38 @@ internal sealed class HandoverService : IHandoverService
         return OperationResult.Success();
     }
 
-    public async Task<OperationResult> ConfirmCustomerSignatureAsync(
+    public async Task<OperationResult> ConfirmCustomerCheckInAsync(
         ConfirmCustomerHandoverRequest request,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.CustomerId) ||
             string.IsNullOrWhiteSpace(request.SnapshotHash) ||
-            string.IsNullOrWhiteSpace(request.SignaturePath) ||
+            string.IsNullOrWhiteSpace(request.CustomerImagePaths) ||
             string.IsNullOrWhiteSpace(request.EvidenceHash))
         {
-            return OperationResult.Failure("Thiếu dữ liệu xác nhận chữ ký biên bản.");
+            return OperationResult.Failure("Thiếu dữ liệu check-in tình trạng xe.");
+        }
+
+        var customerImagePaths = SplitPaths(request.CustomerImagePaths);
+        if (customerImagePaths.Count < 6)
+        {
+            return OperationResult.Failure("Khách phải chụp đủ tối thiểu 6 ảnh check-in bắt buộc trước khi bắt đầu chuyến.");
+        }
+
+        if (customerImagePaths.Count > 12)
+        {
+            return OperationResult.Failure("Bộ ảnh check-in của khách tối đa 12 ảnh.");
+        }
+
+        var customerNote = Normalize(request.CustomerNote);
+        if (request.HasPreExistingIssue && string.IsNullOrWhiteSpace(customerNote))
+        {
+            return OperationResult.Failure("Nếu phát hiện hư hỏng có sẵn, khách phải mô tả rõ vị trí/tình trạng trước khi nhận xe.");
+        }
+
+        if (customerNote?.Length > 1000)
+        {
+            return OperationResult.Failure("Ghi chú check-in của khách tối đa 1000 ký tự.");
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -207,15 +231,24 @@ internal sealed class HandoverService : IHandoverService
 
         if (booking.Handover is null)
         {
-            return OperationResult.Failure("SmartCar chưa lập biên bản bàn giao cho đơn này.");
+            return OperationResult.Failure("SmartCar chưa lập hồ sơ bàn giao cho đơn này.");
         }
 
         if (booking.Status != BookingStatus.ReadyForPickup)
         {
             return OperationResult.Failure(
                 booking.Status == BookingStatus.Rented
-                    ? "Biên bản đã được xác nhận và chuyến thuê đã bắt đầu."
-                    : "Đơn không còn ở trạng thái chờ xác nhận bàn giao.");
+                    ? "Bạn đã hoàn tất check-in và chuyến thuê đã bắt đầu."
+                    : "Đơn không còn ở trạng thái chờ check-in nhận xe.");
+        }
+
+        var alreadyCheckedIn = await _dbContext.AuditLogs.AnyAsync(log =>
+            log.Action == CustomerCheckInAction &&
+            log.EntityId == booking.BookingId.ToString(),
+            cancellationToken);
+        if (alreadyCheckedIn)
+        {
+            return OperationResult.Failure("Bộ bằng chứng check-in của khách đã được khóa trước đó.");
         }
 
         var rentalPaid = booking.Payments.Any(payment =>
@@ -234,13 +267,7 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe không còn ở trạng thái sẵn sàng để bàn giao.");
         }
 
-        var customerNote = Normalize(request.CustomerNote);
-        if (customerNote?.Length > 1000)
-        {
-            return OperationResult.Failure("Ghi chú bổ sung của khách tối đa 1000 ký tự.");
-        }
-
-        var signedAt = DateTime.UtcNow;
+        var checkedInAt = DateTime.UtcNow;
         var normalizedUserAgent = Normalize(request.UserAgent);
         if (normalizedUserAgent?.Length > 500)
         {
@@ -251,42 +278,43 @@ internal sealed class HandoverService : IHandoverService
         booking.Vehicle.Status = VehicleStatus.Rented;
         booking.Vehicle.CurrentMileage = booking.Handover.Mileage;
 
-        var signatureEvidence = JsonSerializer.Serialize(new
+        var checkInEvidence = JsonSerializer.Serialize(new
         {
             request.BookingId,
-            SnapshotHash = request.SnapshotHash.Trim(),
+            Mileage = booking.Handover.Mileage,
+            FuelLevel = booking.Handover.FuelLevel,
+            HasIssue = request.HasPreExistingIssue,
+            Note = customerNote,
+            ImagePaths = string.Join(';', customerImagePaths),
+            AdminSnapshotHash = request.SnapshotHash.Trim(),
             EvidenceHash = request.EvidenceHash.Trim(),
-            SignaturePath = request.SignaturePath.Trim(),
-            CustomerNote = customerNote,
-            CustomerImagePaths = Normalize(request.CustomerImagePaths),
-            SignedAt = signedAt,
+            CheckedInAt = checkedInAt,
             UserAgent = normalizedUserAgent
         });
 
-        var supplementalImageCount = SplitPaths(request.CustomerImagePaths).Count;
         _dbContext.AuditLogs.Add(new AuditLog
         {
             UserId = request.CustomerId,
-            Action = "CustomerSignedHandover",
+            Action = CustomerCheckInAction,
             EntityName = nameof(VehicleHandover),
             EntityId = booking.BookingId.ToString(),
             Description =
-                $"Khách đã xem và ký biên bản bàn giao điện tử đơn #{booking.BookingId}; " +
-                $"snapshot SHA-256 {request.SnapshotHash.Trim()}, evidence SHA-256 {request.EvidenceHash.Trim()}, " +
-                $"chữ ký lưu tại {request.SignaturePath.Trim()}, ảnh khách bổ sung: {supplementalImageCount}. " +
-                "Booking chuyển sang Rented trong cùng giao dịch dữ liệu với bằng chứng chữ ký.",
-            NewValues = signatureEvidence,
+                $"Khách đã tự thực hiện check-in tình trạng xe đơn #{booking.BookingId} bằng {customerImagePaths.Count} ảnh; " +
+                $"ODO bàn giao {booking.Handover.Mileage:N0} km; nhiên liệu/pin {booking.Handover.FuelLevel}; " +
+                $"hư hỏng có sẵn do khách khai: {(request.HasPreExistingIssue ? "Có" : "Không")}; " +
+                $"evidence SHA-256 {request.EvidenceHash.Trim()}. Booking chuyển sang Rented trong cùng giao dịch dữ liệu.",
+            NewValues = checkInEvidence,
             IpAddress = Normalize(request.IpAddress),
-            CreatedAt = signedAt
+            CreatedAt = checkedInAt
         });
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Đã ký biên bản và nhận xe",
+            Title = "Check-in hoàn tất · chuyến thuê đã bắt đầu",
             Message =
-                $"Bạn đã ký xác nhận biên bản bàn giao đơn #{booking.BookingId}. " +
-                "Chuyến thuê đã bắt đầu. Ảnh/ghi chú bạn bổ sung (nếu có) đã được lưu cùng bằng chứng bàn giao và cọc bảo đảm sẽ được quyết toán sau khi xe được trả, kiểm tra."
+                $"Bộ ảnh check-in của đơn #{booking.BookingId} đã được khóa cùng thời gian và mã kiểm tra dữ liệu. " +
+                "Khi trả xe, bạn sẽ thực hiện check-out bằng cùng các góc để SmartCar đối chiếu trước–sau."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
