@@ -109,7 +109,7 @@ public sealed class AdminPaymentsController : Controller
         TempData[result.Succeeded
             ? "SuccessMessage"
             : "ErrorMessage"] = result.Succeeded
-                ? "Đã xác nhận hoàn tiền cho khách."
+                ? "Đã xác nhận khoản hoàn cho khách."
                 : string.Join("; ", result.Errors);
 
         return RedirectToAction(nameof(Index));
