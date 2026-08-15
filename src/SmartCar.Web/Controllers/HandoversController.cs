@@ -49,7 +49,7 @@ public sealed class HandoversController : Controller
 
         if (booking.Status == BookingStatus.ReadyForPickup && booking.HasHandover)
         {
-            return RedirectToAction(nameof(PendingCustomerSignature), new { bookingId });
+            return RedirectToAction(nameof(PendingCustomerCheckIn), new { bookingId });
         }
 
         if (booking.Status != BookingStatus.ReadyForPickup)
@@ -64,14 +64,14 @@ public sealed class HandoversController : Controller
         if (!depositPaid)
         {
             TempData["ErrorMessage"] =
-                $"Chưa xác nhận cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng trong giao dịch thanh toán ban đầu. Không thể lập biên bản bàn giao.";
+                $"Chưa xác nhận cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng trong giao dịch thanh toán ban đầu. Không thể lập hồ sơ bàn giao.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
         if (DateTime.Now >= booking.ReturnDate)
         {
             TempData["ErrorMessage"] =
-                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao xe.";
+                "Đã đến hoặc quá thời gian trả xe, không thể lập hồ sơ giao xe.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
@@ -122,7 +122,7 @@ public sealed class HandoversController : Controller
             {
                 ModelState.AddModelError(
                     string.Empty,
-                    "Biên bản bàn giao đã được lập và đang chờ khách ký xác nhận.");
+                    "Hồ sơ bàn giao đã được lập và đang chờ khách tự check-in tình trạng xe.");
             }
 
             if (!booking.Payments.Any(payment =>
@@ -130,7 +130,7 @@ public sealed class HandoversController : Controller
             {
                 ModelState.AddModelError(
                     string.Empty,
-                    $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng chưa được xác nhận thanh toán. Không thể lập biên bản giao xe.");
+                    $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng chưa được xác nhận thanh toán. Không thể lập hồ sơ giao xe.");
             }
         }
 
@@ -162,7 +162,7 @@ public sealed class HandoversController : Controller
             cancellationToken);
 
         const string conditionReference =
-            "Tình trạng xe được ghi nhận và đối chiếu theo bộ ảnh bàn giao điện tử.";
+            "Tình trạng xe được ghi nhận và đối chiếu theo bộ ảnh kiểm tra độc lập của SmartCar trước chuyến.";
 
         var result = await _handoverService.CreateAsync(
             new CreateHandoverRequest(
@@ -199,21 +199,26 @@ public sealed class HandoversController : Controller
             "CreateHandoverDraft",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập biên bản bàn giao điện tử cho đơn #{model.BookingId}; đã đối chiếu đúng người nhận và CCCD/GPLX bản gốc; " +
-            $"ODO {model.Mileage:N0} km, nhiên liệu/pin {model.FuelLevel}, {imagePaths.Count} ảnh bàn giao. " +
-            "Biên bản đang chờ chính khách thuê xem và ký xác nhận; Booking chưa chuyển sang Rented.",
+            $"Lập hồ sơ bàn giao SmartCar cho đơn #{model.BookingId}; đã đối chiếu đúng người nhận và CCCD/GPLX bản gốc; " +
+            $"ODO {model.Mileage:N0} km, nhiên liệu/pin {model.FuelLevel}, {imagePaths.Count} ảnh SmartCar. " +
+            "Hồ sơ đang chờ chính khách thuê tự tạo bộ ảnh customer check-in; Booking chưa chuyển sang Rented.",
             newValues:
-                $"Images={imagePaths.Count};Mileage={model.Mileage};FuelLevel={model.FuelLevel};AwaitingCustomerSignature=true",
+                $"Images={imagePaths.Count};Mileage={model.Mileage};FuelLevel={model.FuelLevel};AwaitingCustomerCheckIn=true",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã tạo biên bản bàn giao và gửi khách xác nhận. Chưa giao chìa khóa; đơn chỉ chuyển sang Đang thuê sau khi khách ký biên bản.";
-        return RedirectToAction(nameof(PendingCustomerSignature), new { bookingId = model.BookingId });
+            "Đã khóa hồ sơ ảnh SmartCar. Chưa giao chìa khóa; yêu cầu khách mở đơn và tự check-in đủ 6 ảnh. Chỉ sau check-in, đơn mới chuyển sang Đang thuê.";
+        return RedirectToAction(nameof(PendingCustomerCheckIn), new { bookingId = model.BookingId });
     }
 
+    // Route cũ để tránh lỗi bookmark/link đã tạo trước khi đổi tên checkpoint.
     [HttpGet]
-    public async Task<IActionResult> PendingCustomerSignature(
+    public IActionResult PendingCustomerSignature(int bookingId) =>
+        RedirectToAction(nameof(PendingCustomerCheckIn), new { bookingId });
+
+    [HttpGet]
+    public async Task<IActionResult> PendingCustomerCheckIn(
         int bookingId,
         CancellationToken cancellationToken)
     {
@@ -228,7 +233,7 @@ public sealed class HandoversController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
-        return View(booking);
+        return View("PendingCustomerSignature", booking);
     }
 
     private void SetVehicleContext(HandoverVehicleContextDto context)
@@ -270,6 +275,13 @@ public sealed class HandoversController : Controller
                 nameof(HandoverViewModel.DrivingLicenseOriginalChecked),
                 "Phải đối chiếu GPLX bản gốc tại thời điểm giao xe.");
         }
+
+        if (!model.FinalHandoverConfirmed)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.FinalHandoverConfirmed),
+                "Phải xác nhận bộ ảnh/thông số SmartCar đã được ghi đầy đủ trước khi chuyển khách sang bước check-in.");
+        }
     }
 
     private async Task ValidateImagesAsync(
@@ -280,7 +292,7 @@ public sealed class HandoversController : Controller
         if (selectedImages.Count < MinimumImages)
         {
             ModelState.AddModelError(nameof(HandoverViewModel.Images),
-                $"Vui lòng tải tối thiểu {MinimumImages} ảnh đối chiếu khi bàn giao: trước xe, sau xe, hai bên thân xe, đồng hồ km/nhiên liệu và nội thất.");
+                $"Vui lòng tải tối thiểu {MinimumImages} ảnh SmartCar: trước xe, sau xe, hai bên thân xe, đồng hồ ODO/nhiên liệu và nội thất.");
             return;
         }
 
@@ -314,10 +326,12 @@ public sealed class HandoversController : Controller
         Directory.CreateDirectory(folder);
 
         var paths = new List<string>();
+        var index = 0;
         foreach (var image in images.Where(file => file.Length > 0))
         {
+            index++;
             var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-            var fileName = $"{Guid.NewGuid():N}{extension}";
+            var fileName = $"{index:00}-{Guid.NewGuid():N}{extension}";
             var fullPath = Path.Combine(folder, fileName);
 
             await using var stream = System.IO.File.Create(fullPath);
