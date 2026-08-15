@@ -83,7 +83,7 @@ internal sealed class HandoverRefusalService : IHandoverRefusalService
         }
 
         var hasAwaitingInitialPayment = booking.Payments.Any(payment =>
-            payment.Type is PaymentType.Rental or PaymentType.Deposit &&
+            (payment.Type is PaymentType.Rental or PaymentType.Deposit) &&
             payment.Status == PaymentStatus.AwaitingConfirmation);
         if (hasAwaitingInitialPayment)
         {
