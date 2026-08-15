@@ -13,21 +13,21 @@
         : Model.ReturnLocation;
     var earlyReturnMin = DateTime.Now.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm");
     var earlyReturnMax = Model.ReturnDate.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm");
-    var awaitingHandoverSignature = Model.Status == BookingStatus.ReadyForPickup && Model.HasHandover;
+    var awaitingCustomerCheckIn = Model.Status == BookingStatus.ReadyForPickup && Model.HasHandover;
 }
 
-@if (awaitingHandoverSignature)
+@if (awaitingCustomerCheckIn)
 {
     <div class="alert alert-warning shadow-sm mb-4 d-flex justify-content-between align-items-center gap-3 flex-wrap">
         <div>
-            <div class="text-uppercase small fw-semibold">Cần bạn xác nhận trước khi nhận chìa khóa</div>
-            <div class="fw-bold fs-5">Biên bản bàn giao đã sẵn sàng để ký</div>
-            <div class="small mt-1">SmartCar đã ghi nhận bộ ảnh, ODO, nhiên liệu/pin, phụ kiện và ghi chú hiện trạng. Hãy xem đúng biên bản này; nếu cần bạn có thể bổ sung ảnh/ghi chú của mình trước khi ký.</div>
+            <div class="text-uppercase small fw-semibold">Bắt buộc trước khi nhận chìa khóa</div>
+            <div class="fw-bold fs-5">Tự check-in tình trạng xe trên tài khoản của bạn</div>
+            <div class="small mt-1">SmartCar đã có bộ ảnh bàn giao riêng. Bạn cần tự chụp 6 góc chuẩn để tạo nguồn bằng chứng độc lập trước chuyến; sau đó hệ thống mới kích hoạt trạng thái Đang thuê.</div>
         </div>
         <a class="btn btn-dark"
            asp-controller="CustomerHandovers"
-           asp-action="Sign"
-           asp-route-bookingId="@Model.BookingId">Xem & ký biên bản →</a>
+           asp-action="CheckIn"
+           asp-route-bookingId="@Model.BookingId">Bắt đầu check-in 6 ảnh →</a>
     </div>
 }
 
@@ -38,8 +38,8 @@
     <div class="alert alert-warning shadow-sm mt-4 d-flex justify-content-between align-items-center gap-3 flex-wrap">
         <div>
             <div class="text-uppercase small fw-semibold">Xe đã được SmartCar tiếp nhận</div>
-            <div class="fw-bold fs-5">Kiểm tra ảnh giao ↔ ảnh trả xe</div>
-            <div class="small mt-1">Bạn có thể xem lại bộ ảnh trước chuyến và ảnh SmartCar chụp lúc nhận xe. Nếu có điểm không đúng, gửi yêu cầu xem xét ngay trên hệ thống.</div>
+            <div class="fw-bold fs-5">Kiểm tra toàn bộ bằng chứng trước ↔ sau</div>
+            <div class="small mt-1">Trang đối chiếu hiển thị ảnh check-in/check-out do chính bạn tạo và ảnh kiểm tra độc lập của SmartCar. Nếu có điểm không đúng, gửi yêu cầu xem xét ngay trên hệ thống.</div>
         </div>
         <a class="btn btn-warning"
            asp-controller="CustomerReturns"
@@ -50,6 +50,23 @@
 
 @if (Model.Status == BookingStatus.Rented)
 {
+    <div class="card card-body shadow-sm mt-4 border-primary">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="text-uppercase small text-primary fw-semibold">Bằng chứng cuối chuyến</div>
+                <h2 class="h5 mb-1">Check-out tình trạng xe trước khi bàn giao lại</h2>
+                <p class="text-muted small mb-0">Khi bạn đã ở điểm trả xe và chuẩn bị giao chìa khóa, hãy tự chụp lại đúng 6 góc như lúc check-in. SmartCar sẽ chụp thêm bộ ảnh kiểm tra riêng sau khi nhận xe.</p>
+            </div>
+            <a class="btn btn-primary"
+               asp-controller="CustomerReturns"
+               asp-action="CheckOut"
+               asp-route-bookingId="@Model.BookingId">Check-out 6 ảnh →</a>
+        </div>
+        <div class="alert alert-light border small mt-3 mb-0">
+            Sau khi check-out, đơn vẫn là <strong>Đang thuê</strong> cho đến khi SmartCar thực tế nhận xe/chìa khóa. Không nên check-out từ xa hoặc quá sớm vì bộ ảnh sẽ được khóa làm mốc tình trạng cuối chuyến.
+        </div>
+    </div>
+
     <div class="card card-body shadow-sm mt-4" id="early-return-panel">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
             <div>
@@ -80,7 +97,7 @@
                 {
                     <div class="small"><strong>Ghi chú:</strong> @earlyReturn.DecisionNote</div>
                 }
-                <div class="small text-muted mt-2">Đơn chỉ chuyển sang bước kiểm tra sau khi SmartCar thực tế nhận lại xe và lập biên bản trả.</div>
+                <div class="small text-muted mt-2">Khi đến điểm trả, hãy thực hiện check-out 6 ảnh trước khi giao xe/chìa khóa cho SmartCar.</div>
             </div>
         }
         else
