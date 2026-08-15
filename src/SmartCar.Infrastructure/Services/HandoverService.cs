@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Handovers;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -83,16 +84,19 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
 
-        if (request.HandoverAt < booking.PickupDate)
+        if (!RentalPolicyConstants.DemoBypassRentalTimelineValidation)
         {
-            return OperationResult.Failure(
-                "Thời gian giao xe không được trước thời gian nhận xe đã đặt.");
-        }
+            if (request.HandoverAt < booking.PickupDate)
+            {
+                return OperationResult.Failure(
+                    "Thời gian giao xe không được trước thời gian nhận xe đã đặt.");
+            }
 
-        if (request.HandoverAt >= booking.ReturnDate)
-        {
-            return OperationResult.Failure(
-                "Thời gian giao xe phải trước thời gian trả xe đã đặt.");
+            if (request.HandoverAt >= booking.ReturnDate)
+            {
+                return OperationResult.Failure(
+                    "Thời gian giao xe phải trước thời gian trả xe đã đặt.");
+            }
         }
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
