@@ -115,7 +115,7 @@ else
                         ? Model.FirstOrDefault(item =>
                             item.BookingId == payment.BookingId &&
                             item.PaymentId != payment.PaymentId &&
-                            item.Type is PaymentType.Rental or PaymentType.Deposit &&
+                            (item.Type is PaymentType.Rental or PaymentType.Deposit) &&
                             item.Status == payment.Status &&
                             item.TransactionCode == payment.TransactionCode)
                         : null;
