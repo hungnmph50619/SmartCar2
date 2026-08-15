@@ -162,6 +162,19 @@ public sealed class HandoverViewModel
     public bool FinalHandoverConfirmed { get; set; }
 }
 
+public sealed class CustomerHandoverSignViewModel
+{
+    public int BookingId { get; set; }
+
+    [Required]
+    public string SnapshotHash { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng ký vào biên bản trước khi xác nhận nhận xe.")]
+    public string SignatureData { get; set; } = string.Empty;
+
+    public bool Accepted { get; set; }
+}
+
 public sealed class ReturnViewModel
 {
     public int BookingId { get; set; }
