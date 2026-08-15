@@ -189,8 +189,15 @@ public sealed class ReturnViewModel
     [Display(Name = "Ảnh hiện trạng khi nhận lại xe")]
     public List<IFormFile> Images { get; set; } = new();
 
-    [Display(Name = "Ảnh biên bản trả xe đã ký")]
+    [Required(ErrorMessage = "Vui lòng chọn kết quả ký biên bản trả xe.")]
+    [RegularExpression(@"^(Signed|Refused)$", ErrorMessage = "Kết quả ký biên bản trả xe không hợp lệ.")]
+    public string ReturnDocumentStatus { get; set; } = string.Empty;
+
+    [Display(Name = "Ảnh biên bản / hồ sơ ghi nhận từ chối ký")]
     public List<IFormFile> SignedDocumentImages { get; set; } = new();
+
+    [StringLength(1000, ErrorMessage = "Lý do hoặc diễn biến từ chối ký tối đa 1000 ký tự.")]
+    public string? SignatureRefusalReason { get; set; }
 
     [StringLength(1000)]
     public string? Notes { get; set; }
@@ -215,6 +222,10 @@ public sealed class RentalEvidenceViewModel
     public IReadOnlyList<string> HandoverDocumentImagePaths { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> ReturnVehicleImagePaths { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> ReturnDocumentImagePaths { get; set; } = Array.Empty<string>();
+    public bool CustomerSignedReturnDocument { get; set; } = true;
+    public bool SignatureDisputeActive { get; set; }
+    public string? SignatureRefusalReason { get; set; }
+    public string? SignatureDisputeResolution { get; set; }
 }
 
 public sealed class AddChargeViewModel
