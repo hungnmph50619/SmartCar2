@@ -13,91 +13,56 @@
         : Model.ReturnLocation;
     var earlyReturnMin = DateTime.Now.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm");
     var earlyReturnMax = Model.ReturnDate.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm");
-    var awaitingCustomerCheckIn = Model.Status == BookingStatus.ReadyForPickup && Model.HasHandover;
-}
-
-@if (awaitingCustomerCheckIn)
-{
-    <div class="alert alert-warning shadow-sm mb-4 d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <div>
-            <div class="text-uppercase small fw-semibold">Bắt buộc trước khi nhận chìa khóa</div>
-            <div class="fw-bold fs-5">Tự check-in tình trạng xe trên tài khoản của bạn</div>
-            <div class="small mt-1">SmartCar đã có bộ ảnh bàn giao riêng. Bạn cần tự chụp 6 góc chuẩn để tạo nguồn bằng chứng độc lập trước chuyến; sau đó hệ thống mới kích hoạt trạng thái Đang thuê.</div>
-        </div>
-        <a class="btn btn-dark"
-           asp-controller="CustomerHandovers"
-           asp-action="CheckIn"
-           asp-route-bookingId="@Model.BookingId">Bắt đầu check-in 6 ảnh →</a>
-    </div>
 }
 
 <partial name="Details" model="Model" />
 
 @if (Model.Status == BookingStatus.PendingInspection && Model.HasReturn)
 {
-    <div class="alert alert-warning shadow-sm mt-4 d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <div>
-            <div class="text-uppercase small fw-semibold">Xe đã được SmartCar tiếp nhận</div>
-            <div class="fw-bold fs-5">Kiểm tra toàn bộ bằng chứng trước ↔ sau</div>
-            <div class="small mt-1">Trang đối chiếu hiển thị ảnh check-in/check-out do chính bạn tạo và ảnh kiểm tra độc lập của SmartCar. Nếu có điểm không đúng, gửi yêu cầu xem xét ngay trên hệ thống.</div>
-        </div>
-        <a class="btn btn-warning"
-           asp-controller="CustomerReturns"
-           asp-action="Review"
-           asp-route-bookingId="@Model.BookingId">Xem đối chiếu & phản hồi →</a>
+    <div class="alert alert-info shadow-sm mt-4">
+        <div class="text-uppercase small fw-semibold">Xe đã được SmartCar tiếp nhận</div>
+        <div class="fw-bold fs-5">Biên bản trả xe đã được lưu</div>
+        <div class="small mt-1">SmartCar đã lưu ảnh hiện trạng khi trả và ảnh biên bản giấy có chữ ký. Xe đang được kiểm tra để xác định phụ phí (nếu có) và quyết toán cọc bảo đảm.</div>
     </div>
 }
 
 @if (Model.Status == BookingStatus.Rented)
 {
-    <div class="card card-body shadow-sm mt-4 border-primary">
-        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-            <div>
-                <div class="text-uppercase small text-primary fw-semibold">Bằng chứng cuối chuyến</div>
-                <h2 class="h5 mb-1">Check-out tình trạng xe trước khi bàn giao lại</h2>
-                <p class="text-muted small mb-0">Khi bạn đã ở điểm trả xe và chuẩn bị giao chìa khóa, hãy tự chụp lại đúng 6 góc như lúc check-in. SmartCar sẽ chụp thêm bộ ảnh kiểm tra riêng sau khi nhận xe.</p>
-            </div>
-            <a class="btn btn-primary"
-               asp-controller="CustomerReturns"
-               asp-action="CheckOut"
-               asp-route-bookingId="@Model.BookingId">Check-out 6 ảnh →</a>
-        </div>
-        <div class="alert alert-light border small mt-3 mb-0">
-            Sau khi check-out, đơn vẫn là <strong>Đang thuê</strong> cho đến khi SmartCar thực tế nhận xe/chìa khóa. Không nên check-out từ xa hoặc quá sớm vì bộ ảnh sẽ được khóa làm mốc tình trạng cuối chuyến.
-        </div>
-    </div>
-
     <div class="card card-body shadow-sm mt-4" id="early-return-panel">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
             <div>
-                <div class="text-uppercase small text-muted fw-semibold">Thay đổi lịch trả</div>
-                <h2 class="h5 mb-1">Trả xe sớm</h2>
-                <p class="text-muted small mb-0">Nếu muốn kết thúc chuyến trước lịch, hãy gửi yêu cầu để SmartCar bố trí thời gian và địa điểm tiếp nhận.</p>
+                <div class="text-uppercase small text-danger fw-semibold">Kết thúc chuyến trước lịch</div>
+                <h2 class="h5 mb-1">Hủy chuyến đang thuê</h2>
+                <p class="text-muted small mb-0">Bạn có thể yêu cầu kết thúc chuyến và trả xe trước thời gian đã đặt. Tiền thuê và phí giao nhận của đơn vẫn được thu như đã thanh toán, không hoàn phần thời gian chưa sử dụng.</p>
             </div>
             <span class="badge bg-primary">Đang thuê</span>
+        </div>
+
+        <div class="alert alert-light border small">
+            Sau khi gửi yêu cầu, xe vẫn thuộc trách nhiệm của bạn cho đến khi SmartCar thực tế nhận lại xe, hai bên ký biên bản trả xe và hệ thống chuyển sang bước kiểm tra. Cọc bảo đảm chỉ được quyết toán sau bước này.
         </div>
 
         @if (earlyReturn?.Status == "Pending")
         {
             <div class="alert alert-warning mb-0">
-                <div class="fw-bold">Yêu cầu đang chờ SmartCar xác nhận</div>
-                <div class="small mt-2"><strong>Thời gian:</strong> @earlyReturn.RequestedReturnAt.ToString("dd/MM/yyyy HH:mm")</div>
+                <div class="fw-bold">Yêu cầu hủy chuyến đang chờ SmartCar xác nhận thời gian nhận lại xe</div>
+                <div class="small mt-2"><strong>Thời gian muốn trả:</strong> @earlyReturn.RequestedReturnAt.ToString("dd/MM/yyyy HH:mm")</div>
                 <div class="small"><strong>Địa điểm:</strong> @earlyReturn.ReturnLocation</div>
                 <div class="small"><strong>Lý do:</strong> @earlyReturn.Reason</div>
-                <div class="small text-muted mt-2">Trong thời gian chờ, đơn vẫn là Đang thuê và xe vẫn thuộc trách nhiệm của bạn.</div>
+                <div class="small text-muted mt-2">Tiền thuê/phí giao nhận không được hoàn do khách chủ động kết thúc chuyến khi xe đã được bàn giao.</div>
             </div>
         }
         else if (earlyReturn?.Status == "Approved")
         {
             <div class="alert alert-success mb-0">
-                <div class="fw-bold">✓ SmartCar đã chấp thuận lịch trả sớm</div>
+                <div class="fw-bold">✓ SmartCar đã xác nhận lịch nhận lại xe</div>
                 <div class="small mt-2"><strong>Tiếp nhận:</strong> @earlyReturn.RequestedReturnAt.ToString("dd/MM/yyyy HH:mm")</div>
                 <div class="small"><strong>Địa điểm:</strong> @earlyReturn.ReturnLocation</div>
                 @if (!string.IsNullOrWhiteSpace(earlyReturn.DecisionNote))
                 {
                     <div class="small"><strong>Ghi chú:</strong> @earlyReturn.DecisionNote</div>
                 }
-                <div class="small text-muted mt-2">Khi đến điểm trả, hãy thực hiện check-out 6 ảnh trước khi giao xe/chìa khóa cho SmartCar.</div>
+                <div class="small text-muted mt-2">Khi trả xe, SmartCar sẽ chụp ảnh hiện trạng và hai bên ký biên bản trả xe. Tiền thuê/phí giao nhận vẫn giữ nguyên; cọc được quyết toán sau kiểm tra.</div>
             </div>
         }
         else
@@ -105,7 +70,7 @@
             @if (earlyReturn?.Status == "Rejected")
             {
                 <div class="alert alert-secondary py-2 small">
-                    Yêu cầu trước chưa được chấp thuận@(string.IsNullOrWhiteSpace(earlyReturn.DecisionNote) ? "." : $": {earlyReturn.DecisionNote}") Bạn có thể gửi một thời gian khác phù hợp hơn.
+                    Thời gian tiếp nhận trước chưa được chấp thuận@(string.IsNullOrWhiteSpace(earlyReturn.DecisionNote) ? "." : $": {earlyReturn.DecisionNote}") Bạn có thể đề xuất thời gian khác.
                 </div>
             }
 
@@ -116,18 +81,18 @@
                       method="post"
                       class="row g-3"
                       data-loading-form
-                      data-confirm="Gửi yêu cầu trả xe sớm? Đơn vẫn là Đang thuê cho đến khi SmartCar thực tế nhận lại xe.">
+                      data-confirm="Hủy chuyến đang thuê và đề nghị trả xe sớm? Tiền thuê/phí giao nhận sẽ không được hoàn; xe vẫn thuộc trách nhiệm của bạn cho đến khi SmartCar nhận lại.">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
 
                     <div class="col-md-4">
-                        <label class="form-label">Thời gian muốn trả</label>
+                        <label class="form-label">Thời gian muốn trả xe</label>
                         <input type="datetime-local"
                                name="requestedReturnAt"
                                min="@earlyReturnMin"
                                max="@earlyReturnMax"
                                class="form-control"
                                required />
-                        <div class="form-text">Sớm hơn lịch hiện tại @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm").</div>
+                        <div class="form-text">Phải sớm hơn lịch hiện tại @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm").</div>
                     </div>
 
                     <div class="col-md-4">
@@ -141,21 +106,21 @@
                     </div>
 
                     <div class="col-md-4">
-                        <label class="form-label">Lý do</label>
+                        <label class="form-label">Lý do kết thúc chuyến</label>
                         <input type="text"
                                name="reason"
                                minlength="5"
                                maxlength="500"
                                class="form-control"
-                               placeholder="Ví dụ: công việc kết thúc sớm"
+                               placeholder="Ví dụ: không còn nhu cầu sử dụng xe"
                                required />
                     </div>
 
                     <div class="col-12 d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                        <div class="small text-muted">Trả sớm không tự động hoàn tiền thời gian chưa sử dụng; cọc vẫn được quyết toán sau khi trả xe.</div>
-                        <button class="btn btn-outline-primary"
+                        <div class="small text-danger"><strong>Lưu ý:</strong> hủy chuyến khi đang thuê không hoàn tiền thuê/phí giao nhận đã thanh toán.</div>
+                        <button class="btn btn-outline-danger"
                                 type="submit"
-                                data-loading-text="Đang gửi yêu cầu...">Gửi yêu cầu trả xe sớm</button>
+                                data-loading-text="Đang gửi yêu cầu...">Hủy chuyến & đề nghị trả xe</button>
                     </div>
                 </form>
             }
