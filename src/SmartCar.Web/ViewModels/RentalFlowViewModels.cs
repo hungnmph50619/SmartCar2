@@ -162,21 +162,41 @@ public sealed class HandoverViewModel
     public bool FinalHandoverConfirmed { get; set; }
 }
 
-public sealed class CustomerHandoverSignViewModel
+public sealed class CustomerHandoverCheckInViewModel
 {
     public int BookingId { get; set; }
 
     [Required]
     public string SnapshotHash { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng ký vào biên bản trước khi xác nhận nhận xe.")]
-    public string SignatureData { get; set; } = string.Empty;
+    public bool HasPreExistingIssue { get; set; }
 
-    [StringLength(1000, ErrorMessage = "Ghi chú bổ sung tối đa 1000 ký tự.")]
+    [StringLength(1000, ErrorMessage = "Ghi chú hiện trạng tối đa 1000 ký tự.")]
     public string? CustomerNote { get; set; }
 
-    [Display(Name = "Ảnh khách bổ sung")]
-    public List<IFormFile> CustomerImages { get; set; } = new();
+    [Display(Name = "Ảnh check-in của khách")]
+    public List<IFormFile> EvidenceImages { get; set; } = new();
+
+    public bool Accepted { get; set; }
+}
+
+public sealed class CustomerVehicleCheckOutViewModel
+{
+    public int BookingId { get; set; }
+
+    [Range(0, int.MaxValue)]
+    public int Mileage { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng ghi mức nhiên liệu/pin khi trả xe.")]
+    public string FuelLevel { get; set; } = string.Empty;
+
+    public bool HasIssue { get; set; }
+
+    [StringLength(1000, ErrorMessage = "Ghi chú check-out tối đa 1000 ký tự.")]
+    public string? Note { get; set; }
+
+    [Display(Name = "Ảnh check-out của khách")]
+    public List<IFormFile> EvidenceImages { get; set; } = new();
 
     public bool Accepted { get; set; }
 }
@@ -219,10 +239,14 @@ public sealed class CustomerReturnReviewViewModel
     public string HandoverFuelLevel { get; set; } = string.Empty;
     public string ReturnFuelLevel { get; set; } = string.Empty;
     public string? CustomerHandoverNote { get; set; }
+    public string? CustomerCheckoutNote { get; set; }
+    public int? CustomerCheckoutMileage { get; set; }
+    public string? CustomerCheckoutFuelLevel { get; set; }
     public string? ReturnCondition { get; set; }
     public string? ReturnNotes { get; set; }
     public IReadOnlyList<string> HandoverImagePaths { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> CustomerHandoverImagePaths { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> CustomerCheckoutImagePaths { get; set; } = Array.Empty<string>();
     public IReadOnlyList<string> ReturnImagePaths { get; set; } = Array.Empty<string>();
     public string ReviewStatus { get; set; } = "Pending";
     public string? DisputeReason { get; set; }
