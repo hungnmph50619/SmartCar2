@@ -198,9 +198,17 @@
                 <span class="badge bg-primary">Bằng chứng bắt buộc</span>
             </div>
 
-            <div class="alert alert-danger">
-                <strong>Nếu khách từ chối ký tại thời điểm giao xe:</strong>
-                không giao chìa khóa, không hoàn tất bàn giao và không chuyển đơn sang Đang thuê. Quay lại đơn để xử lý hủy theo chính sách hiện hành.
+            <div class="alert alert-danger d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                <div>
+                    <strong>Nếu khách từ chối ký tại thời điểm giao xe:</strong>
+                    không giao chìa khóa, không hoàn tất bàn giao và không chuyển đơn sang Đang thuê. Hệ thống sẽ áp dụng chính sách hủy do khách từ chối ký, tách riêng với trường hợp SmartCar chủ động hủy.
+                </div>
+                <a class="btn btn-danger flex-shrink-0"
+                   asp-controller="HandoverRefusal"
+                   asp-action="Confirm"
+                   asp-route-bookingId="@Model.BookingId">
+                    Khách từ chối ký →
+                </a>
             </div>
 
             <label asp-for="SignedDocumentImages" class="form-label fw-semibold">Ảnh biên bản bàn giao đã có chữ ký khách</label>
