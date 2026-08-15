@@ -1,39 +1,12 @@
 @model SmartCar.Web.ViewModels.ProfileViewModel
-@using System.Globalization
 @using System.Security.Claims
-@using System.Text
-@using SmartCar.Domain.Constants
 @using SmartCar.Web.Services
 @inject IUserBankAccountService BankAccountService
 @{
-    static string NormalizeName(string value)
-    {
-        var vietnameseNormalized = value
-            .Replace('Đ', 'D')
-            .Replace('đ', 'd');
-        var decomposed = vietnameseNormalized.Trim().Normalize(NormalizationForm.FormD);
-        var characters = decomposed
-            .Where(character =>
-                CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark &&
-                char.IsLetterOrDigit(character))
-            .Select(char.ToUpperInvariant);
-        return new string(characters.ToArray());
-    }
-
     var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
     var bankAccount = string.IsNullOrWhiteSpace(userId)
         ? null
         : await BankAccountService.GetDefaultAsync(userId);
-    var citizenName = Model.Documents
-        .FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId)
-        ?.FullNameOnDocument;
-    var referenceName = string.IsNullOrWhiteSpace(citizenName) ? Model.FullName : citizenName;
-    var holderMatchesKyc = bankAccount is null || string.IsNullOrWhiteSpace(referenceName)
-        ? (bool?)null
-        : string.Equals(
-            NormalizeName(referenceName),
-            NormalizeName(bankAccount.AccountHolderName),
-            StringComparison.Ordinal);
 
     var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
     var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
@@ -101,19 +74,6 @@
                         <span>Chủ tài khoản</span>
                         <strong>@bankAccount.AccountHolderName</strong>
                     </div>
-
-                    @if (holderMatchesKyc == true)
-                    {
-                        <div class="alert alert-success py-2 mt-3 mb-0 small">
-                            ✓ Tên chủ tài khoản khớp với tên trên hồ sơ danh tính.
-                        </div>
-                    }
-                    else if (holderMatchesKyc == false)
-                    {
-                        <div class="alert alert-warning py-2 mt-3 mb-0 small">
-                            Tên chủ tài khoản chưa khớp với tên trên CCCD. Hãy kiểm tra lại trước khi phát sinh yêu cầu hoàn tiền.
-                        </div>
-                    }
                 }
             </div>
         </section>
@@ -138,7 +98,7 @@
 
             <div class="mb-4">
                 <h2 class="h5 mb-1">@(bankAccount is null ? "Thêm tài khoản ngân hàng" : "Cập nhật tài khoản ngân hàng")</h2>
-                <p class="text-muted mb-0">Tên chủ tài khoản nên trùng với họ tên trên CCCD đã gửi để hạn chế sai sót khi hoàn tiền.</p>
+                <p class="text-muted mb-0">Cập nhật chính xác thông tin tài khoản dùng để nhận tiền hoàn từ SmartCar.</p>
             </div>
 
             <div class="row g-3">
@@ -170,6 +130,7 @@
                            minlength="6"
                            maxlength="20"
                            pattern="[0-9]{6,20}"
+                           title="Số tài khoản phải gồm từ 6 đến 20 chữ số."
                            placeholder="Ví dụ: 0123456789"
                            required />
                 </div>
@@ -181,10 +142,16 @@
                            value="@bankAccount?.AccountHolderName"
                            maxlength="150"
                            autocomplete="name"
+                           pattern="[\p{L}]+(?:[ ]+[\p{L}]+)*"
+                           title="Tên chủ tài khoản chỉ được chứa chữ cái và khoảng trắng."
                            placeholder="NGUYEN MANH HUNG"
                            required />
-                    <div class="form-text">Có thể nhập có dấu hoặc không dấu; hệ thống chuẩn hóa khi so sánh với tên trên CCCD.</div>
+                    <div class="form-text">Chỉ nhập chữ cái và khoảng trắng; có thể nhập tên có dấu hoặc không dấu.</div>
                 </div>
+            </div>
+
+            <div class="alert alert-warning small mt-4 mb-0">
+                <strong>Lưu ý:</strong> Vui lòng kiểm tra chính xác thông tin tài khoản. SmartCar sẽ hoàn tiền vào tài khoản đã đăng ký.
             </div>
 
             <div class="mt-4 d-flex justify-content-end">
