@@ -53,17 +53,28 @@ public static class ReturnEvidenceHelper
             .Select(user => user.FullName)
             .FirstOrDefaultAsync(cancellationToken) ?? "Khách thuê";
 
-        var handoverEvidenceJson = await dbContext.AuditLogs
-            .AsNoTracking()
-            .Where(log =>
-                log.Action == "CustomerSignedHandover" &&
-                log.EntityName == nameof(VehicleHandover) &&
-                log.EntityId == bookingId.ToString())
-            .OrderByDescending(log => log.CreatedAt)
-            .Select(log => log.NewValues)
-            .FirstOrDefaultAsync(cancellationToken);
+        var checkIn = await VehicleEvidenceAuditHelper.GetCheckInAsync(
+            dbContext,
+            bookingId,
+            cancellationToken);
+        var checkOut = await VehicleEvidenceAuditHelper.GetCheckOutAsync(
+            dbContext,
+            bookingId,
+            cancellationToken);
 
-        var (customerImages, customerNote) = ParseHandoverEvidence(handoverEvidenceJson);
+        // Tương thích dữ liệu đã tạo ở bản thử nghiệm chữ ký trước khi chuyển sang check-in bắt buộc.
+        var legacyHandoverEvidenceJson = checkIn is null
+            ? await dbContext.AuditLogs
+                .AsNoTracking()
+                .Where(log =>
+                    log.Action == "CustomerSignedHandover" &&
+                    log.EntityName == nameof(VehicleHandover) &&
+                    log.EntityId == bookingId.ToString())
+                .OrderByDescending(log => log.CreatedAt)
+                .Select(log => log.NewValues)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var (legacyCustomerImages, legacyCustomerNote) = ParseLegacyHandoverEvidence(legacyHandoverEvidenceJson);
 
         var latestReview = await dbContext.AuditLogs
             .AsNoTracking()
@@ -96,18 +107,22 @@ public static class ReturnEvidenceHelper
             ReturnMileage = booking.VehicleReturn.Mileage,
             HandoverFuelLevel = booking.Handover.FuelLevel,
             ReturnFuelLevel = booking.VehicleReturn.FuelLevel,
-            CustomerHandoverNote = customerNote,
+            CustomerHandoverNote = checkIn?.Note ?? legacyCustomerNote,
+            CustomerCheckoutNote = checkOut?.Note,
+            CustomerCheckoutMileage = checkOut?.Mileage,
+            CustomerCheckoutFuelLevel = checkOut?.FuelLevel,
             ReturnCondition = booking.VehicleReturn.ExteriorCondition,
             ReturnNotes = booking.VehicleReturn.Notes,
             HandoverImagePaths = SplitPaths(booking.Handover.ImagePaths),
-            CustomerHandoverImagePaths = customerImages,
+            CustomerHandoverImagePaths = checkIn?.ImagePaths ?? legacyCustomerImages,
+            CustomerCheckoutImagePaths = checkOut?.ImagePaths ?? Array.Empty<string>(),
             ReturnImagePaths = SplitPaths(booking.VehicleReturn.ImagePaths),
             ReviewStatus = reviewStatus,
             DisputeReason = ParseReason(latestReview?.NewValues)
         };
     }
 
-    private static (IReadOnlyList<string> Images, string? Note) ParseHandoverEvidence(string? json)
+    private static (IReadOnlyList<string> Images, string? Note) ParseLegacyHandoverEvidence(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
