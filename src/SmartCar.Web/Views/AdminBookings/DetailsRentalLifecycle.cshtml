@@ -22,17 +22,8 @@
 
     var customerConfirmedForPickup = Model.Status is BookingStatus.ReadyForPickup or BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
     var handoverCompleted = Model.Status is BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
-    var awaitingCustomerCheckIn = Model.Status == BookingStatus.ReadyForPickup && Model.HasHandover;
     var showHandoverCommand = Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
-    var canStartHandover = Model.Status == BookingStatus.ReadyForPickup &&
-                           Model.RentalPaid &&
-                           depositPaid &&
-                           !Model.HasHandover;
-    var handoverCheckpointClass = handoverCompleted
-        ? "bg-success-subtle border-success"
-        : awaitingCustomerCheckIn
-            ? "bg-warning-subtle border-warning"
-            : "bg-light";
+    var canStartHandover = Model.Status == BookingStatus.ReadyForPickup && Model.RentalPaid && depositPaid && !Model.HasHandover;
 }
 
 @if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Pending")
@@ -41,29 +32,31 @@
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
             <div>
                 <div class="text-uppercase small text-warning fw-semibold">Yêu cầu cần xử lý</div>
-                <h2 class="h5 mb-1">Khách muốn trả xe sớm</h2>
-                <div class="text-muted small">Đơn vẫn là <strong>Đang thuê</strong> cho đến khi khách check-out và SmartCar thực tế nhận lại xe/chìa khóa.</div>
+                <h2 class="h5 mb-1">Khách muốn hủy chuyến đang thuê</h2>
+                <div class="text-muted small">Khách chủ động kết thúc chuyến trước lịch. Tiền thuê/phí giao nhận vẫn giữ nguyên; xe vẫn thuộc trách nhiệm khách cho đến khi SmartCar nhận lại và hai bên ký biên bản trả xe.</div>
             </div>
-            <span class="badge bg-warning text-dark">Chờ xác nhận</span>
+            <span class="badge bg-warning text-dark">Chờ xác nhận lịch trả</span>
         </div>
+
         <div class="row g-2 small mb-3">
             <div class="col-md-4"><span class="text-muted">Thời gian muốn trả</span><div class="fw-semibold">@earlyReturn.RequestedReturnAt.ToString("dd/MM/yyyy HH:mm")</div></div>
             <div class="col-md-4"><span class="text-muted">Địa điểm</span><div class="fw-semibold">@earlyReturn.ReturnLocation</div></div>
             <div class="col-md-4"><span class="text-muted">Lý do</span><div class="fw-semibold">@earlyReturn.Reason</div></div>
         </div>
+
         <div class="row g-2">
             <div class="col-md-6">
-                <form asp-controller="AdminBookingOperations" asp-action="ApproveEarlyReturn" method="post" data-loading-form data-confirm="Chấp thuận lịch trả sớm này? Đơn vẫn giữ trạng thái Đang thuê cho đến khi xe thực tế được nhận lại.">
+                <form asp-controller="AdminBookingOperations" asp-action="ApproveEarlyReturn" method="post" data-loading-form data-confirm="Xác nhận thời gian tiếp nhận xe? Tiền thuê/phí giao nhận vẫn giữ nguyên và đơn tiếp tục là Đang thuê cho tới khi SmartCar nhận lại xe.">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <input name="decisionNote" maxlength="500" class="form-control form-control-sm mb-2" placeholder="Ghi chú cho khách (không bắt buộc)" />
-                    <button class="btn btn-success btn-sm w-100" type="submit" data-loading-text="Đang duyệt...">✓ Chấp thuận trả sớm</button>
+                    <button class="btn btn-success btn-sm w-100" type="submit" data-loading-text="Đang duyệt...">✓ Xác nhận lịch nhận lại xe</button>
                 </form>
             </div>
             <div class="col-md-6">
-                <form asp-controller="AdminBookingOperations" asp-action="RejectEarlyReturn" method="post" data-loading-form data-confirm="Từ chối yêu cầu trả sớm và giữ lịch trả hiện tại?">
+                <form asp-controller="AdminBookingOperations" asp-action="RejectEarlyReturn" method="post" data-loading-form data-confirm="Chưa thể tiếp nhận xe ở thời gian này?">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                    <input name="decisionNote" minlength="5" maxlength="500" class="form-control form-control-sm mb-2" required placeholder="Lý do chưa thể tiếp nhận" />
-                    <button class="btn btn-outline-secondary btn-sm w-100" type="submit" data-loading-text="Đang xử lý...">Từ chối yêu cầu</button>
+                    <input name="decisionNote" minlength="5" maxlength="500" class="form-control form-control-sm mb-2" required placeholder="Lý do và đề nghị thời gian khác" />
+                    <button class="btn btn-outline-secondary btn-sm w-100" type="submit" data-loading-text="Đang xử lý...">Đề nghị thời gian khác</button>
                 </form>
             </div>
         </div>
@@ -73,10 +66,10 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
 {
     <div class="alert alert-success shadow-sm mb-4 d-flex justify-content-between align-items-center gap-3 flex-wrap">
         <div>
-            <div class="fw-bold">✓ Đã thống nhất trả xe sớm</div>
-            <div class="small">Tiếp nhận <strong>@earlyReturn.RequestedReturnAt.ToString("dd/MM/yyyy HH:mm")</strong> tại <strong>@earlyReturn.ReturnLocation</strong>. Nhắc khách check-out 6 ảnh tại điểm trả trước khi SmartCar lập hồ sơ nhận lại.</div>
+            <div class="fw-bold">✓ Đã xác nhận lịch nhận lại xe</div>
+            <div class="small">Tiếp nhận <strong>@earlyReturn.RequestedReturnAt.ToString("dd/MM/yyyy HH:mm")</strong> tại <strong>@earlyReturn.ReturnLocation</strong>. Khi xe về, chụp ảnh hiện trạng, cho khách ký biên bản trả xe giấy và lưu ảnh biên bản vào hệ thống.</div>
         </div>
-        <a class="btn btn-success btn-sm" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Tiếp nhận xe & kiểm tra</a>
+        <a class="btn btn-success btn-sm" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản trả xe</a>
     </div>
 }
 
@@ -89,17 +82,10 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                 <div>
                     <div class="text-uppercase small text-primary fw-semibold">Vận hành giao xe</div>
-                    <h2 class="h5 mb-1">Điểm giao & tiến trình bằng chứng</h2>
-                    <p class="text-muted small mb-0">SmartCar tạo bộ ảnh riêng; khách phải tạo thêm customer check-in trước khi nhận chìa khóa.</p>
+                    <h2 class="h5 mb-1">Điểm giao & tiến trình bàn giao</h2>
+                    <p class="text-muted small mb-0">Nhân viên chụp ảnh hiện trạng xe; khách ký biên bản giấy trực tiếp; ảnh biên bản có chữ ký được lưu trên SmartCar.</p>
                 </div>
-                @if (awaitingCustomerCheckIn)
-                {
-                    <span class="badge bg-warning text-dark px-3 py-2">Chờ khách check-in</span>
-                }
-                else
-                {
-                    <span class="badge @(Model.Status == BookingStatus.ReadyForPickup ? "bg-success" : "bg-primary") px-3 py-2">@(Model.Status == BookingStatus.ReadyForPickup ? "Sẵn sàng lập hồ sơ" : "Đang chuẩn bị giao")</span>
-                }
+                <span class="badge @(Model.Status == BookingStatus.ReadyForPickup ? "bg-success" : "bg-primary") px-3 py-2">@(Model.Status == BookingStatus.ReadyForPickup ? "Sẵn sàng bàn giao" : "Đang chuẩn bị giao")</span>
             </div>
 
             <div class="row g-3 align-items-stretch mb-3">
@@ -132,19 +118,15 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                             {
                                 <div class="fw-semibold mt-1">Liên hệ khách xác nhận lịch nhận</div>
                             }
-                            else if (awaitingCustomerCheckIn)
-                            {
-                                <div class="fw-semibold mt-1">Chờ khách tự check-in 6 ảnh</div>
-                                <div class="small text-muted mt-1">Không giao chìa khóa cho đến khi Booking chuyển sang Đang thuê sau customer check-in.</div>
-                            }
                             else if (canStartHandover)
                             {
-                                <div class="fw-semibold mt-1">Tạo bộ bằng chứng SmartCar trước chuyến</div>
-                                <div class="small text-muted mt-1">Đối chiếu người nhận, chụp ảnh, ghi ODO/nhiên liệu; sau đó khách tạo bộ ảnh riêng.</div>
+                                <div class="fw-semibold mt-1">Lập biên bản bàn giao xe</div>
+                                <div class="small text-muted mt-1">Đối chiếu giấy tờ, chụp ảnh xe, ghi số km/nhiên liệu và tải ảnh biên bản giấy đã có chữ ký khách.</div>
                             }
                             else
                             {
                                 <div class="fw-semibold mt-1 text-warning">Chưa đủ điều kiện bàn giao</div>
+                                <div class="small text-muted mt-1">Kiểm tra lại trạng thái tiền thuê, cọc và đơn trước khi giao xe.</div>
                             }
                         </div>
 
@@ -157,13 +139,9 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                             {
                                 <a class="btn btn-primary btn-sm w-100" asp-controller="AdminBookingOperations" asp-action="PreparePickup" asp-route-bookingId="@Model.BookingId">☎ Gọi khách & xác nhận</a>
                             }
-                            else if (awaitingCustomerCheckIn)
-                            {
-                                <a class="btn btn-warning btn-sm w-100" asp-controller="Handovers" asp-action="PendingCustomerCheckIn" asp-route-bookingId="@Model.BookingId">Xem trạng thái check-in →</a>
-                            }
                             else if (canStartHandover)
                             {
-                                <a class="btn btn-success btn-sm w-100" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Tạo hồ sơ SmartCar →</a>
+                                <a class="btn btn-success btn-sm w-100" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản bàn giao →</a>
                             }
                         </div>
                     </div>
@@ -174,17 +152,14 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                 <div class="col-6 col-lg-3"><div class="border rounded-3 p-2 @(Model.RentalPaid ? "bg-success-subtle border-success" : "bg-light")"><div class="fw-semibold">@(Model.RentalPaid ? "✓" : "○") Thanh toán</div><div class="text-muted">@(Model.RentalPaid ? "Đã xác nhận" : "Chưa hoàn tất")</div></div></div>
                 <div class="col-6 col-lg-3"><div class="border rounded-3 p-2 @(vehiclePrepared ? "bg-success-subtle border-success" : "bg-light")"><div class="fw-semibold">@(vehiclePrepared ? "✓" : "○") Chuẩn bị xe</div><div class="text-muted">@(vehiclePrepared ? "Đã kiểm tra" : "Chờ Admin")</div></div></div>
                 <div class="col-6 col-lg-3"><div class="border rounded-3 p-2 @(customerConfirmedForPickup ? "bg-success-subtle border-success" : "bg-light")"><div class="fw-semibold">@(customerConfirmedForPickup ? "✓" : "○") Xác nhận khách</div><div class="text-muted">@(customerConfirmedForPickup ? "Đã xác nhận lịch" : "Chưa xác nhận")</div></div></div>
-                <div class="col-6 col-lg-3"><div class="border rounded-3 p-2 @handoverCheckpointClass"><div class="fw-semibold">@(handoverCompleted ? "✓" : awaitingCustomerCheckIn ? "◷" : "○") Bàn giao</div><div class="text-muted">@(handoverCompleted ? "Customer check-in hoàn tất" : awaitingCustomerCheckIn ? "Chờ khách check-in" : "Chưa lập hồ sơ")</div></div></div>
+                <div class="col-6 col-lg-3"><div class="border rounded-3 p-2 @(handoverCompleted ? "bg-success-subtle border-success" : "bg-light")"><div class="fw-semibold">@(handoverCompleted ? "✓" : "○") Bàn giao</div><div class="text-muted">@(handoverCompleted ? "Đã giao xe" : "Chưa bàn giao")</div></div></div>
             </div>
 
             @if (Model.Status == BookingStatus.ReadyForPickup)
             {
                 <div class="d-flex gap-3 flex-wrap small mt-3 pt-3 border-top text-muted">
                     <span>Cọc bảo đảm: <strong class="@(depositPaid ? "text-success" : "text-danger")">@(depositPaid ? "Đã thanh toán" : "Chưa ghi nhận")</strong></span>
-                    @if (awaitingCustomerCheckIn)
-                    {
-                        <span>Bằng chứng: <strong class="text-warning">Ảnh SmartCar đã khóa · chờ ảnh khách</strong></span>
-                    }
+                    <span>Biên bản giấy: <strong>Khách ký trực tiếp khi nhận xe</strong></span>
                 </div>
             }
         </div>
@@ -217,7 +192,8 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
         legacyHandoverCard?.remove();
     }
 
-    document.getElementById('focus-vehicle-preparation')?.addEventListener('click', () => {
+    const focusVehiclePreparation = document.getElementById('focus-vehicle-preparation');
+    focusVehiclePreparation?.addEventListener('click', () => {
         const preparationCard = Array.from(document.querySelectorAll('.card')).find(card => card.querySelector('h2')?.textContent?.trim() === 'Xác nhận xe đã chuẩn bị xong');
         preparationCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
