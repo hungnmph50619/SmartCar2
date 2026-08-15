@@ -1,123 +1,99 @@
 @model SmartCar.Web.ViewModels.ReturnViewModel
-@using SmartCar.Web.Services
 @{
-    ViewData["Title"] = "Tiếp nhận xe trả";
+    ViewData["Title"] = "Biên bản trả xe";
 
     var isEarlyReturn = ViewBag.IsEarlyReturn is bool early && early;
     var scheduledReturnDate = ViewBag.ScheduledReturnDate is DateTime scheduled ? scheduled : (DateTime?)null;
     var handoverAt = ViewBag.HandoverAt is DateTime handoverDate ? handoverDate : (DateTime?)null;
     var handoverMileage = ViewBag.HandoverMileage is int mileage ? mileage : 0;
     var handoverFuelLevel = ViewBag.HandoverFuelLevel as string ?? "Chưa ghi nhận";
-    var handoverAccessories = ViewBag.HandoverAccessories as string;
-    var customerCheckInNote = ViewBag.CustomerHandoverNote as string;
-    var customerCheckOutNote = ViewBag.CustomerCheckoutNote as string;
-    var customerCheckOutMileage = ViewBag.CustomerCheckoutMileage is int checkoutMileage ? checkoutMileage : (int?)null;
-    var customerCheckOutFuel = ViewBag.CustomerCheckoutFuelLevel as string;
     var vehicleFuelType = ViewBag.VehicleFuelType as string ?? string.Empty;
     var isElectric = vehicleFuelType.Equals("Điện", StringComparison.OrdinalIgnoreCase);
-    var accessoryStatus = ViewBag.AccessoryStatus as string ?? "Complete";
-    var accessoryNote = ViewBag.AccessoryNote as string ?? string.Empty;
-    var labels = VehicleEvidenceAuditHelper.StandardPhotoLabels;
 
-    var smartCarPreTripImages = (ViewBag.HandoverImagePaths as string ?? string.Empty)
+    var handoverVehicleImages = (ViewBag.HandoverVehicleImagePaths as string ?? string.Empty)
         .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    var customerCheckInImages = (ViewBag.CustomerHandoverImagePaths as string ?? string.Empty)
+    var handoverDocumentImages = (ViewBag.HandoverDocumentImagePaths as string ?? string.Empty)
         .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    var customerCheckOutImages = (ViewBag.CustomerCheckoutImagePaths as string ?? string.Empty)
-        .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    const string abnormalPrefix = "Có bất thường mới:";
-    var hasAbnormalCondition = Model.HasDamage ||
-        Model.ExteriorCondition?.StartsWith(abnormalPrefix, StringComparison.OrdinalIgnoreCase) == true;
-    var abnormalConditionDetail = Model.ExteriorCondition?.StartsWith(abnormalPrefix, StringComparison.OrdinalIgnoreCase) == true
-        ? Model.ExteriorCondition.Substring(abnormalPrefix.Length).Trim()
-        : string.Empty;
 }
 
-<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
     <div>
-        <div class="text-uppercase small text-primary fw-semibold">SmartCar return inspection</div>
-        <h1 class="h3 mb-1">Tiếp nhận xe trả · Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Đối chiếu bằng chứng khách tự tạo ở hai đầu chuyến trước khi SmartCar chụp bộ ảnh kiểm tra độc lập lúc nhận lại.</p>
+        <div class="text-uppercase small text-primary fw-semibold">Nhận lại xe</div>
+        <h1 class="h3 mb-1">Biên bản trả xe · Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Đối chiếu ảnh lúc giao, kiểm tra xe thực tế, khách ký biên bản trả xe ngoài đời và lưu ảnh biên bản đã ký trên hệ thống.</p>
     </div>
-    <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">← Quay lại đơn</a>
+    <a class="btn btn-outline-secondary"
+       asp-controller="AdminBookings"
+       asp-action="Details"
+       asp-route-id="@Model.BookingId">← Quay lại đơn</a>
 </div>
 
 @if (isEarlyReturn && scheduledReturnDate.HasValue)
 {
     <div class="alert alert-primary shadow-sm">
-        <strong>Khách đang trả xe sớm.</strong> Lịch trả ban đầu là <strong>@scheduledReturnDate.Value.ToString("dd/MM/yyyy HH:mm")</strong>. Trả sớm không tự hoàn tiền và không tự hoàn tất chuyến.
+        <strong>Khách trả xe trước lịch.</strong>
+        Lịch trả ban đầu: <strong>@scheduledReturnDate.Value.ToString("dd/MM/yyyy HH:mm")</strong>.
+        Tiền thuê/phí giao nhận vẫn được tính theo đơn đã thanh toán; cọc chỉ được quyết toán sau khi kiểm tra xe.
     </div>
 }
 
-<div class="alert alert-info shadow-sm">
-    <strong>Nguyên tắc:</strong> customer check-out chỉ là mốc bằng chứng do khách tạo; SmartCar chỉ chuyển xe sang <strong>Chờ kiểm tra</strong> sau khi thực tế nhận xe/chìa khóa và tự chụp bộ ảnh độc lập.
-</div>
-
-<div class="card shadow-sm border-primary mb-4">
+<div class="card shadow-sm border-0 mb-4">
     <div class="card-body p-4">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
             <div>
-                <div class="text-uppercase small text-primary fw-semibold">Nguồn bằng chứng của khách</div>
-                <h2 class="h5 mb-1">Customer check-in ↔ customer check-out</h2>
-                <p class="small text-muted mb-0">Hai bộ ảnh được tạo trên chính tài khoản khách. Admin dùng chúng để biết chính xác những góc cần kiểm tra lại.</p>
+                <div class="text-uppercase small text-muted fw-semibold">Hồ sơ lúc giao xe</div>
+                <h2 class="h5 mb-1">Căn cứ để đối chiếu khi nhận lại</h2>
             </div>
-            <span class="badge @(customerCheckOutImages.Length >= 6 ? "bg-success" : "bg-warning text-dark")">
-                @(customerCheckOutImages.Length >= 6 ? "Check-out đã khóa" : "Chưa có đủ check-out")
-            </span>
+            <span class="badge bg-light text-dark border">Đã lưu trên SmartCar</span>
         </div>
 
-        <div class="table-responsive mb-3">
-            <table class="table align-middle mb-0">
-                <thead class="table-light"><tr><th>Nội dung</th><th>Lúc nhận/check-in</th><th>Lúc trả/check-out</th></tr></thead>
-                <tbody>
-                    <tr><th>ODO</th><td>@handoverMileage.ToString("N0") km</td><td>@(customerCheckOutMileage.HasValue ? $"{customerCheckOutMileage.Value:N0} km" : "Chưa có")</td></tr>
-                    <tr><th>Nhiên liệu / pin</th><td>@handoverFuelLevel</td><td>@(string.IsNullOrWhiteSpace(customerCheckOutFuel) ? "Chưa có" : customerCheckOutFuel)</td></tr>
-                    <tr><th>Ghi chú khách</th><td>@(string.IsNullOrWhiteSpace(customerCheckInNote) ? "Không khai bất thường riêng" : customerCheckInNote)</td><td>@(string.IsNullOrWhiteSpace(customerCheckOutNote) ? "Không khai bất thường riêng" : customerCheckOutNote)</td></tr>
-                </tbody>
-            </table>
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <div class="small text-muted">Thời gian giao</div>
+                <div class="fw-semibold">@(handoverAt.HasValue ? handoverAt.Value.ToString("dd/MM/yyyy HH:mm") : "Không xác định")</div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted">Số km khi giao</div>
+                <div class="fw-semibold">@handoverMileage.ToString("N0") km</div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted">Nhiên liệu / pin khi giao</div>
+                <div class="fw-semibold">@handoverFuelLevel</div>
+            </div>
         </div>
 
-        @if (customerCheckInImages.Length > 0 || customerCheckOutImages.Length > 0)
+        @if (handoverDocumentImages.Length > 0)
         {
-            <div class="d-grid gap-3">
-                @for (var index = 0; index < Math.Max(customerCheckInImages.Length, customerCheckOutImages.Length); index++)
-                {
-                    var inPath = index < customerCheckInImages.Length ? customerCheckInImages[index] : null;
-                    var outPath = index < customerCheckOutImages.Length ? customerCheckOutImages[index] : null;
-                    <div class="border rounded-3 p-3">
-                        <div class="small fw-semibold mb-2">@(index < labels.Length ? labels[index] : $"Ảnh {index + 1}")</div>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="small text-muted mb-1">Khách tự chụp lúc nhận</div>
-                                @if (!string.IsNullOrWhiteSpace(inPath))
-                                {
-                                    <a href="@inPath" target="_blank" rel="noopener noreferrer"><img src="@inPath" class="w-100 rounded border" style="height:210px;object-fit:contain;background:#f8f9fa" alt="Check-in @(index + 1)" /></a>
-                                }
-                                else
-                                {
-                                    <div class="bg-light p-4 rounded text-center text-muted">Không có ảnh</div>
-                                }
-                            </div>
-                            <div class="col-md-6">
-                                <div class="small text-muted mb-1">Khách tự chụp lúc trả</div>
-                                @if (!string.IsNullOrWhiteSpace(outPath))
-                                {
-                                    <a href="@outPath" target="_blank" rel="noopener noreferrer"><img src="@outPath" class="w-100 rounded border" style="height:210px;object-fit:contain;background:#f8f9fa" alt="Check-out @(index + 1)" /></a>
-                                }
-                                else
-                                {
-                                    <div class="bg-light p-4 rounded text-center text-muted">Chưa có ảnh check-out tương ứng</div>
-                                }
-                            </div>
+            <div class="mb-3">
+                <div class="fw-semibold small mb-2">Biên bản bàn giao có chữ ký khách</div>
+                <div class="row g-2">
+                    @foreach (var path in handoverDocumentImages)
+                    {
+                        <div class="col-6 col-md-3">
+                            <a href="@path" target="_blank" rel="noopener noreferrer">
+                                <img src="@path" class="w-100 rounded border" style="height:170px;object-fit:contain;background:#f8f9fa" alt="Biên bản bàn giao đã ký" />
+                            </a>
                         </div>
-                    </div>
-                }
+                    }
+                </div>
             </div>
         }
-        else
+
+        @if (handoverVehicleImages.Length > 0)
         {
-            <div class="alert alert-secondary mb-0">Đơn legacy hoặc chưa có bộ bằng chứng customer check-in/check-out. Backend vẫn giữ tương thích cho dữ liệu cũ; flow mới sẽ yêu cầu đủ check-out trước khi tiếp nhận.</div>
+            <div>
+                <div class="fw-semibold small mb-2">Ảnh xe lúc giao</div>
+                <div class="row g-2">
+                    @foreach (var path in handoverVehicleImages.Take(6))
+                    {
+                        <div class="col-4 col-md-2">
+                            <a href="@path" target="_blank" rel="noopener noreferrer">
+                                <img src="@path" class="w-100 rounded border" style="height:90px;object-fit:cover" alt="Ảnh xe lúc giao" />
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
         }
     </div>
 </div>
@@ -125,195 +101,153 @@
 <form asp-action="Create"
       method="post"
       enctype="multipart/form-data"
-      class="card card-body shadow-sm"
       data-loading-form
-      data-confirm="Xác nhận SmartCar đã thực tế nhận xe/chìa khóa và hoàn tất bộ ảnh kiểm tra độc lập?">
+      data-confirm="Xác nhận SmartCar đã thực tế nhận xe, khách đã ký biên bản trả xe và ảnh biên bản đã được lưu rõ?">
     <input asp-for="BookingId" type="hidden" />
-    <input asp-for="ExteriorCondition" type="hidden" id="return-condition-summary" />
-    <input asp-for="InteriorCondition" type="hidden" id="return-interior-summary" />
-    <input asp-for="HasDamage" type="hidden" id="return-has-damage" />
     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
 
-    <div class="row g-4">
-        <div class="col-lg-8">
-            <section class="border rounded-3 p-3 mb-4">
-                <div class="text-uppercase small text-muted fw-semibold">Kiểm tra độc lập của SmartCar</div>
-                <h2 class="h5 mb-3">Thời gian, ODO và nhiên liệu</h2>
-                <div class="table-responsive">
-                    <table class="table align-middle mb-0">
-                        <thead class="table-light"><tr><th>Nội dung</th><th>Trước chuyến</th><th>Khách check-out</th><th>SmartCar nhận lại</th></tr></thead>
-                        <tbody>
-                            <tr>
-                                <th>Thời gian</th>
-                                <td>@(handoverAt.HasValue ? handoverAt.Value.ToString("dd/MM/yyyy HH:mm") : "Không xác định")</td>
-                                <td>Thời gian khóa trong AuditLog</td>
-                                <td><input asp-for="ReturnedAt" type="datetime-local" class="form-control" required /><span asp-validation-for="ReturnedAt" class="text-danger small"></span></td>
-                            </tr>
-                            <tr>
-                                <th>ODO</th>
-                                <td>@handoverMileage.ToString("N0") km</td>
-                                <td>@(customerCheckOutMileage.HasValue ? $"{customerCheckOutMileage.Value:N0} km" : "—")</td>
-                                <td><div class="input-group"><input asp-for="Mileage" id="return-mileage" type="number" min="@handoverMileage" class="form-control" required /><span class="input-group-text">km</span></div><span asp-validation-for="Mileage" class="text-danger small"></span></td>
-                            </tr>
-                            <tr>
-                                <th>@(isElectric ? "Pin" : "Nhiên liệu")</th>
-                                <td>@handoverFuelLevel</td>
-                                <td>@(string.IsNullOrWhiteSpace(customerCheckOutFuel) ? "—" : customerCheckOutFuel)</td>
-                                <td>
-                                    @if (isElectric)
-                                    {
-                                        <div class="input-group"><input asp-for="FuelLevel" type="number" min="0" max="100" class="form-control" required /><span class="input-group-text">% SOC</span></div>
-                                    }
-                                    else
-                                    {
-                                        <select asp-for="FuelLevel" class="form-select" required>
-                                            <option value="">-- Chọn mức --</option>
-                                            <option value="8/8 (100%)">8/8 - 100%</option>
-                                            <option value="7/8 (~87.5%)">7/8 - ~87,5%</option>
-                                            <option value="6/8 (75%)">6/8 - 75%</option>
-                                            <option value="5/8 (~62.5%)">5/8 - ~62,5%</option>
-                                            <option value="4/8 (50%)">4/8 - 50%</option>
-                                            <option value="3/8 (~37.5%)">3/8 - ~37,5%</option>
-                                            <option value="2/8 (25%)">2/8 - 25%</option>
-                                            <option value="1/8 (~12.5%)">1/8 - ~12,5%</option>
-                                            <option value="0/8 (Gần cạn)">0/8 - Gần cạn</option>
-                                        </select>
-                                    }
-                                    <span asp-validation-for="FuelLevel" class="text-danger small"></span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <div class="text-uppercase small text-primary fw-semibold">Bước 1</div>
+            <h2 class="h5 mb-3">Thông tin nhận lại xe</h2>
 
-            <section class="border rounded-3 p-3 mb-4">
-                <h2 class="h5">Địa điểm & phụ kiện</h2>
-                <label asp-for="ReturnLocation" class="form-label fw-semibold mt-2">Địa điểm SmartCar thực tế nhận lại</label>
-                <input asp-for="ReturnLocation" class="form-control" maxlength="250" required />
-                <span asp-validation-for="ReturnLocation" class="text-danger small"></span>
-
-                <div class="bg-light rounded-3 p-3 my-3"><div class="small text-muted">Phụ kiện lúc giao</div><strong>@(string.IsNullOrWhiteSpace(handoverAccessories) ? "Không ghi phụ kiện riêng" : handoverAccessories)</strong></div>
-                <div class="row g-3">
-                    <div class="col-md-6"><label class="border rounded-3 p-3 w-100 h-100 d-flex gap-3"><input class="form-check-input" type="radio" name="accessoryStatus" id="accessory-complete" value="Complete" checked="@(accessoryStatus != "Issue")" /><span><strong class="d-block">Phụ kiện đầy đủ</strong><span class="small text-muted">Khớp hồ sơ lúc giao.</span></span></label></div>
-                    <div class="col-md-6"><label class="border rounded-3 p-3 w-100 h-100 d-flex gap-3"><input class="form-check-input" type="radio" name="accessoryStatus" id="accessory-issue" value="Issue" checked="@(accessoryStatus == "Issue")" /><span><strong class="d-block">Thiếu / hư hỏng phụ kiện</strong><span class="small text-muted">Phải mô tả rõ.</span></span></label></div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label asp-for="ReturnedAt" class="form-label fw-semibold">Thời gian nhận lại xe thực tế</label>
+                    <input asp-for="ReturnedAt" type="datetime-local" class="form-control" required />
+                    <span asp-validation-for="ReturnedAt" class="text-danger small"></span>
                 </div>
-                <div id="accessory-note-wrap" class="mt-3 @(accessoryStatus == "Issue" ? string.Empty : "d-none")">
-                    <label for="accessory-note" class="form-label fw-semibold">Mô tả phụ kiện có vấn đề</label>
-                    <textarea name="accessoryNote" id="accessory-note" class="form-control" rows="2" maxlength="500">@accessoryNote</textarea>
-                </div>
-            </section>
-
-            <section class="border rounded-3 p-3 mb-4">
-                <div class="text-uppercase small text-muted fw-semibold">Kết luận kiểm tra trực tiếp</div>
-                <h2 class="h5">Có hư hỏng/bất thường mới so với trước chuyến?</h2>
-                <div class="row g-3 mt-1">
-                    <div class="col-md-6"><label class="border rounded-3 p-3 w-100 h-100 d-flex gap-3"><input class="form-check-input" type="radio" name="conditionState" id="condition-normal" value="normal" checked="@(!hasAbnormalCondition)" /><span><strong class="d-block">Không phát hiện mới</strong><span class="small text-muted">Các điểm quan sát khớp bằng chứng trước chuyến.</span></span></label></div>
-                    <div class="col-md-6"><label class="border border-danger rounded-3 p-3 w-100 h-100 d-flex gap-3"><input class="form-check-input" type="radio" name="conditionState" id="condition-abnormal" value="abnormal" checked="@hasAbnormalCondition" /><span><strong class="d-block text-danger">Có hư hỏng/bất thường mới</strong><span class="small text-muted">Mô tả vị trí và chụp cận cảnh.</span></span></label></div>
-                </div>
-                <div id="abnormal-condition-wrap" class="mt-3 @(hasAbnormalCondition ? string.Empty : "d-none")">
-                    <label for="abnormal-condition-detail" class="form-label fw-semibold">Mô tả phần mới phát sinh</label>
-                    <textarea id="abnormal-condition-detail" class="form-control" rows="3" maxlength="1000" placeholder="Ví dụ: móp mới cửa phải phía sau...">@abnormalConditionDetail</textarea>
-                </div>
-                <span asp-validation-for="ExteriorCondition" class="text-danger small"></span>
-            </section>
-
-            <section class="border rounded-3 p-3 mb-4">
-                <div class="d-flex justify-content-between gap-3 flex-wrap">
-                    <div><div class="text-uppercase small text-muted fw-semibold">Nguồn bằng chứng SmartCar</div><h2 class="h5 mb-1">Chụp bộ ảnh nhận lại độc lập</h2><p class="small text-muted mb-0">Chụp cùng thứ tự 6 góc để sau đó hệ thống đặt cạnh ảnh SmartCar lúc giao.</p></div>
-                    <span class="badge bg-danger-subtle text-danger border">Bắt buộc 6–15 ảnh</span>
-                </div>
-
-                @if (smartCarPreTripImages.Length > 0)
-                {
-                    <div class="row g-2 my-3">
-                        @for (var index = 0; index < Math.Min(6, smartCarPreTripImages.Length); index++)
-                        {
-                            <div class="col-4 col-md-2"><div class="small text-muted mb-1">@(index < labels.Length ? labels[index] : $"Ảnh {index + 1}")</div><a href="@smartCarPreTripImages[index]" target="_blank" rel="noopener noreferrer"><img src="@smartCarPreTripImages[index]" class="w-100 rounded border" style="height:90px;object-fit:cover" alt="SmartCar pre-trip @(index + 1)" /></a></div>
-                        }
+                <div class="col-md-4">
+                    <label asp-for="Mileage" class="form-label fw-semibold">Số km trên đồng hồ khi trả</label>
+                    <div class="input-group">
+                        <input asp-for="Mileage" type="number" min="@handoverMileage" class="form-control" required />
+                        <span class="input-group-text">km</span>
                     </div>
-                }
-
-                <label asp-for="Images" class="form-label fw-semibold">Ảnh SmartCar khi nhận lại xe</label>
-                <input asp-for="Images" type="file" multiple accept="image/jpeg,image/png,image/webp" class="form-control" required />
-                <span asp-validation-for="Images" class="text-danger small"></span>
-                <div class="form-text">6–15 ảnh, tối đa 5 MB/ảnh. Nếu có damage mới, thêm ảnh cận cảnh ngoài 6 góc chuẩn.</div>
-            </section>
-
-            <section class="border rounded-3 p-3">
-                <label asp-for="Notes" class="form-label fw-semibold">Ghi chú bổ sung của SmartCar</label>
-                <textarea asp-for="Notes" class="form-control" rows="3" maxlength="1000" placeholder="Thông tin cần chuyển sang bước kiểm tra/phụ phí"></textarea>
-            </section>
-        </div>
-
-        <div class="col-lg-4">
-            <div class="card bg-light border-0 sticky-top" style="top:1rem"><div class="card-body">
-                <div class="text-uppercase small text-muted fw-semibold">Checklist nhận lại</div>
-                <h2 class="h5">Ba mốc bằng chứng phải rõ</h2>
-                <div class="d-grid gap-2 small mt-3">
-                    <div>✓ Customer check-in trước chuyến</div>
-                    <div>✓ Customer check-out tại điểm trả</div>
-                    <div>✓ SmartCar kiểm tra độc lập khi nhận lại</div>
-                    <div>✓ ODO/nhiên liệu được đối chiếu</div>
-                    <div>✓ Damage mới có ảnh rộng + ảnh cận nếu có</div>
-                    <div>✓ Phụ kiện đã đối chiếu</div>
+                    <span asp-validation-for="Mileage" class="text-danger small"></span>
+                    <div class="form-text">Khi giao: @handoverMileage.ToString("N0") km.</div>
                 </div>
-                <hr />
-                <div class="small text-muted">Sau khi lưu, Booking → <strong>Chờ kiểm tra</strong>. Khách được xem toàn bộ hai nguồn bằng chứng và có quyền Đồng ý hoặc Yêu cầu xem xét. Không quyết toán cọc khi tranh chấp còn mở.</div>
-            </div></div>
+                <div class="col-md-4">
+                    <label asp-for="FuelLevel" class="form-label fw-semibold">@(isElectric ? "Mức pin khi trả" : "Mức nhiên liệu khi trả")</label>
+                    @if (isElectric)
+                    {
+                        <div class="input-group">
+                            <input asp-for="FuelLevel" type="number" min="0" max="100" class="form-control" required />
+                            <span class="input-group-text">%</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <select asp-for="FuelLevel" class="form-select" required>
+                            <option value="">-- Chọn mức trên đồng hồ --</option>
+                            <option value="8/8 (100%)">8/8 - Đầy bình</option>
+                            <option value="7/8 (~87.5%)">7/8 - khoảng 87,5%</option>
+                            <option value="6/8 (75%)">6/8 - 75%</option>
+                            <option value="5/8 (~62.5%)">5/8 - khoảng 62,5%</option>
+                            <option value="4/8 (50%)">4/8 - 50%</option>
+                            <option value="3/8 (~37.5%)">3/8 - khoảng 37,5%</option>
+                            <option value="2/8 (25%)">2/8 - 25%</option>
+                            <option value="1/8 (~12.5%)">1/8 - khoảng 12,5%</option>
+                            <option value="0/8 (Gần cạn)">0/8 - Gần cạn</option>
+                        </select>
+                    }
+                    <span asp-validation-for="FuelLevel" class="text-danger small"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="ReturnLocation" class="form-label fw-semibold">Địa điểm thực tế nhận lại xe</label>
+                    <input asp-for="ReturnLocation" class="form-control" maxlength="250" required />
+                    <span asp-validation-for="ReturnLocation" class="text-danger small"></span>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="mt-4 border-top pt-3 d-flex gap-2 flex-wrap">
-        <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang khóa bộ ảnh SmartCar...">Tiếp nhận xe & khóa bằng chứng SmartCar</button>
-        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy thao tác</a>
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-primary fw-semibold">Bước 2</div>
+                    <h2 class="h5 mb-1">Ảnh hiện trạng xe khi trả</h2>
+                    <p class="small text-muted mb-0">Chụp lại cùng các góc như lúc giao. Nếu có hư hỏng mới, chụp thêm ảnh cận cảnh.</p>
+                </div>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">6–15 ảnh</span>
+            </div>
+
+            <div class="row g-2 small mb-3">
+                <div class="col-md-4"><div class="bg-light rounded p-2">① Chính diện xe</div></div>
+                <div class="col-md-4"><div class="bg-light rounded p-2">② Phía sau xe</div></div>
+                <div class="col-md-4"><div class="bg-light rounded p-2">③ Bên trái thân xe</div></div>
+                <div class="col-md-4"><div class="bg-light rounded p-2">④ Bên phải thân xe</div></div>
+                <div class="col-md-4"><div class="bg-light rounded p-2">⑤ Số km + nhiên liệu/pin</div></div>
+                <div class="col-md-4"><div class="bg-light rounded p-2">⑥ Nội thất xe</div></div>
+            </div>
+
+            <input asp-for="Images"
+                   type="file"
+                   multiple
+                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                   class="form-control"
+                   data-image-input
+                   data-max-files="15"
+                   data-preview-target="#return-image-preview"
+                   data-file-info-target="#return-file-info" />
+            <span asp-validation-for="Images" class="text-danger small"></span>
+            <div class="form-text">Tối thiểu 6 ảnh, tối đa 15 ảnh; mỗi ảnh tối đa 5 MB.</div>
+            <div id="return-file-info" class="small text-muted mt-2 d-none"></div>
+            <div id="return-image-preview" class="mt-3 d-none">
+                <div class="row g-2" data-preview-list></div>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn lại ảnh</button>
+            </div>
+
+            <div class="mt-3">
+                <label asp-for="ExteriorCondition" class="form-label fw-semibold">Mô tả hư hỏng / bất thường mới <span class="text-muted fw-normal">(nếu có)</span></label>
+                <textarea asp-for="ExteriorCondition" class="form-control" rows="3" maxlength="1000" placeholder="Ví dụ: móp mới cản trước bên phải; xước mới cửa sau bên trái..."></textarea>
+                <span asp-validation-for="ExteriorCondition" class="text-danger small"></span>
+                <div class="form-text">Nếu không có hư hỏng mới thì để trống. Chi phí sửa chữa được xử lý ở bước kiểm tra/phụ phí sau đó.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-primary mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-primary fw-semibold">Bước 3</div>
+                    <h2 class="h5 mb-1">Biên bản trả xe có chữ ký khách</h2>
+                    <p class="small text-muted mb-0">Sau khi hai bên kiểm tra xe, khách ký biên bản giấy xác nhận tình trạng khi trả. Chụp/scan rõ biên bản và lưu vào hồ sơ.</p>
+                </div>
+                <span class="badge bg-primary">Bằng chứng bắt buộc</span>
+            </div>
+
+            <input asp-for="SignedDocumentImages"
+                   type="file"
+                   multiple
+                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                   class="form-control"
+                   data-image-input
+                   data-max-files="3"
+                   data-preview-target="#return-document-preview"
+                   data-file-info-target="#return-document-info" />
+            <span asp-validation-for="SignedDocumentImages" class="text-danger small"></span>
+            <div class="form-text">Bắt buộc ít nhất 1 ảnh, tối đa 3 ảnh. Ảnh phải đọc được nội dung và nhìn rõ chữ ký khách.</div>
+            <div id="return-document-info" class="small text-muted mt-2 d-none"></div>
+            <div id="return-document-preview" class="mt-3 d-none">
+                <div class="row g-2" data-preview-list></div>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn lại ảnh biên bản</button>
+            </div>
+
+            <div class="mt-3">
+                <label asp-for="Notes" class="form-label fw-semibold">Ghi chú bổ sung <span class="text-muted fw-normal">(nếu có)</span></label>
+                <textarea asp-for="Notes" class="form-control" rows="3" maxlength="1000" placeholder="Thông tin cần lưu cùng biên bản trả xe..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap border-top pt-3 mb-5">
+        <div class="small text-muted">Sau khi lưu, đơn chuyển sang <strong>Chờ kiểm tra</strong>; SmartCar dùng ảnh xe + biên bản đã ký để xử lý phụ phí và quyết toán cọc.</div>
+        <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang lưu biên bản trả xe...">Lưu biên bản & tiếp nhận xe</button>
     </div>
 </form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    <script>
-        (() => {
-            const accessoryIssue = document.getElementById('accessory-issue');
-            const accessoryComplete = document.getElementById('accessory-complete');
-            const accessoryWrap = document.getElementById('accessory-note-wrap');
-            const accessoryNote = document.getElementById('accessory-note');
-            const normal = document.getElementById('condition-normal');
-            const abnormal = document.getElementById('condition-abnormal');
-            const abnormalWrap = document.getElementById('abnormal-condition-wrap');
-            const abnormalDetail = document.getElementById('abnormal-condition-detail');
-            const conditionSummary = document.getElementById('return-condition-summary');
-            const interiorSummary = document.getElementById('return-interior-summary');
-            const hasDamage = document.getElementById('return-has-damage');
-
-            const syncAccessory = () => {
-                if (!accessoryIssue || !accessoryWrap || !accessoryNote) return;
-                accessoryWrap.classList.toggle('d-none', !accessoryIssue.checked);
-                accessoryNote.required = accessoryIssue.checked;
-            };
-            const syncCondition = () => {
-                if (!abnormal || !abnormalWrap || !abnormalDetail || !conditionSummary || !interiorSummary || !hasDamage) return;
-                abnormalWrap.classList.toggle('d-none', !abnormal.checked);
-                abnormalDetail.required = abnormal.checked;
-                if (abnormal.checked) {
-                    conditionSummary.value = `Có bất thường mới: ${abnormalDetail.value.trim()}`;
-                    interiorSummary.value = 'Đối chiếu bằng bộ ảnh trả xe và mô tả bất thường mới.';
-                    hasDamage.value = 'true';
-                } else {
-                    conditionSummary.value = 'Không phát hiện bất thường mới khi nhận lại xe.';
-                    interiorSummary.value = 'Không phát hiện bất thường mới khi nhận lại xe.';
-                    hasDamage.value = 'false';
-                }
-            };
-
-            accessoryIssue?.addEventListener('change', syncAccessory);
-            accessoryComplete?.addEventListener('change', syncAccessory);
-            abnormal?.addEventListener('change', syncCondition);
-            normal?.addEventListener('change', syncCondition);
-            abnormalDetail?.addEventListener('input', syncCondition);
-            document.getElementById('return-mileage')?.closest('form')?.addEventListener('submit', () => { syncAccessory(); syncCondition(); });
-            syncAccessory();
-            syncCondition();
-        })();
-    </script>
 }
