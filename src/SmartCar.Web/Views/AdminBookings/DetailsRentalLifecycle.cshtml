@@ -115,6 +115,23 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
 
 <partial name="Details" model="Model" />
 
+@if (Model.Status == BookingStatus.PendingInspection && Model.HasReturn)
+{
+    <div class="card shadow-sm border-warning mb-4">
+        <div class="card-body p-4 d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div>
+                <div class="text-uppercase small text-warning fw-semibold">Bằng chứng sau trả xe</div>
+                <h2 class="h5 mb-1">Đối chiếu ảnh giao ↔ trả & phản hồi khách</h2>
+                <div class="small text-muted">Mở trang đối chiếu để xem ảnh trước/sau, ảnh khách tự bổ sung lúc nhận xe và trạng thái Đồng ý/Tranh chấp. Luồng mới chặn hoàn tất đơn khi khách chưa phản hồi hoặc đang tranh chấp.</div>
+            </div>
+            <a class="btn btn-warning"
+               asp-controller="ReturnEvidence"
+               asp-action="Review"
+               asp-route-bookingId="@Model.BookingId">Mở đối chiếu & phản hồi →</a>
+        </div>
+    </div>
+}
+
 @if (showHandoverCommand)
 {
     <div id="handover-command-card" class="card shadow-sm border-0 mb-4 d-none">
