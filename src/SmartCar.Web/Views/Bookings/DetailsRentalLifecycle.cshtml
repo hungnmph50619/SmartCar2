@@ -8,10 +8,13 @@
     var termination = ViewBag.RentalTermination as RentalTerminationSnapshot;
     var canSubmitEarlyReturn = Model.Status == BookingStatus.Rented &&
         termination?.Status != "Requested" &&
-        earlyReturn?.Status is not ("Pending" or "Approved");
+        earlyReturn?.Status != "Pending" &&
+        earlyReturn?.Status != "Approved";
     var defaultReturnLocation = string.IsNullOrWhiteSpace(Model.ReturnLocation)
         ? "SmartCar"
         : Model.ReturnLocation;
+    var earlyReturnMin = DateTime.Now.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm");
+    var earlyReturnMax = Model.ReturnDate.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm");
 }
 
 <partial name="Details" model="Model" />
@@ -101,8 +104,8 @@
                         <label class="form-label">Thời gian muốn trả</label>
                         <input type="datetime-local"
                                name="requestedReturnAt"
-                               min="@DateTime.Now.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm")"
-                               max="@Model.ReturnDate.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm")"
+                               min="@earlyReturnMin"
+                               max="@earlyReturnMax"
                                class="form-control"
                                required />
                         <div class="form-text">Phải sớm hơn lịch trả hiện tại @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm").</div>
