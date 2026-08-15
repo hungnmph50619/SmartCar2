@@ -1,15 +1,7 @@
 @model SmartCar.Web.ViewModels.HandoverViewModel
 @using SmartCar.Domain.Constants
 @{
-    ViewData["Title"] = "Bàn giao xe";
-
-    var abnormalPrefix = "Có bất thường:";
-    var hasAbnormalCondition = Model.ExteriorCondition?.StartsWith(
-        abnormalPrefix,
-        StringComparison.OrdinalIgnoreCase) == true;
-    var abnormalConditionDetail = hasAbnormalCondition
-        ? Model.ExteriorCondition!.Substring(abnormalPrefix.Length).Trim()
-        : string.Empty;
+    ViewData["Title"] = "Lập biên bản bàn giao";
 
     var currentMileage = ViewBag.CurrentMileage is int mileage ? mileage : 0;
     var vehicleFuelType = ViewBag.VehicleFuelType as string ?? string.Empty;
@@ -30,8 +22,8 @@
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
         <div class="text-uppercase small text-primary fw-semibold">Quy trình giao xe</div>
-        <h1 class="h3 mb-1">Bàn giao xe · Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Xác minh đúng người nhận, ghi nhận tình trạng xe và chỉ giao chìa khóa sau khi hoàn tất đủ 4 bước.</p>
+        <h1 class="h3 mb-1">Lập biên bản bàn giao · Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Nhân viên ghi nhận đúng người nhận, bộ ảnh và thông số. Sau đó khách xem chính biên bản này và ký điện tử trước khi nhận chìa khóa.</p>
     </div>
     <a class="btn btn-outline-secondary"
        asp-controller="AdminBookings"
@@ -56,7 +48,7 @@
                 <div class="small">@licensePlate</div>
             </div>
             <div class="col-md-4">
-                <div class="small text-muted">Lịch giao</div>
+                <div class="small text-muted">Lịch nhận</div>
                 <div class="fw-semibold">@pickupDate.ToString("HH:mm · dd/MM/yyyy")</div>
                 <div class="small text-truncate" title="@pickupLocation">@pickupLocation</div>
                 @if (!string.IsNullOrWhiteSpace(directionsUrl))
@@ -79,8 +71,8 @@
             </div>
             <div class="col-6 col-lg-3">
                 <div class="handover-step rounded-3 p-2" data-step-indicator="2">
-                    <div class="small fw-semibold">2. Tình trạng xe</div>
-                    <div class="small text-muted">Ảnh & bất thường</div>
+                    <div class="small fw-semibold">2. Ảnh bàn giao</div>
+                    <div class="small text-muted">Ảnh & ghi chú hiện trạng</div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
@@ -91,8 +83,8 @@
             </div>
             <div class="col-6 col-lg-3">
                 <div class="handover-step rounded-3 p-2" data-step-indicator="4">
-                    <div class="small fw-semibold">4. Xác nhận</div>
-                    <div class="small text-muted">Hoàn tất giao xe</div>
+                    <div class="small fw-semibold">4. Tạo biên bản</div>
+                    <div class="small text-muted">Gửi khách ký xác nhận</div>
                 </div>
             </div>
         </div>
@@ -104,10 +96,8 @@
       enctype="multipart/form-data"
       id="handover-form"
       data-loading-form
-      data-confirm="Xác nhận đã giao xe thực tế cho đúng khách? Sau thao tác này đơn sẽ chuyển sang trạng thái Đang thuê.">
+      data-confirm="Tạo biên bản bàn giao và gửi khách ký? Đơn chưa chuyển sang Đang thuê cho đến khi chính khách xác nhận chữ ký.">
     <input asp-for="BookingId" type="hidden" />
-    <input asp-for="ExteriorCondition" type="hidden" id="handover-condition-summary" />
-    <input asp-for="InteriorCondition" type="hidden" id="handover-interior-summary" />
     <input asp-for="FuelLevel" type="hidden" id="handover-fuel-level" />
 
     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
@@ -119,9 +109,9 @@
                     <div>
                         <div class="text-uppercase small text-primary fw-semibold">Bước 1/4</div>
                         <h2 class="h4 mb-1">Xác minh người nhận xe</h2>
-                        <p class="text-muted mb-0">Đối chiếu người đang có mặt với hồ sơ đã được SmartCar xác minh trước đó.</p>
+                        <p class="text-muted mb-0">Đối chiếu người đang có mặt với hồ sơ khách thuê đã được SmartCar xác minh.</p>
                     </div>
-                    <span class="badge bg-light text-dark border px-3 py-2">Bắt buộc trước khi giao chìa khóa</span>
+                    <span class="badge bg-light text-dark border px-3 py-2">Bắt buộc</span>
                 </div>
 
                 <div class="row g-3 mb-4">
@@ -137,7 +127,7 @@
                     </div>
                     <div class="col-md-6">
                         <div class="border rounded-3 p-3 h-100">
-                            <div class="small text-muted">Xe được phép bàn giao</div>
+                            <div class="small text-muted">Xe được phép lập biên bản</div>
                             <div class="fs-5 fw-semibold">@vehicleName</div>
                             <div>@licensePlate</div>
                         </div>
@@ -149,7 +139,7 @@
                         <input asp-for="RecipientConfirmed" id="recipient-confirmed" class="form-check-input mt-1" type="checkbox" required />
                         <span>
                             <strong class="d-block">Đúng người nhận xe</strong>
-                            <span class="small text-muted">Người đang nhận xe đúng là khách thuê của đơn #@Model.BookingId.</span>
+                            <span class="small text-muted">Người đang có mặt đúng là khách thuê của đơn #@Model.BookingId.</span>
                         </span>
                     </label>
                     <span asp-validation-for="RecipientConfirmed" class="text-danger small"></span>
@@ -158,7 +148,7 @@
                         <input asp-for="CitizenIdOriginalChecked" id="citizen-checked" class="form-check-input mt-1" type="checkbox" required />
                         <span>
                             <strong class="d-block">Đã đối chiếu CCCD bản gốc</strong>
-                            <span class="small text-muted">Ảnh và thông tin trên giấy tờ bản gốc khớp hồ sơ đã xác minh.</span>
+                            <span class="small text-muted">Ảnh và thông tin trên CCCD bản gốc khớp hồ sơ khách đã xác minh.</span>
                         </span>
                     </label>
                     <span asp-validation-for="CitizenIdOriginalChecked" class="text-danger small"></span>
@@ -186,47 +176,13 @@
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                     <div>
                         <div class="text-uppercase small text-primary fw-semibold">Bước 2/4</div>
-                        <h2 class="h4 mb-1">Ghi nhận tình trạng xe</h2>
-                        <p class="text-muted mb-0">Bộ ảnh trước chuyến là căn cứ chính để đối chiếu khi nhận lại xe.</p>
+                        <h2 class="h4 mb-1">Ảnh bàn giao & ghi chú hiện trạng</h2>
+                        <p class="text-muted mb-0">Không đánh dấu “có/không bất thường” lần nữa. Bộ ảnh là dữ liệu hiện trạng trước chuyến; nếu có điểm cần lưu ý, mô tả cụ thể ở phần ghi chú.</p>
                     </div>
                     <span class="badge bg-danger-subtle text-danger border border-danger-subtle">6–15 ảnh</span>
                 </div>
 
-                <div class="mb-4">
-                    <div class="small fw-semibold mb-2">Tình trạng quan sát trực tiếp</div>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="border rounded-3 p-3 w-100 h-100 d-flex gap-3 align-items-start" for="condition-normal">
-                                <input class="form-check-input mt-1" type="radio" name="conditionState" id="condition-normal" value="normal" checked="@(!hasAbnormalCondition)" />
-                                <span>
-                                    <strong class="d-block">Không phát hiện bất thường</strong>
-                                    <span class="small text-muted">Tình trạng xe được xác nhận bằng bộ ảnh bàn giao.</span>
-                                </span>
-                            </label>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="border rounded-3 p-3 w-100 h-100 d-flex gap-3 align-items-start" for="condition-abnormal">
-                                <input class="form-check-input mt-1" type="radio" name="conditionState" id="condition-abnormal" value="abnormal" checked="@hasAbnormalCondition" />
-                                <span>
-                                    <strong class="d-block">Có bất thường hiện hữu</strong>
-                                    <span class="small text-muted">Mô tả rõ vị trí và chụp thêm ảnh cận cảnh.</span>
-                                </span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div id="abnormal-condition-wrap" class="mt-3 @(hasAbnormalCondition ? string.Empty : "d-none")">
-                        <label for="abnormal-condition-detail" class="form-label fw-semibold">Mô tả bất thường</label>
-                        <textarea id="abnormal-condition-detail"
-                                  class="form-control"
-                                  rows="3"
-                                  maxlength="1000"
-                                  placeholder="Ví dụ: xước cản trước bên phải khoảng 5 cm...">@abnormalConditionDetail</textarea>
-                    </div>
-                    <span asp-validation-for="ExteriorCondition" class="text-danger small d-block mt-2"></span>
-                </div>
-
-                <div class="border rounded-3 p-3">
+                <div class="border rounded-3 p-3 mb-4">
                     <div class="row g-2 mb-3 small">
                         <div class="col-md-4"><div class="bg-light rounded p-2 h-100">① Chính diện xe</div></div>
                         <div class="col-md-4"><div class="bg-light rounded p-2 h-100">② Phía sau xe</div></div>
@@ -236,7 +192,7 @@
                         <div class="col-md-4"><div class="bg-light rounded p-2 h-100">⑥ Nội thất xe</div></div>
                     </div>
 
-                    <label asp-for="Images" class="form-label fw-semibold">Ảnh bàn giao</label>
+                    <label asp-for="Images" class="form-label fw-semibold">Ảnh hiện trạng tại thời điểm bàn giao</label>
                     <input asp-for="Images"
                            id="handover-images"
                            type="file"
@@ -249,7 +205,7 @@
                            data-file-info-target="#handover-file-info" />
                     <span asp-validation-for="Images" class="text-danger small"></span>
                     <div class="d-flex justify-content-between gap-2 flex-wrap mt-2">
-                        <div class="form-text">Tối thiểu 6 ảnh, tối đa 15 ảnh; mỗi ảnh tối đa 5 MB.</div>
+                        <div class="form-text">Tối thiểu 6 ảnh, tối đa 15 ảnh; mỗi ảnh tối đa 5 MB. Khách sẽ xem lại chính bộ ảnh này trước khi ký.</div>
                         <div id="selected-photo-count" class="small fw-semibold text-primary">Chưa chọn ảnh</div>
                     </div>
                     <div id="handover-file-info" class="small text-muted mt-2 d-none"></div>
@@ -257,6 +213,17 @@
                         <div class="row g-2" data-preview-list></div>
                         <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn lại ảnh</button>
                     </div>
+                </div>
+
+                <div>
+                    <label asp-for="Notes" class="form-label fw-semibold">Ghi chú hiện trạng trước chuyến <span class="text-muted fw-normal">(nếu có)</span></label>
+                    <textarea asp-for="Notes"
+                              id="handover-notes"
+                              class="form-control"
+                              rows="3"
+                              maxlength="1000"
+                              placeholder="Ví dụ: cản trước bên phải có vết xước cũ khoảng 5 cm; mâm trái có vết trầy nhẹ..."></textarea>
+                    <div class="form-text">Ghi đúng vị trí cần lưu ý và bảo đảm có ảnh tương ứng trong bộ ảnh bàn giao.</div>
                 </div>
 
                 <div class="d-flex justify-content-between mt-4">
@@ -274,14 +241,14 @@
                     <div>
                         <div class="text-uppercase small text-primary fw-semibold">Bước 3/4</div>
                         <h2 class="h4 mb-1">Thông số bàn giao</h2>
-                        <p class="text-muted mb-0">Nhập đúng dữ liệu đang hiển thị trên xe tại thời điểm giao thực tế.</p>
+                        <p class="text-muted mb-0">Nhập đúng dữ liệu đang hiển thị trên xe để đưa vào biên bản khách sẽ ký.</p>
                     </div>
-                    <span class="badge bg-light text-dark border">ODO hiện tại: @currentMileage.ToString("N0") km</span>
+                    <span class="badge bg-light text-dark border">ODO hệ thống: @currentMileage.ToString("N0") km</span>
                 </div>
 
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label asp-for="HandoverAt" class="form-label fw-semibold">Thời gian giao thực tế</label>
+                        <label asp-for="HandoverAt" class="form-label fw-semibold">Thời gian lập biên bản / giao thực tế</label>
                         <input asp-for="HandoverAt" type="datetime-local" class="form-control" required />
                         <span asp-validation-for="HandoverAt" class="text-danger small"></span>
                     </div>
@@ -328,11 +295,6 @@
                         <label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện / giấy tờ đi kèm</label>
                         <textarea asp-for="Accessories" id="handover-accessories" class="form-control" rows="3" placeholder="Ví dụ: 2 chìa khóa, đăng ký xe, lốp dự phòng, bộ dụng cụ..."></textarea>
                     </div>
-
-                    <div class="col-12">
-                        <label asp-for="Notes" class="form-label fw-semibold">Ghi chú bổ sung</label>
-                        <textarea asp-for="Notes" class="form-control" rows="2" placeholder="Thông tin hai bên thống nhất thêm nếu có"></textarea>
-                    </div>
                 </div>
 
                 <div class="alert alert-success mt-4 mb-0 small">
@@ -341,7 +303,7 @@
 
                 <div class="d-flex justify-content-between mt-4">
                     <button type="button" class="btn btn-outline-secondary" data-prev-step="2">← Quay lại</button>
-                    <button type="button" class="btn btn-primary px-4" data-next-step="4">Xem xác nhận cuối →</button>
+                    <button type="button" class="btn btn-primary px-4" data-next-step="4">Xem biên bản trước khi tạo →</button>
                 </div>
             </div>
         </div>
@@ -353,13 +315,16 @@
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                     <div>
                         <div class="text-uppercase small text-success fw-semibold">Bước 4/4</div>
-                        <h2 class="h4 mb-1">Xác nhận bàn giao cuối cùng</h2>
-                        <p class="text-muted mb-0">Kiểm tra lại toàn bộ thông tin trước khi giao chìa khóa và chuyển đơn sang Đang thuê.</p>
+                        <h2 class="h4 mb-1">Hoàn tất biên bản bàn giao</h2>
+                        <p class="text-muted mb-0">Đây là bước nhân viên tạo bản chốt để khách kiểm tra và ký. Nhân viên không ký thay khách và thao tác này chưa kích hoạt chuyến thuê.</p>
                     </div>
-                    <span class="badge bg-success px-3 py-2">Sẵn sàng hoàn tất</span>
+                    <span class="badge bg-warning text-dark px-3 py-2">Chờ chữ ký khách sau bước này</span>
                 </div>
 
                 <div class="border rounded-3 overflow-hidden mb-4">
+                    <div class="px-3 py-2 bg-light border-bottom text-center">
+                        <strong>BIÊN BẢN BÀN GIAO XE · ĐƠN #@Model.BookingId</strong>
+                    </div>
                     <div class="row g-0">
                         <div class="col-md-6 border-end border-bottom p-3">
                             <div class="small text-muted">Người nhận</div>
@@ -377,33 +342,28 @@
                             <div class="small text-muted">@(isElectricVehicle ? "SOC pin" : "Nhiên liệu")</div>
                             <strong id="summary-fuel">—</strong>
                         </div>
-                        <div class="col-md-6 border-end p-3">
-                            <div class="small text-muted">Ảnh đối chiếu</div>
+                        <div class="col-md-6 border-end border-bottom p-3">
+                            <div class="small text-muted">Ảnh hiện trạng</div>
                             <strong id="summary-images">—</strong>
                         </div>
-                        <div class="col-md-6 p-3">
+                        <div class="col-md-6 border-bottom p-3">
                             <div class="small text-muted">Trả dự kiến</div>
                             <strong>@returnDate.ToString("HH:mm · dd/MM/yyyy")</strong>
+                        </div>
+                        <div class="col-12 p-3">
+                            <div class="small text-muted">Ghi chú hiện trạng</div>
+                            <div id="summary-notes">Không có ghi chú bổ sung.</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="alert alert-light border small">
-                    Sau khi hoàn tất: hệ thống lưu biên bản + bộ ảnh, cập nhật ODO xe và chuyển Booking từ <strong>Sẵn sàng giao xe</strong> sang <strong>Đang thuê</strong>. Chỉ lúc này mới giao chìa khóa cho khách.
+                <div class="alert alert-info small">
+                    <strong>Sau khi tạo biên bản:</strong> khách mở đơn của mình, xem đúng bộ ảnh và thông số trên biên bản, ký trực tiếp trên màn hình. Chỉ khi chữ ký hợp lệ được lưu, Booking mới chuyển từ <strong>Sẵn sàng giao xe</strong> sang <strong>Đang thuê</strong> và xe mới được giao chìa khóa.
                 </div>
-
-                <label class="border border-success rounded-3 p-3 d-flex gap-3 align-items-start bg-light" for="final-handover-confirmed">
-                    <input asp-for="FinalHandoverConfirmed" id="final-handover-confirmed" class="form-check-input mt-1" type="checkbox" required />
-                    <span>
-                        <strong class="d-block">Tôi xác nhận xe đã được giao thực tế cho đúng khách</strong>
-                        <span class="small text-muted">Người nhận đã được đối chiếu giấy tờ, tình trạng xe đã ghi nhận và các thông số trên phù hợp với xe thực tế.</span>
-                    </span>
-                </label>
-                <span asp-validation-for="FinalHandoverConfirmed" class="text-danger small"></span>
 
                 <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mt-4">
                     <button type="button" class="btn btn-outline-secondary" data-prev-step="3">← Quay lại kiểm tra</button>
-                    <button class="btn btn-success px-4" type="submit" data-loading-text="Đang hoàn tất bàn giao...">✓ Hoàn tất bàn giao & giao chìa khóa</button>
+                    <button class="btn btn-success px-4" type="submit" data-loading-text="Đang tạo biên bản...">Tạo biên bản & gửi khách ký →</button>
                 </div>
             </div>
         </div>
@@ -416,10 +376,12 @@
         border: 1px solid var(--bs-border-color);
         transition: .2s ease;
     }
+
     .handover-step.active {
         border-color: var(--bs-primary);
         background: rgba(var(--bs-primary-rgb), .08);
     }
+
     .handover-step.completed {
         border-color: var(--bs-success);
         background: rgba(var(--bs-success-rgb), .08);
@@ -500,9 +462,11 @@
                 const mileage = document.getElementById('handover-mileage')?.value;
                 const fuel = document.getElementById('handover-fuel-level')?.value;
                 const imageCount = imagesInput?.files?.length ?? 0;
+                const notes = document.getElementById('handover-notes')?.value?.trim();
                 document.getElementById('summary-mileage').textContent = mileage ? `${Number(mileage).toLocaleString('vi-VN')} km` : '—';
                 document.getElementById('summary-fuel').textContent = fuel || '—';
                 document.getElementById('summary-images').textContent = imageCount ? `${imageCount} ảnh` : '—';
+                document.getElementById('summary-notes').textContent = notes || 'Không có ghi chú bổ sung.';
             };
 
             form?.addEventListener('submit', event => {
@@ -515,37 +479,6 @@
         })();
 
         (() => {
-            const normalRadio = document.getElementById('condition-normal');
-            const abnormalRadio = document.getElementById('condition-abnormal');
-            const abnormalWrap = document.getElementById('abnormal-condition-wrap');
-            const abnormalDetail = document.getElementById('abnormal-condition-detail');
-            const conditionSummary = document.getElementById('handover-condition-summary');
-            const interiorSummary = document.getElementById('handover-interior-summary');
-
-            if (!normalRadio || !abnormalRadio || !abnormalWrap || !abnormalDetail || !conditionSummary || !interiorSummary) return;
-
-            const syncCondition = () => {
-                if (abnormalRadio.checked) {
-                    abnormalWrap.classList.remove('d-none');
-                    abnormalDetail.required = true;
-                    conditionSummary.value = `Có bất thường: ${abnormalDetail.value.trim()}`;
-                    interiorSummary.value = 'Tình trạng nội thất được đối chiếu bằng bộ ảnh bàn giao; bất thường nếu có được ghi trong tình trạng chung.';
-                    return;
-                }
-                abnormalWrap.classList.add('d-none');
-                abnormalDetail.required = false;
-                conditionSummary.value = 'Không phát hiện bất thường tại thời điểm bàn giao.';
-                interiorSummary.value = 'Không phát hiện bất thường tại thời điểm bàn giao.';
-            };
-
-            normalRadio.addEventListener('change', syncCondition);
-            abnormalRadio.addEventListener('change', syncCondition);
-            abnormalDetail.addEventListener('input', syncCondition);
-            normalRadio.closest('form')?.addEventListener('submit', syncCondition);
-            syncCondition();
-        })();
-
-        (() => {
             const fuelLevel = document.getElementById('handover-fuel-level');
             const fuelGauge = document.getElementById('fuel-gauge-select');
             const batteryPercent = document.getElementById('battery-percent-input');
@@ -553,7 +486,9 @@
 
             if (fuelGauge) {
                 const initialValue = fuelGauge.dataset.initialFuel || fuelLevel.value || '';
-                if (initialValue && Array.from(fuelGauge.options).some(option => option.value === initialValue)) fuelGauge.value = initialValue;
+                if (initialValue && Array.from(fuelGauge.options).some(option => option.value === initialValue)) {
+                    fuelGauge.value = initialValue;
+                }
                 const sync = () => fuelLevel.value = fuelGauge.value;
                 fuelGauge.addEventListener('change', sync);
                 fuelGauge.closest('form')?.addEventListener('submit', sync);
