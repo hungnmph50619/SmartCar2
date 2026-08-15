@@ -7,6 +7,8 @@
     var earlyReturn = ViewBag.EarlyReturn as EarlyReturnSnapshot;
     var termination = ViewBag.RentalTermination as RentalTerminationSnapshot;
     var terminationActive = termination?.Status == "Requested";
+    var terminationMin = DateTime.Now.ToString("yyyy-MM-ddTHH:mm");
+    var terminationMax = Model.ReturnDate.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm");
 }
 
 @if (Model.Status == BookingStatus.Rented)
@@ -115,10 +117,34 @@
                 <div><strong>Căn cứ:</strong> @termination.Reason</div>
                 <div class="small mt-2">Booking chưa kết thúc. Chỉ sau khi xe thực tế về và biên bản trả được lập mới chuyển sang bước kiểm tra.</div>
             </div>
-            <a class="btn btn-danger"
-               asp-controller="Returns"
-               asp-action="Create"
-               asp-route-bookingId="@Model.BookingId">Tiếp nhận xe thu hồi / trả sớm</a>
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-danger"
+                   asp-controller="Returns"
+                   asp-action="Create"
+                   asp-route-bookingId="@Model.BookingId">Tiếp nhận xe thu hồi / trả sớm</a>
+            </div>
+
+            <form asp-controller="AdminBookingOperations"
+                  asp-action="CancelEarlyTermination"
+                  method="post"
+                  class="row g-2 mt-3"
+                  data-loading-form
+                  data-confirm="Rút yêu cầu thu hồi trước hạn và tiếp tục lịch thuê hiện tại?">
+                <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                <div class="col-md-9">
+                    <input name="cancellationReason"
+                           minlength="5"
+                           maxlength="500"
+                           class="form-control"
+                           required
+                           placeholder="Lý do rút yêu cầu thu hồi" />
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-outline-secondary w-100"
+                            type="submit"
+                            data-loading-text="Đang rút yêu cầu...">Rút yêu cầu</button>
+                </div>
+            </form>
         }
         else
         {
@@ -149,8 +175,8 @@
                     <label class="form-label">Yêu cầu trả xe trước</label>
                     <input type="datetime-local"
                            name="requestedReturnAt"
-                           min="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")"
-                           max="@Model.ReturnDate.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm")"
+                           min="@terminationMin"
+                           max="@terminationMax"
                            class="form-control"
                            required />
                 </div>
