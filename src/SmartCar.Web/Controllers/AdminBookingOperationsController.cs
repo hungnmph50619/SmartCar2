@@ -142,7 +142,7 @@ public sealed class AdminBookingOperationsController : Controller
         var request = RentalLifecycleAuditHelper.ParseEarlyReturn(
             latest.Action,
             latest.NewValues,
-            latest.CreatedAt);
+            latest.CreatedAt.ToLocalTime());
         if (request is null)
         {
             TempData["ErrorMessage"] = "Dữ liệu yêu cầu trả sớm không hợp lệ.";
@@ -229,7 +229,7 @@ public sealed class AdminBookingOperationsController : Controller
         var request = RentalLifecycleAuditHelper.ParseEarlyReturn(
             latest.Action,
             latest.NewValues,
-            latest.CreatedAt);
+            latest.CreatedAt.ToLocalTime());
         if (request is null)
         {
             TempData["ErrorMessage"] = "Dữ liệu yêu cầu trả sớm không hợp lệ.";
@@ -313,18 +313,8 @@ public sealed class AdminBookingOperationsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
-        var bookingIdText = bookingId.ToString();
-        var latestTerminationAction = await _dbContext.AuditLogs
-            .AsNoTracking()
-            .Where(log =>
-                log.EntityName == nameof(Booking) &&
-                log.EntityId == bookingIdText &&
-                RentalLifecycleAuditHelper.RentalTerminationActions.Contains(log.Action))
-            .OrderByDescending(log => log.CreatedAt)
-            .Select(log => log.Action)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (latestTerminationAction == RentalLifecycleAuditHelper.RentalTerminationRequested)
+        var latestTermination = await GetLatestTerminationAsync(bookingId, cancellationToken);
+        if (latestTermination?.Action == RentalLifecycleAuditHelper.RentalTerminationRequested)
         {
             TempData["ErrorMessage"] = "Đơn đã có yêu cầu chấm dứt/thu hồi xe đang hiệu lực.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
@@ -337,7 +327,7 @@ public sealed class AdminBookingOperationsController : Controller
             UserId = adminId,
             Action = RentalLifecycleAuditHelper.RentalTerminationRequested,
             EntityName = nameof(Booking),
-            EntityId = bookingIdText,
+            EntityId = bookingId.ToString(),
             Description =
                 $"Admin yêu cầu chấm dứt thuê trước hạn đơn #{bookingId}. Nhóm lý do: {reasonLabel}. " +
                 $"Yêu cầu trả xe trước {requestedReturnAt:dd/MM/yyyy HH:mm}. Căn cứ: {normalizedReason}. " +
@@ -366,6 +356,82 @@ public sealed class AdminBookingOperationsController : Controller
         await _dbContext.SaveChangesAsync(cancellationToken);
         TempData["SuccessMessage"] =
             "Đã tạo yêu cầu chấm dứt thuê trước hạn và thông báo khách. Trạng thái vẫn là Đang thuê cho đến khi xe thực tế được nhận lại.";
+        return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CancelEarlyTermination(
+        int bookingId,
+        string cancellationReason,
+        CancellationToken cancellationToken)
+    {
+        var booking = await _dbContext.Bookings
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        if (booking.Status != BookingStatus.Rented)
+        {
+            TempData["ErrorMessage"] = "Đơn không còn ở trạng thái Đang thuê để rút yêu cầu thu hồi.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        var normalizedReason = cancellationReason?.Trim() ?? string.Empty;
+        if (normalizedReason.Length < 5 || normalizedReason.Length > 500)
+        {
+            TempData["ErrorMessage"] = "Vui lòng nhập lý do rút yêu cầu từ 5 đến 500 ký tự.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        var latestTermination = await GetLatestTerminationAsync(bookingId, cancellationToken);
+        if (latestTermination is null ||
+            latestTermination.Action != RentalLifecycleAuditHelper.RentalTerminationRequested)
+        {
+            TempData["ErrorMessage"] = "Không có yêu cầu thu hồi đang hiệu lực để rút.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        var request = RentalLifecycleAuditHelper.ParseTermination(
+            latestTermination.Action,
+            latestTermination.NewValues,
+            latestTermination.CreatedAt.ToLocalTime());
+        if (request is null)
+        {
+            TempData["ErrorMessage"] = "Dữ liệu yêu cầu thu hồi hiện tại không hợp lệ.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        _dbContext.AuditLogs.Add(new AuditLog
+        {
+            UserId = adminId,
+            Action = RentalLifecycleAuditHelper.RentalTerminationCancelled,
+            EntityName = nameof(Booking),
+            EntityId = bookingId.ToString(),
+            Description = $"Admin rút yêu cầu chấm dứt/thu hồi xe trước hạn của đơn #{bookingId}. Lý do: {normalizedReason}",
+            NewValues = RentalLifecycleAuditHelper.SerializeTermination(
+                request.ReasonType,
+                $"Yêu cầu trước: {request.Reason}. Lý do rút: {normalizedReason}",
+                request.RequestedReturnAt),
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+            CreatedAt = DateTime.UtcNow
+        });
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "SmartCar đã rút yêu cầu trả xe trước hạn",
+            Message =
+                $"Đơn #{bookingId}: SmartCar đã rút yêu cầu chấm dứt thuê/thu hồi xe trước hạn. " +
+                $"Lý do: {normalizedReason}. Lịch thuê hiện tại tiếp tục có hiệu lực."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Đã rút yêu cầu thu hồi trước hạn và thông báo cho khách.";
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
     }
 
@@ -421,24 +487,36 @@ public sealed class AdminBookingOperationsController : Controller
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
     }
 
-    private async Task<(string Action, string? NewValues, DateTime CreatedAt)?> GetLatestEarlyReturnAsync(
+    private Task<AuditLog?> GetLatestEarlyReturnAsync(
         int bookingId,
         CancellationToken cancellationToken)
     {
         var bookingIdText = bookingId.ToString();
-        var log = await _dbContext.AuditLogs
+        return _dbContext.AuditLogs
             .AsNoTracking()
             .Where(item =>
                 item.EntityName == nameof(Booking) &&
                 item.EntityId == bookingIdText &&
                 RentalLifecycleAuditHelper.EarlyReturnActions.Contains(item.Action))
             .OrderByDescending(item => item.CreatedAt)
-            .Select(item => new { item.Action, item.NewValues, item.CreatedAt })
+            .ThenByDescending(item => item.AuditLogId)
             .FirstOrDefaultAsync(cancellationToken);
+    }
 
-        return log is null
-            ? null
-            : (log.Action, log.NewValues, log.CreatedAt.ToLocalTime());
+    private Task<AuditLog?> GetLatestTerminationAsync(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var bookingIdText = bookingId.ToString();
+        return _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(item =>
+                item.EntityName == nameof(Booking) &&
+                item.EntityId == bookingIdText &&
+                RentalLifecycleAuditHelper.RentalTerminationActions.Contains(item.Action))
+            .OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.AuditLogId)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     private Task<bool> HasVehiclePreparedAsync(
