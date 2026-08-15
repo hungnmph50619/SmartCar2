@@ -8,6 +8,7 @@ using SmartCar.Application.Features.Handovers;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -17,6 +18,8 @@ public sealed class CustomerHandoversController : Controller
 {
     private const int MaximumSignatureBytes = 2 * 1024 * 1024;
     private const string SignatureDataPrefix = "data:image/png;base64,";
+    private const int MaximumCustomerImages = 6;
+    private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IHandoverService _handoverService;
     private readonly ApplicationDbContext _dbContext;
@@ -124,6 +127,8 @@ public sealed class CustomerHandoversController : Controller
                 signatureResult.Error!);
         }
 
+        await ValidateCustomerImagesAsync(model.CustomerImages, cancellationToken);
+
         if (!ModelState.IsValid)
         {
             return View(model);
@@ -132,6 +137,16 @@ public sealed class CustomerHandoversController : Controller
         var signaturePath = await SaveSignatureAsync(
             model.BookingId,
             signatureResult.Bytes!,
+            cancellationToken);
+        var customerImagePaths = await SaveCustomerImagesAsync(
+            model.BookingId,
+            model.CustomerImages,
+            cancellationToken);
+
+        var evidenceHash = await ComputeCustomerEvidenceHashAsync(
+            currentSnapshotHash,
+            model.CustomerNote,
+            customerImagePaths,
             cancellationToken);
 
         var userAgent = Request.Headers.UserAgent.ToString();
@@ -146,12 +161,20 @@ public sealed class CustomerHandoversController : Controller
                 customerId,
                 currentSnapshotHash,
                 signaturePath,
+                model.CustomerNote,
+                string.Join(';', customerImagePaths),
+                evidenceHash,
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
                 userAgent),
             cancellationToken);
         if (!confirmResult.Succeeded)
         {
-            DeleteSignature(signaturePath);
+            DeleteSavedFile(signaturePath);
+            foreach (var path in customerImagePaths)
+            {
+                DeleteSavedFile(path);
+            }
+
             foreach (var error in confirmResult.Errors)
             {
                 ModelState.AddModelError(string.Empty, error);
@@ -162,12 +185,16 @@ public sealed class CustomerHandoversController : Controller
 
         await AddAdminNotificationsAsync(
             $"Khách đã ký biên bản|Booking:{model.BookingId}",
-            $"Khách {snapshot.CustomerName} đã ký biên bản bàn giao đơn #{model.BookingId}. Chuyến thuê đã được kích hoạt; có thể hoàn tất việc giao chìa khóa.",
+            $"Khách {snapshot.CustomerName} đã ký biên bản bàn giao đơn #{model.BookingId}" +
+            (customerImagePaths.Count > 0 || !string.IsNullOrWhiteSpace(model.CustomerNote)
+                ? $" và bổ sung {customerImagePaths.Count} ảnh/ghi chú hiện trạng."
+                : ".") +
+            " Chuyến thuê đã được kích hoạt; có thể hoàn tất việc giao chìa khóa.",
             cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Bạn đã ký biên bản bàn giao thành công. Biên bản đã được chốt và chuyến thuê chuyển sang trạng thái Đang thuê.";
+            "Bạn đã ký biên bản bàn giao thành công. Ảnh/ghi chú bổ sung (nếu có) đã được lưu cùng bằng chứng bàn giao và chuyến thuê chuyển sang trạng thái Đang thuê.";
         return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
     }
 
@@ -197,24 +224,50 @@ public sealed class CustomerHandoversController : Controller
         foreach (var imagePath in snapshot.ImagePaths.OrderBy(path => path, StringComparer.Ordinal))
         {
             AppendText(hash, $"ImagePath={imagePath}");
-
-            var fullPath = ResolveWebRootPath(imagePath);
-            if (!System.IO.File.Exists(fullPath))
-            {
-                AppendText(hash, "ImageMissing=true");
-                continue;
-            }
-
-            await using var stream = System.IO.File.OpenRead(fullPath);
-            var buffer = new byte[81920];
-            int bytesRead;
-            while ((bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
-            {
-                hash.AppendData(buffer, 0, bytesRead);
-            }
+            await AppendFileAsync(hash, imagePath, cancellationToken);
         }
 
         return Convert.ToHexString(hash.GetHashAndReset());
+    }
+
+    private async Task<string> ComputeCustomerEvidenceHashAsync(
+        string snapshotHash,
+        string? customerNote,
+        IReadOnlyList<string> customerImagePaths,
+        CancellationToken cancellationToken)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendText(hash, $"SnapshotHash={snapshotHash}");
+        AppendText(hash, $"CustomerNote={customerNote?.Trim() ?? string.Empty}");
+
+        foreach (var imagePath in customerImagePaths.OrderBy(path => path, StringComparer.Ordinal))
+        {
+            AppendText(hash, $"CustomerImagePath={imagePath}");
+            await AppendFileAsync(hash, imagePath, cancellationToken);
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset());
+    }
+
+    private async Task AppendFileAsync(
+        IncrementalHash hash,
+        string imagePath,
+        CancellationToken cancellationToken)
+    {
+        var fullPath = ResolveWebRootPath(imagePath);
+        if (!System.IO.File.Exists(fullPath))
+        {
+            AppendText(hash, "ImageMissing=true");
+            return;
+        }
+
+        await using var stream = System.IO.File.OpenRead(fullPath);
+        var buffer = new byte[81920];
+        int bytesRead;
+        while ((bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
+        {
+            hash.AppendData(buffer, 0, bytesRead);
+        }
     }
 
     private static void AppendText(IncrementalHash hash, string value)
@@ -263,6 +316,30 @@ public sealed class CustomerHandoversController : Controller
         return (true, bytes, null);
     }
 
+    private async Task ValidateCustomerImagesAsync(
+        IReadOnlyCollection<IFormFile> images,
+        CancellationToken cancellationToken)
+    {
+        var selected = images.Where(file => file.Length > 0).ToList();
+        if (selected.Count > MaximumCustomerImages)
+        {
+            ModelState.AddModelError(
+                nameof(CustomerHandoverSignViewModel.CustomerImages),
+                $"Bạn chỉ có thể bổ sung tối đa {MaximumCustomerImages} ảnh hiện trạng.");
+        }
+
+        foreach (var image in selected)
+        {
+            var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
+            if (error is not null)
+            {
+                ModelState.AddModelError(
+                    nameof(CustomerHandoverSignViewModel.CustomerImages),
+                    $"{image.FileName}: {error}");
+            }
+        }
+    }
+
     private async Task<string> SaveSignatureAsync(
         int bookingId,
         byte[] signatureBytes,
@@ -277,6 +354,30 @@ public sealed class CustomerHandoversController : Controller
         await System.IO.File.WriteAllBytesAsync(fullPath, signatureBytes, cancellationToken);
 
         return $"/{relativeFolder}/{fileName}";
+    }
+
+    private async Task<IReadOnlyList<string>> SaveCustomerImagesAsync(
+        int bookingId,
+        IEnumerable<IFormFile> images,
+        CancellationToken cancellationToken)
+    {
+        var relativeFolder = $"uploads/handover-customer/{bookingId}";
+        var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
+        Directory.CreateDirectory(folder);
+
+        var paths = new List<string>();
+        foreach (var image in images.Where(file => file.Length > 0))
+        {
+            var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+            var fileName = $"customer-{Guid.NewGuid():N}{extension}";
+            var fullPath = Path.Combine(folder, fileName);
+
+            await using var stream = System.IO.File.Create(fullPath);
+            await image.CopyToAsync(stream, cancellationToken);
+            paths.Add($"/{relativeFolder}/{fileName}");
+        }
+
+        return paths;
     }
 
     private string ResolveWebRootPath(string relativePath)
@@ -294,9 +395,9 @@ public sealed class CustomerHandoversController : Controller
         return fullPath;
     }
 
-    private void DeleteSignature(string signaturePath)
+    private void DeleteSavedFile(string relativePath)
     {
-        var fullPath = ResolveWebRootPath(signaturePath);
+        var fullPath = ResolveWebRootPath(relativePath);
         if (System.IO.File.Exists(fullPath))
         {
             System.IO.File.Delete(fullPath);
