@@ -8,7 +8,15 @@
     var earlyReturn = ViewBag.EarlyReturn as EarlyReturnSnapshot;
     var isBeforeScheduledReturn = DateTime.Now < Model.ReturnDate;
     var vehiclePreparedAt = ViewBag.VehiclePreparedAt is DateTime preparedAt ? preparedAt : (DateTime?)null;
-    var vehiclePrepared = vehiclePreparedAt.HasValue;
+
+    // ReadyForPickup trở đi đồng nghĩa xe đã vượt qua checkpoint chuẩn bị.
+    // Audit VehiclePrepared vẫn dùng để hiển thị thời điểm khi có, nhưng không được làm UI lùi trạng thái.
+    var vehiclePrepared = vehiclePreparedAt.HasValue ||
+        Model.Status is BookingStatus.ReadyForPickup or BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
+
+    var depositPaid = Model.Payments.Any(payment =>
+        payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid);
+
     var isHomeDelivery = Model.PickupMethod == DeliveryConstants.HomeDelivery;
     var pickupLocation = string.IsNullOrWhiteSpace(Model.PickupLocation)
         ? "Chưa cập nhật địa điểm nhận"
@@ -19,6 +27,7 @@
     var customerConfirmedForPickup = Model.Status is BookingStatus.ReadyForPickup or BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
     var handoverCompleted = Model.Status is BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
     var showHandoverCommand = Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var canStartHandover = Model.Status == BookingStatus.ReadyForPickup && Model.RentalPaid && depositPaid;
 }
 
 @if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Pending")
@@ -157,10 +166,15 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                                 <div class="fw-semibold mt-1">Liên hệ khách xác nhận lịch nhận</div>
                                 <div class="small text-muted mt-1">Chỉ chuyển ReadyForPickup sau khi khách xác nhận giờ và địa điểm.</div>
                             }
-                            else
+                            else if (canStartHandover)
                             {
                                 <div class="fw-semibold mt-1">Bắt đầu bàn giao thực tế</div>
                                 <div class="small text-muted mt-1">Đối chiếu người nhận, xe, ảnh, ODO và nhiên liệu trước khi giao chìa khóa.</div>
+                            }
+                            else
+                            {
+                                <div class="fw-semibold mt-1 text-warning">Chưa đủ điều kiện bàn giao</div>
+                                <div class="small text-muted mt-1">Kiểm tra lại tiền thuê và cọc bảo đảm trước khi giao xe.</div>
                             }
                         </div>
 
@@ -176,12 +190,25 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                                    asp-action="PreparePickup"
                                    asp-route-bookingId="@Model.BookingId">☎ Gọi khách & xác nhận</a>
                             }
-                            else if (Model.Status == BookingStatus.ReadyForPickup)
+                            else if (canStartHandover)
                             {
                                 <a class="btn btn-success btn-sm w-100"
                                    asp-controller="Handovers"
                                    asp-action="Create"
                                    asp-route-bookingId="@Model.BookingId">Bắt đầu bàn giao →</a>
+                            }
+                            else if (Model.Status == BookingStatus.ReadyForPickup)
+                            {
+                                <div class="alert alert-warning py-2 px-3 small mb-0">
+                                    @if (!Model.RentalPaid)
+                                    {
+                                        <div>• Chưa ghi nhận tiền thuê đã thanh toán.</div>
+                                    }
+                                    @if (!depositPaid)
+                                    {
+                                        <div>• Chưa ghi nhận cọc bảo đảm đã thanh toán.</div>
+                                    }
+                                </div>
                             }
                         </div>
                     </div>
@@ -214,6 +241,17 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                     </div>
                 </div>
             </div>
+
+            @if (Model.Status == BookingStatus.ReadyForPickup)
+            {
+                <div class="d-flex gap-3 flex-wrap small mt-3 pt-3 border-top text-muted">
+                    <span>Cọc bảo đảm: <strong class="@(depositPaid ? "text-success" : "text-danger")">@(depositPaid ? "Đã thanh toán" : "Chưa ghi nhận")</strong></span>
+                    @if (vehiclePreparedAt.HasValue)
+                    {
+                        <span>Chuẩn bị xe lúc: <strong>@vehiclePreparedAt.Value.ToString("dd/MM/yyyy HH:mm")</strong></span>
+                    }
+                </div>
+            }
         </div>
     </div>
 }
