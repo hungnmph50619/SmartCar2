@@ -163,15 +163,13 @@ internal sealed class HandoverService : IHandoverService
             Notes = Normalize(request.Notes)
         };
 
-        // Biên bản được tạo trước, nhưng Booking vẫn ReadyForPickup.
-        // Chỉ sau khi chính khách xem và ký biên bản, hệ thống mới kích hoạt chuyến thuê.
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
             Title = "Biên bản bàn giao đang chờ bạn ký",
             Message =
                 $"SmartCar đã lập biên bản bàn giao cho đơn #{booking.BookingId}. " +
-                "Vui lòng mở chi tiết đơn, kiểm tra ảnh, ODO, nhiên liệu và phụ kiện rồi ký xác nhận trước khi nhận chìa khóa."
+                "Vui lòng mở chi tiết đơn, kiểm tra ảnh, ODO, nhiên liệu và phụ kiện. Nếu cần, bạn có thể bổ sung ảnh/ghi chú của mình trước khi ký xác nhận nhận xe."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -185,7 +183,8 @@ internal sealed class HandoverService : IHandoverService
     {
         if (string.IsNullOrWhiteSpace(request.CustomerId) ||
             string.IsNullOrWhiteSpace(request.SnapshotHash) ||
-            string.IsNullOrWhiteSpace(request.SignaturePath))
+            string.IsNullOrWhiteSpace(request.SignaturePath) ||
+            string.IsNullOrWhiteSpace(request.EvidenceHash))
         {
             return OperationResult.Failure("Thiếu dữ liệu xác nhận chữ ký biên bản.");
         }
@@ -235,6 +234,12 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe không còn ở trạng thái sẵn sàng để bàn giao.");
         }
 
+        var customerNote = Normalize(request.CustomerNote);
+        if (customerNote?.Length > 1000)
+        {
+            return OperationResult.Failure("Ghi chú bổ sung của khách tối đa 1000 ký tự.");
+        }
+
         var signedAt = DateTime.UtcNow;
         var normalizedUserAgent = Normalize(request.UserAgent);
         if (normalizedUserAgent?.Length > 500)
@@ -250,11 +255,15 @@ internal sealed class HandoverService : IHandoverService
         {
             request.BookingId,
             SnapshotHash = request.SnapshotHash.Trim(),
+            EvidenceHash = request.EvidenceHash.Trim(),
             SignaturePath = request.SignaturePath.Trim(),
+            CustomerNote = customerNote,
+            CustomerImagePaths = Normalize(request.CustomerImagePaths),
             SignedAt = signedAt,
             UserAgent = normalizedUserAgent
         });
 
+        var supplementalImageCount = SplitPaths(request.CustomerImagePaths).Count;
         _dbContext.AuditLogs.Add(new AuditLog
         {
             UserId = request.CustomerId,
@@ -263,7 +272,8 @@ internal sealed class HandoverService : IHandoverService
             EntityId = booking.BookingId.ToString(),
             Description =
                 $"Khách đã xem và ký biên bản bàn giao điện tử đơn #{booking.BookingId}; " +
-                $"snapshot SHA-256 {request.SnapshotHash.Trim()}, chữ ký lưu tại {request.SignaturePath.Trim()}. " +
+                $"snapshot SHA-256 {request.SnapshotHash.Trim()}, evidence SHA-256 {request.EvidenceHash.Trim()}, " +
+                $"chữ ký lưu tại {request.SignaturePath.Trim()}, ảnh khách bổ sung: {supplementalImageCount}. " +
                 "Booking chuyển sang Rented trong cùng giao dịch dữ liệu với bằng chứng chữ ký.",
             NewValues = signatureEvidence,
             IpAddress = Normalize(request.IpAddress),
@@ -276,7 +286,7 @@ internal sealed class HandoverService : IHandoverService
             Title = "Đã ký biên bản và nhận xe",
             Message =
                 $"Bạn đã ký xác nhận biên bản bàn giao đơn #{booking.BookingId}. " +
-                "Chuyến thuê đã bắt đầu và cọc bảo đảm sẽ được quyết toán sau khi xe được trả, kiểm tra."
+                "Chuyến thuê đã bắt đầu. Ảnh/ghi chú bạn bổ sung (nếu có) đã được lưu cùng bằng chứng bàn giao và cọc bảo đảm sẽ được quyết toán sau khi xe được trả, kiểm tra."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
