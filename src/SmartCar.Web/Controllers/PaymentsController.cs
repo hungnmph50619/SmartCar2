@@ -37,20 +37,22 @@ public sealed class PaymentsController : Controller
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Thanh toán mô phỏng thành công."
+            ? type == PaymentType.Rental
+                ? "Thanh toán mô phỏng một lần cho tiền thuê/phí giao nhận và cọc bảo đảm thành công."
+                : "Thanh toán mô phỏng thành công."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction("Details", "Bookings", new { id = bookingId });
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SubmitQr(
-    int bookingId,
-    PaymentType type,
-    CancellationToken cancellationToken)
+        int bookingId,
+        PaymentType type,
+        CancellationToken cancellationToken)
     {
-        var customerId =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrWhiteSpace(customerId))
         {
@@ -63,11 +65,11 @@ public sealed class PaymentsController : Controller
             type,
             cancellationToken);
 
-        TempData[result.Succeeded
-            ? "SuccessMessage"
-            : "ErrorMessage"] = result.Succeeded
-                ? "Đã gửi thông tin chuyển khoản. Vui lòng chờ SmartCar xác nhận."
-                : string.Join("; ", result.Errors);
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? type == PaymentType.Rental
+                ? "Đã gửi xác nhận giao dịch một lần gồm tiền thuê/phí giao nhận và cọc bảo đảm. Vui lòng chờ SmartCar đối soát."
+                : "Đã gửi thông tin chuyển khoản. Vui lòng chờ SmartCar xác nhận."
+            : string.Join("; ", result.Errors);
 
         return RedirectToAction(
             "Details",
