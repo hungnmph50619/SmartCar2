@@ -1,0 +1,202 @@
+@model SmartCar.Web.ViewModels.CustomerVehicleCheckOutViewModel
+@using SmartCar.Web.Services
+@{
+    ViewData["Title"] = "Check-out trả xe";
+    var vehicleName = ViewBag.VehicleName as string ?? "Xe thuê";
+    var licensePlate = ViewBag.LicensePlate as string ?? string.Empty;
+    var fuelType = ViewBag.VehicleFuelType as string ?? string.Empty;
+    var isElectric = fuelType.Equals("Điện", StringComparison.OrdinalIgnoreCase);
+    var scheduledReturn = ViewBag.ScheduledReturnDate is DateTime scheduled ? scheduled : (DateTime?)null;
+    var handoverMileage = ViewBag.HandoverMileage is int mileage ? mileage : 0;
+    var handoverFuel = ViewBag.HandoverFuelLevel as string ?? string.Empty;
+    var checkIn = ViewBag.CustomerCheckIn as CustomerVehicleEvidenceSnapshot;
+    var labels = VehicleEvidenceAuditHelper.StandardPhotoLabels;
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <div class="text-uppercase small text-primary fw-semibold">Customer check-out</div>
+        <h1 class="h3 mb-1">Ghi nhận tình trạng xe khi trả · Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Tự chụp lại đúng 6 góc như lúc nhận. SmartCar sẽ có một bộ ảnh kiểm tra độc lập khi thực tế nhận xe/chìa khóa.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-controller="Bookings" asp-action="Details" asp-route-id="@Model.BookingId">← Quay lại đơn</a>
+</div>
+
+<div class="alert alert-warning shadow-sm">
+    <strong>Check-out không đồng nghĩa SmartCar đã nhận lại xe.</strong>
+    Sau khi khóa bộ ảnh này, đơn vẫn là <strong>Đang thuê</strong> cho đến khi bạn bàn giao xe và chìa khóa để SmartCar lập hồ sơ kiểm tra độc lập.
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-4"><div class="small text-muted">Xe</div><div class="fw-semibold">@vehicleName · @licensePlate</div></div>
+            <div class="col-md-4"><div class="small text-muted">ODO lúc nhận</div><div class="fw-semibold">@handoverMileage.ToString("N0") km</div></div>
+            <div class="col-md-4"><div class="small text-muted">Nhiên liệu/pin lúc nhận</div><div class="fw-semibold">@handoverFuel</div></div>
+            @if (scheduledReturn.HasValue)
+            {
+                <div class="col-md-4"><div class="small text-muted">Lịch trả</div><div class="fw-semibold">@scheduledReturn.Value.ToString("dd/MM/yyyy HH:mm")</div></div>
+            }
+            @if (checkIn is not null)
+            {
+                <div class="col-md-4"><div class="small text-muted">Check-in của bạn</div><div class="fw-semibold">@checkIn.ImagePaths.Count ảnh · @checkIn.RecordedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div></div>
+            }
+        </div>
+
+        @if (checkIn?.ImagePaths.Count > 0)
+        {
+            <hr />
+            <div class="small fw-semibold mb-2">Ảnh check-in của chính bạn để chụp lại cùng góc</div>
+            <div class="row g-2">
+                @for (var index = 0; index < checkIn.ImagePaths.Count; index++)
+                {
+                    var path = checkIn.ImagePaths[index];
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <div class="small text-muted mb-1">@(index < labels.Length ? labels[index] : $"Ảnh {index + 1}")</div>
+                        <a href="@path" target="_blank" rel="noopener noreferrer">
+                            <img src="@path" class="w-100 rounded border" style="height:110px;object-fit:cover" alt="Ảnh check-in @(index + 1)" />
+                        </a>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<form asp-action="CheckOut"
+      method="post"
+      enctype="multipart/form-data"
+      data-loading-form
+      data-confirm="Khóa bộ ảnh check-out này làm bằng chứng tình trạng xe tại thời điểm bạn chuẩn bị bàn giao lại cho SmartCar?">
+    <input asp-for="BookingId" type="hidden" />
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
+
+    <div class="card shadow-sm border-primary mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-primary fw-semibold">Bộ ảnh sau chuyến do khách tạo</div>
+                    <h2 class="h5 mb-1">Chụp lại đúng 6 góc</h2>
+                    <p class="small text-muted mb-0">Cố gắng giữ góc chụp và khoảng cách gần giống check-in để đối chiếu rõ trước ↔ sau.</p>
+                </div>
+                <span class="badge bg-primary">Bắt buộc 6 ảnh</span>
+            </div>
+
+            <div class="row g-3">
+                @for (var index = 0; index < labels.Length; index++)
+                {
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3 h-100 evidence-slot">
+                            <div class="d-flex gap-3 align-items-start">
+                                <div class="badge bg-dark rounded-pill">@(index + 1)</div>
+                                <div class="flex-grow-1">
+                                    <label class="form-label fw-semibold">@labels[index]</label>
+                                    <input type="file"
+                                           name="EvidenceImages"
+                                           accept="image/jpeg,image/png,image/webp"
+                                           capture="environment"
+                                           class="form-control evidence-input"
+                                           required />
+                                    <div class="form-text evidence-file-name">Chưa chọn ảnh</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <span asp-validation-for="EvidenceImages" class="text-danger small d-block mt-2"></span>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <h2 class="h5">Thông số tại thời điểm check-out</h2>
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <label asp-for="Mileage" class="form-label fw-semibold">ODO hiện tại</label>
+                    <div class="input-group">
+                        <input asp-for="Mileage" type="number" min="@handoverMileage" class="form-control" required />
+                        <span class="input-group-text">km</span>
+                    </div>
+                    <span asp-validation-for="Mileage" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="FuelLevel" class="form-label fw-semibold">@(isElectric ? "Mức pin hiện tại" : "Mức nhiên liệu hiện tại")</label>
+                    @if (isElectric)
+                    {
+                        <div class="input-group">
+                            <input asp-for="FuelLevel" type="number" min="0" max="100" class="form-control" required />
+                            <span class="input-group-text">% SOC</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <select asp-for="FuelLevel" class="form-select" required>
+                            <option value="">-- Chọn mức trên đồng hồ --</option>
+                            <option value="8/8 (100%)">8/8 - 100%</option>
+                            <option value="7/8 (~87.5%)">7/8 - ~87,5%</option>
+                            <option value="6/8 (75%)">6/8 - 75%</option>
+                            <option value="5/8 (~62.5%)">5/8 - ~62,5%</option>
+                            <option value="4/8 (50%)">4/8 - 50%</option>
+                            <option value="3/8 (~37.5%)">3/8 - ~37,5%</option>
+                            <option value="2/8 (25%)">2/8 - 25%</option>
+                            <option value="1/8 (~12.5%)">1/8 - ~12,5%</option>
+                            <option value="0/8 (Gần cạn)">0/8 - Gần cạn</option>
+                        </select>
+                    }
+                    <span asp-validation-for="FuelLevel" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="form-check mt-4">
+                <input asp-for="HasIssue" class="form-check-input" id="checkout-issue" />
+                <label class="form-check-label fw-semibold" for="checkout-issue">Tôi ghi nhận có hư hỏng/bất thường tại thời điểm trả xe</label>
+            </div>
+            <div class="mt-3">
+                <label asp-for="Note" class="form-label fw-semibold">Ghi chú của bạn</label>
+                <textarea asp-for="Note" class="form-control" rows="3" maxlength="1000" placeholder="Nếu có bất thường, mô tả rõ vị trí/tình trạng. Nếu không có có thể để trống."></textarea>
+                <span asp-validation-for="Note" class="text-danger small"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <label class="border rounded-3 p-3 d-flex gap-3 align-items-start" for="accepted-checkout">
+                <input asp-for="Accepted" id="accepted-checkout" type="checkbox" class="form-check-input mt-1" required />
+                <span>
+                    <strong class="d-block">Tôi xác nhận bộ ảnh này phản ánh chiếc xe tại thời điểm tôi chuẩn bị trả</strong>
+                    <span class="small text-muted">Sau xác nhận, ảnh, ODO, nhiên liệu/pin, tài khoản và thời gian hệ thống được khóa thành bằng chứng check-out. SmartCar vẫn sẽ chụp bộ ảnh kiểm tra riêng khi nhận lại xe.</span>
+                </span>
+            </label>
+            <span asp-validation-for="Accepted" class="text-danger small d-block mt-1"></span>
+
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-success px-4" data-loading-text="Đang khóa bằng chứng check-out...">Hoàn tất check-out & bàn giao xe</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            document.querySelectorAll('.evidence-input').forEach(input => {
+                input.addEventListener('change', () => {
+                    const label = input.closest('.evidence-slot')?.querySelector('.evidence-file-name');
+                    if (label) label.textContent = input.files?.[0]?.name ?? 'Chưa chọn ảnh';
+                });
+            });
+
+            const issue = document.getElementById('checkout-issue');
+            const note = document.getElementById('Note');
+            const sync = () => {
+                if (!issue || !note) return;
+                note.required = issue.checked;
+            };
+            issue?.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
+}
