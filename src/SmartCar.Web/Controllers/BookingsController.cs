@@ -475,7 +475,7 @@ public sealed class BookingsController : Controller
             _configuration["PaymentQr:QrImagePath"]
             ?? "/images/payment/bank-qr.png";
 
-        return View(booking);
+        return View("DetailsRentalLifecycle", booking);
     }
 
     private async Task AddAdminNotificationsAsync(
