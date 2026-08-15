@@ -84,17 +84,12 @@
         </h1>
 
         <p class="text-muted mb-0">
-            Theo dõi thanh toán tiền thuê,
-            gia hạn, phụ phí và hoàn tiền.
+            Theo dõi tiền thuê, cọc bảo đảm,
+            gia hạn, phụ phí và các khoản hoàn.
         </p>
     </div>
 
 </div>
-
-
-@* =========================================================
-   BỘ LỌC
-   ========================================================= *@
 
 <form method="get"
       class="row g-2 mb-4">
@@ -171,11 +166,6 @@
 
 </form>
 
-
-@* =========================================================
-   DANH SÁCH GIAO DỊCH
-   ========================================================= *@
-
 @if (Model.Count == 0)
 {
     <div class="alert alert-info">
@@ -248,8 +238,10 @@ else
                 @foreach (var payment in Model)
                 {
                     UserBankAccountDto? refundBankAccount = null;
+                    var isRefund = payment.Type is PaymentType.Refund or PaymentType.DepositRefund;
+                    var isDepositRefund = payment.Type == PaymentType.DepositRefund;
 
-                    if (payment.Type == PaymentType.Refund &&
+                    if (isRefund &&
                         payment.Status == PaymentStatus.AwaitingRefund)
                     {
                         refundBankAccount =
@@ -396,17 +388,17 @@ else
                                 </form>
                             }
                             else if (
-                                payment.Type == PaymentType.Refund &&
+                                isRefund &&
                                 payment.Status == PaymentStatus.AwaitingRefund)
                             {
                                 <div class="fw-semibold mb-2">
-                                    Hoàn tiền cho khách
+                                    @(isDepositRefund ? "Hoàn cọc bảo đảm cho khách" : "Hoàn tiền cho khách")
                                 </div>
 
                                 @if (refundBankAccount is null)
                                 {
                                     <div class="alert alert-danger py-2 px-2 small mb-2">
-                                        Khách chưa lưu tài khoản ngân hàng nhận hoàn tiền.
+                                        Khách chưa lưu tài khoản ngân hàng nhận khoản hoàn.
                                     </div>
 
                                     <a asp-controller="AdminCustomers"
@@ -447,7 +439,7 @@ else
                                     <form asp-action="ConfirmRefund"
                                           method="post"
                                           data-loading-form
-                                          data-confirm="Bạn đã thực sự chuyển khoản hoàn tiền cho khách?">
+                                          data-confirm="@(isDepositRefund ? "Bạn đã thực sự chuyển khoản hoàn cọc cho khách?" : "Bạn đã thực sự chuyển khoản hoàn tiền cho khách?")">
 
                                         <input type="hidden"
                                                name="paymentId"
@@ -469,7 +461,7 @@ else
                                         <button type="submit"
                                                 class="btn btn-success btn-sm w-100"
                                                 data-loading-text="Đang xác nhận...">
-                                            ✓ Xác nhận đã hoàn tiền
+                                            ✓ @(isDepositRefund ? "Xác nhận đã hoàn cọc" : "Xác nhận đã hoàn tiền")
                                         </button>
                                     </form>
                                 }
@@ -483,7 +475,7 @@ else
                             else if (payment.Status == PaymentStatus.Refunded)
                             {
                                 <span class="text-success small fw-semibold">
-                                    ✓ Đã hoàn tiền
+                                    ✓ @(isDepositRefund ? "Đã hoàn cọc" : "Đã hoàn tiền")
                                 </span>
                             }
                             else if (payment.Status == PaymentStatus.Pending)
