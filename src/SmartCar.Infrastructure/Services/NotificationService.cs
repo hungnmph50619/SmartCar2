@@ -18,8 +18,12 @@ internal sealed class NotificationService : INotificationService
         "CCCD chờ xác minh|",
         "GPLX chờ xác minh|",
         "Đơn thuê chờ xử lý|",
+        "Đơn đã thanh toán - chuẩn bị xe|",
+        "Đơn sẵn sàng bàn giao|",
+        "Đơn chờ kiểm tra & quyết toán|",
         "Yêu cầu gia hạn chờ xử lý|",
-        "Thanh toán QR chờ xác nhận|"
+        "Thanh toán QR chờ xác nhận|",
+        "Khoản hoàn chờ xử lý|"
     };
 
     private readonly ApplicationDbContext _dbContext;
@@ -35,6 +39,10 @@ internal sealed class NotificationService : INotificationService
         CancellationToken cancellationToken = default)
     {
         await EnsureDocumentExpiryNotificationsAsync(
+            userId,
+            cancellationToken);
+
+        await EnsureAdminWorkNotificationsAsync(
             userId,
             cancellationToken);
 
@@ -62,6 +70,10 @@ internal sealed class NotificationService : INotificationService
         CancellationToken cancellationToken = default)
     {
         await EnsureDocumentExpiryNotificationsAsync(
+            userId,
+            cancellationToken);
+
+        await EnsureAdminWorkNotificationsAsync(
             userId,
             cancellationToken);
 
@@ -129,6 +141,243 @@ internal sealed class NotificationService : INotificationService
     }
 
     /// <summary>
+    /// Tạo/reopen các thông báo nghiệp vụ dựa trên trạng thái thật trong DB.
+    /// Vì vậy Admin không bị bỏ sót việc chỉ vì một controller quên phát notification:
+    /// đơn mới, thanh toán, chuẩn bị/bàn giao, kiểm tra sau trả và hoàn tiền đều
+    /// tự xuất hiện ở chuông thông báo khi còn việc phải xử lý.
+    /// </summary>
+    private async Task EnsureAdminWorkNotificationsAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsAdminAsync(userId, cancellationToken))
+        {
+            return;
+        }
+
+        var pendingBookings = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.Status == BookingStatus.PendingConfirmation)
+            .OrderBy(booking => booking.CreatedAt)
+            .Select(booking => new
+            {
+                booking.BookingId,
+                CustomerName = _dbContext.Users
+                    .Where(user => user.Id == booking.CustomerId)
+                    .Select(user => user.FullName)
+                    .FirstOrDefault() ?? "Khách hàng",
+                VehicleName = booking.Vehicle.VehicleName,
+                booking.PickupDate
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var booking in pendingBookings)
+        {
+            await EnsureWorkItemAsync(
+                userId,
+                $"Đơn thuê chờ xử lý|{booking.BookingId}",
+                $"Đơn #{booking.BookingId} của {booking.CustomerName} - {booking.VehicleName} đang chờ xác nhận. Lịch nhận {booking.PickupDate:dd/MM/yyyy HH:mm}.",
+                cancellationToken);
+        }
+
+        var preparedEntityIds = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.Action == "VehiclePrepared" &&
+                log.EntityName == nameof(Booking))
+            .Select(log => log.EntityId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var preparedBookingIds = preparedEntityIds
+            .Select(value => int.TryParse(value, out var id) ? id : 0)
+            .Where(id => id > 0)
+            .ToHashSet();
+
+        var paidBookings = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.Status == BookingStatus.Paid)
+            .Select(booking => new
+            {
+                booking.BookingId,
+                CustomerName = _dbContext.Users
+                    .Where(user => user.Id == booking.CustomerId)
+                    .Select(user => user.FullName)
+                    .FirstOrDefault() ?? "Khách hàng",
+                VehicleName = booking.Vehicle.VehicleName
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var booking in paidBookings.Where(item => !preparedBookingIds.Contains(item.BookingId)))
+        {
+            await EnsureWorkItemAsync(
+                userId,
+                $"Đơn đã thanh toán - chuẩn bị xe|{booking.BookingId}",
+                $"Khách {booking.CustomerName} đã hoàn tất thanh toán đơn #{booking.BookingId} - {booking.VehicleName}. Admin cần kiểm tra và chuẩn bị xe.",
+                cancellationToken);
+        }
+
+        var readyBookings = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking =>
+                booking.Status == BookingStatus.ReadyForPickup &&
+                booking.Handover == null)
+            .Select(booking => new
+            {
+                booking.BookingId,
+                CustomerName = _dbContext.Users
+                    .Where(user => user.Id == booking.CustomerId)
+                    .Select(user => user.FullName)
+                    .FirstOrDefault() ?? "Khách hàng",
+                VehicleName = booking.Vehicle.VehicleName,
+                booking.PickupDate
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var booking in readyBookings)
+        {
+            await EnsureWorkItemAsync(
+                userId,
+                $"Đơn sẵn sàng bàn giao|{booking.BookingId}",
+                $"Đơn #{booking.BookingId} - {booking.VehicleName} của {booking.CustomerName} đang sẵn sàng bàn giao. Lịch nhận {booking.PickupDate:dd/MM/yyyy HH:mm}.",
+                cancellationToken);
+        }
+
+        var inspectionBookings = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.Status == BookingStatus.PendingInspection)
+            .Select(booking => new
+            {
+                booking.BookingId,
+                VehicleName = booking.Vehicle.VehicleName,
+                booking.AdditionalAmount
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var booking in inspectionBookings)
+        {
+            await EnsureWorkItemAsync(
+                userId,
+                $"Đơn chờ kiểm tra & quyết toán|{booking.BookingId}",
+                booking.AdditionalAmount > 0
+                    ? $"Đơn #{booking.BookingId} - {booking.VehicleName} đã trả xe, đang có {booking.AdditionalAmount:N0} đồng phụ phí. Kiểm tra căn cứ và quyết toán cọc."
+                    : $"Đơn #{booking.BookingId} - {booking.VehicleName} đã trả xe. Nếu không phát sinh phụ phí, hoàn tất kiểm tra để tạo khoản hoàn cọc.",
+                cancellationToken);
+        }
+
+        var pendingExtensions = await _dbContext.BookingExtensions
+            .AsNoTracking()
+            .Where(extension => extension.Status == BookingExtensionStatus.Pending)
+            .Select(extension => new
+            {
+                extension.BookingExtensionId,
+                extension.BookingId,
+                extension.RequestedReturnDate
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var extension in pendingExtensions)
+        {
+            await EnsureWorkItemAsync(
+                userId,
+                $"Yêu cầu gia hạn chờ xử lý|{extension.BookingExtensionId}",
+                $"Đơn #{extension.BookingId} đang chờ duyệt gia hạn đến {extension.RequestedReturnDate:dd/MM/yyyy HH:mm}.",
+                cancellationToken);
+        }
+
+        var pendingQrPayments = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment =>
+                payment.Status == PaymentStatus.AwaitingConfirmation &&
+                payment.Method == PaymentMethods.BankQr)
+            .Select(payment => new
+            {
+                payment.PaymentId,
+                payment.BookingId,
+                payment.Type,
+                payment.Amount
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var payment in pendingQrPayments)
+        {
+            await EnsureWorkItemAsync(
+                userId,
+                $"Thanh toán QR chờ xác nhận|{payment.PaymentId}",
+                $"Khách đã báo chuyển khoản cho đơn #{payment.BookingId}: {payment.Type} - {payment.Amount:N0} đồng. Cần đối soát giao dịch ngân hàng.",
+                cancellationToken);
+        }
+
+        var pendingRefunds = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment =>
+                payment.Status == PaymentStatus.AwaitingRefund &&
+                (payment.Type == PaymentType.Refund || payment.Type == PaymentType.DepositRefund))
+            .Select(payment => new
+            {
+                payment.PaymentId,
+                payment.BookingId,
+                payment.Type,
+                payment.Amount,
+                CustomerName = _dbContext.Users
+                    .Where(user => user.Id == payment.Booking.CustomerId)
+                    .Select(user => user.FullName)
+                    .FirstOrDefault() ?? "Khách hàng"
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var payment in pendingRefunds)
+        {
+            var refundName = payment.Type == PaymentType.DepositRefund
+                ? "hoàn cọc bảo đảm"
+                : "hoàn tiền";
+
+            await EnsureWorkItemAsync(
+                userId,
+                $"Khoản hoàn chờ xử lý|{payment.PaymentId}",
+                $"Cần {refundName} {payment.Amount:N0} đồng cho {payment.CustomerName}, đơn #{payment.BookingId}. Chỉ xác nhận sau khi đã chuyển tiền thực tế.",
+                cancellationToken);
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task EnsureWorkItemAsync(
+        string userId,
+        string title,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var existing = await _dbContext.Notifications
+            .FirstOrDefaultAsync(item =>
+                item.UserId == userId &&
+                item.Title == title,
+                cancellationToken);
+
+        if (existing is null)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = userId,
+                Title = title,
+                Message = message
+            });
+            return;
+        }
+
+        if (!string.Equals(existing.Message, message, StringComparison.Ordinal))
+        {
+            existing.Message = message;
+        }
+
+        if (existing.IsRead)
+        {
+            existing.IsRead = false;
+            existing.ReadAt = null;
+        }
+    }
+
+    /// <summary>
     /// Work notification không được đóng chỉ vì Admin đã mở xem.
     /// Mỗi lần layout/trang notification hỏi số badge, trạng thái thật trong DB
     /// được đối chiếu. Chỉ khi nghiệp vụ không còn Pending/AwaitingConfirmation
@@ -138,31 +387,7 @@ internal sealed class NotificationService : INotificationService
         string userId,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return;
-        }
-
-        var adminRoleId =
-            await _dbContext.Roles
-                .Where(role => role.Name == RoleNames.Admin)
-                .Select(role => role.Id)
-                .FirstOrDefaultAsync(cancellationToken);
-
-        if (string.IsNullOrWhiteSpace(adminRoleId))
-        {
-            return;
-        }
-
-        var isAdmin =
-            await _dbContext.UserRoles
-                .AnyAsync(
-                    item =>
-                        item.UserId == userId &&
-                        item.RoleId == adminRoleId,
-                    cancellationToken);
-
-        if (!isAdmin)
+        if (!await IsAdminAsync(userId, cancellationToken))
         {
             return;
         }
@@ -283,54 +508,119 @@ internal sealed class NotificationService : INotificationService
                         cancellationToken);
 
             case "Đơn thuê chờ xử lý":
-                return int.TryParse(key, out var bookingId) &&
+                return int.TryParse(key, out var pendingBookingId) &&
                        await _dbContext.Bookings
                            .AsNoTracking()
                            .AnyAsync(
                                booking =>
-                                   booking.BookingId ==
-                                       bookingId &&
-                                   booking.Status ==
-                                       BookingStatus
-                                           .PendingConfirmation,
+                                   booking.BookingId == pendingBookingId &&
+                                   booking.Status == BookingStatus.PendingConfirmation,
+                               cancellationToken);
+
+            case "Đơn đã thanh toán - chuẩn bị xe":
+                if (!int.TryParse(key, out var paidBookingId))
+                {
+                    return false;
+                }
+
+                var stillPaid = await _dbContext.Bookings
+                    .AsNoTracking()
+                    .AnyAsync(booking =>
+                        booking.BookingId == paidBookingId &&
+                        booking.Status == BookingStatus.Paid,
+                        cancellationToken);
+
+                if (!stillPaid)
+                {
+                    return false;
+                }
+
+                return !await _dbContext.AuditLogs
+                    .AsNoTracking()
+                    .AnyAsync(log =>
+                        log.Action == "VehiclePrepared" &&
+                        log.EntityName == nameof(Booking) &&
+                        log.EntityId == key,
+                        cancellationToken);
+
+            case "Đơn sẵn sàng bàn giao":
+                return int.TryParse(key, out var readyBookingId) &&
+                       await _dbContext.Bookings
+                           .AsNoTracking()
+                           .AnyAsync(booking =>
+                               booking.BookingId == readyBookingId &&
+                               booking.Status == BookingStatus.ReadyForPickup &&
+                               booking.Handover == null,
+                               cancellationToken);
+
+            case "Đơn chờ kiểm tra & quyết toán":
+                return int.TryParse(key, out var inspectionBookingId) &&
+                       await _dbContext.Bookings
+                           .AsNoTracking()
+                           .AnyAsync(booking =>
+                               booking.BookingId == inspectionBookingId &&
+                               booking.Status == BookingStatus.PendingInspection,
                                cancellationToken);
 
             case "Yêu cầu gia hạn chờ xử lý":
-                return int.TryParse(
-                           key,
-                           out var extensionId) &&
+                return int.TryParse(key, out var extensionId) &&
                        await _dbContext.BookingExtensions
                            .AsNoTracking()
-                           .AnyAsync(
-                               extension =>
-                                   extension
-                                       .BookingExtensionId ==
-                                   extensionId &&
-                                   extension.Status ==
-                                       BookingExtensionStatus
-                                           .Pending,
+                           .AnyAsync(extension =>
+                               extension.BookingExtensionId == extensionId &&
+                               extension.Status == BookingExtensionStatus.Pending,
                                cancellationToken);
 
             case "Thanh toán QR chờ xác nhận":
-                return int.TryParse(
-                           key,
-                           out var paymentId) &&
+                return int.TryParse(key, out var paymentId) &&
                        await _dbContext.Payments
                            .AsNoTracking()
-                           .AnyAsync(
-                               payment =>
-                                   payment.PaymentId ==
-                                       paymentId &&
-                                   payment.Status ==
-                                       PaymentStatus
-                                           .AwaitingConfirmation &&
-                                   payment.Method ==
-                                       PaymentMethods.BankQr,
+                           .AnyAsync(payment =>
+                               payment.PaymentId == paymentId &&
+                               payment.Status == PaymentStatus.AwaitingConfirmation &&
+                               payment.Method == PaymentMethods.BankQr,
+                               cancellationToken);
+
+            case "Khoản hoàn chờ xử lý":
+                return int.TryParse(key, out var refundPaymentId) &&
+                       await _dbContext.Payments
+                           .AsNoTracking()
+                           .AnyAsync(payment =>
+                               payment.PaymentId == refundPaymentId &&
+                               payment.Status == PaymentStatus.AwaitingRefund &&
+                               (payment.Type == PaymentType.Refund ||
+                                payment.Type == PaymentType.DepositRefund),
                                cancellationToken);
 
             default:
                 return false;
         }
+    }
+
+    private async Task<bool> IsAdminAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return false;
+        }
+
+        var adminRoleId = await _dbContext.Roles
+            .Where(role => role.Name == RoleNames.Admin)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(adminRoleId))
+        {
+            return false;
+        }
+
+        return await _dbContext.UserRoles
+            .AnyAsync(item =>
+                item.UserId == userId &&
+                item.RoleId == adminRoleId,
+                cancellationToken);
     }
 
     private async Task EnsureDocumentExpiryNotificationsAsync(
