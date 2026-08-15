@@ -135,7 +135,7 @@ public sealed class ReturnsController : Controller
             cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã tiếp nhận xe và lưu biên bản đối chiếu. Xe chuyển sang Chờ kiểm tra để xử lý phụ phí hoặc bảo trì nếu có.";
+            "Đã tiếp nhận xe và lưu bộ ảnh trả xe. Khách được yêu cầu xem đối chiếu ảnh giao ↔ trả và chọn Đồng ý hoặc Yêu cầu xem xét trước khi đơn mới có thể hoàn tất theo luồng mới.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
@@ -241,6 +241,8 @@ public sealed class ReturnsController : Controller
         ViewBag.HandoverFuelLevel = preparation.HandoverFuelLevel;
         ViewBag.HandoverAccessories = preparation.HandoverAccessories;
         ViewBag.HandoverImagePaths = preparation.HandoverImagePaths;
+        ViewBag.CustomerHandoverImagePaths = preparation.CustomerHandoverImagePaths;
+        ViewBag.CustomerHandoverNote = preparation.CustomerHandoverNote;
         ViewBag.VehicleFuelType = preparation.VehicleFuelType;
         ViewBag.AccessoryStatus = accessoryStatus ?? "Complete";
         ViewBag.AccessoryNote = accessoryNote ?? string.Empty;
