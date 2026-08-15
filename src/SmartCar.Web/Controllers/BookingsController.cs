@@ -2,10 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure.Identity;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
@@ -20,6 +22,7 @@ public sealed class BookingsController : Controller
     private readonly IUserBankAccountService _bankAccountService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
+    private readonly ApplicationDbContext _dbContext;
 
     public BookingsController(
         IBookingService bookingService,
@@ -27,7 +30,8 @@ public sealed class BookingsController : Controller
         IDocumentService documentService,
         IUserBankAccountService bankAccountService,
         UserManager<ApplicationUser> userManager,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ApplicationDbContext dbContext)
     {
         _bookingService = bookingService;
         _deliveryQuoteService = deliveryQuoteService;
@@ -35,6 +39,7 @@ public sealed class BookingsController : Controller
         _bankAccountService = bankAccountService;
         _userManager = userManager;
         _configuration = configuration;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -267,6 +272,18 @@ public sealed class BookingsController : Controller
             return NotFound();
         }
 
+        var bookingIdText = id.ToString();
+        var vehiclePreparedAt = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.Action == "VehiclePrepared" &&
+                log.EntityName == "Booking" &&
+                log.EntityId == bookingIdText)
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => (DateTime?)log.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        ViewBag.VehiclePreparedAt = vehiclePreparedAt?.ToLocalTime();
         ViewBag.SmartCarSupportPhone = GetSupportPhone();
 
         ViewBag.PaymentBankName =
