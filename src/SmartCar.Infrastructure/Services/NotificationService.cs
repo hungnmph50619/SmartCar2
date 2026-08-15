@@ -299,7 +299,35 @@ internal sealed class NotificationService : INotificationService
             })
             .ToListAsync(cancellationToken);
 
-        foreach (var payment in pendingQrPayments)
+        var pendingInitialQrGroups = pendingQrPayments
+            .Where(payment =>
+                payment.Type == PaymentType.Rental ||
+                payment.Type == PaymentType.Deposit)
+            .GroupBy(payment => payment.BookingId)
+            .ToList();
+
+        foreach (var group in pendingInitialQrGroups)
+        {
+            var rentalAmount = group
+                .Where(payment => payment.Type == PaymentType.Rental)
+                .Sum(payment => payment.Amount);
+            var depositAmount = group
+                .Where(payment => payment.Type == PaymentType.Deposit)
+                .Sum(payment => payment.Amount);
+            var totalAmount = rentalAmount + depositAmount;
+
+            await EnsureWorkItemAsync(
+                userId,
+                $"Thanh toán QR chờ xác nhận|B{group.Key}",
+                $"Khách đã báo chuyển khoản cho đơn #{group.Key}: tổng {totalAmount:N0} đồng " +
+                $"(tiền thuê/phí giao nhận {rentalAmount:N0} đồng + cọc bảo đảm {depositAmount:N0} đồng). " +
+                "Cần đối soát giao dịch ngân hàng cho đơn.",
+                cancellationToken);
+        }
+
+        foreach (var payment in pendingQrPayments.Where(payment =>
+                     payment.Type != PaymentType.Rental &&
+                     payment.Type != PaymentType.Deposit))
         {
             await EnsureWorkItemAsync(
                 userId,
@@ -572,14 +600,52 @@ internal sealed class NotificationService : INotificationService
                                cancellationToken);
 
             case "Thanh toán QR chờ xác nhận":
-                return int.TryParse(key, out var paymentId) &&
-                       await _dbContext.Payments
-                           .AsNoTracking()
-                           .AnyAsync(payment =>
-                               payment.PaymentId == paymentId &&
-                               payment.Status == PaymentStatus.AwaitingConfirmation &&
-                               payment.Method == PaymentMethods.BankQr,
-                               cancellationToken);
+                if (key.StartsWith("B", StringComparison.Ordinal) &&
+                    int.TryParse(key[1..], out var paymentBookingId))
+                {
+                    return await _dbContext.Payments
+                        .AsNoTracking()
+                        .AnyAsync(payment =>
+                            payment.BookingId == paymentBookingId &&
+                            payment.Status == PaymentStatus.AwaitingConfirmation &&
+                            payment.Method == PaymentMethods.BankQr &&
+                            (payment.Type == PaymentType.Rental ||
+                             payment.Type == PaymentType.Deposit),
+                            cancellationToken);
+                }
+
+                if (!int.TryParse(key, out var paymentId))
+                {
+                    return false;
+                }
+
+                var legacyPayment = await _dbContext.Payments
+                    .AsNoTracking()
+                    .Where(payment => payment.PaymentId == paymentId)
+                    .Select(payment => new
+                    {
+                        payment.Type,
+                        payment.Status,
+                        payment.Method
+                    })
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (legacyPayment is null)
+                {
+                    return false;
+                }
+
+                // Rental + Deposit của một checkout ban đầu được gộp thành một
+                // công việc theo BookingId. Notification cũ theo từng PaymentId
+                // được đóng để Admin không phải xử lý hai thẻ cho cùng một đơn.
+                if (legacyPayment.Type == PaymentType.Rental ||
+                    legacyPayment.Type == PaymentType.Deposit)
+                {
+                    return false;
+                }
+
+                return legacyPayment.Status == PaymentStatus.AwaitingConfirmation &&
+                       legacyPayment.Method == PaymentMethods.BankQr;
 
             case "Khoản hoàn chờ xử lý":
                 return int.TryParse(key, out var refundPaymentId) &&
