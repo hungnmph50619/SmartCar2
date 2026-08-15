@@ -127,3 +127,18 @@
         }
     </div>
 }
+
+<script>
+(() => {
+    const statusAlert = document.querySelector('.alert[role="status"]');
+    if (!statusAlert) return;
+
+    statusAlert.innerHTML = statusAlert.innerHTML
+        .replace(
+            'SmartCar đang đối chiếu tình trạng xe, nhiên liệu, phụ kiện và quyết toán cọc bảo đảm.',
+            'SmartCar đang đối chiếu tình trạng xe, ảnh biên bản giao nhận và quyết toán cọc bảo đảm.')
+        .replace(
+            'Nếu muốn trả sớm, hãy liên hệ SmartCar để thống nhất thời gian tiếp nhận.',
+            'Nếu muốn kết thúc chuyến trước lịch, dùng mục Hủy chuyến đang thuê bên dưới để thống nhất thời gian SmartCar nhận lại xe.');
+})();
+</script>
