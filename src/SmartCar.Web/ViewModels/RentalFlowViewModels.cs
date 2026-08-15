@@ -143,62 +143,25 @@ public sealed class HandoverViewModel
     public DateTime HandoverAt { get; set; } = DateTime.Now;
 
     [Range(0, int.MaxValue)]
+    [Display(Name = "Số km trên đồng hồ khi giao")]
     public int Mileage { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi giao xe.")]
     public string FuelLevel { get; set; } = string.Empty;
-    public string? ExteriorCondition { get; set; }
-    public string? InteriorCondition { get; set; }
-    public string? Accessories { get; set; }
 
-    [Display(Name = "Ảnh bàn giao")]
+    [Display(Name = "Ảnh hiện trạng xe")]
     public List<IFormFile> Images { get; set; } = new();
 
+    [Display(Name = "Ảnh biên bản bàn giao đã ký")]
+    public List<IFormFile> SignedDocumentImages { get; set; } = new();
+
+    [StringLength(1000)]
     public string? Notes { get; set; }
 
     public bool RecipientConfirmed { get; set; }
     public bool CitizenIdOriginalChecked { get; set; }
     public bool DrivingLicenseOriginalChecked { get; set; }
     public bool FinalHandoverConfirmed { get; set; }
-}
-
-public sealed class CustomerHandoverCheckInViewModel
-{
-    public int BookingId { get; set; }
-
-    [Required]
-    public string SnapshotHash { get; set; } = string.Empty;
-
-    public bool HasPreExistingIssue { get; set; }
-
-    [StringLength(1000, ErrorMessage = "Ghi chú hiện trạng tối đa 1000 ký tự.")]
-    public string? CustomerNote { get; set; }
-
-    [Display(Name = "Ảnh check-in của khách")]
-    public List<IFormFile> EvidenceImages { get; set; } = new();
-
-    public bool Accepted { get; set; }
-}
-
-public sealed class CustomerVehicleCheckOutViewModel
-{
-    public int BookingId { get; set; }
-
-    [Range(0, int.MaxValue)]
-    public int Mileage { get; set; }
-
-    [Required(ErrorMessage = "Vui lòng ghi mức nhiên liệu/pin khi trả xe.")]
-    public string FuelLevel { get; set; } = string.Empty;
-
-    public bool HasIssue { get; set; }
-
-    [StringLength(1000, ErrorMessage = "Ghi chú check-out tối đa 1000 ký tự.")]
-    public string? Note { get; set; }
-
-    [Display(Name = "Ảnh check-out của khách")]
-    public List<IFormFile> EvidenceImages { get; set; } = new();
-
-    public bool Accepted { get; set; }
 }
 
 public sealed class ReturnViewModel
@@ -212,21 +175,28 @@ public sealed class ReturnViewModel
     public string ReturnLocation { get; set; } = string.Empty;
 
     [Range(0, int.MaxValue)]
+    [Display(Name = "Số km trên đồng hồ khi trả")]
     public int Mileage { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi trả xe.")]
     public string FuelLevel { get; set; } = string.Empty;
+
+    [StringLength(1000, ErrorMessage = "Mô tả hư hỏng tối đa 1000 ký tự.")]
     public string? ExteriorCondition { get; set; }
     public string? InteriorCondition { get; set; }
     public bool HasDamage { get; set; }
 
-    [Display(Name = "Ảnh khi trả xe")]
+    [Display(Name = "Ảnh hiện trạng khi nhận lại xe")]
     public List<IFormFile> Images { get; set; } = new();
 
+    [Display(Name = "Ảnh biên bản trả xe đã ký")]
+    public List<IFormFile> SignedDocumentImages { get; set; } = new();
+
+    [StringLength(1000)]
     public string? Notes { get; set; }
 }
 
-public sealed class CustomerReturnReviewViewModel
+public sealed class RentalEvidenceViewModel
 {
     public int BookingId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
@@ -238,18 +208,13 @@ public sealed class CustomerReturnReviewViewModel
     public int ReturnMileage { get; set; }
     public string HandoverFuelLevel { get; set; } = string.Empty;
     public string ReturnFuelLevel { get; set; } = string.Empty;
-    public string? CustomerHandoverNote { get; set; }
-    public string? CustomerCheckoutNote { get; set; }
-    public int? CustomerCheckoutMileage { get; set; }
-    public string? CustomerCheckoutFuelLevel { get; set; }
+    public string? HandoverNotes { get; set; }
     public string? ReturnCondition { get; set; }
     public string? ReturnNotes { get; set; }
-    public IReadOnlyList<string> HandoverImagePaths { get; set; } = Array.Empty<string>();
-    public IReadOnlyList<string> CustomerHandoverImagePaths { get; set; } = Array.Empty<string>();
-    public IReadOnlyList<string> CustomerCheckoutImagePaths { get; set; } = Array.Empty<string>();
-    public IReadOnlyList<string> ReturnImagePaths { get; set; } = Array.Empty<string>();
-    public string ReviewStatus { get; set; } = "Pending";
-    public string? DisputeReason { get; set; }
+    public IReadOnlyList<string> HandoverVehicleImagePaths { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> HandoverDocumentImagePaths { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> ReturnVehicleImagePaths { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> ReturnDocumentImagePaths { get; set; } = Array.Empty<string>();
 }
 
 public sealed class AddChargeViewModel
