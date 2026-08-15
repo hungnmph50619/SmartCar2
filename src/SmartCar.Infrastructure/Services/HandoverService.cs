@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Handovers;
-using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -70,31 +69,13 @@ internal sealed class HandoverService : IHandoverService
 
         var rentalPaid = booking.Payments.Any(payment =>
             payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
+        var depositPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid);
 
-        if (!rentalPaid)
-        {
-            return OperationResult.Failure("Khách hàng chưa thanh toán tiền thuê.");
-        }
-
-        if (!request.DepositReceived)
+        if (!rentalPaid || !depositPaid)
         {
             return OperationResult.Failure(
-                $"Chỉ được bàn giao chìa khóa sau khi đã nhận cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng.");
-        }
-
-        var depositMethod = request.DepositMethod?.Trim() ?? string.Empty;
-        if (depositMethod is not (
-                RentalPolicyConstants.SecurityDepositCashMethod or
-                RentalPolicyConstants.SecurityDepositTransferMethod))
-        {
-            return OperationResult.Failure("Phương thức nhận cọc không hợp lệ.");
-        }
-
-        if (booking.Payments.Any(payment =>
-                payment.Type == PaymentType.Deposit &&
-                payment.Status is PaymentStatus.Paid or PaymentStatus.AwaitingRefund or PaymentStatus.Refunded))
-        {
-            return OperationResult.Failure("Đơn đã có khoản cọc bảo đảm được ghi nhận.");
+                "Chỉ được bàn giao xe sau khi SmartCar đã xác nhận đủ tiền thuê và cọc bảo đảm trong giao dịch thanh toán ban đầu.");
         }
 
         if (booking.Vehicle.Status != VehicleStatus.Available)
@@ -128,16 +109,6 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure(fuelLevelResult.Error!);
         }
 
-        booking.Payments.Add(new Payment
-        {
-            Type = PaymentType.Deposit,
-            Amount = RentalPolicyConstants.SecurityDepositAmount,
-            Method = depositMethod,
-            Status = PaymentStatus.Paid,
-            PaidAt = DateTime.UtcNow,
-            TransactionCode = $"DEP{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}"
-        });
-
         booking.Handover = new VehicleHandover
         {
             HandoverAt = request.HandoverAt,
@@ -157,11 +128,10 @@ internal sealed class HandoverService : IHandoverService
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Đã bàn giao xe và nhận cọc bảo đảm",
+            Title = "Đã bàn giao xe",
             Message =
                 $"Xe của đơn #{booking.BookingId} đã được bàn giao thành công. " +
-                $"SmartCar đã ghi nhận cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng bằng {depositMethod}. " +
-                "Khoản cọc sẽ được quyết toán sau khi xe được trả và kiểm tra."
+                "Cọc bảo đảm đã được thanh toán cùng tiền thuê trước đó và sẽ được quyết toán sau khi xe được trả, kiểm tra."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
