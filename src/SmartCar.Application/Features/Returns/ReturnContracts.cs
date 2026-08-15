@@ -12,6 +12,8 @@ public sealed record ReturnPreparationDto(
     string HandoverFuelLevel,
     string? HandoverAccessories,
     string? HandoverImagePaths,
+    string? CustomerHandoverImagePaths,
+    string? CustomerHandoverNote,
     string VehicleFuelType);
 
 public sealed record CreateReturnRequest(
