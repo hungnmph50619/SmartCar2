@@ -40,6 +40,47 @@ internal sealed class HandoverService : IHandoverService
                 booking.Vehicle.FuelType))
             .FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<CustomerHandoverSnapshotDto?> GetCustomerSnapshotAsync(
+        int bookingId,
+        string customerId,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await _dbContext.Bookings
+            .AsNoTracking()
+            .Include(item => item.Vehicle)
+            .Include(item => item.Handover)
+            .FirstOrDefaultAsync(item =>
+                item.BookingId == bookingId &&
+                item.CustomerId == customerId,
+                cancellationToken);
+
+        if (booking?.Handover is null)
+        {
+            return null;
+        }
+
+        var customerName = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == customerId)
+            .Select(user => user.FullName)
+            .FirstOrDefaultAsync(cancellationToken) ?? "Khách thuê";
+
+        return new CustomerHandoverSnapshotDto(
+            booking.BookingId,
+            customerName,
+            booking.Vehicle.VehicleName,
+            booking.Vehicle.LicensePlate,
+            booking.PickupDate,
+            booking.ReturnDate,
+            booking.Handover.HandoverAt,
+            booking.Handover.Mileage,
+            booking.Handover.FuelLevel,
+            booking.Handover.Accessories,
+            booking.Handover.Notes,
+            SplitPaths(booking.Handover.ImagePaths),
+            booking.Status == BookingStatus.ReadyForPickup);
+    }
+
     public async Task<OperationResult> CreateAsync(
         CreateHandoverRequest request,
         CancellationToken cancellationToken = default)
@@ -64,7 +105,7 @@ internal sealed class HandoverService : IHandoverService
 
         if (booking.Handover is not null)
         {
-            return OperationResult.Failure("Đơn đã có biên bản giao xe.");
+            return OperationResult.Failure("Đơn đã có biên bản bàn giao và đang chờ khách xác nhận.");
         }
 
         var rentalPaid = booking.Payments.Any(payment =>
@@ -75,7 +116,7 @@ internal sealed class HandoverService : IHandoverService
         if (!rentalPaid || !depositPaid)
         {
             return OperationResult.Failure(
-                "Chỉ được bàn giao xe sau khi SmartCar đã xác nhận đủ tiền thuê và cọc bảo đảm trong giao dịch thanh toán ban đầu.");
+                "Chỉ được lập biên bản bàn giao sau khi SmartCar đã xác nhận đủ tiền thuê và cọc bảo đảm trong giao dịch thanh toán ban đầu.");
         }
 
         if (booking.Vehicle.Status != VehicleStatus.Available)
@@ -121,17 +162,83 @@ internal sealed class HandoverService : IHandoverService
             Notes = Normalize(request.Notes)
         };
 
+        // Biên bản được tạo trước, nhưng Booking vẫn ReadyForPickup.
+        // Chỉ sau khi chính khách xem và ký biên bản, hệ thống mới kích hoạt chuyến thuê.
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Biên bản bàn giao đang chờ bạn ký",
+            Message =
+                $"SmartCar đã lập biên bản bàn giao cho đơn #{booking.BookingId}. " +
+                "Vui lòng mở chi tiết đơn, kiểm tra ảnh, ODO, nhiên liệu và phụ kiện rồi ký xác nhận trước khi nhận chìa khóa."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return OperationResult.Success();
+    }
+
+    public async Task<OperationResult> ConfirmCustomerSignatureAsync(
+        int bookingId,
+        string customerId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Vehicle)
+            .Include(item => item.Payments)
+            .Include(item => item.Handover)
+            .FirstOrDefaultAsync(item =>
+                item.BookingId == bookingId &&
+                item.CustomerId == customerId,
+                cancellationToken);
+
+        if (booking is null)
+        {
+            return OperationResult.Failure("Không tìm thấy đơn thuê của bạn.");
+        }
+
+        if (booking.Handover is null)
+        {
+            return OperationResult.Failure("SmartCar chưa lập biên bản bàn giao cho đơn này.");
+        }
+
+        if (booking.Status != BookingStatus.ReadyForPickup)
+        {
+            return OperationResult.Failure(
+                booking.Status == BookingStatus.Rented
+                    ? "Biên bản đã được xác nhận và chuyến thuê đã bắt đầu."
+                    : "Đơn không còn ở trạng thái chờ xác nhận bàn giao.");
+        }
+
+        var rentalPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
+        var depositPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid);
+
+        if (!rentalPaid || !depositPaid)
+        {
+            return OperationResult.Failure(
+                "Không thể kích hoạt chuyến thuê vì tiền thuê hoặc cọc bảo đảm chưa ở trạng thái đã thanh toán.");
+        }
+
+        if (booking.Vehicle.Status != VehicleStatus.Available)
+        {
+            return OperationResult.Failure("Xe không còn ở trạng thái sẵn sàng để bàn giao.");
+        }
+
         booking.Status = BookingStatus.Rented;
         booking.Vehicle.Status = VehicleStatus.Rented;
-        booking.Vehicle.CurrentMileage = request.Mileage;
+        booking.Vehicle.CurrentMileage = booking.Handover.Mileage;
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Đã bàn giao xe",
+            Title = "Đã ký biên bản và nhận xe",
             Message =
-                $"Xe của đơn #{booking.BookingId} đã được bàn giao thành công. " +
-                "Cọc bảo đảm đã được thanh toán cùng tiền thuê trước đó và sẽ được quyết toán sau khi xe được trả, kiểm tra."
+                $"Bạn đã ký xác nhận biên bản bàn giao đơn #{booking.BookingId}. " +
+                "Chuyến thuê đã bắt đầu và cọc bảo đảm sẽ được quyết toán sau khi xe được trả, kiểm tra."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -169,6 +276,11 @@ internal sealed class HandoverService : IHandoverService
 
         return (true, value, null);
     }
+
+    private static IReadOnlyList<string> SplitPaths(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? Array.Empty<string>()
+            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
