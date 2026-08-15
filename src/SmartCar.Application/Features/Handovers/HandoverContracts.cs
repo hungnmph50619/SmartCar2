@@ -15,7 +15,9 @@ public sealed record CreateHandoverRequest(
     string? InteriorCondition,
     string? Accessories,
     string? ImagePaths,
-    string? Notes);
+    string? Notes,
+    bool DepositReceived,
+    string DepositMethod);
 
 public interface IHandoverService
 {
