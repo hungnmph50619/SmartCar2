@@ -1,0 +1,261 @@
+@model SmartCar.Web.ViewModels.CustomerHandoverSignViewModel
+@using SmartCar.Application.Features.Handovers
+@{
+    ViewData["Title"] = "Ký biên bản bàn giao";
+    var snapshot = ViewBag.HandoverSnapshot as CustomerHandoverSnapshotDto;
+}
+
+@if (snapshot is null)
+{
+    <div class="alert alert-danger">Không thể tải nội dung biên bản bàn giao.</div>
+    return;
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <div class="text-uppercase small text-primary fw-semibold">Xác nhận nhận xe</div>
+        <h1 class="h3 mb-1">Biên bản bàn giao · Đơn #@snapshot.BookingId</h1>
+        <p class="text-muted mb-0">Kiểm tra đúng xe, thông số, bộ ảnh và ghi chú trước khi ký. Chữ ký của bạn gắn với chính phiên bản biên bản đang hiển thị.</p>
+    </div>
+    <a class="btn btn-outline-secondary"
+       asp-controller="Bookings"
+       asp-action="Details"
+       asp-route-id="@snapshot.BookingId">← Quay lại đơn</a>
+</div>
+
+<form asp-action="Sign"
+      method="post"
+      id="customer-handover-sign-form"
+      data-loading-form
+      data-confirm="Bạn xác nhận đã xem biên bản, bộ ảnh và đồng ý ký nhận xe? Sau xác nhận, chuyến thuê sẽ bắt đầu.">
+    <input asp-for="BookingId" type="hidden" />
+    <input asp-for="SnapshotHash" type="hidden" />
+    <input asp-for="SignatureData" type="hidden" id="signature-data" />
+
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
+
+    <div class="card shadow-sm border-0 mb-4 handover-document">
+        <div class="card-body p-0">
+            <div class="p-4 text-center border-bottom bg-light">
+                <div class="small text-uppercase text-muted">SmartCar</div>
+                <h2 class="h4 mb-1">BIÊN BẢN BÀN GIAO XE</h2>
+                <div class="text-muted">Đơn thuê #@snapshot.BookingId</div>
+            </div>
+
+            <div class="p-4">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <div class="small text-muted">Người thuê / người nhận</div>
+                        <div class="fw-semibold fs-5">@snapshot.CustomerName</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Xe bàn giao</div>
+                        <div class="fw-semibold fs-5">@snapshot.VehicleName</div>
+                        <div>@snapshot.LicensePlate</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="small text-muted">Thời điểm bàn giao ghi nhận</div>
+                        <strong>@snapshot.HandoverAt.ToString("dd/MM/yyyy HH:mm")</strong>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="small text-muted">ODO khi giao</div>
+                        <strong>@snapshot.Mileage.ToString("N0") km</strong>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="small text-muted">Nhiên liệu / pin</div>
+                        <strong>@snapshot.FuelLevel</strong>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Lịch nhận</div>
+                        <strong>@snapshot.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Lịch trả dự kiến</div>
+                        <strong>@snapshot.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong>
+                    </div>
+                </div>
+
+                <div class="border-top pt-4 mb-4">
+                    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                            <h3 class="h5 mb-1">Ảnh hiện trạng trước chuyến</h3>
+                            <div class="small text-muted">@snapshot.ImagePaths.Count ảnh do SmartCar ghi nhận tại thời điểm lập biên bản. Hãy mở ảnh nếu cần kiểm tra chi tiết.</div>
+                        </div>
+                        <span class="badge bg-primary">@snapshot.ImagePaths.Count ảnh</span>
+                    </div>
+
+                    <div class="row g-2">
+                        @for (var index = 0; index < snapshot.ImagePaths.Count; index++)
+                        {
+                            var imagePath = snapshot.ImagePaths[index];
+                            <div class="col-6 col-md-4 col-lg-3">
+                                <a href="@imagePath" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
+                                    <div class="border rounded-3 overflow-hidden bg-light">
+                                        <img src="@imagePath"
+                                             class="w-100"
+                                             style="height:150px;object-fit:cover"
+                                             alt="Ảnh bàn giao @(index + 1)" />
+                                        <div class="small text-center py-2 text-body">Ảnh @(index + 1)</div>
+                                    </div>
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="row g-3 border-top pt-4">
+                    <div class="col-md-6">
+                        <div class="small text-muted">Phụ kiện / giấy tờ đi kèm</div>
+                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(snapshot.Accessories) ? "Không có ghi chú riêng." : snapshot.Accessories)</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small text-muted">Ghi chú hiện trạng trước chuyến</div>
+                        <div class="fw-semibold">@(string.IsNullOrWhiteSpace(snapshot.Notes) ? "Không có ghi chú bổ sung." : snapshot.Notes)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="px-4 py-3 border-top bg-light small">
+                <div class="text-muted">Mã kiểm tra phiên bản biên bản (SHA-256)</div>
+                <code class="user-select-all text-break">@Model.SnapshotHash</code>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-success fw-semibold">Chữ ký người nhận xe</div>
+                    <h2 class="h5 mb-1">Ký trực tiếp vào biên bản</h2>
+                    <p class="text-muted small mb-0">Bạn có thể ký bằng chuột, bút cảm ứng hoặc ngón tay. Sau khi xác nhận, hệ thống lưu chữ ký cùng mã phiên bản biên bản và thời điểm ký.</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="clear-signature">Xóa chữ ký</button>
+            </div>
+
+            <div class="signature-shell border rounded-3 bg-white overflow-hidden">
+                <canvas id="signature-pad" width="1000" height="280" aria-label="Vùng ký tên"></canvas>
+            </div>
+            <div class="small text-muted mt-2">Ký trong khung phía trên. Không ký nếu thông tin hoặc ảnh chưa đúng với xe bạn đang nhận.</div>
+            <span asp-validation-for="SignatureData" class="text-danger small d-block mt-1"></span>
+
+            <label class="border rounded-3 p-3 d-flex gap-3 align-items-start mt-4" for="accepted-handover">
+                <input asp-for="Accepted" id="accepted-handover" type="checkbox" class="form-check-input mt-1" required />
+                <span>
+                    <strong class="d-block">Tôi đã kiểm tra biên bản và xác nhận nhận xe</strong>
+                    <span class="small text-muted">Tôi đã xem thông tin, bộ ảnh, ODO, nhiên liệu/pin, phụ kiện và ghi chú trên phiên bản biên bản này.</span>
+                </span>
+            </label>
+            <span asp-validation-for="Accepted" class="text-danger small d-block mt-1"></span>
+
+            <div class="alert alert-warning small mt-4 mb-0">
+                Sau khi ký, biên bản này được coi là bản chốt của bước nhận xe. Nếu nội dung thay đổi, khách phải xem và xác nhận lại phiên bản mới; chữ ký cũ không được dùng để xác nhận nội dung khác.
+            </div>
+
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-success px-4" data-loading-text="Đang lưu chữ ký...">Ký & xác nhận nhận xe</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<style>
+    .handover-document {
+        max-width: 1050px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .signature-shell {
+        touch-action: none;
+    }
+
+    #signature-pad {
+        display: block;
+        width: 100%;
+        height: 220px;
+        cursor: crosshair;
+        background: #fff;
+        touch-action: none;
+    }
+</style>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const form = document.getElementById('customer-handover-sign-form');
+            const canvas = document.getElementById('signature-pad');
+            const clearButton = document.getElementById('clear-signature');
+            const signatureData = document.getElementById('signature-data');
+            if (!form || !canvas || !signatureData) return;
+
+            const context = canvas.getContext('2d');
+            context.lineWidth = 3;
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.strokeStyle = '#111';
+
+            let drawing = false;
+            let hasInk = false;
+
+            const pointFromEvent = event => {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: (event.clientX - rect.left) * (canvas.width / rect.width),
+                    y: (event.clientY - rect.top) * (canvas.height / rect.height)
+                };
+            };
+
+            const begin = event => {
+                event.preventDefault();
+                drawing = true;
+                const point = pointFromEvent(event);
+                context.beginPath();
+                context.moveTo(point.x, point.y);
+                canvas.setPointerCapture?.(event.pointerId);
+            };
+
+            const move = event => {
+                if (!drawing) return;
+                event.preventDefault();
+                const point = pointFromEvent(event);
+                context.lineTo(point.x, point.y);
+                context.stroke();
+                hasInk = true;
+            };
+
+            const end = event => {
+                if (!drawing) return;
+                event.preventDefault();
+                drawing = false;
+                context.closePath();
+                canvas.releasePointerCapture?.(event.pointerId);
+            };
+
+            canvas.addEventListener('pointerdown', begin);
+            canvas.addEventListener('pointermove', move);
+            canvas.addEventListener('pointerup', end);
+            canvas.addEventListener('pointercancel', end);
+            canvas.addEventListener('pointerleave', event => {
+                if (drawing && event.buttons === 0) end(event);
+            });
+
+            clearButton?.addEventListener('click', () => {
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                signatureData.value = '';
+                hasInk = false;
+            });
+
+            form.addEventListener('submit', event => {
+                if (!hasInk) {
+                    event.preventDefault();
+                    alert('Vui lòng ký vào biên bản trước khi xác nhận nhận xe.');
+                    return;
+                }
+
+                signatureData.value = canvas.toDataURL('image/png');
+            });
+        })();
+    </script>
+}
