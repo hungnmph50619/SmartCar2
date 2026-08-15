@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Handovers;
@@ -179,10 +180,16 @@ internal sealed class HandoverService : IHandoverService
     }
 
     public async Task<OperationResult> ConfirmCustomerSignatureAsync(
-        int bookingId,
-        string customerId,
+        ConfirmCustomerHandoverRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.CustomerId) ||
+            string.IsNullOrWhiteSpace(request.SnapshotHash) ||
+            string.IsNullOrWhiteSpace(request.SignaturePath))
+        {
+            return OperationResult.Failure("Thiếu dữ liệu xác nhận chữ ký biên bản.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var booking = await _dbContext.Bookings
@@ -190,8 +197,8 @@ internal sealed class HandoverService : IHandoverService
             .Include(item => item.Payments)
             .Include(item => item.Handover)
             .FirstOrDefaultAsync(item =>
-                item.BookingId == bookingId &&
-                item.CustomerId == customerId,
+                item.BookingId == request.BookingId &&
+                item.CustomerId == request.CustomerId,
                 cancellationToken);
 
         if (booking is null)
@@ -228,9 +235,40 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe không còn ở trạng thái sẵn sàng để bàn giao.");
         }
 
+        var signedAt = DateTime.UtcNow;
+        var normalizedUserAgent = Normalize(request.UserAgent);
+        if (normalizedUserAgent?.Length > 500)
+        {
+            normalizedUserAgent = normalizedUserAgent[..500];
+        }
+
         booking.Status = BookingStatus.Rented;
         booking.Vehicle.Status = VehicleStatus.Rented;
         booking.Vehicle.CurrentMileage = booking.Handover.Mileage;
+
+        var signatureEvidence = JsonSerializer.Serialize(new
+        {
+            request.BookingId,
+            SnapshotHash = request.SnapshotHash.Trim(),
+            SignaturePath = request.SignaturePath.Trim(),
+            SignedAt = signedAt,
+            UserAgent = normalizedUserAgent
+        });
+
+        _dbContext.AuditLogs.Add(new AuditLog
+        {
+            UserId = request.CustomerId,
+            Action = "CustomerSignedHandover",
+            EntityName = nameof(VehicleHandover),
+            EntityId = booking.BookingId.ToString(),
+            Description =
+                $"Khách đã xem và ký biên bản bàn giao điện tử đơn #{booking.BookingId}; " +
+                $"snapshot SHA-256 {request.SnapshotHash.Trim()}, chữ ký lưu tại {request.SignaturePath.Trim()}. " +
+                "Booking chuyển sang Rented trong cùng giao dịch dữ liệu với bằng chứng chữ ký.",
+            NewValues = signatureEvidence,
+            IpAddress = Normalize(request.IpAddress),
+            CreatedAt = signedAt
+        });
 
         _dbContext.Notifications.Add(new Notification
         {
