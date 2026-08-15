@@ -16,8 +16,10 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class ReturnsController : Controller
 {
-    private const int MinimumImages = 6;
-    private const int MaximumImages = 15;
+    private const int MinimumVehicleImages = 6;
+    private const int MaximumVehicleImages = 15;
+    private const int MinimumDocumentImages = 1;
+    private const int MaximumDocumentImages = 3;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IReturnService _returnService;
@@ -62,15 +64,14 @@ public sealed class ReturnsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
-        PopulateReturnContext(preparation, DateTime.Now, null, null);
+        PopulateReturnContext(preparation, DateTime.Now);
 
         return View(new ReturnViewModel
         {
             BookingId = bookingId,
             ReturnedAt = DateTime.Now,
             ReturnLocation = preparation.ScheduledReturnLocation,
-            Mileage = preparation.CustomerCheckoutMileage ?? preparation.HandoverMileage,
-            FuelLevel = preparation.CustomerCheckoutFuelLevel ?? string.Empty
+            Mileage = preparation.HandoverMileage
         });
     }
 
@@ -78,8 +79,6 @@ public sealed class ReturnsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
         ReturnViewModel model,
-        string? accessoryStatus,
-        string? accessoryNote,
         CancellationToken cancellationToken)
     {
         var preparation = await _returnService.GetPreparationAsync(model.BookingId, cancellationToken);
@@ -90,21 +89,43 @@ public sealed class ReturnsController : Controller
         }
 
         NormalizeConditionSummary(model);
-        ValidateAccessoryStatus(accessoryStatus, accessoryNote);
-        await ValidateImagesAsync(model.Images, cancellationToken);
+
+        await ValidateImageCollectionAsync(
+            model.Images,
+            MinimumVehicleImages,
+            MaximumVehicleImages,
+            nameof(ReturnViewModel.Images),
+            "ảnh hiện trạng xe khi nhận lại",
+            cancellationToken);
+
+        await ValidateImageCollectionAsync(
+            model.SignedDocumentImages,
+            MinimumDocumentImages,
+            MaximumDocumentImages,
+            nameof(ReturnViewModel.SignedDocumentImages),
+            "ảnh biên bản trả xe đã có chữ ký khách",
+            cancellationToken);
 
         if (!ModelState.IsValid)
         {
-            PopulateReturnContext(preparation, model.ReturnedAt, accessoryStatus, accessoryNote);
+            PopulateReturnContext(preparation, model.ReturnedAt);
             return View(model);
         }
 
-        var imagePaths = await SaveImagesAsync(
+        var vehicleImagePaths = await SaveImagesAsync(
             model.BookingId,
             model.Images,
+            "uploads/returns",
+            "vehicle",
             cancellationToken);
+        var documentImagePaths = await SaveImagesAsync(
+            model.BookingId,
+            model.SignedDocumentImages,
+            "uploads/return-documents",
+            "document",
+            cancellationToken);
+        var allEvidencePaths = vehicleImagePaths.Concat(documentImagePaths).ToList();
 
-        var notes = ComposeReturnNotes(model.Notes, accessoryStatus!, accessoryNote);
         var result = await _returnService.CreateAsync(
             new CreateReturnRequest(
                 model.BookingId,
@@ -115,15 +136,15 @@ public sealed class ReturnsController : Controller
                 model.ExteriorCondition,
                 model.InteriorCondition,
                 model.HasDamage,
-                string.Join(';', imagePaths),
-                notes),
+                string.Join(';', allEvidencePaths),
+                model.Notes),
             cancellationToken);
 
         if (!result.Succeeded)
         {
-            DeleteSavedImages(imagePaths);
+            DeleteSavedImages(allEvidencePaths);
             AddErrors(result.Errors);
-            PopulateReturnContext(preparation, model.ReturnedAt, accessoryStatus, accessoryNote);
+            PopulateReturnContext(preparation, model.ReturnedAt);
             return View(model);
         }
 
@@ -132,11 +153,15 @@ public sealed class ReturnsController : Controller
             "CreateReturn",
             nameof(VehicleReturn),
             model.BookingId,
-            $"Tiếp nhận xe trả đơn #{model.BookingId}; địa điểm {model.ReturnLocation}; ODO giao {preparation.HandoverMileage:N0} km, ODO trả {model.Mileage:N0} km, quãng đường sử dụng {travelledKm:N0} km; nhiên liệu/pin giao {preparation.HandoverFuelLevel}, trả {model.FuelLevel}; phụ kiện: {accessoryStatus}; {imagePaths.Count} ảnh SmartCar; bất thường mới: {(model.HasDamage ? "Có" : "Không")}.",
+            $"Tiếp nhận xe trả đơn #{model.BookingId}; địa điểm {model.ReturnLocation}; " +
+            $"số km khi giao {preparation.HandoverMileage:N0} km, số km khi trả {model.Mileage:N0} km, quãng đường sử dụng {travelledKm:N0} km; " +
+            $"nhiên liệu/pin khi giao {preparation.HandoverFuelLevel}, khi trả {model.FuelLevel}; " +
+            $"{vehicleImagePaths.Count} ảnh hiện trạng xe, {documentImagePaths.Count} ảnh biên bản trả xe có chữ ký; " +
+            $"hư hỏng mới ghi nhận: {(model.HasDamage ? "Có" : "Không")}.",
             cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã tiếp nhận xe và lưu bộ ảnh kiểm tra độc lập của SmartCar. Khách được yêu cầu xem toàn bộ bằng chứng check-in ↔ check-out ↔ ảnh SmartCar và phản hồi trước khi đơn hoàn tất theo luồng mới.";
+            "Đã tiếp nhận xe và lưu biên bản trả xe có chữ ký. Xe chuyển sang Chờ kiểm tra để xử lý phụ phí và quyết toán cọc nếu có.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
@@ -231,107 +256,51 @@ public sealed class ReturnsController : Controller
 
     private void PopulateReturnContext(
         ReturnPreparationDto preparation,
-        DateTime returnedAt,
-        string? accessoryStatus,
-        string? accessoryNote)
+        DateTime returnedAt)
     {
         ViewBag.ScheduledReturnDate = preparation.ScheduledReturnDate;
         ViewBag.IsEarlyReturn = returnedAt < preparation.ScheduledReturnDate;
         ViewBag.HandoverAt = preparation.HandoverAt;
         ViewBag.HandoverMileage = preparation.HandoverMileage;
         ViewBag.HandoverFuelLevel = preparation.HandoverFuelLevel;
-        ViewBag.HandoverAccessories = preparation.HandoverAccessories;
-        ViewBag.HandoverImagePaths = preparation.HandoverImagePaths;
-        ViewBag.CustomerHandoverImagePaths = preparation.CustomerHandoverImagePaths;
-        ViewBag.CustomerHandoverNote = preparation.CustomerHandoverNote;
-        ViewBag.CustomerCheckoutImagePaths = preparation.CustomerCheckoutImagePaths;
-        ViewBag.CustomerCheckoutNote = preparation.CustomerCheckoutNote;
-        ViewBag.CustomerCheckoutMileage = preparation.CustomerCheckoutMileage;
-        ViewBag.CustomerCheckoutFuelLevel = preparation.CustomerCheckoutFuelLevel;
+        ViewBag.HandoverVehicleImagePaths = preparation.HandoverVehicleImagePaths;
+        ViewBag.HandoverDocumentImagePaths = preparation.HandoverDocumentImagePaths;
         ViewBag.VehicleFuelType = preparation.VehicleFuelType;
-        ViewBag.AccessoryStatus = accessoryStatus ?? "Complete";
-        ViewBag.AccessoryNote = accessoryNote ?? string.Empty;
     }
 
-    private void NormalizeConditionSummary(ReturnViewModel model)
+    private static void NormalizeConditionSummary(ReturnViewModel model)
     {
-        var exterior = model.ExteriorCondition?.Trim();
-
-        if (model.HasDamage ||
-            (!string.IsNullOrWhiteSpace(exterior) &&
-             exterior.StartsWith("Có bất thường mới:", StringComparison.OrdinalIgnoreCase)))
-        {
-            var detail = exterior?.StartsWith("Có bất thường mới:", StringComparison.OrdinalIgnoreCase) == true
-                ? exterior["Có bất thường mới:".Length..].Trim()
-                : string.Empty;
-
-            if (string.IsNullOrWhiteSpace(detail))
-            {
-                ModelState.AddModelError(nameof(ReturnViewModel.ExteriorCondition),
-                    "Vui lòng mô tả bất thường hoặc hư hỏng mới phát hiện khi nhận lại xe.");
-                return;
-            }
-
-            model.HasDamage = true;
-            model.ExteriorCondition = $"Có bất thường mới: {detail}";
-            model.InteriorCondition =
-                "Tình trạng nội thất được đối chiếu bằng bộ ảnh trả xe; bất thường nếu có được ghi trong tình trạng chung.";
-            return;
-        }
-
-        model.HasDamage = false;
-        model.ExteriorCondition = "Không phát hiện bất thường mới khi nhận lại xe.";
-        model.InteriorCondition = "Không phát hiện bất thường mới khi nhận lại xe.";
+        var detail = model.ExteriorCondition?.Trim();
+        model.HasDamage = !string.IsNullOrWhiteSpace(detail);
+        model.ExteriorCondition = model.HasDamage
+            ? $"Hư hỏng/bất thường mới: {detail}"
+            : null;
+        model.InteriorCondition = null;
     }
 
-    private void ValidateAccessoryStatus(string? accessoryStatus, string? accessoryNote)
-    {
-        if (accessoryStatus is not ("Complete" or "Issue"))
-        {
-            ModelState.AddModelError(string.Empty, "Vui lòng xác nhận tình trạng phụ kiện khi nhận lại xe.");
-            return;
-        }
-
-        if (accessoryStatus == "Issue" && string.IsNullOrWhiteSpace(accessoryNote))
-        {
-            ModelState.AddModelError(string.Empty,
-                "Vui lòng mô tả phụ kiện bị thiếu hoặc hư hỏng khi nhận lại xe.");
-        }
-    }
-
-    private static string ComposeReturnNotes(
-        string? notes,
-        string accessoryStatus,
-        string? accessoryNote)
-    {
-        var accessoryText = accessoryStatus == "Complete"
-            ? "Phụ kiện khi nhận lại: đầy đủ theo biên bản giao xe."
-            : $"Phụ kiện khi nhận lại có vấn đề: {accessoryNote?.Trim()}";
-
-        return string.IsNullOrWhiteSpace(notes)
-            ? accessoryText
-            : $"{accessoryText}\nGhi chú bổ sung: {notes.Trim()}";
-    }
-
-    private async Task ValidateImagesAsync(
+    private async Task ValidateImageCollectionAsync(
         IReadOnlyCollection<IFormFile> images,
+        int minimum,
+        int maximum,
+        string modelKey,
+        string description,
         CancellationToken cancellationToken)
     {
-        var selectedImages = images.Where(file => file.Length > 0).ToList();
-        if (selectedImages.Count < MinimumImages)
+        var selected = images.Where(file => file.Length > 0).ToList();
+        if (selected.Count < minimum)
         {
-            ModelState.AddModelError(nameof(ReturnViewModel.Images),
-                $"Vui lòng tải tối thiểu {MinimumImages} ảnh đối chiếu khi nhận lại xe: trước xe, sau xe, hai bên thân xe, đồng hồ ODO/nhiên liệu và nội thất.");
+            ModelState.AddModelError(modelKey,
+                $"Vui lòng tải tối thiểu {minimum} {description}.");
             return;
         }
 
-        if (selectedImages.Count > MaximumImages)
+        if (selected.Count > maximum)
         {
-            ModelState.AddModelError(nameof(ReturnViewModel.Images),
-                $"Chỉ được tải tối đa {MaximumImages} ảnh khi nhận lại xe.");
+            ModelState.AddModelError(modelKey,
+                $"Chỉ được tải tối đa {maximum} {description}.");
         }
 
-        foreach (var image in selectedImages)
+        foreach (var image in selected)
         {
             var error = await ImageFileValidator.ValidateAsync(
                 image,
@@ -339,8 +308,7 @@ public sealed class ReturnsController : Controller
                 cancellationToken);
             if (error is not null)
             {
-                ModelState.AddModelError(nameof(ReturnViewModel.Images),
-                    $"{image.FileName}: {error}");
+                ModelState.AddModelError(modelKey, $"{image.FileName}: {error}");
             }
         }
     }
@@ -348,17 +316,21 @@ public sealed class ReturnsController : Controller
     private async Task<IReadOnlyList<string>> SaveImagesAsync(
         int bookingId,
         IEnumerable<IFormFile> images,
+        string rootFolder,
+        string filePrefix,
         CancellationToken cancellationToken)
     {
-        var relativeFolder = $"uploads/returns/{bookingId}";
+        var relativeFolder = $"{rootFolder}/{bookingId}";
         var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
         Directory.CreateDirectory(folder);
 
         var paths = new List<string>();
+        var index = 0;
         foreach (var image in images.Where(file => file.Length > 0))
         {
+            index++;
             var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-            var fileName = $"{Guid.NewGuid():N}{extension}";
+            var fileName = $"{filePrefix}-{index:00}-{Guid.NewGuid():N}{extension}";
             var fullPath = Path.Combine(folder, fileName);
 
             await using var stream = System.IO.File.Create(fullPath);
