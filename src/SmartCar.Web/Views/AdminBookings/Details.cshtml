@@ -3,7 +3,7 @@
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = $"Xử lý đơn #{Model.BookingId}";
-    var canAdminCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var canAdminCancel = Model.Status is BookingStatus.PendingPayment or BookingStatus.Paid;
     var canMarkNoShow = Model.Status == BookingStatus.ReadyForPickup &&
         DateTime.Now >= Model.PickupDate.AddMinutes(30);
     var canEditLocations = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment;
@@ -62,7 +62,7 @@
             "success"),
         BookingStatus.ReadyForPickup => (
             "Lập biên bản bàn giao",
-            "Khách đã xác nhận lịch nhận. Chỉ lập biên bản khi khách thực sự có mặt và đã đối chiếu người nhận, ODO, nhiên liệu, tình trạng xe và phụ kiện.",
+            "Khách đã xác nhận lịch nhận. Chỉ lập biên bản khi khách thực sự có mặt; đối chiếu người nhận, số km trên đồng hồ, nhiên liệu/pin, tình trạng xe và ảnh thực tế trước khi giao chìa khóa.",
             "success"),
         BookingStatus.Rented => (
             "Theo dõi chuyến thuê",
@@ -409,31 +409,61 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Bàn giao xe</h2>
-                <p class="text-muted">Khách đã xác nhận lịch nhận. Biên bản chỉ được lập khi khách thực sự có mặt; ghi ODO, nhiên liệu, tình trạng xe, phụ kiện và ảnh thực tế trước khi giao chìa khóa.</p>
-                <div class="mb-2"><strong>Điểm giao đã hẹn:</strong> @pickupLocationText</div>
+                <p class="text-muted">Khách đã xác nhận lịch nhận. Biên bản chỉ được lập khi khách thực sự có mặt; ghi số km trên đồng hồ, nhiên liệu/pin, tình trạng xe và ảnh thực tế trước khi giao chìa khóa.</p>
+                <div class="mb-3"><strong>Điểm giao đã hẹn:</strong> @pickupLocationText</div>
                 <a class="btn btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao xe</a>
             </div>
-        }
 
-        @if (canMarkNoShow)
-        {
-            <div class="card card-body border-warning shadow-sm mb-4">
-                <h2 class="h5">Khách không đến nhận xe</h2>
-                @if (isHomeDelivery)
-                {
-                    <p>Đã quá giờ nhận xe 30 phút. Chỉ ghi NoShow khi trước đó khách đã xác nhận lịch nhận, Admin đã đến đúng điểm giao và đã liên hệ lại khách ít nhất 2 lần nhưng vẫn không thể tiếp tục bàn giao.</p>
-                }
-                else
-                {
-                    <p>Đã quá giờ nhận xe 30 phút. Hãy liên hệ lại khách ít nhất 2 lần và ghi rõ thời gian, kết quả trước khi xác nhận NoShow.</p>
-                }
-                <div class="alert alert-light border py-2 small">
-                    Chính sách hiện tại: giữ 40% tiền thuê + phí lượt giao xe thực tế đã phát sinh; phần còn lại được tạo thành khoản hoàn tiền.
+            <div class="card card-body shadow-sm mb-4 border-warning">
+                <div class="text-uppercase small text-warning fw-semibold">Nếu không thể hoàn tất bàn giao</div>
+                <h2 class="h5 mb-2">Chọn đúng nguyên nhân để áp dụng đúng chính sách tiền</h2>
+                <p class="text-muted small">Ba trường hợp dưới đây là ba nghiệp vụ khác nhau. Không dùng “SmartCar không thể giao xe” khi nguyên nhân thực tế thuộc phía khách.</p>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-lg-4">
+                        <div class="border rounded-3 p-3 h-100 d-flex flex-column">
+                            <div class="fw-bold">1. Khách có mặt nhưng từ chối ký</div>
+                            <p class="small text-muted mt-2 mb-2">Xe đúng thỏa thuận nhưng khách không ký biên bản nên SmartCar không giao xe/chìa khóa.</p>
+                            <div class="alert alert-light border small py-2 mb-3">Giữ <strong>40% tiền thuê</strong> + phí lượt giao thực tế nếu có; hoàn phần còn lại và <strong>100% cọc</strong>.</div>
+                            <a class="btn btn-outline-warning mt-auto"
+                               asp-controller="HandoverRefusal"
+                               asp-action="Confirm"
+                               asp-route-bookingId="@Model.BookingId">Khách từ chối ký →</a>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <div class="border rounded-3 p-3 h-100 d-flex flex-column">
+                            <div class="fw-bold">2. Khách không đến nhận xe</div>
+                            <p class="small text-muted mt-2 mb-2">Khách đã xác nhận lịch nhưng không xuất hiện. Phải chờ đủ 30 phút và liên hệ lại tối thiểu 2 lần.</p>
+                            <div class="alert alert-light border small py-2 mb-3">No-show: giữ <strong>40% tiền thuê</strong> + phí lượt giao thực tế nếu có; hoàn phần còn lại và <strong>100% cọc</strong>.</div>
+                            @if (canMarkNoShow)
+                            {
+                                <form asp-controller="AdminBookingOperations" asp-action="MarkNoShow" method="post" class="mt-auto" data-loading-form data-confirm="Mở bước xác minh No-show? Hệ thống sẽ yêu cầu đủ thời gian chờ và bằng chứng liên hệ trước khi kết thúc đơn.">
+                                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                    <button class="btn btn-warning w-100" type="submit" data-loading-text="Đang mở xác minh...">Xác minh No-show →</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <button class="btn btn-outline-secondary mt-auto" type="button" disabled>Chỉ mở sau 30 phút</button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <div class="border border-danger rounded-3 p-3 h-100 d-flex flex-column">
+                            <div class="fw-bold text-danger">3. SmartCar không thể giao xe</div>
+                            <p class="small text-muted mt-2 mb-2">Chỉ dùng khi nguyên nhân thuộc SmartCar: xe có lỗi, xe không đúng thỏa thuận hoặc SmartCar không thể thực hiện chuyến.</p>
+                            <div class="alert alert-danger small py-2 mb-3">Hoàn <strong>100% toàn bộ số tiền đã thực tế thu</strong>, gồm tiền chuyến và cọc.</div>
+                            <form asp-controller="AdminBookingOperations" asp-action="Cancel" method="post" class="mt-auto" data-loading-form data-confirm="Xác nhận nguyên nhân thuộc phía SmartCar và hủy chuyến? Hệ thống sẽ tạo khoản hoàn 100% đối với toàn bộ số tiền khách đã thực tế thanh toán.">
+                                <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                                <input name="Reason" maxlength="500" class="form-control form-control-sm mb-2" required placeholder="Nêu rõ lỗi/nguyên nhân thuộc SmartCar" />
+                                <button class="btn btn-outline-danger w-100" type="submit" data-loading-text="Đang hủy...">SmartCar hủy & hoàn 100%</button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-                <form asp-controller="AdminBookingOperations" asp-action="MarkNoShow" method="post" data-loading-form data-confirm="Mở bước xác minh NoShow? Hệ thống sẽ yêu cầu đủ bằng chứng liên hệ trước khi kết thúc đơn.">
-                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                    <button class="btn btn-warning" type="submit" data-loading-text="Đang mở xác minh...">Xác minh khách không đến</button>
-                </form>
             </div>
         }
 
@@ -507,12 +537,12 @@
         @if (canAdminCancel)
         {
             <div class="card card-body border-danger shadow-sm">
-                <h2 class="h5 text-danger">Quản trị viên hủy đơn</h2>
-                <p class="text-muted">Quản trị viên hủy trước khi giao xe sẽ hoàn 100% số tiền khách hàng đã thanh toán.</p>
-                <form asp-controller="AdminBookingOperations" asp-action="Cancel" method="post" class="row g-2" data-loading-form data-confirm="Hủy đơn và hoàn 100% số tiền khách đã thanh toán?">
+                <h2 class="h5 text-danger">SmartCar hủy trước khi giao xe</h2>
+                <p class="text-muted">Chỉ dùng khi SmartCar chủ động không thể tiếp tục đơn trước bước sẵn sàng bàn giao. Nếu đã thực tế thu tiền, hệ thống tạo khoản hoàn 100%; nếu chưa thu tiền thì không phát sinh khoản hoàn.</p>
+                <form asp-controller="AdminBookingOperations" asp-action="Cancel" method="post" class="row g-2" data-loading-form data-confirm="Xác nhận SmartCar hủy đơn trước khi giao xe? Hệ thống chỉ tạo khoản hoàn đối với số tiền đã thực tế thu.">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                    <div class="col-md-9"><input name="Reason" maxlength="500" class="form-control" required placeholder="Lý do Quản trị viên hủy" /></div>
-                    <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit" data-loading-text="Đang hủy...">Hủy và hoàn tiền</button></div>
+                    <div class="col-md-9"><input name="Reason" maxlength="500" class="form-control" required placeholder="Lý do SmartCar hủy" /></div>
+                    <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit" data-loading-text="Đang hủy...">Hủy đơn</button></div>
                 </form>
             </div>
         }
