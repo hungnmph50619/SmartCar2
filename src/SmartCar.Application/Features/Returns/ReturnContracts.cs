@@ -14,6 +14,10 @@ public sealed record ReturnPreparationDto(
     string? HandoverImagePaths,
     string? CustomerHandoverImagePaths,
     string? CustomerHandoverNote,
+    string? CustomerCheckoutImagePaths,
+    string? CustomerCheckoutNote,
+    int? CustomerCheckoutMileage,
+    string? CustomerCheckoutFuelLevel,
     string VehicleFuelType);
 
 public sealed record CreateReturnRequest(
