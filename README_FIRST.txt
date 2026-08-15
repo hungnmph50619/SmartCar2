@@ -46,10 +46,15 @@ Mật khẩu: SmartCar@123
 7. LUỒNG DEMO CHÍNH
 - Customer đăng nhập, tìm xe theo ngày giờ tương lai và tạo đơn.
 - Admin xác nhận đơn.
-- Customer thanh toán mô phỏng.
+- Hệ thống tạo 2 cấu phần kế toán cho thanh toán ban đầu:
+  + Rental = tiền thuê + phí giao nhận.
+  + Deposit = cọc bảo đảm 5.000.000 đồng.
+- Trên giao diện Customer, hai cấu phần này được cộng thành MỘT số tiền cần thanh toán. Customer chỉ chuyển khoản một lần/một QR.
+- Khi thanh toán mô phỏng hoặc Admin xác nhận QR, Rental và Deposit được ghi Paid cùng thời điểm và cùng mã giao dịch; Booking chuyển sang Paid.
+- Cọc bảo đảm không cộng vào Booking.TotalAmount và không tính vào doanh thu.
 - Admin kiểm tra/vệ sinh/chuẩn bị xe và ghi nhận "Xe đã chuẩn bị xong". Customer nhận thông báo nhưng đơn vẫn ở Paid.
 - Sau đó Admin gọi/nhắn khách; chỉ khi khách phản hồi sẽ nhận xe đúng giờ, đúng địa điểm thì đơn mới chuyển sang ReadyForPickup.
-- Admin đến điểm giao, chỉ lập biên bản khi khách thực sự có mặt; trước khi giao chìa khóa phải ghi nhận đã nhận cọc bảo đảm 5.000.000 đồng.
+- Admin đến điểm giao, chỉ lập biên bản khi khách thực sự có mặt. Handover chỉ kiểm tra cọc đã được thanh toán trước đó, KHÔNG thu cọc lần hai.
 - Sau bàn giao thực tế đơn mới chuyển sang Rented.
 - Nếu khách đã xác nhận nhưng sau đó không xuất hiện: chờ tối thiểu 30 phút, liên hệ lại ít nhất 2 lần; với giao tận nơi Admin phải xác nhận đã đến đúng điểm giao trước khi ghi NoShow.
 - Customer có thể gửi yêu cầu gia hạn.
@@ -60,21 +65,24 @@ Mật khẩu: SmartCar@123
 - Admin quản lý giấy tờ xe, bảo trì, sự cố, báo cáo và audit log.
 
 8. QUY TẮC HỦY, NOSHOW VÀ HOÀN TIỀN
-- Customer chủ động hủy trước giờ nhận từ 48 giờ trở lên: hoàn 100% số tiền đã thanh toán.
-- Customer chủ động hủy trước giờ nhận từ 24 đến dưới 48 giờ: hoàn 50% số tiền đã thanh toán.
-- Customer chủ động hủy trước giờ nhận dưới 24 giờ: không hoàn tiền.
-- Admin hủy trước khi bàn giao: hoàn 100% số tiền đã thanh toán.
+- Chính sách hủy chỉ áp dụng trên phần tiền thuê/phí giao nhận; cọc bảo đảm được xử lý riêng.
+- Customer chủ động hủy trước giờ nhận từ 48 giờ trở lên: hoàn 100% phần tiền thuê/phí giao nhận + hoàn 100% cọc vì xe chưa bàn giao.
+- Customer chủ động hủy trước giờ nhận từ 24 đến dưới 48 giờ: hoàn 50% phần tiền thuê/phí giao nhận + hoàn 100% cọc.
+- Customer chủ động hủy trước giờ nhận dưới 24 giờ: không hoàn phần tiền thuê/phí giao nhận nhưng vẫn hoàn 100% cọc vì xe chưa bàn giao.
+- Admin hủy trước khi bàn giao: hoàn 100% phần tiền thuê/phí giao nhận + hoàn 100% cọc.
 - NoShow: chỉ áp dụng sau ít nhất 30 phút kể từ giờ nhận, có xác nhận khách trước khi Admin xuất phát, có ít nhất 2 lần liên hệ lại; đơn giao tận nơi còn phải xác nhận Admin đã đến đúng điểm giao.
-- Phí NoShow: giữ 40% tiền thuê + phí lượt giao xe thực tế đã phát sinh (nếu có); phần còn lại được tạo thành khoản hoàn tiền cho khách.
-- NoShow không tạo biên bản bàn giao, không thu cọc bảo đảm, không chuyển xe sang Rented và xe được giải phóng theo lịch vận hành.
+- Phí NoShow: giữ 40% tiền thuê + phí lượt giao xe thực tế đã phát sinh (nếu có) từ phần tiền chuyến; phần tiền chuyến còn lại được hoàn.
+- Với NoShow, cọc bảo đảm được hoàn 100% vì xe chưa được bàn giao.
+- NoShow không tạo biên bản bàn giao, không chuyển xe sang Rented và xe được giải phóng theo lịch vận hành.
+- Refund và DepositRefund được lưu riêng để báo cáo không nhầm tiền cọc là doanh thu/chi phí hoạt động.
 
 9. CỌC BẢO ĐẢM
 - Mức cọc hiện tại của SmartCar: 5.000.000 đồng/đơn.
-- Chỉ thu cọc tại thời điểm khách thực tế nhận xe, ngay trước khi giao chìa khóa.
-- Cọc có thể được Admin ghi nhận bằng tiền mặt hoặc chuyển khoản sau khi đã thực tế nhận đủ tiền.
+- Cọc được thanh toán CÙNG tiền thuê/phí giao nhận trong một giao dịch ban đầu; Customer không phải chuyển khoản cọc lần thứ hai khi nhận xe.
+- Trong database, Rental và Deposit vẫn là hai Payment riêng nhưng dùng chung thời điểm/mã giao dịch thanh toán ban đầu.
 - Tiền cọc không cộng vào TotalAmount của chuyến thuê và không tính vào doanh thu.
 - Khi khách trả xe, hệ thống đối trừ phụ phí có căn cứ (trả muộn, nhiên liệu, vệ sinh, hư hỏng, thiếu phụ kiện...) với cọc.
-- Nếu phụ phí nhỏ hơn cọc: tạo khoản hoàn cọc bằng phần dư.
+- Nếu phụ phí nhỏ hơn cọc: tạo DepositRefund bằng phần cọc còn dư.
 - Nếu phụ phí bằng cọc: không còn số dư cọc phải hoàn.
 - Nếu phụ phí lớn hơn cọc: dùng hết cọc và chỉ yêu cầu khách thanh toán phần vượt cọc.
 - Admin thực hiện chuyển khoản hoàn cọc trong màn Quản lý thanh toán và nhập mã giao dịch để lưu Audit Log.
