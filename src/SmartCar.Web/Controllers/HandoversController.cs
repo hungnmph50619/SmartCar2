@@ -70,7 +70,8 @@ public sealed class HandoversController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
-        if (DateTime.Now >= booking.ReturnDate)
+        if (!RentalPolicyConstants.DemoBypassRentalTimelineValidation &&
+            DateTime.Now >= booking.ReturnDate)
         {
             TempData["ErrorMessage"] =
                 "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao xe.";
