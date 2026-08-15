@@ -6,6 +6,21 @@ public sealed record HandoverVehicleContextDto(
     int CurrentMileage,
     string FuelType);
 
+public sealed record CustomerHandoverSnapshotDto(
+    int BookingId,
+    string CustomerName,
+    string VehicleName,
+    string LicensePlate,
+    DateTime PickupDate,
+    DateTime ReturnDate,
+    DateTime HandoverAt,
+    int Mileage,
+    string FuelLevel,
+    string? Accessories,
+    string? Notes,
+    IReadOnlyList<string> ImagePaths,
+    bool CanCustomerSign);
+
 public sealed record CreateHandoverRequest(
     int BookingId,
     DateTime HandoverAt,
@@ -23,7 +38,17 @@ public interface IHandoverService
         int bookingId,
         CancellationToken cancellationToken = default);
 
+    Task<CustomerHandoverSnapshotDto?> GetCustomerSnapshotAsync(
+        int bookingId,
+        string customerId,
+        CancellationToken cancellationToken = default);
+
     Task<OperationResult> CreateAsync(
         CreateHandoverRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<OperationResult> ConfirmCustomerSignatureAsync(
+        int bookingId,
+        string customerId,
         CancellationToken cancellationToken = default);
 }
