@@ -306,13 +306,27 @@ internal sealed class BookingService : IBookingService
             });
         }
 
+        if (!booking.Payments.Any(payment => payment.Type == PaymentType.Deposit))
+        {
+            booking.Payments.Add(new Payment
+            {
+                Type = PaymentType.Deposit,
+                Amount = RentalPolicyConstants.SecurityDepositAmount,
+                Status = PaymentStatus.Pending,
+                Method = PaymentMethods.NotSelected
+            });
+        }
+
+        var checkoutAmount = rentalPaymentAmount + RentalPolicyConstants.SecurityDepositAmount;
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã được xác nhận",
-            Message = booking.DeliveryFee > 0
-                ? $"Đơn #{booking.BookingId} đã được xác nhận. Tiền thuê {booking.RentalAmount:N0} đồng + phí giao nhận {booking.DeliveryFee:N0} đồng. Vui lòng thanh toán để giữ xe."
-                : $"Đơn #{booking.BookingId} đã được xác nhận. Vui lòng thanh toán để giữ xe."
+            Message =
+                $"Đơn #{booking.BookingId} đã được xác nhận. " +
+                $"Khoản thanh toán ban đầu gồm tiền thuê/phí giao nhận {rentalPaymentAmount:N0} đồng " +
+                $"và cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng; " +
+                $"tổng cần thanh toán một lần {checkoutAmount:N0} đồng."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -372,10 +386,13 @@ internal sealed class BookingService : IBookingService
 
         var rentalPaid = booking.Payments.Any(payment =>
             payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
+        var depositPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid);
 
-        if (booking.Status != BookingStatus.Paid || !rentalPaid)
+        if (booking.Status != BookingStatus.Paid || !rentalPaid || !depositPaid)
         {
-            return OperationResult.Failure("Đơn phải thanh toán tiền thuê trước khi chuẩn bị giao xe.");
+            return OperationResult.Failure(
+                "Đơn phải được xác nhận đủ tiền thuê và cọc bảo đảm trong thanh toán ban đầu trước khi chuẩn bị giao xe.");
         }
 
         if (string.IsNullOrWhiteSpace(booking.PickupLocation) ||
@@ -392,7 +409,8 @@ internal sealed class BookingService : IBookingService
             Title = "Xe đã sẵn sàng bàn giao",
             Message =
                 $"Xe của đơn #{booking.BookingId} đã sẵn sàng. " +
-                $"Nhận xe tại {booking.PickupLocation} lúc {booking.PickupDate:dd/MM/yyyy HH:mm}."
+                $"Nhận xe tại {booking.PickupLocation} lúc {booking.PickupDate:dd/MM/yyyy HH:mm}. " +
+                $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng đã được thanh toán cùng tiền thuê, bạn không cần thanh toán cọc lần nữa khi nhận xe."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -522,10 +540,12 @@ internal sealed class BookingService : IBookingService
             HasReview = booking.Review is not null,
             RentalPaid = booking.Payments.Any(payment =>
                 payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid),
-            AdditionalChargePaid = booking.AdditionalAmount == 0 || booking.Payments.Any(payment =>
-                payment.Type == PaymentType.AdditionalCharge &&
-                payment.Status == PaymentStatus.Paid &&
-                payment.Amount >= booking.AdditionalAmount),
+            AdditionalChargePaid = booking.AdditionalAmount == 0 ||
+                booking.Payments
+                    .Where(payment =>
+                        payment.Status == PaymentStatus.Paid &&
+                        payment.Type is PaymentType.Deposit or PaymentType.AdditionalCharge)
+                    .Sum(payment => payment.Amount) >= booking.AdditionalAmount,
             ExtensionPaid = booking.Extensions.All(extension =>
                 extension.Status != BookingExtensionStatus.Approved),
             Payments = booking.Payments
