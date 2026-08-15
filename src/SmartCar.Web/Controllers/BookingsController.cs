@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Entities;
+using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Identity;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
@@ -253,6 +255,131 @@ public sealed class BookingsController : Controller
             cancellationToken));
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestEarlyReturn(
+        int bookingId,
+        DateTime requestedReturnAt,
+        string? returnLocation,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return Challenge();
+        }
+
+        var booking = await _dbContext.Bookings
+            .FirstOrDefaultAsync(item =>
+                item.BookingId == bookingId &&
+                item.CustomerId == customerId,
+                cancellationToken);
+
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        if (booking.Status != BookingStatus.Rented)
+        {
+            TempData["ErrorMessage"] =
+                "Chỉ đơn đang thuê và đã bàn giao xe mới có thể gửi yêu cầu trả xe sớm.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var normalizedReason = reason?.Trim() ?? string.Empty;
+        var normalizedLocation = string.IsNullOrWhiteSpace(returnLocation)
+            ? booking.ReturnLocation?.Trim() ?? string.Empty
+            : returnLocation.Trim();
+
+        if (requestedReturnAt <= DateTime.Now)
+        {
+            TempData["ErrorMessage"] = "Thời gian muốn trả xe phải ở sau thời điểm hiện tại.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        if (requestedReturnAt >= booking.ReturnDate)
+        {
+            TempData["ErrorMessage"] =
+                "Thời gian yêu cầu phải sớm hơn thời gian trả xe đã thỏa thuận. Nếu trả đúng hoặc muộn hơn, không cần dùng chức năng trả sớm.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedLocation) || normalizedLocation.Length > 250)
+        {
+            TempData["ErrorMessage"] = "Địa điểm trả xe phải có nội dung và không vượt quá 250 ký tự.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        if (normalizedReason.Length < 5 || normalizedReason.Length > 500)
+        {
+            TempData["ErrorMessage"] = "Vui lòng nhập lý do trả sớm từ 5 đến 500 ký tự.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var bookingIdText = bookingId.ToString();
+        var latestEarlyReturnAction = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == bookingIdText &&
+                RentalLifecycleAuditHelper.EarlyReturnActions.Contains(log.Action))
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => log.Action)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (latestEarlyReturnAction is RentalLifecycleAuditHelper.EarlyReturnRequested or
+            RentalLifecycleAuditHelper.EarlyReturnApproved)
+        {
+            TempData["ErrorMessage"] =
+                latestEarlyReturnAction == RentalLifecycleAuditHelper.EarlyReturnRequested
+                    ? "Đơn đang có yêu cầu trả xe sớm chờ SmartCar xử lý."
+                    : "Yêu cầu trả xe sớm đã được SmartCar chấp thuận. Hãy thực hiện theo thời gian và địa điểm đã thống nhất.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var createdAt = DateTime.UtcNow;
+        var newValues = RentalLifecycleAuditHelper.SerializeEarlyReturn(
+            requestedReturnAt,
+            normalizedLocation,
+            normalizedReason);
+
+        _dbContext.AuditLogs.Add(new AuditLog
+        {
+            UserId = customerId,
+            Action = RentalLifecycleAuditHelper.EarlyReturnRequested,
+            EntityName = nameof(Booking),
+            EntityId = bookingIdText,
+            Description =
+                $"Khách yêu cầu trả sớm đơn #{bookingId} vào {requestedReturnAt:dd/MM/yyyy HH:mm} tại {normalizedLocation}. " +
+                $"Lý do: {normalizedReason}. Booking vẫn giữ trạng thái Rented cho đến khi xe thực tế được nhận lại.",
+            NewValues = newValues,
+            IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
+            CreatedAt = createdAt
+        });
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = customerId,
+            Title = "Đã gửi yêu cầu trả xe sớm",
+            Message =
+                $"SmartCar đã nhận yêu cầu trả xe sớm của đơn #{bookingId}: {requestedReturnAt:dd/MM/yyyy HH:mm} tại {normalizedLocation}. " +
+                "Xe vẫn thuộc trách nhiệm của bạn và đơn vẫn ở trạng thái Đang thuê cho đến khi SmartCar thực tế nhận lại xe và lập biên bản trả xe."
+        });
+
+        await AddAdminNotificationsAsync(
+            $"Yêu cầu trả xe sớm|Booking:{bookingId}",
+            $"Khách yêu cầu trả sớm đơn #{bookingId} vào {requestedReturnAt:dd/MM/yyyy HH:mm} tại {normalizedLocation}. Vào chi tiết đơn để duyệt hoặc từ chối.",
+            cancellationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        TempData["SuccessMessage"] =
+            "Đã gửi yêu cầu trả xe sớm. SmartCar sẽ xác nhận lại thời gian và địa điểm. Trong thời gian chờ, xe vẫn thuộc trách nhiệm của bạn.";
+        return RedirectToAction(nameof(Details), new { id = bookingId });
+    }
+
     [HttpGet]
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
@@ -277,16 +404,48 @@ public sealed class BookingsController : Controller
             .AsNoTracking()
             .Where(log =>
                 log.Action == "VehiclePrepared" &&
-                log.EntityName == "Booking" &&
+                log.EntityName == nameof(Booking) &&
                 log.EntityId == bookingIdText)
             .OrderByDescending(log => log.CreatedAt)
             .Select(log => (DateTime?)log.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+        var latestEarlyReturnLog = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == bookingIdText &&
+                RentalLifecycleAuditHelper.EarlyReturnActions.Contains(log.Action))
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => new { log.Action, log.NewValues, log.CreatedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var latestTerminationLog = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == bookingIdText &&
+                RentalLifecycleAuditHelper.RentalTerminationActions.Contains(log.Action))
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => new { log.Action, log.NewValues, log.CreatedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+
         var vehiclePreparedLocal = vehiclePreparedAt?.ToLocalTime();
         ViewBag.VehiclePreparedAt = vehiclePreparedLocal;
+        ViewBag.EarlyReturn = latestEarlyReturnLog is null
+            ? null
+            : RentalLifecycleAuditHelper.ParseEarlyReturn(
+                latestEarlyReturnLog.Action,
+                latestEarlyReturnLog.NewValues,
+                latestEarlyReturnLog.CreatedAt.ToLocalTime());
+        ViewBag.RentalTermination = latestTerminationLog is null
+            ? null
+            : RentalLifecycleAuditHelper.ParseTermination(
+                latestTerminationLog.Action,
+                latestTerminationLog.NewValues,
+                latestTerminationLog.CreatedAt.ToLocalTime());
 
-        if (booking.Status == SmartCar.Domain.Enums.BookingStatus.Paid &&
+        if (booking.Status == BookingStatus.Paid &&
             vehiclePreparedLocal.HasValue &&
             TempData["SuccessMessage"] is null)
         {
@@ -317,6 +476,40 @@ public sealed class BookingsController : Controller
             ?? "/images/payment/bank-qr.png";
 
         return View(booking);
+    }
+
+    private async Task AddAdminNotificationsAsync(
+        string title,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var adminRoleId = await _dbContext.Roles
+            .AsNoTracking()
+            .Where(role => role.Name == RoleNames.Admin)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(adminRoleId))
+        {
+            return;
+        }
+
+        var adminIds = await _dbContext.UserRoles
+            .AsNoTracking()
+            .Where(userRole => userRole.RoleId == adminRoleId)
+            .Select(userRole => userRole.UserId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        foreach (var adminId in adminIds)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = adminId,
+                Title = title,
+                Message = message
+            });
+        }
     }
 
     private string GetSupportPhone() =>
