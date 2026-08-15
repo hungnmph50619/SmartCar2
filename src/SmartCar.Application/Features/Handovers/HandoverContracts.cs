@@ -32,6 +32,14 @@ public sealed record CreateHandoverRequest(
     string? ImagePaths,
     string? Notes);
 
+public sealed record ConfirmCustomerHandoverRequest(
+    int BookingId,
+    string CustomerId,
+    string SnapshotHash,
+    string SignaturePath,
+    string? IpAddress,
+    string? UserAgent);
+
 public interface IHandoverService
 {
     Task<HandoverVehicleContextDto?> GetVehicleContextAsync(
@@ -48,7 +56,6 @@ public interface IHandoverService
         CancellationToken cancellationToken = default);
 
     Task<OperationResult> ConfirmCustomerSignatureAsync(
-        int bookingId,
-        string customerId,
+        ConfirmCustomerHandoverRequest request,
         CancellationToken cancellationToken = default);
 }
