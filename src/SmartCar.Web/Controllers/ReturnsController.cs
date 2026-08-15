@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
@@ -8,6 +9,7 @@ using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
@@ -21,22 +23,27 @@ public sealed class ReturnsController : Controller
     private const int MinimumDocumentImages = 1;
     private const int MaximumDocumentImages = 3;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
+    private const string SignatureRefusedAuditAction = "ReturnDocumentSignatureRefused";
+    private const string SignatureResolvedAuditAction = "ReturnDocumentSignatureDisputeResolved";
 
     private readonly IReturnService _returnService;
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
     private readonly IWebHostEnvironment _environment;
+    private readonly ApplicationDbContext _dbContext;
 
     public ReturnsController(
         IReturnService returnService,
         IBookingService bookingService,
         IAuditService auditService,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        ApplicationDbContext dbContext)
     {
         _returnService = returnService;
         _bookingService = bookingService;
         _auditService = auditService;
         _environment = environment;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -90,6 +97,36 @@ public sealed class ReturnsController : Controller
 
         NormalizeConditionSummary(model);
 
+        var documentStatus = model.ReturnDocumentStatus?.Trim() ?? string.Empty;
+        var customerSigned = string.Equals(documentStatus, "Signed", StringComparison.Ordinal);
+        var customerRefused = string.Equals(documentStatus, "Refused", StringComparison.Ordinal);
+
+        if (!customerSigned && !customerRefused)
+        {
+            ModelState.AddModelError(
+                nameof(ReturnViewModel.ReturnDocumentStatus),
+                "Vui lòng chọn khách đã ký biên bản hoặc khách từ chối ký/có tranh chấp.");
+        }
+
+        if (customerRefused)
+        {
+            var refusalReason = model.SignatureRefusalReason?.Trim() ?? string.Empty;
+            if (refusalReason.Length < 5)
+            {
+                ModelState.AddModelError(
+                    nameof(ReturnViewModel.SignatureRefusalReason),
+                    "Khi khách từ chối ký, vui lòng ghi rõ lý do hoặc diễn biến, tối thiểu 5 ký tự.");
+            }
+            else
+            {
+                model.SignatureRefusalReason = refusalReason;
+            }
+        }
+        else
+        {
+            model.SignatureRefusalReason = null;
+        }
+
         await ValidateImageCollectionAsync(
             model.Images,
             MinimumVehicleImages,
@@ -103,7 +140,9 @@ public sealed class ReturnsController : Controller
             MinimumDocumentImages,
             MaximumDocumentImages,
             nameof(ReturnViewModel.SignedDocumentImages),
-            "ảnh biên bản trả xe đã có chữ ký khách",
+            customerRefused
+                ? "ảnh biên bản/hồ sơ ghi nhận khách từ chối ký"
+                : "ảnh biên bản trả xe đã có chữ ký khách",
             cancellationToken);
 
         if (!ModelState.IsValid)
@@ -122,9 +161,13 @@ public sealed class ReturnsController : Controller
             model.BookingId,
             model.SignedDocumentImages,
             "uploads/return-documents",
-            "document",
+            customerRefused ? "refusal-document" : "signed-document",
             cancellationToken);
         var allEvidencePaths = vehicleImagePaths.Concat(documentImagePaths).ToList();
+
+        var returnNote = customerRefused
+            ? $"Khách từ chối ký biên bản trả xe. Lý do/diễn biến: {model.SignatureRefusalReason}"
+            : null;
 
         var result = await _returnService.CreateAsync(
             new CreateReturnRequest(
@@ -137,7 +180,7 @@ public sealed class ReturnsController : Controller
                 model.InteriorCondition,
                 model.HasDamage,
                 string.Join(';', allEvidencePaths),
-                model.Notes),
+                returnNote),
             cancellationToken);
 
         if (!result.Succeeded)
@@ -156,8 +199,39 @@ public sealed class ReturnsController : Controller
             $"Tiếp nhận xe trả đơn #{model.BookingId}; địa điểm {model.ReturnLocation}; " +
             $"số km khi giao {preparation.HandoverMileage:N0} km, số km khi trả {model.Mileage:N0} km, quãng đường sử dụng {travelledKm:N0} km; " +
             $"nhiên liệu/pin khi giao {preparation.HandoverFuelLevel}, khi trả {model.FuelLevel}; " +
-            $"{vehicleImagePaths.Count} ảnh hiện trạng xe, {documentImagePaths.Count} ảnh biên bản trả xe có chữ ký; " +
+            $"{vehicleImagePaths.Count} ảnh hiện trạng xe, {documentImagePaths.Count} ảnh hồ sơ biên bản trả xe; " +
+            $"trạng thái biên bản: {(customerRefused ? "Khách từ chối ký/có tranh chấp" : "Khách đã ký")}; " +
             $"hư hỏng mới ghi nhận: {(model.HasDamage ? "Có" : "Không")}.",
+            cancellationToken);
+
+        if (customerRefused)
+        {
+            await WriteAuditAsync(
+                SignatureRefusedAuditAction,
+                nameof(Booking),
+                model.BookingId,
+                $"Khách từ chối ký biên bản trả xe. Lý do/diễn biến: {model.SignatureRefusalReason}. " +
+                $"SmartCar đã lưu {vehicleImagePaths.Count} ảnh hiện trạng và {documentImagePaths.Count} ảnh biên bản/hồ sơ ghi nhận từ chối ký. " +
+                "Khóa quyết toán cọc cho đến khi Admin xử lý tranh chấp.",
+                cancellationToken);
+
+            await UpdateReturnReceiptNotificationAsync(
+                model.BookingId,
+                cancellationToken);
+
+            TempData["SuccessMessage"] =
+                "Đã nhận lại xe và ghi nhận khách từ chối ký biên bản. Cọc đang bị khóa quyết toán cho đến khi Admin xử lý hồ sơ tranh chấp.";
+            return RedirectToAction(
+                "Review",
+                "ReturnEvidence",
+                new { bookingId = model.BookingId });
+        }
+
+        await WriteAuditAsync(
+            "ReturnDocumentSigned",
+            nameof(Booking),
+            model.BookingId,
+            $"Khách đã ký biên bản trả xe; SmartCar lưu {documentImagePaths.Count} ảnh biên bản có chữ ký cùng hồ sơ đơn.",
             cancellationToken);
 
         TempData["SuccessMessage"] =
@@ -232,6 +306,16 @@ public sealed class ReturnsController : Controller
         CompleteBookingViewModel model,
         CancellationToken cancellationToken)
     {
+        if (await HasOpenReturnSignatureDisputeAsync(model.BookingId, cancellationToken))
+        {
+            TempData["ErrorMessage"] =
+                "Khách đang từ chối ký biên bản trả xe. Phải mở hồ sơ giao nhận, xử lý tranh chấp và ghi rõ căn cứ trước khi quyết toán cọc hoặc hoàn tất đơn.";
+            return RedirectToAction(
+                "Review",
+                "ReturnEvidence",
+                new { bookingId = model.BookingId });
+        }
+
         var result = await _returnService.CompleteAsync(
             model.BookingId,
             model.RequiresMaintenance,
@@ -276,6 +360,75 @@ public sealed class ReturnsController : Controller
             ? $"Hư hỏng/bất thường mới: {detail}"
             : null;
         model.InteriorCondition = null;
+    }
+
+    private async Task<bool> HasOpenReturnSignatureDisputeAsync(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var bookingKey = bookingId.ToString();
+        var latestRefusalAt = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.Action == SignatureRefusedAuditAction &&
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == bookingKey)
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => (DateTime?)log.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!latestRefusalAt.HasValue)
+        {
+            return false;
+        }
+
+        var latestResolutionAt = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.Action == SignatureResolvedAuditAction &&
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == bookingKey)
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => (DateTime?)log.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return !latestResolutionAt.HasValue ||
+               latestResolutionAt.Value < latestRefusalAt.Value;
+    }
+
+    private async Task UpdateReturnReceiptNotificationAsync(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var customerId = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.BookingId == bookingId)
+            .Select(booking => booking.CustomerId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return;
+        }
+
+        var notification = await _dbContext.Notifications
+            .Where(item =>
+                item.UserId == customerId &&
+                (item.Title == "Đã tiếp nhận xe trả" ||
+                 item.Title == "Đã tiếp nhận xe trả sớm"))
+            .OrderByDescending(item => item.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (notification is null)
+        {
+            return;
+        }
+
+        notification.Message =
+            $"Đơn #{bookingId} đã được SmartCar tiếp nhận xe. Bạn đã từ chối ký biên bản trả xe; SmartCar đã lưu ảnh hiện trạng và hồ sơ ghi nhận việc từ chối ký. " +
+            "Hồ sơ đang chờ Admin xử lý tranh chấp và cọc chưa được quyết toán.";
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task ValidateImageCollectionAsync(
