@@ -365,7 +365,7 @@ internal sealed class PaymentService : IPaymentService
                 : $"Khách báo đã chuyển khoản QR {paymentType} cho đơn #{booking.BookingId}, số tiền {payment.Amount:N0} đồng, mã yêu cầu đối soát {reconciliationCode}." +
                   (string.IsNullOrWhiteSpace(previousReconciliationCode)
                       ? string.Empty
-                      : $" Mã yêu cầu trước đó: {previousReconciliationCode}."),
+                      : $" Mã yêu cầu trước đó: {previousReconciliationCode}.") ,
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -496,37 +496,24 @@ internal sealed class PaymentService : IPaymentService
                 booking.RefundReason =
                     $"{rentalRefundReason} Cọc bảo đảm {depositPayment.Amount:N0} đồng được hoàn 100% vì xe chưa được bàn giao. Tổng hoàn {refundAmount:N0} đồng.";
 
-                var existingRefund = booking.Payments.FirstOrDefault(item => item.Type == PaymentType.Refund);
-                if (refundAmount > 0)
-                {
-                    if (existingRefund is null)
-                    {
-                        booking.Payments.Add(new Payment
-                        {
-                            Type = PaymentType.Refund,
-                            Amount = refundAmount,
-                            Method = PaymentMethods.BankTransferRefund,
-                            Status = PaymentStatus.AwaitingRefund,
-                            PaidAt = null,
-                            TransactionCode = null
-                        });
-                    }
-                    else if (existingRefund.Status == PaymentStatus.AwaitingRefund)
-                    {
-                        existingRefund.Amount = refundAmount;
-                    }
-                }
+                EnsureRefundPayment(
+                    booking,
+                    PaymentType.Refund,
+                    rentalRefundAmount,
+                    PaymentMethods.BankTransferRefund);
+                EnsureRefundPayment(
+                    booking,
+                    PaymentType.DepositRefund,
+                    depositPayment.Amount,
+                    RentalPolicyConstants.SecurityDepositRefundMethod);
 
                 _dbContext.Notifications.Add(new Notification
                 {
                     UserId = booking.CustomerId,
-                    Title = refundAmount > 0
-                        ? "Khoản hoàn tiền đã được tạo"
-                        : "Đã xác nhận khoản chuyển của đơn đã hủy",
-                    Message = refundAmount > 0
-                        ? $"SmartCar đã xác nhận giao dịch {checkoutAmount:N0} đồng của đơn #{booking.BookingId}. " +
-                          $"Theo chính sách hủy, tổng khoản hoàn {refundAmount:N0} đồng đã được tạo, trong đó cọc {depositPayment.Amount:N0} đồng được hoàn 100%."
-                        : $"SmartCar đã xác nhận giao dịch {checkoutAmount:N0} đồng của đơn #{booking.BookingId}. {booking.RefundReason}"
+                    Title = "Khoản hoàn đã được tạo",
+                    Message =
+                        $"SmartCar đã xác nhận giao dịch {checkoutAmount:N0} đồng của đơn #{booking.BookingId}. " +
+                        $"Theo chính sách hủy, hoàn phần tiền chuyến {rentalRefundAmount:N0} đồng và hoàn cọc {depositPayment.Amount:N0} đồng; tổng hoàn {refundAmount:N0} đồng."
                 });
             }
 
@@ -653,7 +640,7 @@ internal sealed class PaymentService : IPaymentService
         {
             var checkoutPayments = payment.Booking.Payments
                 .Where(item =>
-                    item.Type is PaymentType.Rental or PaymentType.Deposit &&
+                    (item.Type is PaymentType.Rental or PaymentType.Deposit) &&
                     item.Status == PaymentStatus.AwaitingConfirmation &&
                     item.Method == PaymentMethods.BankQr)
                 .ToList();
@@ -670,7 +657,6 @@ internal sealed class PaymentService : IPaymentService
                 checkoutPayment.Status = PaymentStatus.Pending;
                 checkoutPayment.Method = PaymentMethods.NotSelected;
                 checkoutPayment.PaidAt = null;
-                // Giữ mã QRREQ để phục vụ truy vết lần khách đã báo chuyển khoản.
             }
         }
         else
@@ -755,7 +741,7 @@ internal sealed class PaymentService : IPaymentService
             Title = isDepositRefund ? "Hoàn cọc thành công" : "Hoàn tiền thành công",
             Message = isDepositRefund
                 ? $"SmartCar đã hoàn cọc {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}."
-                : $"SmartCar đã hoàn {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}."
+                : $"SmartCar đã hoàn phần tiền chuyến {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -768,7 +754,7 @@ internal sealed class PaymentService : IPaymentService
             payment.PaymentId.ToString(),
             isDepositRefund
                 ? $"Hoàn cọc {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}."
-                : $"Hoàn {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}.",
+                : $"Hoàn phần tiền chuyến {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -794,6 +780,39 @@ internal sealed class PaymentService : IPaymentService
         };
         booking.Payments.Add(depositPayment);
         return depositPayment;
+    }
+
+    private static void EnsureRefundPayment(
+        Booking booking,
+        PaymentType type,
+        decimal amount,
+        string method)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        var payment = booking.Payments.FirstOrDefault(item => item.Type == type);
+        if (payment is null)
+        {
+            booking.Payments.Add(new Payment
+            {
+                Type = type,
+                Amount = amount,
+                Method = method,
+                Status = PaymentStatus.AwaitingRefund,
+                PaidAt = null,
+                TransactionCode = null
+            });
+            return;
+        }
+
+        if (payment.Status == PaymentStatus.AwaitingRefund)
+        {
+            payment.Amount = amount;
+            payment.Method = method;
+        }
     }
 
     private static decimal GetPaidDepositAmount(Booking booking) =>
