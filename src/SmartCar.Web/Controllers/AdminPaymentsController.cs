@@ -35,22 +35,29 @@ public sealed class AdminPaymentsController : Controller
         ViewBag.Status = status;
         ViewBag.Type = type;
 
+        // "Chờ hoàn + Hoàn cọc" là lối vào nghiệp vụ hoàn tiền của Admin.
+        // Không render từng DepositRefund riêng nữa vì một đơn có thể đồng thời có
+        // Refund (phần tiền chuyến) + DepositRefund (cọc). Thay vào đó gom toàn bộ
+        // khoản hoàn đang chờ theo Booking để Admin nhìn và xử lý tổng tiền của đơn.
+        if (status == PaymentStatus.AwaitingRefund && type == PaymentType.DepositRefund)
+        {
+            var pendingRefunds = await _paymentService.GetAdminPaymentsAsync(
+                PaymentStatus.AwaitingRefund,
+                type: null,
+                cancellationToken);
+
+            var refundPayments = pendingRefunds
+                .Where(item => item.Type is PaymentType.Refund or PaymentType.DepositRefund)
+                .OrderByDescending(item => item.PaymentId)
+                .ToList();
+
+            return View("BookingRefundQueue", refundPayments);
+        }
+
         var payments = await _paymentService.GetAdminPaymentsAsync(
             status,
             type,
             cancellationToken);
-
-        // Link cũ từ trang chi tiết đơn từng mở thẳng danh sách DepositRefund.
-        // Nếu chỉ có đúng một đơn đang chờ hoàn cọc, chuyển sang màn hoàn tiền theo đơn
-        // để Admin nhìn thấy cả phần hoàn tiền chuyến và phần hoàn cọc trong cùng một nghiệp vụ.
-        if (status == PaymentStatus.AwaitingRefund &&
-            type == PaymentType.DepositRefund &&
-            payments.Count == 1)
-        {
-            return RedirectToAction(
-                nameof(BookingRefund),
-                new { bookingId = payments[0].BookingId });
-        }
 
         return View(payments);
     }
