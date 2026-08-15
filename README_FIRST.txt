@@ -47,11 +47,15 @@ Mật khẩu: SmartCar@123
 - Customer đăng nhập, tìm xe theo ngày giờ tương lai và tạo đơn.
 - Admin xác nhận đơn.
 - Customer thanh toán mô phỏng.
-- Trước khi chuyển đơn sang sẵn sàng giao xe, Admin phải gọi/nhắn khách và chỉ xác nhận khi khách phản hồi sẽ nhận xe đúng giờ, đúng địa điểm.
-- Admin đến điểm giao, chỉ lập biên bản khi khách thực sự có mặt; sau bàn giao đơn mới chuyển sang Rented.
+- Admin kiểm tra/vệ sinh/chuẩn bị xe và ghi nhận "Xe đã chuẩn bị xong". Customer nhận thông báo nhưng đơn vẫn ở Paid.
+- Sau đó Admin gọi/nhắn khách; chỉ khi khách phản hồi sẽ nhận xe đúng giờ, đúng địa điểm thì đơn mới chuyển sang ReadyForPickup.
+- Admin đến điểm giao, chỉ lập biên bản khi khách thực sự có mặt; trước khi giao chìa khóa phải ghi nhận đã nhận cọc bảo đảm 5.000.000 đồng.
+- Sau bàn giao thực tế đơn mới chuyển sang Rented.
 - Nếu khách đã xác nhận nhưng sau đó không xuất hiện: chờ tối thiểu 30 phút, liên hệ lại ít nhất 2 lần; với giao tận nơi Admin phải xác nhận đã đến đúng điểm giao trước khi ghi NoShow.
 - Customer có thể gửi yêu cầu gia hạn.
-- Admin lập biên bản trả xe, thêm phụ phí và hoàn tất đơn.
+- Admin lập biên bản trả xe; xe chuyển sang PendingInspection để kiểm tra, thêm phụ phí và quyết toán cọc.
+- Phụ phí được đối trừ với cọc trước. Chỉ phần vượt quá số cọc mới yêu cầu Customer thanh toán thêm.
+- Sau khi hoàn tất kiểm tra, số cọc còn dư được tạo thành khoản DepositRefund chờ Admin chuyển trả cho khách.
 - Customer đánh giá xe sau khi đơn hoàn tất.
 - Admin quản lý giấy tờ xe, bảo trì, sự cố, báo cáo và audit log.
 
@@ -62,9 +66,20 @@ Mật khẩu: SmartCar@123
 - Admin hủy trước khi bàn giao: hoàn 100% số tiền đã thanh toán.
 - NoShow: chỉ áp dụng sau ít nhất 30 phút kể từ giờ nhận, có xác nhận khách trước khi Admin xuất phát, có ít nhất 2 lần liên hệ lại; đơn giao tận nơi còn phải xác nhận Admin đã đến đúng điểm giao.
 - Phí NoShow: giữ 40% tiền thuê + phí lượt giao xe thực tế đã phát sinh (nếu có); phần còn lại được tạo thành khoản hoàn tiền cho khách.
-- NoShow không tạo biên bản bàn giao, không chuyển xe sang Rented và xe được giải phóng theo lịch vận hành.
+- NoShow không tạo biên bản bàn giao, không thu cọc bảo đảm, không chuyển xe sang Rented và xe được giải phóng theo lịch vận hành.
 
-9. KIỂM TRA TỰ ĐỘNG
+9. CỌC BẢO ĐẢM
+- Mức cọc hiện tại của SmartCar: 5.000.000 đồng/đơn.
+- Chỉ thu cọc tại thời điểm khách thực tế nhận xe, ngay trước khi giao chìa khóa.
+- Cọc có thể được Admin ghi nhận bằng tiền mặt hoặc chuyển khoản sau khi đã thực tế nhận đủ tiền.
+- Tiền cọc không cộng vào TotalAmount của chuyến thuê và không tính vào doanh thu.
+- Khi khách trả xe, hệ thống đối trừ phụ phí có căn cứ (trả muộn, nhiên liệu, vệ sinh, hư hỏng, thiếu phụ kiện...) với cọc.
+- Nếu phụ phí nhỏ hơn cọc: tạo khoản hoàn cọc bằng phần dư.
+- Nếu phụ phí bằng cọc: không còn số dư cọc phải hoàn.
+- Nếu phụ phí lớn hơn cọc: dùng hết cọc và chỉ yêu cầu khách thanh toán phần vượt cọc.
+- Admin thực hiện chuyển khoản hoàn cọc trong màn Quản lý thanh toán và nhập mã giao dịch để lưu Audit Log.
+
+10. KIỂM TRA TỰ ĐỘNG
 GitHub Actions thực hiện:
 - Restore và build toàn bộ solution .NET 8 Release.
 - Chạy unit test quy tắc ngày thuê.
