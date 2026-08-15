@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -11,10 +13,14 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminBookingOperationsController : Controller
 {
     private readonly IBookingOperationService _operationService;
+    private readonly ApplicationDbContext _dbContext;
 
-    public AdminBookingOperationsController(IBookingOperationService operationService)
+    public AdminBookingOperationsController(
+        IBookingOperationService operationService,
+        ApplicationDbContext dbContext)
     {
         _operationService = operationService;
+        _dbContext = dbContext;
     }
 
     [HttpPost]
@@ -43,6 +49,13 @@ public sealed class AdminBookingOperationsController : Controller
         int bookingId,
         CancellationToken cancellationToken)
     {
+        if (!await HasVehiclePreparedAsync(bookingId, cancellationToken))
+        {
+            TempData["ErrorMessage"] =
+                "Xe chưa được ghi nhận chuẩn bị xong. Hãy hoàn tất kiểm tra/chuẩn bị xe trước khi gọi khách xác nhận giao xe.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
         var preparation = await _operationService.GetPickupPreparationAsync(
             bookingId,
             cancellationToken);
@@ -64,6 +77,13 @@ public sealed class AdminBookingOperationsController : Controller
         string contactNote,
         CancellationToken cancellationToken)
     {
+        if (!await HasVehiclePreparedAsync(bookingId, cancellationToken))
+        {
+            TempData["ErrorMessage"] =
+                "Không thể xác nhận xuất phát vì chưa có bằng chứng xe đã được chuẩn bị xong.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var result = await _operationService.ConfirmPickupDepartureAsync(
             new ConfirmPickupDepartureRequest(
@@ -130,5 +150,19 @@ public sealed class AdminBookingOperationsController : Controller
             : string.Join("; ", result.Errors);
 
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+    }
+
+    private Task<bool> HasVehiclePreparedAsync(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var bookingIdText = bookingId.ToString();
+        return _dbContext.AuditLogs
+            .AsNoTracking()
+            .AnyAsync(log =>
+                log.Action == "VehiclePrepared" &&
+                log.EntityName == "Booking" &&
+                log.EntityId == bookingIdText,
+                cancellationToken);
     }
 }
