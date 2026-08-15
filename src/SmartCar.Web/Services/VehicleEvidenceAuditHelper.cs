@@ -97,7 +97,7 @@ public static class VehicleEvidenceAuditHelper
                 ? fuelElement.GetString() ?? string.Empty
                 : string.Empty;
             var hasIssue = root.TryGetProperty("HasIssue", out var issueElement) &&
-                           issueElement.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+                           (issueElement.ValueKind is JsonValueKind.True or JsonValueKind.False) &&
                            issueElement.GetBoolean();
             var note = root.TryGetProperty("Note", out var noteElement) &&
                        noteElement.ValueKind == JsonValueKind.String
