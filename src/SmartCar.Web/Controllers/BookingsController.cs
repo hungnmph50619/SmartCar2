@@ -290,9 +290,15 @@ public sealed class BookingsController : Controller
             vehiclePreparedLocal.HasValue &&
             TempData["SuccessMessage"] is null)
         {
+            var pickupLocation = string.IsNullOrWhiteSpace(booking.PickupLocation)
+                ? "địa điểm đã thỏa thuận"
+                : booking.PickupLocation;
+
             TempData["SuccessMessage"] =
-                $"Xe của đơn #{booking.BookingId} đã được SmartCar chuẩn bị xong lúc {vehiclePreparedLocal.Value:dd/MM/yyyy HH:mm}. " +
-                $"SmartCar sẽ liên hệ xác nhận lịch nhận trước khi giao. Khi nhận xe cần cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng; cọc được quyết toán sau khi trả xe.";
+                $"Xe của đơn #{booking.BookingId} đã được SmartCar kiểm tra và xác nhận chuẩn bị xong lúc {vehiclePreparedLocal.Value:dd/MM/yyyy HH:mm}. " +
+                $"Xe đã được dành cho lịch nhận {booking.PickupDate:dd/MM/yyyy HH:mm} tại {pickupLocation}. " +
+                "Bạn chỉ cần chờ đến thời gian nhận xe; SmartCar sẽ liên hệ lại gần giờ nhận để xác nhận trước khi bàn giao. " +
+                $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng đã được thanh toán cùng tiền thuê, bạn không cần thanh toán lại khi nhận xe.";
         }
 
         ViewBag.SmartCarSupportPhone = GetSupportPhone();
