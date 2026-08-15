@@ -39,9 +39,9 @@ public static class VietnameseDisplayExtensions
             PaymentStatus.Pending => "Chờ thanh toán",
             PaymentStatus.Paid => "Đã thanh toán",
             PaymentStatus.Failed => "Thanh toán thất bại",
-            PaymentStatus.Refunded => "Đã hoàn tiền",
+            PaymentStatus.Refunded => "Đã hoàn",
             PaymentStatus.AwaitingConfirmation => "Chờ xác nhận chuyển khoản",
-            PaymentStatus.AwaitingRefund => "Chờ hoàn tiền",
+            PaymentStatus.AwaitingRefund => "Chờ hoàn",
             _ => status.ToString()
         },
         PaymentType type => type switch
@@ -50,6 +50,8 @@ public static class VietnameseDisplayExtensions
             PaymentType.AdditionalCharge => "Phụ phí",
             PaymentType.Refund => "Hoàn tiền",
             PaymentType.Extension => "Tiền gia hạn",
+            PaymentType.Deposit => "Cọc bảo đảm",
+            PaymentType.DepositRefund => "Hoàn cọc bảo đảm",
             _ => type.ToString()
         },
         AdditionalChargeType type => type switch
@@ -142,8 +144,11 @@ public static class VietnameseDisplayExtensions
         "UnlockCustomer" => "Mở khóa tài khoản khách hàng",
         "Confirm" => "Xác nhận đơn",
         "MarkReady" => "Đánh dấu sẵn sàng",
+        "VehiclePrepared" => "Xe đã chuẩn bị xong",
+        "ConfirmPickupDeparture" => "Xác nhận khách trước khi giao",
         "Pay" => "Thanh toán",
         "Refund" => "Hoàn tiền",
+        "DepositRefund" => "Hoàn cọc bảo đảm",
         "CustomerCancel" => "Khách hàng hủy đơn",
         "AdminCancel" => "Quản trị viên hủy đơn",
         "MarkNoShow" => "Ghi nhận không đến nhận xe",
