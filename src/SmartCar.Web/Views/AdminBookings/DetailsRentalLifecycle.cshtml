@@ -1,4 +1,5 @@
 @model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 @using SmartCar.Web.Services
 
@@ -6,6 +7,18 @@
     ViewData["Title"] = $"Xử lý đơn #{Model.BookingId}";
     var earlyReturn = ViewBag.EarlyReturn as EarlyReturnSnapshot;
     var isBeforeScheduledReturn = DateTime.Now < Model.ReturnDate;
+    var vehiclePreparedAt = ViewBag.VehiclePreparedAt is DateTime preparedAt ? preparedAt : (DateTime?)null;
+    var vehiclePrepared = vehiclePreparedAt.HasValue;
+    var isHomeDelivery = Model.PickupMethod == DeliveryConstants.HomeDelivery;
+    var pickupLocation = string.IsNullOrWhiteSpace(Model.PickupLocation)
+        ? "Chưa cập nhật địa điểm nhận"
+        : Model.PickupLocation;
+    var pickupDirectionsUrl = isHomeDelivery
+        ? $"https://www.google.com/maps/dir/?api=1&origin={Uri.EscapeDataString(DeliveryConstants.SmartCarMapQuery)}&destination={Uri.EscapeDataString(pickupLocation)}"
+        : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString(pickupLocation)}";
+    var customerConfirmedForPickup = Model.Status is BookingStatus.ReadyForPickup or BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
+    var handoverCompleted = Model.Status is BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
+    var showHandoverCommand = Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
 }
 
 @if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Pending")
@@ -84,37 +97,181 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
 
 <partial name="Details" model="Model" />
 
+@if (showHandoverCommand)
+{
+    <div id="handover-command-card" class="card shadow-sm border-0 mb-4 d-none">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-primary fw-semibold">Vận hành giao xe</div>
+                    <h2 class="h5 mb-1">Điểm giao & tiến trình bàn giao</h2>
+                    <p class="text-muted small mb-0">Một nơi để Admin biết phải liên hệ ai, đi đâu và bước tiếp theo là gì.</p>
+                </div>
+                <span class="badge @(Model.Status == BookingStatus.ReadyForPickup ? "bg-success" : "bg-primary") px-3 py-2">
+                    @(Model.Status == BookingStatus.ReadyForPickup ? "Sẵn sàng bàn giao" : "Đang chuẩn bị giao")
+                </span>
+            </div>
+
+            <div class="row g-3 align-items-stretch mb-3">
+                <div class="col-lg-8">
+                    <div class="border rounded-3 p-3 h-100">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="small text-muted">Thời gian nhận</div>
+                                <div class="fw-semibold">@Model.PickupDate.ToString("HH:mm · dd/MM/yyyy")</div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="small text-muted">Địa điểm</div>
+                                <div class="fw-semibold">@pickupLocation</div>
+                                <div class="small text-muted">@(isHomeDelivery ? "SmartCar giao xe tận nơi" : "Khách tự đến điểm nhận")</div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small text-muted">Khách</div>
+                                <div class="fw-semibold">@Model.CustomerName</div>
+                                <div class="small">@Model.CustomerPhone</div>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap mt-3">
+                            @if (!string.IsNullOrWhiteSpace(Model.CustomerPhone))
+                            {
+                                <a class="btn btn-sm btn-outline-success" href="tel:@Model.CustomerPhone">☎ Gọi khách</a>
+                            }
+                            <a class="btn btn-sm btn-outline-primary" href="@pickupDirectionsUrl" target="_blank" rel="noopener noreferrer">
+                                @(isHomeDelivery ? "⌖ Mở chỉ đường" : "⌖ Xem vị trí")
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="border rounded-3 p-3 h-100 d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="small text-muted">Việc cần làm ngay</div>
+                            @if (Model.Status == BookingStatus.Paid && !vehiclePrepared)
+                            {
+                                <div class="fw-semibold mt-1">Kiểm tra và xác nhận xe đã chuẩn bị xong</div>
+                                <div class="small text-muted mt-1">Sau đó khách mới được thông báo rằng xe đã sẵn sàng cho lịch nhận.</div>
+                            }
+                            else if (Model.Status == BookingStatus.Paid && vehiclePrepared)
+                            {
+                                <div class="fw-semibold mt-1">Liên hệ khách xác nhận lịch nhận</div>
+                                <div class="small text-muted mt-1">Chỉ chuyển ReadyForPickup sau khi khách xác nhận giờ và địa điểm.</div>
+                            }
+                            else
+                            {
+                                <div class="fw-semibold mt-1">Bắt đầu bàn giao thực tế</div>
+                                <div class="small text-muted mt-1">Đối chiếu người nhận, xe, ảnh, ODO và nhiên liệu trước khi giao chìa khóa.</div>
+                            }
+                        </div>
+
+                        <div class="mt-3">
+                            @if (Model.Status == BookingStatus.Paid && !vehiclePrepared)
+                            {
+                                <button type="button" class="btn btn-primary btn-sm w-100" id="focus-vehicle-preparation">Đi tới bước chuẩn bị xe</button>
+                            }
+                            else if (Model.Status == BookingStatus.Paid && vehiclePrepared)
+                            {
+                                <a class="btn btn-primary btn-sm w-100"
+                                   asp-controller="AdminBookingOperations"
+                                   asp-action="PreparePickup"
+                                   asp-route-bookingId="@Model.BookingId">☎ Gọi khách & xác nhận</a>
+                            }
+                            else if (Model.Status == BookingStatus.ReadyForPickup)
+                            {
+                                <a class="btn btn-success btn-sm w-100"
+                                   asp-controller="Handovers"
+                                   asp-action="Create"
+                                   asp-route-bookingId="@Model.BookingId">Bắt đầu bàn giao →</a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-2 small text-center">
+                <div class="col-6 col-lg-3">
+                    <div class="border rounded-3 p-2 @(Model.RentalPaid ? "bg-success-subtle border-success" : "bg-light")">
+                        <div class="fw-semibold">@(Model.RentalPaid ? "✓" : "○") Thanh toán</div>
+                        <div class="text-muted">@(Model.RentalPaid ? "Đã xác nhận" : "Chưa hoàn tất")</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="border rounded-3 p-2 @(vehiclePrepared ? "bg-success-subtle border-success" : "bg-light")">
+                        <div class="fw-semibold">@(vehiclePrepared ? "✓" : "○") Chuẩn bị xe</div>
+                        <div class="text-muted">@(vehiclePrepared ? "Đã kiểm tra" : "Chờ Admin")</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="border rounded-3 p-2 @(customerConfirmedForPickup ? "bg-success-subtle border-success" : "bg-light")">
+                        <div class="fw-semibold">@(customerConfirmedForPickup ? "✓" : "○") Xác nhận khách</div>
+                        <div class="text-muted">@(customerConfirmedForPickup ? "Đã xác nhận lịch" : "Chưa xác nhận")</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="border rounded-3 p-2 @(handoverCompleted ? "bg-success-subtle border-success" : "bg-light")">
+                        <div class="fw-semibold">@(handoverCompleted ? "✓" : "○") Bàn giao</div>
+                        <div class="text-muted">@(handoverCompleted ? "Đã giao xe" : "Chưa giao")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
 <script>
 (() => {
-    // Khối bản đồ giao/nhận bị trùng thông tin với phần chi tiết đơn và làm màn hình quá nặng.
-    // Giữ các thao tác chính ở đúng bước nghiệp vụ thay vì lặp lại trong một dashboard lớn.
     const cards = Array.from(document.querySelectorAll('.card'));
-    const logisticsCard = cards.find(card =>
+
+    // Bỏ dashboard bản đồ lớn cũ: địa điểm và thao tác đã được gom vào command card nhỏ.
+    const legacyLogisticsCard = cards.find(card =>
         card.textContent?.includes('Vận hành giao nhận') &&
         card.textContent?.includes('Kế hoạch giao xe & nhận lại xe'));
-    if (logisticsCard) {
-        logisticsCard.remove();
+    legacyLogisticsCard?.remove();
+
+    const commandCard = document.getElementById('handover-command-card');
+    if (commandCard) {
+        const infoCard = Array.from(document.querySelectorAll('.card')).find(card =>
+            card.querySelector('h2')?.textContent?.trim() === 'Thông tin thuê xe');
+        if (infoCard) {
+            infoCard.insertAdjacentElement('afterend', commandCard);
+            commandCard.classList.remove('d-none');
+        }
     }
 
-    const isRented = '@Model.Status' === '@BookingStatus.Rented';
-    if (!isRented) {
-        return;
+    // Khi đã chuẩn bị xe, command card đã thay vai trò card xanh cũ để tránh lặp thông tin.
+    const isPrepared = @vehiclePrepared.ToString().ToLowerInvariant();
+    if (isPrepared && '@Model.Status' === '@BookingStatus.Paid') {
+        const preparedCard = Array.from(document.querySelectorAll('.card')).find(card =>
+            card.textContent?.includes('Xe đã được xác nhận cho đơn') &&
+            card.textContent?.includes('Gọi khách và xác nhận trước khi đi'));
+        preparedCard?.remove();
     }
+
+    // Khi ReadyForPickup, CTA "Bắt đầu bàn giao" đã nằm ở command card.
+    if ('@Model.Status' === '@BookingStatus.ReadyForPickup') {
+        const legacyHandoverCard = Array.from(document.querySelectorAll('.card')).find(card =>
+            card.querySelector('h2')?.textContent?.trim() === 'Bàn giao xe');
+        legacyHandoverCard?.remove();
+    }
+
+    const focusVehiclePreparation = document.getElementById('focus-vehicle-preparation');
+    focusVehiclePreparation?.addEventListener('click', () => {
+        const preparationCard = Array.from(document.querySelectorAll('.card')).find(card =>
+            card.querySelector('h2')?.textContent?.trim() === 'Xác nhận xe đã chuẩn bị xong');
+        preparationCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    const isRented = '@Model.Status' === '@BookingStatus.Rented';
+    if (!isRented) return;
 
     const rentedCard = Array.from(document.querySelectorAll('.card')).find(card =>
         card.querySelector('h2')?.textContent?.trim() === 'Đơn đang thuê');
-    if (!rentedCard) {
-        return;
-    }
+    if (!rentedCard) return;
 
-    // Trước giờ trả, không cho đi tắt bằng nút tiếp nhận trả sớm trong màn chi tiết cũ.
-    // Nếu yêu cầu đã được duyệt, nút tiếp nhận chính nằm ở banner xanh phía trên.
+    // Trước giờ trả không cho đi tắt bằng nút trả sớm cũ. Nếu đã duyệt, CTA nằm ở banner xanh.
     const earlyReturnLink = Array.from(rentedCard.querySelectorAll('a')).find(link =>
         link.textContent?.includes('Tiếp nhận xe trả sớm'));
-
     const isBeforeScheduledReturn = @isBeforeScheduledReturn.ToString().ToLowerInvariant();
-    if (isBeforeScheduledReturn && earlyReturnLink) {
-        earlyReturnLink.remove();
-    }
+    if (isBeforeScheduledReturn && earlyReturnLink) earlyReturnLink.remove();
 })();
 </script>
