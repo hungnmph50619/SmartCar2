@@ -321,34 +321,17 @@ internal sealed class ReturnService : IReturnService
                     : "Đơn vẫn còn khoản tiền chưa được thanh toán.");
         }
 
-        if (booking.AdditionalAmount > 0)
+        if (depositApplied > 0)
         {
-            var settlementPayment = booking.Payments
-                .Where(payment =>
-                    payment.Type == PaymentType.AdditionalCharge &&
-                    payment.Status == PaymentStatus.Paid)
-                .OrderByDescending(payment => payment.PaymentId)
-                .FirstOrDefault();
-
-            if (settlementPayment is null)
+            booking.Payments.Add(new Payment
             {
-                settlementPayment = new Payment
-                {
-                    Type = PaymentType.AdditionalCharge,
-                    Status = PaymentStatus.Paid,
-                    PaidAt = DateTime.UtcNow,
-                    TransactionCode = $"DEPSET{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}"
-                };
-                booking.Payments.Add(settlementPayment);
-            }
-
-            settlementPayment.Amount = booking.AdditionalAmount;
-            if (depositApplied > 0)
-            {
-                settlementPayment.Method = additionalDueAfterDeposit > 0
-                    ? RentalPolicyConstants.SecurityDepositMixedSettlementMethod
-                    : RentalPolicyConstants.SecurityDepositSettlementMethod;
-            }
+                Type = PaymentType.AdditionalCharge,
+                Amount = depositApplied,
+                Method = RentalPolicyConstants.SecurityDepositSettlementMethod,
+                Status = PaymentStatus.Paid,
+                PaidAt = DateTime.UtcNow,
+                TransactionCode = $"DEPSET{DateTime.UtcNow:yyyyMMddHHmmssfff}{booking.BookingId}"
+            });
         }
 
         var depositRefundAmount = Math.Max(0, depositAmount - depositApplied);
