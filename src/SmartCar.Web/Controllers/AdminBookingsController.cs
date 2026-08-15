@@ -171,7 +171,7 @@ public sealed class AdminBookingsController : Controller
                 latestTerminationLog.NewValues,
                 latestTerminationLog.CreatedAt.ToLocalTime());
 
-        return View(booking);
+        return View("DetailsRentalLifecycle", booking);
     }
 
     [HttpPost]
