@@ -15,6 +15,9 @@ internal sealed class ReturnService : IReturnService
     private const decimal HourlyLateRateFactor = 0.10m;
     private const decimal MaximumLateFeePerDayFactor = 1.50m;
 
+    private const string CustomerCheckInAction = "CustomerVehicleCheckInCompleted";
+    private const string CustomerCheckOutAction = "CustomerVehicleCheckOutCompleted";
+
     private const string ReturnReviewPendingAction = "ReturnEvidencePendingCustomerReview";
     private const string ReturnReviewAcceptedAction = "CustomerAcceptedReturnEvidence";
     private const string ReturnReviewDisputedAction = "CustomerDisputedReturnEvidence";
@@ -61,17 +64,44 @@ internal sealed class ReturnService : IReturnService
             return null;
         }
 
-        var signedEvidenceJson = await _dbContext.AuditLogs
+        var checkInJson = await _dbContext.AuditLogs
             .AsNoTracking()
             .Where(log =>
-                log.Action == "CustomerSignedHandover" &&
-                log.EntityName == nameof(VehicleHandover) &&
+                log.Action == CustomerCheckInAction &&
                 log.EntityId == bookingId.ToString())
             .OrderByDescending(log => log.CreatedAt)
             .Select(log => log.NewValues)
             .FirstOrDefaultAsync(cancellationToken);
 
-        var (customerImagePaths, customerNote) = ParseCustomerHandoverEvidence(signedEvidenceJson);
+        CustomerEvidenceData checkIn;
+        if (!string.IsNullOrWhiteSpace(checkInJson))
+        {
+            checkIn = ParseCustomerEvidence(checkInJson);
+        }
+        else
+        {
+            // Tương thích dữ liệu thử nghiệm cũ trước khi chuyển từ chữ ký canvas sang check-in ảnh bắt buộc.
+            var legacySignedJson = await _dbContext.AuditLogs
+                .AsNoTracking()
+                .Where(log =>
+                    log.Action == "CustomerSignedHandover" &&
+                    log.EntityName == nameof(VehicleHandover) &&
+                    log.EntityId == bookingId.ToString())
+                .OrderByDescending(log => log.CreatedAt)
+                .Select(log => log.NewValues)
+                .FirstOrDefaultAsync(cancellationToken);
+            checkIn = ParseLegacyCustomerHandoverEvidence(legacySignedJson);
+        }
+
+        var checkOutJson = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.Action == CustomerCheckOutAction &&
+                log.EntityId == bookingId.ToString())
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => log.NewValues)
+            .FirstOrDefaultAsync(cancellationToken);
+        var checkOut = ParseCustomerEvidence(checkOutJson);
 
         return new ReturnPreparationDto(
             booking.BookingId,
@@ -82,8 +112,12 @@ internal sealed class ReturnService : IReturnService
             booking.HandoverFuelLevel,
             booking.HandoverAccessories,
             booking.HandoverImagePaths,
-            customerImagePaths,
-            customerNote,
+            checkIn.ImagePaths,
+            checkIn.Note,
+            checkOut.ImagePaths,
+            checkOut.Note,
+            checkOut.Mileage,
+            checkOut.FuelLevel,
             booking.VehicleFuelType);
     }
 
@@ -113,6 +147,39 @@ internal sealed class ReturnService : IReturnService
         if (booking.VehicleReturn is not null)
         {
             return OperationResult.Failure("Đơn đã có biên bản trả xe.");
+        }
+
+        var hasNewCustomerCheckIn = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .AnyAsync(log =>
+                log.Action == CustomerCheckInAction &&
+                log.EntityId == booking.BookingId.ToString(),
+                cancellationToken);
+
+        if (hasNewCustomerCheckIn)
+        {
+            var customerCheckOutJson = await _dbContext.AuditLogs
+                .AsNoTracking()
+                .Where(log =>
+                    log.Action == CustomerCheckOutAction &&
+                    log.EntityId == booking.BookingId.ToString())
+                .OrderByDescending(log => log.CreatedAt)
+                .Select(log => log.NewValues)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var customerCheckOut = ParseCustomerEvidence(customerCheckOutJson);
+            if (string.IsNullOrWhiteSpace(customerCheckOut.ImagePaths) ||
+                SplitPaths(customerCheckOut.ImagePaths).Count < 6)
+            {
+                return OperationResult.Failure(
+                    "Khách chưa hoàn tất bộ ảnh check-out 6 góc trên tài khoản của mình. Với chuyến sử dụng quy trình bằng chứng mới, SmartCar chỉ được lập biên bản nhận lại sau khi khách đã khóa check-out.");
+            }
+
+            if (customerCheckOut.Mileage.HasValue && request.Mileage < customerCheckOut.Mileage.Value)
+            {
+                return OperationResult.Failure(
+                    $"ODO SmartCar ghi khi nhận lại ({request.Mileage:N0} km) nhỏ hơn ODO khách đã khóa tại check-out ({customerCheckOut.Mileage.Value:N0} km). Hãy kiểm tra lại trước khi lập biên bản.");
+            }
         }
 
         if (request.Mileage < booking.Handover.Mileage)
@@ -192,7 +259,7 @@ internal sealed class ReturnService : IReturnService
             EntityName = nameof(VehicleReturn),
             EntityId = booking.BookingId.ToString(),
             Description =
-                $"SmartCar đã tiếp nhận xe đơn #{booking.BookingId} và tạo bộ bằng chứng trả xe để khách đối chiếu với biên bản bàn giao. " +
+                $"SmartCar đã tiếp nhận xe đơn #{booking.BookingId} và tạo bộ bằng chứng trả xe để đối chiếu với customer check-in/check-out và ảnh bàn giao của SmartCar. " +
                 "Đơn chưa được hoàn tất cho đến khi khách xác nhận hiện trạng hoặc tranh chấp được xử lý.",
             NewValues = JsonSerializer.Serialize(new
             {
@@ -209,7 +276,7 @@ internal sealed class ReturnService : IReturnService
         });
 
         var reviewInstruction =
-            " Mở chi tiết đơn để xem ảnh bàn giao ↔ ảnh trả xe và chọn Đồng ý hoặc Không đồng ý/Yêu cầu xem xét.";
+            " Mở chi tiết đơn để xem bộ bằng chứng check-in ↔ check-out cùng ảnh kiểm tra SmartCar và chọn Đồng ý hoặc Không đồng ý/Yêu cầu xem xét.";
 
         if (lateFee > 0)
         {
@@ -570,11 +637,51 @@ internal sealed class ReturnService : IReturnService
             payment.Type == PaymentType.AdditionalCharge &&
             payment.Status == PaymentStatus.Paid);
 
-    private static (string? ImagePaths, string? Note) ParseCustomerHandoverEvidence(string? json)
+    private sealed record CustomerEvidenceData(
+        string? ImagePaths,
+        string? Note,
+        int? Mileage,
+        string? FuelLevel);
+
+    private static CustomerEvidenceData ParseCustomerEvidence(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return (null, null);
+            return new CustomerEvidenceData(null, null, null, null);
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var imagePaths = root.TryGetProperty("ImagePaths", out var imagesElement) &&
+                             imagesElement.ValueKind == JsonValueKind.String
+                ? Normalize(imagesElement.GetString())
+                : null;
+            var note = root.TryGetProperty("Note", out var noteElement) &&
+                       noteElement.ValueKind == JsonValueKind.String
+                ? Normalize(noteElement.GetString())
+                : null;
+            int? mileage = root.TryGetProperty("Mileage", out var mileageElement) && mileageElement.TryGetInt32(out var mileageValue)
+                ? mileageValue
+                : null;
+            var fuelLevel = root.TryGetProperty("FuelLevel", out var fuelElement) &&
+                            fuelElement.ValueKind == JsonValueKind.String
+                ? Normalize(fuelElement.GetString())
+                : null;
+            return new CustomerEvidenceData(imagePaths, note, mileage, fuelLevel);
+        }
+        catch (JsonException)
+        {
+            return new CustomerEvidenceData(null, null, null, null);
+        }
+    }
+
+    private static CustomerEvidenceData ParseLegacyCustomerHandoverEvidence(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new CustomerEvidenceData(null, null, null, null);
         }
 
         try
@@ -583,19 +690,24 @@ internal sealed class ReturnService : IReturnService
             var root = document.RootElement;
             var imagePaths = root.TryGetProperty("CustomerImagePaths", out var imagesElement) &&
                              imagesElement.ValueKind == JsonValueKind.String
-                ? imagesElement.GetString()
+                ? Normalize(imagesElement.GetString())
                 : null;
             var note = root.TryGetProperty("CustomerNote", out var noteElement) &&
                        noteElement.ValueKind == JsonValueKind.String
-                ? noteElement.GetString()
+                ? Normalize(noteElement.GetString())
                 : null;
-            return (Normalize(imagePaths), Normalize(note));
+            return new CustomerEvidenceData(imagePaths, note, null, null);
         }
         catch (JsonException)
         {
-            return (null, null);
+            return new CustomerEvidenceData(null, null, null, null);
         }
     }
+
+    private static IReadOnlyList<string> SplitPaths(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? Array.Empty<string>()
+            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
