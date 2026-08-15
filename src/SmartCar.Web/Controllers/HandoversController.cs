@@ -50,7 +50,7 @@ public sealed class HandoversController : Controller
         if (booking.Status != BookingStatus.ReadyForPickup)
         {
             TempData["ErrorMessage"] =
-                "Chỉ đơn đang sẵn sàng giao xe mới được lập biên bản bàn giao.";
+                "Chỉ đơn đang sẵn sàng giao xe mới được bắt đầu quy trình bàn giao.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
@@ -79,6 +79,7 @@ public sealed class HandoversController : Controller
         }
 
         SetVehicleContext(vehicleContext);
+        SetBookingContext(booking);
 
         return View(new HandoverViewModel
         {
@@ -103,13 +104,27 @@ public sealed class HandoversController : Controller
         {
             ModelState.AddModelError(string.Empty, "Không tìm thấy đơn thuê.");
         }
-        else if (!booking.Payments.Any(payment =>
-                     payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid))
+        else
         {
-            ModelState.AddModelError(
-                string.Empty,
-                $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng chưa được xác nhận thanh toán. Không thể giao xe.");
+            SetBookingContext(booking);
+
+            if (booking.Status != BookingStatus.ReadyForPickup)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    "Đơn không còn ở trạng thái Sẵn sàng giao xe. Hãy quay lại chi tiết đơn để kiểm tra trạng thái hiện tại.");
+            }
+
+            if (!booking.Payments.Any(payment =>
+                    payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid))
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng chưa được xác nhận thanh toán. Không thể giao xe.");
+            }
         }
+
+        ValidateHandoverCheckpoints(model);
 
         var vehicleContext = await _handoverService.GetVehicleContextAsync(
             model.BookingId,
@@ -172,12 +187,14 @@ public sealed class HandoversController : Controller
             "CreateHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập biên bản giao xe cho đơn #{model.BookingId}, ODO {model.Mileage:N0} km, nhiên liệu {model.FuelLevel}, {imagePaths.Count} ảnh đối chiếu, tình trạng: {model.ExteriorCondition}. " +
+            $"Lập biên bản giao xe cho đơn #{model.BookingId}; đã xác minh đúng người nhận và đối chiếu CCCD/GPLX bản gốc; " +
+            $"ODO {model.Mileage:N0} km, nhiên liệu/pin {model.FuelLevel}, {imagePaths.Count} ảnh đối chiếu, tình trạng: {model.ExteriorCondition}. " +
             $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng đã được thanh toán cùng giao dịch tiền thuê trước khi bàn giao.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lập biên bản giao xe và lưu bộ ảnh đối chiếu.";
+        TempData["SuccessMessage"] =
+            "Đã hoàn tất bàn giao thực tế, lưu bộ ảnh đối chiếu và chuyển đơn sang Đang thuê.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
@@ -185,6 +202,48 @@ public sealed class HandoversController : Controller
     {
         ViewBag.CurrentMileage = context.CurrentMileage;
         ViewBag.VehicleFuelType = context.FuelType;
+    }
+
+    private void SetBookingContext(BookingDetailsDto booking)
+    {
+        ViewBag.HandoverCustomerName = booking.CustomerName;
+        ViewBag.HandoverCustomerPhone = booking.CustomerPhone;
+        ViewBag.HandoverVehicleName = booking.VehicleName;
+        ViewBag.HandoverLicensePlate = booking.LicensePlate;
+        ViewBag.HandoverPickupDate = booking.PickupDate;
+        ViewBag.HandoverPickupLocation = booking.PickupLocation;
+        ViewBag.HandoverReturnDate = booking.ReturnDate;
+    }
+
+    private void ValidateHandoverCheckpoints(HandoverViewModel model)
+    {
+        if (!model.RecipientConfirmed)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.RecipientConfirmed),
+                "Phải xác nhận người đang nhận xe đúng là khách thuê của đơn.");
+        }
+
+        if (!model.CitizenIdOriginalChecked)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.CitizenIdOriginalChecked),
+                "Phải đối chiếu CCCD bản gốc tại thời điểm giao xe.");
+        }
+
+        if (!model.DrivingLicenseOriginalChecked)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.DrivingLicenseOriginalChecked),
+                "Phải đối chiếu GPLX bản gốc tại thời điểm giao xe.");
+        }
+
+        if (!model.FinalHandoverConfirmed)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.FinalHandoverConfirmed),
+                "Phải xác nhận xe đã được giao thực tế trước khi hoàn tất bàn giao.");
+        }
     }
 
     private void NormalizeConditionSummary(HandoverViewModel model)
