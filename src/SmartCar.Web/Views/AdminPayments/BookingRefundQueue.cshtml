@@ -1,0 +1,97 @@
+@model IReadOnlyList<SmartCar.Application.Features.Payments.AdminPaymentListItemDto>
+
+@using SmartCar.Domain.Enums
+
+@{
+    ViewData["Title"] = "Khoản hoàn theo đơn";
+
+    var groups = Model
+        .Where(item =>
+            item.Status == PaymentStatus.AwaitingRefund &&
+            item.Type is PaymentType.Refund or PaymentType.DepositRefund)
+        .GroupBy(item => item.BookingId)
+        .OrderByDescending(group => group.Max(item => item.PaymentId))
+        .ToList();
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <div class="text-uppercase small text-primary fw-semibold">Quyết toán hoàn tiền</div>
+        <h1 class="h3 mb-1">Khoản hoàn đang chờ theo đơn</h1>
+        <p class="text-muted mb-0">
+            Mỗi đơn được gom thành một công việc hoàn tiền. Hệ thống vẫn lưu riêng phần tiền chuyến và phần cọc để đối soát kế toán.
+        </p>
+    </div>
+    <a asp-action="Index" class="btn btn-outline-secondary">Xem toàn bộ giao dịch</a>
+</div>
+
+@if (groups.Count == 0)
+{
+    <div class="alert alert-success shadow-sm">
+        <strong>✓ Không còn khoản hoàn nào đang chờ.</strong>
+    </div>
+}
+else
+{
+    <div class="alert alert-info shadow-sm mb-4">
+        <strong>@groups.Count đơn cần xử lý.</strong>
+        Chọn đúng đơn để xem tổng tiền phải chuyển, tài khoản nhận và xác nhận bằng một mã giao dịch ngân hàng.
+    </div>
+
+    <div class="row g-4">
+        @foreach (var group in groups)
+        {
+            var first = group.First();
+            var tripRefund = group
+                .Where(item => item.Type == PaymentType.Refund)
+                .Sum(item => item.Amount);
+            var depositRefund = group
+                .Where(item => item.Type == PaymentType.DepositRefund)
+                .Sum(item => item.Amount);
+            var totalRefund = tripRefund + depositRefund;
+
+            <div class="col-xl-6">
+                <div class="card shadow-sm border-warning h-100">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                            <div>
+                                <div class="text-uppercase small text-warning fw-semibold">Đơn #@first.BookingId</div>
+                                <h2 class="h5 mb-1">@first.CustomerName</h2>
+                                <div class="text-muted small">@first.VehicleName · @first.LicensePlate</div>
+                            </div>
+                            <span class="badge bg-warning text-dark">Chờ hoàn</span>
+                        </div>
+
+                        <div class="border rounded-3 overflow-hidden mb-3">
+                            <div class="d-flex justify-content-between gap-3 px-3 py-2 border-bottom">
+                                <span>Hoàn phần tiền chuyến</span>
+                                <strong>@tripRefund.ToString("N0") đ</strong>
+                            </div>
+                            <div class="d-flex justify-content-between gap-3 px-3 py-2 border-bottom">
+                                <span>Hoàn cọc bảo đảm</span>
+                                <strong>@depositRefund.ToString("N0") đ</strong>
+                            </div>
+                            <div class="d-flex justify-content-between gap-3 px-3 py-3 bg-light fs-5">
+                                <span class="fw-semibold">Tổng cần chuyển khách</span>
+                                <strong class="text-danger">@totalRefund.ToString("N0") đ</strong>
+                            </div>
+                        </div>
+
+                        @if (tripRefund <= 0 && depositRefund > 0)
+                        {
+                            <div class="alert alert-light border small py-2">
+                                Đơn này hiện chỉ có cấu phần hoàn cọc. Nếu theo chính sách còn phải hoàn một phần tiền chuyến nhưng số tiền ở đây bằng 0, hãy kiểm tra lại nguyên nhân hủy và hồ sơ đơn trước khi chuyển tiền.
+                            </div>
+                        }
+
+                        <a class="btn btn-warning w-100"
+                           asp-action="BookingRefund"
+                           asp-route-bookingId="@first.BookingId">
+                            Xử lý tổng hoàn đơn #@first.BookingId →
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
