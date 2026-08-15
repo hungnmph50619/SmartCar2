@@ -115,24 +115,31 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
 }
 
 <div id="deposit-cost-block" class="d-none">
-    <div class="d-flex justify-content-between mt-1">
-        <span>Cọc bảo đảm</span>
-        <strong>@expectedDepositAmount.ToString("N0") đ</strong>
+    <div class="d-flex justify-content-between align-items-start mt-1 gap-2">
+        <span>Cọc bảo đảm theo chính sách SmartCar</span>
+        <strong class="text-nowrap">@expectedDepositAmount.ToString("N0") đ</strong>
     </div>
+    <div class="small text-muted mt-1">Mức cọc cố định hiện tại áp dụng cho mọi xe; cọc được theo dõi riêng và không tính vào doanh thu chuyến thuê.</div>
     @if (Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment)
     {
+        <div class="small mt-2">
+            Trạng thái cọc:
+            <strong class="@(initialPaymentAwaitingConfirmation ? "text-warning" : "text-muted")">
+                @(initialPaymentAwaitingConfirmation ? "Đang chờ đối soát thanh toán" : "Chưa thanh toán")
+            </strong>
+        </div>
         <div class="alert alert-primary py-2 px-3 mt-3 mb-0 small">
             <div class="d-flex justify-content-between gap-3">
                 <span>Tổng cần thanh toán ban đầu</span>
                 <strong>@initialCheckoutAmount.ToString("N0") đ</strong>
             </div>
-            <div class="mt-1">Gồm giá trị chuyến <strong>@((Model.RentalAmount + Model.DeliveryFee).ToString("N0")) đ</strong> + cọc <strong>@expectedDepositAmount.ToString("N0") đ</strong>.</div>
+            <div class="mt-1">Gồm giá trị chuyến <strong>@((Model.RentalAmount + Model.DeliveryFee).ToString("N0")) đ</strong> + cọc theo chính sách SmartCar <strong>@expectedDepositAmount.ToString("N0") đ</strong>.</div>
         </div>
     }
     else
     {
         <div class="small mt-2 @(depositPaid ? "text-success" : "text-muted")">
-            Cọc: <strong>@(depositPaid ? $"Đã thu {paidDepositAmount:N0} đ" : "Chưa ghi nhận thanh toán")</strong>
+            Trạng thái cọc: <strong>@(depositPaid ? $"Đã thu {paidDepositAmount:N0} đ" : "Chưa ghi nhận thanh toán")</strong>
         </div>
     }
 </div>
@@ -274,7 +281,7 @@ else if (depositRefundPayment is not null && depositRefundPayment.Status == Paym
         phoneCallout.classList.remove('d-none');
     }
 
-    const costCard = allCards().find(card => card.textContent?.includes('CHI TIẾT CHI PHÍ') && card.querySelector('h2')?.textContent?.trim() === 'Tổng tiền');
+    const costCard = allCards().find(card => card.querySelector('h2')?.textContent?.trim() === 'Tổng tiền');
     const depositBlock = document.getElementById('deposit-cost-block');
     if (costCard && depositBlock) {
         const hr = costCard.querySelector('hr');
