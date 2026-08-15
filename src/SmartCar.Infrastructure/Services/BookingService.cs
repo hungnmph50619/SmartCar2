@@ -66,9 +66,16 @@ internal sealed class BookingService : IBookingService
         var vehicle = await _dbContext.Vehicles
             .FirstOrDefaultAsync(item => item.VehicleId == request.VehicleId, cancellationToken);
 
-        if (vehicle is null || vehicle.Status != VehicleStatus.Available)
+        if (vehicle is null)
         {
-            return BookingMutationResult.Failure("Xe không tồn tại hoặc hiện không thể cho thuê.");
+            return BookingMutationResult.Failure("Xe không tồn tại.");
+        }
+
+        if (vehicle.Status == VehicleStatus.Inactive ||
+            vehicle.Status == VehicleStatus.Maintenance ||
+            vehicle.Status == VehicleStatus.Inspection)
+        {
+            return BookingMutationResult.Failure("Xe hiện không thể cho thuê.");
         }
 
         var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(item =>
@@ -85,18 +92,21 @@ internal sealed class BookingService : IBookingService
         var hasValidRegistration = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Registration,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: true,
             cancellationToken);
         var hasValidInspection = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Inspection,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: false,
             cancellationToken);
         var hasValidInsurance = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Insurance,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: false,
             cancellationToken);
@@ -488,13 +498,15 @@ internal sealed class BookingService : IBookingService
     private Task<bool> HasValidVehicleDocumentAsync(
         int vehicleId,
         VehicleDocumentType documentType,
+        DateTime requiredFrom,
         DateTime requiredUntil,
         bool allowNoExpiry,
         CancellationToken cancellationToken) =>
         _dbContext.VehicleDocuments.AnyAsync(document =>
             document.VehicleId == vehicleId &&
             document.DocumentType == documentType &&
+            document.IssuedDate.Date <= requiredFrom.Date &&
             ((allowNoExpiry && !document.ExpiryDate.HasValue) ||
-             (document.ExpiryDate.HasValue && document.ExpiryDate.Value >= requiredUntil)),
+             (document.ExpiryDate.HasValue && document.ExpiryDate.Value.Date >= requiredUntil.Date)),
             cancellationToken);
 }

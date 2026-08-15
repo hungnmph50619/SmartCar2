@@ -35,7 +35,7 @@
                 <a class="btn btn-sm btn-outline-primary" asp-action="Edit" asp-route-id="@brand.BrandId">Sửa</a>
                 <form class="d-inline" asp-action="SetActive" method="post">
                     <input type="hidden" name="id" value="@brand.BrandId" />
-                    <input type="hidden" name="isActive" value="@(!brand.IsActive)" />
+                    <input type="hidden" name="isActive" value="@(brand.IsActive ? "false" : "true")" />
                     <button class="btn btn-sm @(brand.IsActive ? "btn-outline-danger" : "btn-outline-success")" type="submit">
                         @(brand.IsActive ? "Ngừng dùng" : "Kích hoạt")
                     </button>

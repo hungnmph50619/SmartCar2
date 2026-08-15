@@ -48,7 +48,13 @@ public sealed class AdminVehiclesController : Controller
         VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        await ValidateImagesAsync(viewModel.Images, 0, cancellationToken);
+        var createImages = viewModel.Images ?? new List<IFormFile>();
+        if (!createImages.Any(file => file.Length > 0))
+        {
+            ModelState.AddModelError(nameof(VehicleFormViewModel.Images), "Vui lòng chọn ít nhất một ảnh xe.");
+        }
+
+        await ValidateImagesAsync(createImages, 0, cancellationToken);
         if (!ModelState.IsValid)
         {
             await LoadBrandsAsync(viewModel.BrandId, cancellationToken);
@@ -78,8 +84,8 @@ public sealed class AdminVehiclesController : Controller
             return View(viewModel);
         }
 
-        await SaveImagesAsync(result.VehicleId.Value, viewModel.Images, cancellationToken);
-        TempData["SuccessMessage"] = "Đã thêm xe mới.";
+        await SaveImagesAsync(result.VehicleId.Value, createImages, cancellationToken);
+        TempData["SuccessMessage"] = "Đã thêm xe mới. Vui lòng bổ sung Đăng ký xe, Đăng kiểm và Bảo hiểm để xe đủ điều kiện xuất hiện cho khách thuê.";
         return RedirectToAction(nameof(Edit), new { id = result.VehicleId.Value });
     }
 
@@ -92,7 +98,7 @@ public sealed class AdminVehiclesController : Controller
             return NotFound();
         }
 
-        await LoadBrandsAsync(vehicle.BrandId, cancellationToken);
+        await LoadBrandsAsync(vehicle.BrandId, cancellationToken, includeInactiveSelectedBrand: true);
         ViewBag.Vehicle = vehicle;
 
         return View(new VehicleFormViewModel
@@ -128,8 +134,9 @@ public sealed class AdminVehiclesController : Controller
             return NotFound();
         }
 
+        var editImages = viewModel.Images ?? new List<IFormFile>();
         await ValidateImagesAsync(
-            viewModel.Images,
+            editImages,
             currentVehicle.Images.Count,
             cancellationToken);
         if (!ModelState.IsValid)
@@ -175,7 +182,7 @@ public sealed class AdminVehiclesController : Controller
             return View(viewModel);
         }
 
-        await SaveImagesAsync(viewModel.VehicleId, viewModel.Images, cancellationToken);
+        await SaveImagesAsync(viewModel.VehicleId, editImages, cancellationToken);
         TempData["SuccessMessage"] = "Đã cập nhật xe.";
         return RedirectToAction(nameof(Edit), new { id = viewModel.VehicleId });
     }
@@ -313,17 +320,36 @@ public sealed class AdminVehiclesController : Controller
         VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        await LoadBrandsAsync(viewModel.BrandId, cancellationToken);
+        await LoadBrandsAsync(viewModel.BrandId, cancellationToken, includeInactiveSelectedBrand: true);
         ViewBag.Vehicle = await _vehicleService.GetByIdAsync(viewModel.VehicleId, cancellationToken);
     }
 
-    private async Task LoadBrandsAsync(int? selectedId, CancellationToken cancellationToken)
+    private async Task LoadBrandsAsync(
+        int? selectedId,
+        CancellationToken cancellationToken,
+        bool includeInactiveSelectedBrand = false)
     {
-        ViewBag.Brands = new SelectList(
-            await _brandService.GetActiveAsync(cancellationToken),
-            "BrandId",
-            "BrandName",
-            selectedId);
+        var brands = includeInactiveSelectedBrand
+            ? await _brandService.GetAllAsync(cancellationToken)
+            : await _brandService.GetActiveAsync(cancellationToken);
+
+        var items = brands
+            .Where(brand =>
+                brand.IsActive ||
+                (includeInactiveSelectedBrand &&
+                 selectedId.HasValue &&
+                 brand.BrandId == selectedId.Value))
+            .Select(brand => new SelectListItem
+            {
+                Value = brand.BrandId.ToString(),
+                Text = brand.IsActive
+                    ? brand.BrandName
+                    : $"{brand.BrandName} (Đã ngừng hoạt động)",
+                Selected = brand.BrandId == selectedId
+            })
+            .ToList();
+
+        ViewBag.Brands = items;
     }
 
     private void AddErrors(IEnumerable<string> errors)

@@ -32,13 +32,39 @@ internal sealed class VehicleDocumentService : IVehicleDocumentService
     }
 
     public async Task<IReadOnlyList<VehicleDocumentDto>> GetByVehicleAsync(
-        int vehicleId,
-        CancellationToken cancellationToken = default)
+    int vehicleId,
+    CancellationToken cancellationToken = default)
     {
-        return await Query()
-            .Where(item => item.VehicleId == vehicleId)
-            .OrderBy(item => item.DocumentType)
-            .ThenByDescending(item => item.IssuedDate)
+        var today = DateTime.Today;
+
+        return await _dbContext.VehicleDocuments
+            .AsNoTracking()
+            .Where(document => document.VehicleId == vehicleId)
+
+            .OrderBy(document => document.DocumentType)
+            .ThenByDescending(document => document.IssuedDate)
+
+            .Select(document => new VehicleDocumentDto(
+                document.VehicleDocumentId,
+                document.VehicleId,
+                document.Vehicle.VehicleName,
+                document.Vehicle.LicensePlate,
+                document.DocumentType,
+                document.DocumentNumber,
+                document.IssuedDate,
+                document.ExpiryDate,
+                document.ImagePath,
+                document.Notes,
+
+                document.ExpiryDate.HasValue &&
+                document.ExpiryDate.Value.Date < today,
+
+                document.ExpiryDate.HasValue
+                    ? EF.Functions.DateDiffDay(
+                        today,
+                        document.ExpiryDate.Value)
+                    : null))
+
             .ToListAsync(cancellationToken);
     }
 
@@ -50,6 +76,11 @@ internal sealed class VehicleDocumentService : IVehicleDocumentService
         if (string.IsNullOrWhiteSpace(request.DocumentNumber))
         {
             return OperationResult.Failure("Số giấy tờ không được để trống.");
+        }
+
+        if (request.IssuedDate.Date > DateTime.Today)
+        {
+            return OperationResult.Failure("Ngày cấp giấy tờ không được ở tương lai.");
         }
 
         if (request.ExpiryDate.HasValue && request.ExpiryDate.Value.Date < request.IssuedDate.Date)
@@ -64,6 +95,19 @@ internal sealed class VehicleDocumentService : IVehicleDocumentService
         if (vehicle is null)
         {
             return OperationResult.Failure("Không tìm thấy xe.");
+        }
+
+        var duplicateActiveDocument = await _dbContext.VehicleDocuments.AnyAsync(
+            document =>
+                document.VehicleId == request.VehicleId &&
+                document.DocumentType == request.DocumentType &&
+                (!document.ExpiryDate.HasValue || document.ExpiryDate.Value.Date >= DateTime.Today),
+            cancellationToken);
+
+        if (duplicateActiveDocument)
+        {
+            return OperationResult.Failure(
+                $"Xe đã có giấy tờ {request.DocumentType} đang còn hiệu lực.");
         }
 
         var document = new VehicleDocument

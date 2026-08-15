@@ -76,43 +76,26 @@ public sealed class VehiclesController : Controller
                 model.BrandId,
                 model.Seats,
                 model.Transmission,
-                model.MaxDailyPrice),
+                model.FuelType,
+                model.MinDailyPrice,
+                model.MaxDailyPrice,
+                model.MinManufactureYear),
             cancellationToken);
 
-        IEnumerable<VehicleDto> filteredVehicles = vehicles;
-
-        if (!string.IsNullOrWhiteSpace(model.FuelType))
+        IEnumerable<VehicleDto> sortedVehicles = model.SortBy switch
         {
-            filteredVehicles = filteredVehicles.Where(vehicle =>
-                string.Equals(vehicle.FuelType, model.FuelType, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (model.MinDailyPrice.HasValue)
-        {
-            filteredVehicles = filteredVehicles.Where(vehicle =>
-                vehicle.DailyPrice >= model.MinDailyPrice.Value);
-        }
-
-        if (model.MinManufactureYear.HasValue)
-        {
-            filteredVehicles = filteredVehicles.Where(vehicle =>
-                vehicle.ManufactureYear >= model.MinManufactureYear.Value);
-        }
-
-        filteredVehicles = model.SortBy switch
-        {
-            "price_desc" => filteredVehicles
+            "price_desc" => vehicles
                 .OrderByDescending(vehicle => vehicle.DailyPrice)
                 .ThenByDescending(vehicle => vehicle.ManufactureYear),
-            "year_desc" => filteredVehicles
+            "year_desc" => vehicles
                 .OrderByDescending(vehicle => vehicle.ManufactureYear)
                 .ThenBy(vehicle => vehicle.DailyPrice),
-            _ => filteredVehicles
+            _ => vehicles
                 .OrderBy(vehicle => vehicle.DailyPrice)
                 .ThenByDescending(vehicle => vehicle.ManufactureYear)
         };
 
-        return View(filteredVehicles.ToArray());
+        return View(sortedVehicles.ToArray());
     }
 
     [HttpGet]
