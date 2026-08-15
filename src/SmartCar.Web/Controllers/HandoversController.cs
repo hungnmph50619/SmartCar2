@@ -70,6 +70,7 @@ public sealed class HandoversController : Controller
         }
 
         SetVehicleContext(vehicleContext);
+        SetDepositContext(false, RentalPolicyConstants.SecurityDepositCashMethod);
 
         return View(new HandoverViewModel
         {
@@ -87,8 +88,13 @@ public sealed class HandoversController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
         HandoverViewModel model,
+        bool depositReceived,
+        string? depositMethod,
         CancellationToken cancellationToken)
     {
+        var normalizedDepositMethod = depositMethod?.Trim() ?? string.Empty;
+        SetDepositContext(depositReceived, normalizedDepositMethod);
+
         var vehicleContext = await _handoverService.GetVehicleContextAsync(
             model.BookingId,
             cancellationToken);
@@ -100,6 +106,20 @@ public sealed class HandoversController : Controller
         else
         {
             SetVehicleContext(vehicleContext);
+        }
+
+        if (!depositReceived)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                $"Vui lòng xác nhận đã nhận cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng trước khi giao chìa khóa.");
+        }
+
+        if (normalizedDepositMethod is not (
+                RentalPolicyConstants.SecurityDepositCashMethod or
+                RentalPolicyConstants.SecurityDepositTransferMethod))
+        {
+            ModelState.AddModelError(string.Empty, "Vui lòng chọn phương thức nhận cọc hợp lệ.");
         }
 
         NormalizeConditionSummary(model);
@@ -125,7 +145,9 @@ public sealed class HandoversController : Controller
                 model.InteriorCondition,
                 model.Accessories,
                 string.Join(';', imagePaths),
-                model.Notes),
+                model.Notes,
+                depositReceived,
+                normalizedDepositMethod),
             cancellationToken);
 
         if (!result.Succeeded)
@@ -141,6 +163,7 @@ public sealed class HandoversController : Controller
                 SetVehicleContext(vehicleContext);
             }
 
+            SetDepositContext(depositReceived, normalizedDepositMethod);
             return View(model);
         }
 
@@ -150,11 +173,13 @@ public sealed class HandoversController : Controller
             "CreateHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập biên bản giao xe cho đơn #{model.BookingId}, ODO {model.Mileage:N0} km, nhiên liệu {model.FuelLevel}, {imagePaths.Count} ảnh đối chiếu, tình trạng: {model.ExteriorCondition}.",
+            $"Lập biên bản giao xe cho đơn #{model.BookingId}, ODO {model.Mileage:N0} km, nhiên liệu {model.FuelLevel}, {imagePaths.Count} ảnh đối chiếu, tình trạng: {model.ExteriorCondition}. " +
+            $"Đã nhận cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng bằng {normalizedDepositMethod}.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lập biên bản giao xe và lưu bộ ảnh đối chiếu.";
+        TempData["SuccessMessage"] =
+            $"Đã lập biên bản giao xe, ghi nhận cọc {RentalPolicyConstants.SecurityDepositAmount:N0} đồng và lưu bộ ảnh đối chiếu.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
@@ -162,6 +187,14 @@ public sealed class HandoversController : Controller
     {
         ViewBag.CurrentMileage = context.CurrentMileage;
         ViewBag.VehicleFuelType = context.FuelType;
+    }
+
+    private void SetDepositContext(bool received, string? method)
+    {
+        ViewBag.DepositReceived = received;
+        ViewBag.DepositMethod = string.IsNullOrWhiteSpace(method)
+            ? RentalPolicyConstants.SecurityDepositCashMethod
+            : method;
     }
 
     private void NormalizeConditionSummary(HandoverViewModel model)
