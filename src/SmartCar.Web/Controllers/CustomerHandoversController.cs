@@ -1,11 +1,9 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Handovers;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
@@ -21,18 +19,15 @@ public sealed class CustomerHandoversController : Controller
     private const string SignatureDataPrefix = "data:image/png;base64,";
 
     private readonly IHandoverService _handoverService;
-    private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
     private readonly IWebHostEnvironment _environment;
 
     public CustomerHandoversController(
         IHandoverService handoverService,
-        IAuditService auditService,
         ApplicationDbContext dbContext,
         IWebHostEnvironment environment)
     {
         _handoverService = handoverService;
-        _auditService = auditService;
         _dbContext = dbContext;
         _environment = environment;
     }
@@ -139,9 +134,20 @@ public sealed class CustomerHandoversController : Controller
             signatureResult.Bytes!,
             cancellationToken);
 
+        var userAgent = Request.Headers.UserAgent.ToString();
+        if (userAgent.Length > 500)
+        {
+            userAgent = userAgent[..500];
+        }
+
         var confirmResult = await _handoverService.ConfirmCustomerSignatureAsync(
-            model.BookingId,
-            customerId,
+            new ConfirmCustomerHandoverRequest(
+                model.BookingId,
+                customerId,
+                currentSnapshotHash,
+                signaturePath,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                userAgent),
             cancellationToken);
         if (!confirmResult.Succeeded)
         {
@@ -153,33 +159,6 @@ public sealed class CustomerHandoversController : Controller
 
             return View(model);
         }
-
-        var signedAt = DateTime.UtcNow;
-        var userAgent = Request.Headers.UserAgent.ToString();
-        if (userAgent.Length > 500)
-        {
-            userAgent = userAgent[..500];
-        }
-
-        var signatureEvidence = JsonSerializer.Serialize(new
-        {
-            model.BookingId,
-            SnapshotHash = currentSnapshotHash,
-            SignaturePath = signaturePath,
-            SignedAt = signedAt,
-            UserAgent = userAgent
-        });
-
-        await _auditService.WriteAsync(
-            customerId,
-            "CustomerSignedHandover",
-            nameof(VehicleHandover),
-            model.BookingId.ToString(),
-            $"Khách {snapshot.CustomerName} đã xem và ký biên bản bàn giao điện tử đơn #{model.BookingId}; " +
-            $"snapshot SHA-256 {currentSnapshotHash}, chữ ký lưu tại {signaturePath}. Booking chuyển sang Rented sau xác nhận này.",
-            newValues: signatureEvidence,
-            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken: cancellationToken);
 
         await AddAdminNotificationsAsync(
             $"Khách đã ký biên bản|Booking:{model.BookingId}",
