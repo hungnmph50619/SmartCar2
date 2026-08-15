@@ -20,7 +20,7 @@
     <div>
         <div class="text-uppercase small text-primary fw-semibold">Nhận lại xe</div>
         <h1 class="h3 mb-1">Biên bản trả xe · Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Đối chiếu ảnh lúc giao, kiểm tra xe thực tế, khách ký biên bản trả xe ngoài đời và lưu ảnh biên bản đã ký trên hệ thống.</p>
+        <p class="text-muted mb-0">Đối chiếu ảnh lúc giao, kiểm tra xe thực tế và lưu hồ sơ biên bản tại thời điểm SmartCar nhận lại xe.</p>
     </div>
     <a class="btn btn-outline-secondary"
        asp-controller="AdminBookings"
@@ -102,7 +102,7 @@
       method="post"
       enctype="multipart/form-data"
       data-loading-form
-      data-confirm="Xác nhận SmartCar đã thực tế nhận xe, khách đã ký biên bản trả xe và ảnh biên bản đã được lưu rõ?">
+      data-confirm="Xác nhận SmartCar đã thực tế nhận lại xe và đã lưu đầy đủ ảnh hiện trạng cùng hồ sơ biên bản trả xe?">
     <input asp-for="BookingId" type="hidden" />
     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
 
@@ -212,12 +212,55 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
                 <div>
                     <div class="text-uppercase small text-primary fw-semibold">Bước 3</div>
-                    <h2 class="h5 mb-1">Biên bản trả xe có chữ ký khách</h2>
-                    <p class="small text-muted mb-0">Sau khi hai bên kiểm tra xe, khách ký biên bản giấy xác nhận tình trạng khi trả. Chụp/scan rõ biên bản và lưu vào hồ sơ.</p>
+                    <h2 class="h5 mb-1">Xác nhận biên bản trả xe</h2>
+                    <p class="small text-muted mb-0">Khách ký thì lưu ảnh biên bản đã ký. Nếu khách từ chối ký, SmartCar vẫn nhận lại xe nhưng phải lưu biên bản/hồ sơ ghi nhận từ chối ký và chuyển sang xử lý tranh chấp.</p>
                 </div>
                 <span class="badge bg-primary">Bằng chứng bắt buộc</span>
             </div>
 
+            <span asp-validation-for="ReturnDocumentStatus" class="text-danger small d-block mb-2"></span>
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label class="border rounded-3 p-3 d-flex gap-3 h-100" for="returnDocumentSigned">
+                        <input asp-for="ReturnDocumentStatus"
+                               id="returnDocumentSigned"
+                               class="form-check-input mt-1"
+                               type="radio"
+                               value="Signed" />
+                        <span>
+                            <strong class="d-block">Khách đã ký biên bản trả xe</strong>
+                            <span class="small text-muted">Hai bên thống nhất nội dung biên bản; tải ảnh/scan có chữ ký khách.</span>
+                        </span>
+                    </label>
+                </div>
+                <div class="col-md-6">
+                    <label class="border border-danger rounded-3 p-3 d-flex gap-3 h-100" for="returnDocumentRefused">
+                        <input asp-for="ReturnDocumentStatus"
+                               id="returnDocumentRefused"
+                               class="form-check-input mt-1"
+                               type="radio"
+                               value="Refused" />
+                        <span>
+                            <strong class="d-block text-danger">Khách từ chối ký / không đồng ý hiện trạng</strong>
+                            <span class="small text-muted">Không hủy chuyến. SmartCar nhận lại xe, lưu hồ sơ và khóa quyết toán cọc cho đến khi tranh chấp được xử lý.</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="signature-refusal-block" class="alert alert-danger d-none">
+                <label asp-for="SignatureRefusalReason" class="form-label fw-semibold">Lý do / diễn biến khách từ chối ký</label>
+                <textarea asp-for="SignatureRefusalReason"
+                          id="signature-refusal-reason"
+                          class="form-control"
+                          rows="3"
+                          maxlength="1000"
+                          placeholder="Ví dụ: khách không đồng ý vết móp cản trước là hư hỏng mới và từ chối ký biên bản..."></textarea>
+                <span asp-validation-for="SignatureRefusalReason" class="text-danger small"></span>
+                <div class="form-text">Thông tin này được lưu cùng ảnh hiện trạng và hồ sơ biên bản để xử lý tranh chấp.</div>
+            </div>
+
+            <label asp-for="SignedDocumentImages" class="form-label fw-semibold">Ảnh biên bản / hồ sơ ghi nhận tại thời điểm trả xe</label>
             <input asp-for="SignedDocumentImages"
                    type="file"
                    multiple
@@ -228,26 +271,38 @@
                    data-preview-target="#return-document-preview"
                    data-file-info-target="#return-document-info" />
             <span asp-validation-for="SignedDocumentImages" class="text-danger small"></span>
-            <div class="form-text">Bắt buộc ít nhất 1 ảnh, tối đa 3 ảnh. Ảnh phải đọc được nội dung và nhìn rõ chữ ký khách.</div>
+            <div class="form-text">Bắt buộc ít nhất 1 ảnh, tối đa 3 ảnh. Nếu khách ký: ảnh phải thấy rõ chữ ký. Nếu khách từ chối ký: chụp/scan biên bản ghi nhận việc từ chối ký.</div>
             <div id="return-document-info" class="small text-muted mt-2 d-none"></div>
             <div id="return-document-preview" class="mt-3 d-none">
                 <div class="row g-2" data-preview-list></div>
                 <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-clear-image>Chọn lại ảnh biên bản</button>
             </div>
-
-            <div class="mt-3">
-                <label asp-for="Notes" class="form-label fw-semibold">Ghi chú bổ sung <span class="text-muted fw-normal">(nếu có)</span></label>
-                <textarea asp-for="Notes" class="form-control" rows="3" maxlength="1000" placeholder="Thông tin cần lưu cùng biên bản trả xe..."></textarea>
-            </div>
         </div>
     </div>
 
     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap border-top pt-3 mb-5">
-        <div class="small text-muted">Sau khi lưu, đơn chuyển sang <strong>Chờ kiểm tra</strong>; SmartCar dùng ảnh xe + biên bản đã ký để xử lý phụ phí và quyết toán cọc.</div>
-        <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang lưu biên bản trả xe...">Lưu biên bản & tiếp nhận xe</button>
+        <div class="small text-muted">Sau khi lưu, xe được SmartCar tiếp nhận và đơn chuyển sang <strong>Chờ kiểm tra</strong>. Nếu khách từ chối ký, cọc bị khóa cho tới khi Admin xử lý tranh chấp.</div>
+        <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang lưu biên bản trả xe...">Lưu hồ sơ & tiếp nhận xe</button>
     </div>
 </form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const refusalBlock = document.getElementById('signature-refusal-block');
+            const refusalReason = document.getElementById('signature-refusal-reason');
+            const statusInputs = document.querySelectorAll('input[name="ReturnDocumentStatus"]');
+
+            const syncSignatureState = () => {
+                const selected = document.querySelector('input[name="ReturnDocumentStatus"]:checked')?.value;
+                const refused = selected === 'Refused';
+                refusalBlock?.classList.toggle('d-none', !refused);
+                if (refusalReason) refusalReason.required = refused;
+            };
+
+            statusInputs.forEach(input => input.addEventListener('change', syncSignatureState));
+            syncSignatureState();
+        })();
+    </script>
 }
