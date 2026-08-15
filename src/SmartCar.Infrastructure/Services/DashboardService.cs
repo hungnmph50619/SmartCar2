@@ -111,7 +111,6 @@ internal sealed class DashboardService : IDashboardService
                     })
                 .ToListAsync(cancellationToken);
 
-        // Chỉ cần một loại giấy tờ đang Pending là Admin đã có việc cần xử lý.
         var pendingKycPackages =
             await _dbContext.CustomerDocuments
                 .AsNoTracking()
@@ -244,14 +243,12 @@ internal sealed class DashboardService : IDashboardService
             MonthlyRevenue =
                 await _dbContext.Payments
                     .Where(payment =>
-                        payment.Status ==
-                            PaymentStatus.Paid &&
-                        payment.Type !=
-                            PaymentType.Refund &&
-                        payment.PaidAt >=
-                            firstDayOfMonth &&
-                        payment.PaidAt <
-                            firstDayOfNextMonth)
+                        payment.Status == PaymentStatus.Paid &&
+                        (payment.Type == PaymentType.Rental ||
+                         payment.Type == PaymentType.Extension ||
+                         payment.Type == PaymentType.AdditionalCharge) &&
+                        payment.PaidAt >= firstDayOfMonth &&
+                        payment.PaidAt < firstDayOfNextMonth)
                     .SumAsync(
                         payment =>
                             (decimal?)payment.Amount,
