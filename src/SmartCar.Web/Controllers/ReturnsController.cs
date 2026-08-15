@@ -69,7 +69,8 @@ public sealed class ReturnsController : Controller
             BookingId = bookingId,
             ReturnedAt = DateTime.Now,
             ReturnLocation = preparation.ScheduledReturnLocation,
-            Mileage = preparation.HandoverMileage
+            Mileage = preparation.CustomerCheckoutMileage ?? preparation.HandoverMileage,
+            FuelLevel = preparation.CustomerCheckoutFuelLevel ?? string.Empty
         });
     }
 
@@ -131,11 +132,11 @@ public sealed class ReturnsController : Controller
             "CreateReturn",
             nameof(VehicleReturn),
             model.BookingId,
-            $"Tiếp nhận xe trả đơn #{model.BookingId}; địa điểm {model.ReturnLocation}; ODO giao {preparation.HandoverMileage:N0} km, ODO trả {model.Mileage:N0} km, quãng đường sử dụng {travelledKm:N0} km; nhiên liệu/pin giao {preparation.HandoverFuelLevel}, trả {model.FuelLevel}; phụ kiện: {accessoryStatus}; {imagePaths.Count} ảnh; bất thường mới: {(model.HasDamage ? "Có" : "Không")}.",
+            $"Tiếp nhận xe trả đơn #{model.BookingId}; địa điểm {model.ReturnLocation}; ODO giao {preparation.HandoverMileage:N0} km, ODO trả {model.Mileage:N0} km, quãng đường sử dụng {travelledKm:N0} km; nhiên liệu/pin giao {preparation.HandoverFuelLevel}, trả {model.FuelLevel}; phụ kiện: {accessoryStatus}; {imagePaths.Count} ảnh SmartCar; bất thường mới: {(model.HasDamage ? "Có" : "Không")}.",
             cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã tiếp nhận xe và lưu bộ ảnh trả xe. Khách được yêu cầu xem đối chiếu ảnh giao ↔ trả và chọn Đồng ý hoặc Yêu cầu xem xét trước khi đơn mới có thể hoàn tất theo luồng mới.";
+            "Đã tiếp nhận xe và lưu bộ ảnh kiểm tra độc lập của SmartCar. Khách được yêu cầu xem toàn bộ bằng chứng check-in ↔ check-out ↔ ảnh SmartCar và phản hồi trước khi đơn hoàn tất theo luồng mới.";
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
@@ -243,6 +244,10 @@ public sealed class ReturnsController : Controller
         ViewBag.HandoverImagePaths = preparation.HandoverImagePaths;
         ViewBag.CustomerHandoverImagePaths = preparation.CustomerHandoverImagePaths;
         ViewBag.CustomerHandoverNote = preparation.CustomerHandoverNote;
+        ViewBag.CustomerCheckoutImagePaths = preparation.CustomerCheckoutImagePaths;
+        ViewBag.CustomerCheckoutNote = preparation.CustomerCheckoutNote;
+        ViewBag.CustomerCheckoutMileage = preparation.CustomerCheckoutMileage;
+        ViewBag.CustomerCheckoutFuelLevel = preparation.CustomerCheckoutFuelLevel;
         ViewBag.VehicleFuelType = preparation.VehicleFuelType;
         ViewBag.AccessoryStatus = accessoryStatus ?? "Complete";
         ViewBag.AccessoryNote = accessoryNote ?? string.Empty;
