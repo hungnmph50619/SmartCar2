@@ -1,0 +1,99 @@
+@model SmartCar.Application.Features.Operations.HandoverRefusalPreviewDto
+@{
+    ViewData["Title"] = $"Khách từ chối ký biên bản - Đơn #{Model.BookingId}";
+}
+
+<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+    <div>
+        <div class="text-uppercase small text-danger fw-semibold">Không hoàn tất bàn giao</div>
+        <h1 class="h3 mb-1">Khách từ chối ký biên bản · Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Chỉ dùng trường hợp xe đúng thỏa thuận nhưng khách không đồng ý ký biên bản bàn giao và SmartCar chưa giao xe/chìa khóa.</p>
+    </div>
+    <a class="btn btn-outline-secondary"
+       asp-controller="AdminBookings"
+       asp-action="Details"
+       asp-route-id="@Model.BookingId">← Quay lại đơn</a>
+</div>
+
+<div class="alert alert-danger shadow-sm">
+    <strong>Không giao xe và không giao chìa khóa.</strong>
+    Nếu nguyên nhân hủy xuất phát từ SmartCar hoặc xe không đáp ứng đúng thỏa thuận, không dùng chính sách này; hãy quay lại đơn và dùng nghiệp vụ Quản trị viên hủy để hoàn 100% số tiền đã thu.
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body p-4">
+                <div class="text-uppercase small text-muted fw-semibold">Chính sách áp dụng</div>
+                <h2 class="h5 mb-3">Khách từ chối ký tại thời điểm nhận xe</h2>
+
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Tiền thuê/phí giao nhận đã thu</span>
+                    <strong>@Model.PaidRentalAmount.ToString("N0") đ</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Cọc bảo đảm đã thu</span>
+                    <strong>@Model.PaidDepositAmount.ToString("N0") đ</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom text-danger">
+                    <span>Giữ 40% tiền thuê</span>
+                    <strong>@Model.RentalPenaltyAmount.ToString("N0") đ</strong>
+                </div>
+                @if (Model.IncurredPickupDeliveryFee > 0)
+                {
+                    <div class="d-flex justify-content-between py-2 border-bottom text-danger">
+                        <span>Chi phí lượt giao xe đã phát sinh</span>
+                        <strong>@Model.IncurredPickupDeliveryFee.ToString("N0") đ</strong>
+                    </div>
+                }
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span>Tổng SmartCar giữ lại</span>
+                    <strong>@Model.RetainedAmount.ToString("N0") đ</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom text-success">
+                    <span>Hoàn phần tiền chuyến</span>
+                    <strong>@Model.RentalRefundAmount.ToString("N0") đ</strong>
+                </div>
+                <div class="d-flex justify-content-between py-2 border-bottom text-success">
+                    <span>Hoàn cọc bảo đảm</span>
+                    <strong>@Model.PaidDepositAmount.ToString("N0") đ</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center pt-3 fs-5">
+                    <span>Tổng cần hoàn cho khách</span>
+                    <strong class="text-success">@Model.TotalRefundAmount.ToString("N0") đ</strong>
+                </div>
+
+                <div class="small text-muted mt-3">
+                    Cọc được hoàn 100% vì xe chưa được bàn giao. Các khoản hoàn được tạo ở trạng thái chờ hoàn tiền để Admin thực hiện chuyển khoản thực tế và xác nhận giao dịch.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-danger h-100">
+            <div class="card-body p-4 d-flex flex-column">
+                <div class="text-uppercase small text-danger fw-semibold">Xác nhận nghiệp vụ</div>
+                <h2 class="h5">Hủy do khách từ chối ký</h2>
+                <p class="text-muted">
+                    Khi xác nhận, đơn bị hủy, xe được giải phóng khỏi chuyến thuê và hệ thống tạo các khoản hoàn theo số tiền ở bên trái.
+                </p>
+
+                <div class="alert alert-light border small">
+                    Chỉ bấm khi khách đã có mặt/đến bước bàn giao, SmartCar đã sẵn sàng giao đúng xe nhưng khách từ chối ký biên bản. Nếu chưa chắc nguyên nhân, quay lại đơn để kiểm tra trước.
+                </div>
+
+                <form asp-action="Cancel"
+                      method="post"
+                      class="mt-auto"
+                      data-loading-form
+                      data-confirm="Xác nhận khách từ chối ký biên bản, xe/chìa khóa chưa được giao và áp dụng mức giữ 40% tiền thuê?">
+                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                    <button class="btn btn-danger w-100" type="submit" data-loading-text="Đang hủy và tạo khoản hoàn...">
+                        Xác nhận hủy & tạo khoản hoàn
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
