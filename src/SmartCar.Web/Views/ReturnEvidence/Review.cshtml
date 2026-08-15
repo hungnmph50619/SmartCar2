@@ -1,179 +1,155 @@
-@model SmartCar.Web.ViewModels.CustomerReturnReviewViewModel
-@using SmartCar.Web.Services
+@model SmartCar.Web.ViewModels.RentalEvidenceViewModel
 @{
-    ViewData["Title"] = "Hồ sơ bằng chứng & tranh chấp";
-    var labels = VehicleEvidenceAuditHelper.StandardPhotoLabels;
-    var customerPairCount = Math.Max(Model.CustomerHandoverImagePaths.Count, Model.CustomerCheckoutImagePaths.Count);
-    var smartCarPairCount = Math.Max(Model.HandoverImagePaths.Count, Model.ReturnImagePaths.Count);
+    ViewData["Title"] = "Hồ sơ biên bản giao nhận";
+    var pairCount = Math.Max(Model.HandoverVehicleImagePaths.Count, Model.ReturnVehicleImagePaths.Count);
 }
 
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
     <div>
-        <div class="text-uppercase small text-primary fw-semibold">Evidence review</div>
-        <h1 class="h3 mb-1">Hồ sơ tình trạng xe · Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Phân tách rõ bằng chứng do chính khách tạo và bằng chứng kiểm tra độc lập của SmartCar để xử lý damage claim/tranh chấp.</p>
+        <div class="text-uppercase small text-primary fw-semibold">Hồ sơ giao nhận</div>
+        <h1 class="h3 mb-1">Biên bản & ảnh hiện trạng · Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Một nơi lưu ảnh xe trước–sau và ảnh biên bản giấy có chữ ký của khách để phục vụ kiểm tra, xử lý phụ phí hoặc tranh chấp nếu phát sinh.</p>
     </div>
-    <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">← Quay lại đơn</a>
+    <a class="btn btn-outline-secondary"
+       asp-controller="AdminBookings"
+       asp-action="Details"
+       asp-route-id="@Model.BookingId">← Quay lại đơn</a>
 </div>
 
-@if (Model.ReviewStatus == "Pending")
-{
-    <div class="alert alert-warning shadow-sm"><strong>Chờ khách phản hồi.</strong> Không hoàn tất đơn hoặc quyết toán cọc cho đến khi khách Đồng ý hoặc gửi yêu cầu xem xét.</div>
-}
-else if (Model.ReviewStatus == "Accepted")
-{
-    <div class="alert alert-success shadow-sm"><strong>✓ Khách đã xác nhận bộ bằng chứng trước–sau.</strong> Có thể tiếp tục phụ phí có căn cứ và quyết toán.</div>
-}
-else if (Model.ReviewStatus == "Disputed")
-{
-    <div class="alert alert-danger shadow-sm">
-        <strong>Khách đang tranh chấp hiện trạng.</strong>
-        @if (!string.IsNullOrWhiteSpace(Model.DisputeReason))
-        {
-            <div class="mt-1"><strong>Lý do khách:</strong> @Model.DisputeReason</div>
-        }
-        <div class="small mt-1">Phải đối chiếu ảnh cùng góc và ghi căn cứ kết luận trước khi quy trách nhiệm/đối trừ cọc.</div>
-    </div>
-}
-else if (Model.ReviewStatus == "Resolved")
-{
-    <div class="alert alert-info shadow-sm"><strong>Phản hồi đã được xử lý.</strong> AuditLog giữ lịch sử kết quả và hồ sơ ảnh để truy vết.</div>
-}
-else
-{
-    <div class="alert alert-secondary shadow-sm"><strong>Dữ liệu legacy.</strong> Chuyến được tạo trước flow customer check-in/check-out bắt buộc; chỉ các bằng chứng hiện có được hiển thị.</div>
-}
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-3"><div class="small text-muted">Khách</div><strong>@Model.CustomerName</strong></div>
+            <div class="col-md-3"><div class="small text-muted">Xe</div><strong>@Model.VehicleName · @Model.LicensePlate</strong></div>
+            <div class="col-md-3"><div class="small text-muted">Giao xe</div><strong>@Model.HandoverAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
+            <div class="col-md-3"><div class="small text-muted">Nhận lại xe</div><strong>@Model.ReturnedAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
+        </div>
 
-<div class="card shadow-sm border-0 mb-4"><div class="card-body p-4">
-    <div class="row g-3">
-        <div class="col-md-3"><div class="small text-muted">Khách</div><strong>@Model.CustomerName</strong></div>
-        <div class="col-md-3"><div class="small text-muted">Xe</div><strong>@Model.VehicleName · @Model.LicensePlate</strong></div>
-        <div class="col-md-3"><div class="small text-muted">Giao</div><strong>@Model.HandoverAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
-        <div class="col-md-3"><div class="small text-muted">SmartCar nhận lại</div><strong>@Model.ReturnedAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
+        <div class="table-responsive mt-4">
+            <table class="table align-middle mb-0">
+                <thead class="table-light"><tr><th>Nội dung</th><th>Khi giao</th><th>Khi trả</th></tr></thead>
+                <tbody>
+                    <tr><th>Số km trên đồng hồ</th><td>@Model.HandoverMileage.ToString("N0") km</td><td>@Model.ReturnMileage.ToString("N0") km</td></tr>
+                    <tr><th>Nhiên liệu / pin</th><td>@Model.HandoverFuelLevel</td><td>@Model.ReturnFuelLevel</td></tr>
+                    <tr><th>Ghi chú hiện trạng</th><td>@(string.IsNullOrWhiteSpace(Model.HandoverNotes) ? "Không có ghi chú" : Model.HandoverNotes)</td><td>@(string.IsNullOrWhiteSpace(Model.ReturnCondition) ? "Không ghi nhận hư hỏng mới" : Model.ReturnCondition)</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
-    <div class="table-responsive mt-4">
-        <table class="table align-middle mb-0">
-            <thead class="table-light"><tr><th>Nội dung</th><th>Trước chuyến</th><th>Customer check-out</th><th>SmartCar nhận lại</th></tr></thead>
-            <tbody>
-                <tr><th>ODO</th><td>@Model.HandoverMileage.ToString("N0") km</td><td>@(Model.CustomerCheckoutMileage.HasValue ? $"{Model.CustomerCheckoutMileage.Value:N0} km" : "—")</td><td>@Model.ReturnMileage.ToString("N0") km</td></tr>
-                <tr><th>Nhiên liệu / pin</th><td>@Model.HandoverFuelLevel</td><td>@(string.IsNullOrWhiteSpace(Model.CustomerCheckoutFuelLevel) ? "—" : Model.CustomerCheckoutFuelLevel)</td><td>@Model.ReturnFuelLevel</td></tr>
-                <tr><th>Kết luận SmartCar</th><td>Hồ sơ pre-trip</td><td>—</td><td>@(string.IsNullOrWhiteSpace(Model.ReturnCondition) ? "Không có mô tả riêng" : Model.ReturnCondition)</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div></div>
+</div>
 
-<div class="card shadow-sm border-primary mb-4"><div class="card-body p-4">
-    <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
-        <div><div class="text-uppercase small text-primary fw-semibold">Nguồn 1 · Chính khách tạo</div><h2 class="h5 mb-1">Customer check-in ↔ customer check-out</h2><p class="small text-muted mb-0">Dùng để phản biện trường hợp khách nói “ảnh đó SmartCar tự chụp”.</p></div>
-        <span class="badge bg-primary">@Model.CustomerHandoverImagePaths.Count check-in · @Model.CustomerCheckoutImagePaths.Count check-out</span>
-    </div>
-
-    @if (!string.IsNullOrWhiteSpace(Model.CustomerHandoverNote))
-    {
-        <div class="alert alert-light border py-2"><strong>Khách khai lúc nhận:</strong> @Model.CustomerHandoverNote</div>
-    }
-    @if (!string.IsNullOrWhiteSpace(Model.CustomerCheckoutNote))
-    {
-        <div class="alert alert-light border py-2"><strong>Khách khai lúc trả:</strong> @Model.CustomerCheckoutNote</div>
-    }
-
-    @if (customerPairCount == 0)
-    {
-        <div class="alert alert-secondary mb-0">Không có customer check-in/check-out cho dữ liệu này.</div>
-    }
-    else
-    {
-        @for (var index = 0; index < customerPairCount; index++)
-        {
-            var beforePath = index < Model.CustomerHandoverImagePaths.Count ? Model.CustomerHandoverImagePaths[index] : null;
-            var afterPath = index < Model.CustomerCheckoutImagePaths.Count ? Model.CustomerCheckoutImagePaths[index] : null;
-            <div class="border rounded-3 p-3 mb-3">
-                <div class="fw-semibold small mb-2">@(index < labels.Length ? labels[index] : $"Ảnh {index + 1}")</div>
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="small text-muted mb-1">Khách tự chụp khi nhận</div>
-                        @if (!string.IsNullOrWhiteSpace(beforePath))
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-primary h-100">
+            <div class="card-body p-4">
+                <div class="text-uppercase small text-primary fw-semibold">Biên bản bàn giao</div>
+                <h2 class="h5">Ảnh biên bản giấy có chữ ký khách</h2>
+                @if (Model.HandoverDocumentImagePaths.Count == 0)
+                {
+                    <div class="alert alert-secondary mb-0">Không có ảnh biên bản bàn giao riêng. Đây có thể là dữ liệu cũ trước khi áp dụng quy trình biên bản giấy.</div>
+                }
+                else
+                {
+                    <div class="row g-2">
+                        @foreach (var path in Model.HandoverDocumentImagePaths)
                         {
-                            <a href="@beforePath" target="_blank" rel="noopener noreferrer"><img src="@beforePath" class="w-100 rounded border" style="height:280px;object-fit:contain;background:#f8f9fa" alt="Customer check-in @(index + 1)" /></a>
-                        }
-                        else
-                        {
-                            <div class="bg-light p-5 text-center text-muted rounded">Không có ảnh</div>
+                            <div class="col-6">
+                                <a href="@path" target="_blank" rel="noopener noreferrer">
+                                    <img src="@path" class="w-100 rounded border" style="height:260px;object-fit:contain;background:#f8f9fa" alt="Biên bản bàn giao có chữ ký" />
+                                </a>
+                            </div>
                         }
                     </div>
-                    <div class="col-md-6">
-                        <div class="small text-muted mb-1">Khách tự chụp khi trả</div>
-                        @if (!string.IsNullOrWhiteSpace(afterPath))
-                        {
-                            <a href="@afterPath" target="_blank" rel="noopener noreferrer"><img src="@afterPath" class="w-100 rounded border" style="height:280px;object-fit:contain;background:#f8f9fa" alt="Customer check-out @(index + 1)" /></a>
-                        }
-                        else
-                        {
-                            <div class="bg-light p-5 text-center text-muted rounded">Không có ảnh</div>
-                        }
-                    </div>
-                </div>
-            </div>
-        }
-    }
-</div></div>
-
-<div class="card shadow-sm border-0 mb-4"><div class="card-body p-4">
-    <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
-        <div><div class="text-uppercase small text-muted fw-semibold">Nguồn 2 · SmartCar tạo độc lập</div><h2 class="h5 mb-1">SmartCar pre-trip ↔ SmartCar return inspection</h2><p class="small text-muted mb-0">Nguồn kiểm chứng chéo với ảnh khách; cùng một góc nên được đặt cạnh nhau.</p></div>
-        <span class="badge bg-light text-dark border">@Model.HandoverImagePaths.Count trước · @Model.ReturnImagePaths.Count sau</span>
-    </div>
-
-    @for (var index = 0; index < smartCarPairCount; index++)
-    {
-        var beforePath = index < Model.HandoverImagePaths.Count ? Model.HandoverImagePaths[index] : null;
-        var afterPath = index < Model.ReturnImagePaths.Count ? Model.ReturnImagePaths[index] : null;
-        <div class="border rounded-3 p-3 mb-3">
-            <div class="fw-semibold small mb-2">@(index < labels.Length ? labels[index] : $"Ảnh {index + 1}")</div>
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <div class="small text-muted mb-1">SmartCar lúc giao</div>
-                    @if (!string.IsNullOrWhiteSpace(beforePath))
-                    {
-                        <a href="@beforePath" target="_blank" rel="noopener noreferrer"><img src="@beforePath" class="w-100 rounded border" style="height:280px;object-fit:contain;background:#f8f9fa" alt="SmartCar before @(index + 1)" /></a>
-                    }
-                    else
-                    {
-                        <div class="bg-light p-5 text-center text-muted rounded">Không có ảnh</div>
-                    }
-                </div>
-                <div class="col-md-6">
-                    <div class="small text-muted mb-1">SmartCar lúc nhận lại</div>
-                    @if (!string.IsNullOrWhiteSpace(afterPath))
-                    {
-                        <a href="@afterPath" target="_blank" rel="noopener noreferrer"><img src="@afterPath" class="w-100 rounded border" style="height:280px;object-fit:contain;background:#f8f9fa" alt="SmartCar after @(index + 1)" /></a>
-                    }
-                    else
-                    {
-                        <div class="bg-light p-5 text-center text-muted rounded">Không có ảnh</div>
-                    }
-                </div>
+                }
             </div>
         </div>
-    }
+    </div>
 
-    @if (!string.IsNullOrWhiteSpace(Model.ReturnNotes))
-    {
-        <div class="alert alert-light border mb-0"><strong>Ghi chú SmartCar khi nhận lại:</strong><br />@Model.ReturnNotes</div>
-    }
-</div></div>
+    <div class="col-lg-6">
+        <div class="card shadow-sm border-primary h-100">
+            <div class="card-body p-4">
+                <div class="text-uppercase small text-primary fw-semibold">Biên bản trả xe</div>
+                <h2 class="h5">Ảnh biên bản giấy có chữ ký khách</h2>
+                @if (Model.ReturnDocumentImagePaths.Count == 0)
+                {
+                    <div class="alert alert-secondary mb-0">Không có ảnh biên bản trả xe riêng. Đây có thể là dữ liệu cũ trước khi áp dụng quy trình biên bản giấy.</div>
+                }
+                else
+                {
+                    <div class="row g-2">
+                        @foreach (var path in Model.ReturnDocumentImagePaths)
+                        {
+                            <div class="col-6">
+                                <a href="@path" target="_blank" rel="noopener noreferrer">
+                                    <img src="@path" class="w-100 rounded border" style="height:260px;object-fit:contain;background:#f8f9fa" alt="Biên bản trả xe có chữ ký" />
+                                </a>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
 
-@if (Model.ReviewStatus == "Disputed")
-{
-    <div class="card shadow-sm border-danger mb-4"><div class="card-body p-4">
-        <div class="text-uppercase small text-danger fw-semibold">Xử lý tranh chấp</div>
-        <h2 class="h5">Kết luận phải chỉ ra căn cứ cụ thể</h2>
-        <p class="small text-muted">Không ghi chung chung “Admin không đồng ý”. Nêu ảnh nào trước/sau, vị trí hư hỏng, mốc thời gian và báo giá/biên bản nào nếu có. Nội dung được lưu AuditLog.</p>
-        <form asp-action="Resolve" method="post" data-loading-form data-confirm="Ghi nhận kết quả xử lý tranh chấp này?">
-            <input type="hidden" name="bookingId" value="@Model.BookingId" />
-            <textarea name="resolutionNote" minlength="10" maxlength="1000" rows="5" class="form-control mb-3" required placeholder="Ví dụ: ảnh customer check-in góc bên phải và ảnh SmartCar pre-trip đều không có vết móp; customer check-out và ảnh SmartCar nhận lại cùng vị trí đều xuất hiện vết móp; báo giá gara ..."></textarea>
-            <button class="btn btn-danger" type="submit" data-loading-text="Đang ghi nhận...">Ghi nhận kết quả xử lý</button>
-        </form>
-    </div></div>
-}
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+                <div class="text-uppercase small text-muted fw-semibold">Ảnh hiện trạng xe</div>
+                <h2 class="h5 mb-1">So sánh lúc giao ↔ lúc trả</h2>
+                <p class="small text-muted mb-0">Ảnh do nhân viên SmartCar chụp tại hai thời điểm. Khi có hư hỏng, mở ảnh lớn và đối chiếu cùng vị trí.</p>
+            </div>
+            <span class="badge bg-light text-dark border">@Model.HandoverVehicleImagePaths.Count ảnh giao · @Model.ReturnVehicleImagePaths.Count ảnh trả</span>
+        </div>
+
+        @if (pairCount == 0)
+        {
+            <div class="alert alert-secondary mb-0">Không có ảnh hiện trạng để đối chiếu.</div>
+        }
+        else
+        {
+            @for (var index = 0; index < pairCount; index++)
+            {
+                var handoverPath = index < Model.HandoverVehicleImagePaths.Count ? Model.HandoverVehicleImagePaths[index] : null;
+                var returnPath = index < Model.ReturnVehicleImagePaths.Count ? Model.ReturnVehicleImagePaths[index] : null;
+                <div class="border rounded-3 p-3 mb-3">
+                    <div class="small fw-semibold mb-2">Ảnh đối chiếu @(index + 1)</div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="small text-muted mb-1">Lúc giao xe</div>
+                            @if (!string.IsNullOrWhiteSpace(handoverPath))
+                            {
+                                <a href="@handoverPath" target="_blank" rel="noopener noreferrer">
+                                    <img src="@handoverPath" class="w-100 rounded border" style="height:300px;object-fit:contain;background:#f8f9fa" alt="Ảnh xe lúc giao" />
+                                </a>
+                            }
+                            else
+                            {
+                                <div class="bg-light rounded p-5 text-center text-muted">Không có ảnh tương ứng</div>
+                            }
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted mb-1">Lúc trả xe</div>
+                            @if (!string.IsNullOrWhiteSpace(returnPath))
+                            {
+                                <a href="@returnPath" target="_blank" rel="noopener noreferrer">
+                                    <img src="@returnPath" class="w-100 rounded border" style="height:300px;object-fit:contain;background:#f8f9fa" alt="Ảnh xe lúc trả" />
+                                </a>
+                            }
+                            else
+                            {
+                                <div class="bg-light rounded p-5 text-center text-muted">Không có ảnh tương ứng</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.ReturnNotes))
+        {
+            <div class="alert alert-light border mb-0"><strong>Ghi chú khi trả xe:</strong><br />@Model.ReturnNotes</div>
+        }
+    </div>
+</div>
