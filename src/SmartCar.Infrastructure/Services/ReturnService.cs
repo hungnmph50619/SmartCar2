@@ -100,7 +100,8 @@ internal sealed class ReturnService : IReturnService
                 $"Số km khi nhận lại ({request.Mileage:N0} km) không được nhỏ hơn số km lúc giao ({booking.Handover.Mileage:N0} km).");
         }
 
-        if (request.ReturnedAt < booking.Handover.HandoverAt)
+        if (!RentalPolicyConstants.DemoBypassRentalTimelineValidation &&
+            request.ReturnedAt < booking.Handover.HandoverAt)
         {
             return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
         }
