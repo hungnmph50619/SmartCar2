@@ -52,7 +52,25 @@ public sealed class BookingDetailsDto : BookingListItemDto
     public bool HasReturn { get; init; }
     public bool HasReview { get; init; }
     public bool RentalPaid { get; init; }
-    public bool AdditionalChargePaid { get; init; }
+    public bool AdditionalChargePaid
+    {
+        get
+        {
+            if (AdditionalAmount <= 0)
+            {
+                return true;
+            }
+
+            var settledAmount = Payments
+                .Where(payment =>
+                    payment.Status == PaymentStatus.Paid &&
+                    payment.Type is PaymentType.AdditionalCharge or PaymentType.Deposit)
+                .Sum(payment => payment.Amount);
+
+            return settledAmount >= AdditionalAmount;
+        }
+        init { }
+    }
     public bool ExtensionPaid { get; init; }
     public IReadOnlyList<PaymentSummaryDto> Payments { get; init; } = Array.Empty<PaymentSummaryDto>();
     public IReadOnlyList<ChargeSummaryDto> AdditionalCharges { get; init; } = Array.Empty<ChargeSummaryDto>();
