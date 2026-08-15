@@ -94,11 +94,13 @@ internal sealed class BookingOperationService : IBookingOperationService
 
         var rentalPaid = booking.Payments.Any(payment =>
             payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
+        var depositPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid);
 
-        if (booking.Status != BookingStatus.Paid || !rentalPaid)
+        if (booking.Status != BookingStatus.Paid || !rentalPaid || !depositPaid)
         {
             return OperationResult.Failure(
-                "Chỉ đơn đã thanh toán và chưa chuyển sang sẵn sàng giao xe mới được xác nhận trước khi xuất phát.");
+                "Chỉ đơn đã được xác nhận đủ tiền thuê và cọc bảo đảm mới được xác nhận trước khi xuất phát giao xe.");
         }
 
         if (DateTime.Now >= booking.PickupDate)
@@ -122,7 +124,8 @@ internal sealed class BookingOperationService : IBookingOperationService
             Title = "SmartCar đã xác nhận lịch nhận xe",
             Message =
                 $"SmartCar đã ghi nhận bạn xác nhận nhận xe đơn #{booking.BookingId} tại " +
-                $"{booking.PickupLocation} lúc {booking.PickupDate:dd/MM/yyyy HH:mm}."
+                $"{booking.PickupLocation} lúc {booking.PickupDate:dd/MM/yyyy HH:mm}. " +
+                "Tiền thuê và cọc bảo đảm đã được thanh toán, bạn không cần thanh toán thêm cọc khi nhận xe."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -134,7 +137,8 @@ internal sealed class BookingOperationService : IBookingOperationService
             nameof(Booking),
             booking.BookingId.ToString(),
             $"Trước khi xuất phát giao xe, Admin đã liên hệ và khách xác nhận sẽ nhận xe; " +
-            $"giờ hẹn {booking.PickupDate:dd/MM/yyyy HH:mm}; địa điểm {booking.PickupLocation}; ghi chú: {contactNote}.",
+            $"giờ hẹn {booking.PickupDate:dd/MM/yyyy HH:mm}; địa điểm {booking.PickupLocation}; ghi chú: {contactNote}. " +
+            $"Tiền thuê và cọc {RentalPolicyConstants.SecurityDepositAmount:N0} đồng đã được xác nhận thanh toán trước đó.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -258,6 +262,11 @@ internal sealed class BookingOperationService : IBookingOperationService
                 payment.Type == PaymentType.Rental &&
                 payment.Status == PaymentStatus.Paid)
             .Sum(payment => payment.Amount);
+        var paidDepositAmount = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
 
         var rentalPenalty = Math.Round(
             booking.RentalAmount * NoShowRentalPenaltyRate,
@@ -272,7 +281,8 @@ internal sealed class BookingOperationService : IBookingOperationService
         var retainedAmount = Math.Min(
             paidRentalAmount,
             Math.Max(0, rentalPenalty + incurredPickupDeliveryFee));
-        var refundAmount = Math.Max(0, paidRentalAmount - retainedAmount);
+        var rentalRefundAmount = Math.Max(0, paidRentalAmount - retainedAmount);
+        var refundAmount = rentalRefundAmount + paidDepositAmount;
 
         booking.Status = BookingStatus.NoShow;
         booking.NoShowMarkedAt = DateTime.UtcNow;
@@ -287,36 +297,45 @@ internal sealed class BookingOperationService : IBookingOperationService
             (incurredPickupDeliveryFee > 0
                 ? $" và phí lượt giao xe thực tế ({incurredPickupDeliveryFee:N0} đồng)"
                 : string.Empty) +
-            $"; tổng giữ lại {retainedAmount:N0} đồng; hoàn phần còn lại {refundAmount:N0} đồng.";
+            $"; tổng giữ lại từ phần tiền thuê/phí giao nhận {retainedAmount:N0} đồng; " +
+            $"hoàn phần còn lại của chuyến {rentalRefundAmount:N0} đồng và hoàn 100% cọc {paidDepositAmount:N0} đồng vì xe chưa được bàn giao. " +
+            $"Tổng hoàn {refundAmount:N0} đồng.";
 
         booking.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
             _dbContext,
             booking.Vehicle,
             cancellationToken: cancellationToken);
 
-        if (refundAmount > 0 &&
-            !booking.Payments.Any(payment => payment.Type == PaymentType.Refund))
+        if (refundAmount > 0)
         {
-            booking.Payments.Add(new Payment
+            var refundPayment = booking.Payments.FirstOrDefault(payment =>
+                payment.Type == PaymentType.Refund);
+            if (refundPayment is null)
             {
-                Type = PaymentType.Refund,
-                Amount = refundAmount,
-                Method = PaymentMethods.BankTransferRefund,
-                Status = PaymentStatus.AwaitingRefund,
-                PaidAt = null,
-                TransactionCode = null
-            });
+                booking.Payments.Add(new Payment
+                {
+                    Type = PaymentType.Refund,
+                    Amount = refundAmount,
+                    Method = PaymentMethods.BankTransferRefund,
+                    Status = PaymentStatus.AwaitingRefund,
+                    PaidAt = null,
+                    TransactionCode = null
+                });
+            }
+            else if (refundPayment.Status == PaymentStatus.AwaitingRefund)
+            {
+                refundPayment.Amount = refundAmount;
+            }
         }
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
             Title = "Đơn thuê ghi nhận khách không đến nhận xe",
-            Message = refundAmount > 0
-                ? $"Đơn #{booking.BookingId} đã được ghi nhận NoShow sau thời gian chờ và liên hệ theo quy trình. " +
-                  $"SmartCar giữ lại {retainedAmount:N0} đồng theo chính sách NoShow; khoản hoàn {refundAmount:N0} đồng đã được tạo và đang chờ xử lý."
-                : $"Đơn #{booking.BookingId} đã được ghi nhận NoShow sau thời gian chờ và liên hệ theo quy trình. " +
-                  $"Khoản giữ lại theo chính sách là {retainedAmount:N0} đồng nên không còn số tiền phải hoàn."
+            Message =
+                $"Đơn #{booking.BookingId} đã được ghi nhận NoShow sau thời gian chờ và liên hệ theo quy trình. " +
+                $"SmartCar giữ lại {retainedAmount:N0} đồng từ phần tiền thuê/phí giao nhận; cọc {paidDepositAmount:N0} đồng được hoàn 100%. " +
+                $"Tổng khoản hoàn đang chờ xử lý là {refundAmount:N0} đồng."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -331,7 +350,7 @@ internal sealed class BookingOperationService : IBookingOperationService
             $"địa điểm {booking.PickupLocation}; giao tận nơi: {(isHomeDelivery ? "Có" : "Không")}; " +
             $"đã đến điểm giao: {(request.ArrivedAtPickupLocation ? "Có" : "Không áp dụng")}; " +
             $"số lần liên hệ lại: {request.ContactAttemptCount}; ghi chú: {contactNote}; " +
-            $"giữ lại {retainedAmount:N0} đồng; hoàn {refundAmount:N0} đồng.",
+            $"giữ lại {retainedAmount:N0} đồng từ tiền chuyến; hoàn 100% cọc {paidDepositAmount:N0} đồng; tổng hoàn {refundAmount:N0} đồng.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -374,40 +393,43 @@ internal sealed class BookingOperationService : IBookingOperationService
             return RefundResult.Failure("Trạng thái hiện tại không cho phép hủy đơn.");
         }
 
-        var hasRentalPaymentAwaitingConfirmation = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Rental &&
+        var hasInitialPaymentAwaitingConfirmation = booking.Payments.Any(payment =>
+            (payment.Type is PaymentType.Rental or PaymentType.Deposit) &&
             payment.Status == PaymentStatus.AwaitingConfirmation);
 
-        if (hasRentalPaymentAwaitingConfirmation)
+        if (hasInitialPaymentAwaitingConfirmation)
         {
             return RefundResult.Failure(
-                "Khoản chuyển khoản tiền thuê đang chờ SmartCar xác nhận. " +
+                "Giao dịch tiền thuê + cọc đang chờ SmartCar xác nhận. " +
                 "Vui lòng xử lý giao dịch trước khi hủy đơn: nếu đã nhận tiền thì xác nhận thanh toán rồi thực hiện hủy để hệ thống tạo khoản hoàn; " +
                 "nếu chưa nhận được tiền thì trả giao dịch về trạng thái chờ thanh toán rồi mới hủy đơn.");
         }
 
-        var paidAmount = booking.Payments
+        var paidRentalAmount = booking.Payments
             .Where(payment =>
                 payment.Status == PaymentStatus.Paid &&
-                payment.Type is PaymentType.Rental or PaymentType.Extension)
+                payment.Type == PaymentType.Rental)
+            .Sum(payment => payment.Amount);
+        var paidDepositAmount = booking.Payments
+            .Where(payment =>
+                payment.Status == PaymentStatus.Paid &&
+                payment.Type == PaymentType.Deposit)
             .Sum(payment => payment.Amount);
 
-        decimal refundAmount;
-        string refundReason;
+        decimal rentalRefundAmount;
+        string rentalRefundReason;
 
-        if (paidAmount <= 0)
+        if (paidRentalAmount <= 0)
         {
-            refundAmount = 0;
-
-            refundReason =
-                "Đơn chưa phát sinh thanh toán nên không có khoản hoàn tiền.";
+            rentalRefundAmount = 0;
+            rentalRefundReason =
+                "Đơn chưa phát sinh thanh toán phần tiền thuê/phí giao nhận.";
         }
         else if (isAdmin)
         {
-            refundAmount = paidAmount;
-
-            refundReason =
-                "SmartCar chủ động hủy trước khi giao xe: hoàn 100% số tiền đã thanh toán.";
+            rentalRefundAmount = paidRentalAmount;
+            rentalRefundReason =
+                "SmartCar chủ động hủy trước khi giao xe: hoàn 100% phần tiền thuê/phí giao nhận.";
         }
         else
         {
@@ -416,36 +438,36 @@ internal sealed class BookingOperationService : IBookingOperationService
 
             if (hoursBeforePickup >= 48)
             {
-                refundAmount = paidAmount;
-
-                refundReason =
-                    "Khách hủy trước thời gian nhận xe từ 48 giờ trở lên: hoàn 100%.";
+                rentalRefundAmount = paidRentalAmount;
+                rentalRefundReason =
+                    "Khách hủy trước thời gian nhận xe từ 48 giờ trở lên: hoàn 100% phần tiền thuê/phí giao nhận.";
             }
             else if (hoursBeforePickup >= 24)
             {
-                refundAmount =
-                    Math.Round(paidAmount * 0.5m, 0);
-
-                refundReason =
-                    "Khách hủy trước thời gian nhận xe từ 24 đến dưới 48 giờ: hoàn 50%.";
+                rentalRefundAmount = Math.Round(paidRentalAmount * 0.5m, 0);
+                rentalRefundReason =
+                    "Khách hủy trước thời gian nhận xe từ 24 đến dưới 48 giờ: hoàn 50% phần tiền thuê/phí giao nhận.";
             }
             else
             {
-                refundAmount = 0;
-
-                refundReason =
-                    "Khách hủy trước thời gian nhận xe dưới 24 giờ: không hoàn tiền.";
+                rentalRefundAmount = 0;
+                rentalRefundReason =
+                    "Khách hủy trước thời gian nhận xe dưới 24 giờ: không hoàn phần tiền thuê/phí giao nhận.";
             }
         }
 
-        foreach (var pendingRentalPayment in booking.Payments.Where(payment =>
-                     payment.Type == PaymentType.Rental &&
+        var refundAmount = rentalRefundAmount + paidDepositAmount;
+        var refundReason = paidDepositAmount > 0
+            ? $"{rentalRefundReason} Cọc bảo đảm {paidDepositAmount:N0} đồng được hoàn 100% vì xe chưa được bàn giao. Tổng hoàn {refundAmount:N0} đồng."
+            : rentalRefundReason;
+
+        foreach (var pendingInitialPayment in booking.Payments.Where(payment =>
+                     (payment.Type is PaymentType.Rental or PaymentType.Deposit) &&
                      payment.Status == PaymentStatus.Pending))
         {
-            pendingRentalPayment.Status = PaymentStatus.Failed;
-            pendingRentalPayment.PaidAt = null;
-            // Không xóa TransactionCode: mã QRREQ gần nhất là bằng chứng đối soát
-            // nếu trước đó Admin đã ghi nhận chưa tìm thấy giao dịch.
+            pendingInitialPayment.Status = PaymentStatus.Failed;
+            pendingInitialPayment.PaidAt = null;
+            // Không xóa TransactionCode: mã QRREQ gần nhất là bằng chứng đối soát nếu từng báo chuyển khoản.
         }
 
         booking.Status = BookingStatus.Cancelled;
@@ -459,19 +481,26 @@ internal sealed class BookingOperationService : IBookingOperationService
             booking.Vehicle,
             cancellationToken: cancellationToken);
 
-        if (refundAmount > 0 &&
-            !booking.Payments.Any(payment =>
-                payment.Type == PaymentType.Refund))
+        if (refundAmount > 0)
         {
-            booking.Payments.Add(new Payment
+            var refundPayment = booking.Payments.FirstOrDefault(payment =>
+                payment.Type == PaymentType.Refund);
+            if (refundPayment is null)
             {
-                Type = PaymentType.Refund,
-                Amount = refundAmount,
-                Method = PaymentMethods.BankTransferRefund,
-                Status = PaymentStatus.AwaitingRefund,
-                PaidAt = null,
-                TransactionCode = null
-            });
+                booking.Payments.Add(new Payment
+                {
+                    Type = PaymentType.Refund,
+                    Amount = refundAmount,
+                    Method = PaymentMethods.BankTransferRefund,
+                    Status = PaymentStatus.AwaitingRefund,
+                    PaidAt = null,
+                    TransactionCode = null
+                });
+            }
+            else if (refundPayment.Status == PaymentStatus.AwaitingRefund)
+            {
+                refundPayment.Amount = refundAmount;
+            }
         }
 
         _dbContext.Notifications.Add(new Notification
@@ -479,8 +508,7 @@ internal sealed class BookingOperationService : IBookingOperationService
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã được hủy",
             Message = refundAmount > 0
-                ? $"Đơn #{booking.BookingId} đã hủy. " +
-                  $"Khoản hoàn {refundAmount:N0} đồng đã được tạo và đang chờ xử lý."
+                ? $"Đơn #{booking.BookingId} đã hủy. Khoản hoàn {refundAmount:N0} đồng đã được tạo; cọc bảo đảm được hoàn 100% vì xe chưa được bàn giao."
                 : $"Đơn #{booking.BookingId} đã hủy và không phát sinh khoản hoàn tiền."
         });
 
@@ -492,7 +520,8 @@ internal sealed class BookingOperationService : IBookingOperationService
             isAdmin ? "AdminCancel" : "CustomerCancel",
             nameof(Booking),
             booking.BookingId.ToString(),
-            $"{(isAdmin ? "Quản trị viên" : "Khách hàng")} hủy đơn. Lý do: {booking.CancelReason}. Hoàn tiền: {refundAmount:N0} đồng.",
+            $"{(isAdmin ? "Quản trị viên" : "Khách hàng")} hủy đơn. Lý do: {booking.CancelReason}. " +
+            $"Hoàn phần tiền chuyến {rentalRefundAmount:N0} đồng; hoàn cọc {paidDepositAmount:N0} đồng; tổng hoàn {refundAmount:N0} đồng.",
             cancellationToken: cancellationToken);
 
         return RefundResult.Success(refundAmount);
