@@ -44,7 +44,7 @@
     <div>
         <h1 class="h3 mb-1">Quản lý thanh toán</h1>
         <p class="text-muted mb-0">
-            Tiền thuê và cọc bảo đảm được khách thanh toán <strong>một lần</strong> nhưng lưu thành hai cấu phần kế toán riêng để cọc không bị tính vào doanh thu.
+            Mặc định hiển thị theo <strong>giao dịch thực tế của khách</strong>. Tiền thuê + cọc được thanh toán một lần và hiển thị thành một dòng; chỉ khi lọc theo loại mới xem riêng từng cấu phần kế toán.
         </p>
     </div>
 </div>
@@ -70,6 +70,7 @@
                 <option value="@type" selected="@(selectedType == type)">@type.ToVietnamese()</option>
             }
         </select>
+        <div class="form-text">Chỉ dùng bộ lọc này khi cần kiểm tra cấu phần kế toán riêng.</div>
     </div>
 
     <div class="col-md-auto d-flex align-items-end">
@@ -90,7 +91,7 @@ else
         <table class="table table-bordered table-hover align-middle">
             <thead class="table-light">
                 <tr>
-                    <th>Mã GD</th>
+                    <th>Giao dịch</th>
                     <th>Đơn</th>
                     <th>Khách hàng</th>
                     <th>Xe</th>
@@ -99,7 +100,7 @@ else
                     <th class="text-end">Số tiền</th>
                     <th>Trạng thái</th>
                     <th>Thời gian</th>
-                    <th>Mã giao dịch</th>
+                    <th>Mã đối soát</th>
                     <th style="min-width:310px;">Thao tác</th>
                 </tr>
             </thead>
@@ -116,23 +117,50 @@ else
                             item.BookingId == payment.BookingId &&
                             item.PaymentId != payment.PaymentId &&
                             (item.Type is PaymentType.Rental or PaymentType.Deposit) &&
+                            item.Type != payment.Type &&
                             item.Status == payment.Status &&
-                            item.TransactionCode == payment.TransactionCode)
+                            string.Equals(item.TransactionCode, payment.TransactionCode, StringComparison.Ordinal))
                         : null;
 
-                    var checkoutTotal = payment.Amount + (pairedCheckoutPayment?.Amount ?? 0);
-                    var showInitialCheckoutAction =
-                        payment.Status == PaymentStatus.AwaitingConfirmation &&
+                    var isGroupedCheckout =
+                        selectedType is null &&
                         isInitialCheckoutPart &&
-                        (payment.Type == PaymentType.Rental || pairedCheckoutPayment is null);
+                        pairedCheckoutPayment is not null;
+
+                    // Khi xem tất cả loại thanh toán, Deposit được ẩn và Rental đại diện cho cả giao dịch.
+                    // Dữ liệu DB vẫn giữ hai Payment riêng để hạch toán chính xác.
+                    if (isGroupedCheckout && payment.Type == PaymentType.Deposit)
+                    {
+                        continue;
+                    }
+
+                    var displayAmount = isGroupedCheckout
+                        ? payment.Amount + pairedCheckoutPayment!.Amount
+                        : payment.Amount;
+                    var displayType = isGroupedCheckout
+                        ? "Tiền thuê + cọc"
+                        : payment.Type.ToVietnamese();
+                    var displayPaymentId = isGroupedCheckout
+                        ? $"#{Math.Min(payment.PaymentId, pairedCheckoutPayment!.PaymentId)} + #{Math.Max(payment.PaymentId, pairedCheckoutPayment.PaymentId)}"
+                        : $"#{payment.PaymentId}";
 
                     if (isRefund && payment.Status == PaymentStatus.AwaitingRefund)
                     {
                         refundBankAccount = await BankAccountService.GetDefaultAsync(payment.CustomerId);
                     }
 
-                    <tr>
-                        <td class="fw-semibold">#@payment.PaymentId</td>
+                    <tr class="@(isGroupedCheckout ? "table-primary" : string.Empty)">
+                        <td>
+                            @if (isGroupedCheckout)
+                            {
+                                <div class="fw-semibold">Thanh toán ban đầu</div>
+                                <div class="small text-muted">@displayPaymentId · 1 giao dịch</div>
+                            }
+                            else
+                            {
+                                <span class="fw-semibold">@displayPaymentId</span>
+                            }
+                        </td>
                         <td>
                             <a asp-controller="AdminBookings"
                                asp-action="Details"
@@ -151,10 +179,19 @@ else
                             <small class="text-muted">@payment.LicensePlate</small>
                         </td>
                         <td>
-                            @payment.Type.ToVietnamese()
-                            @if (isInitialCheckoutPart)
+                            <strong class="@(isGroupedCheckout ? "text-primary" : string.Empty)">@displayType</strong>
+                            @if (isGroupedCheckout)
                             {
-                                <div class="small text-muted">Cấu phần thanh toán ban đầu</div>
+                                var rentalPart = payment.Type == PaymentType.Rental ? payment : pairedCheckoutPayment!;
+                                var depositPart = payment.Type == PaymentType.Deposit ? payment : pairedCheckoutPayment!;
+                                <div class="small text-muted mt-1">
+                                    Thuê/phí: @rentalPart.Amount.ToString("N0") đ<br />
+                                    Cọc: @depositPart.Amount.ToString("N0") đ
+                                </div>
+                            }
+                            else if (isInitialCheckoutPart && selectedType is not null)
+                            {
+                                <div class="small text-muted">Cấu phần kế toán của thanh toán ban đầu</div>
                             }
                         </td>
                         <td>
@@ -167,8 +204,16 @@ else
                                 @payment.Method
                             }
                         </td>
-                        <td class="text-end fw-semibold">@payment.Amount.ToString("N0") đ</td>
-                        <td><span class="badge @GetStatusBadgeClass(payment.Status)">@payment.Status.ToVietnamese()</span></td>
+                        <td class="text-end">
+                            <strong class="@(isGroupedCheckout ? "text-primary fs-6" : string.Empty)">@displayAmount.ToString("N0") đ</strong>
+                            @if (isGroupedCheckout)
+                            {
+                                <div class="small text-muted">Khách chuyển 1 lần</div>
+                            }
+                        </td>
+                        <td>
+                            <span class="badge @GetStatusBadgeClass(payment.Status)">@payment.Status.ToVietnamese()</span>
+                        </td>
                         <td class="small">@GetPaymentTimeText(payment.Status, payment.PaidAt)</td>
                         <td>
                             @if (string.IsNullOrWhiteSpace(payment.TransactionCode))
@@ -181,41 +226,28 @@ else
                             }
                         </td>
                         <td>
-                            @if (showInitialCheckoutAction)
+                            @if (payment.Status == PaymentStatus.AwaitingConfirmation && isGroupedCheckout)
                             {
                                 <div class="alert alert-warning py-2 px-2 small mb-2">
-                                    <strong>Đây là một giao dịch tiền thuê + cọc</strong>
-                                    @if (pairedCheckoutPayment is not null)
-                                    {
-                                        <div class="mt-1">
-                                            Khách chỉ chuyển <strong>một lần @checkoutTotal.ToString("N0") đ</strong>.
-                                            Hệ thống lưu riêng tiền thuê/phí giao nhận và cọc để hạch toán đúng.
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="mt-1">
-                                            Bạn đang lọc một cấu phần của giao dịch. Khi xác nhận, backend sẽ kiểm tra và xác nhận đồng thời cả tiền thuê và cọc cùng mã đối soát.
-                                        </div>
-                                    }
-                                    <div class="mt-1">Kiểm tra tài khoản ngân hàng và đúng mã đối soát trước khi xác nhận.</div>
+                                    <strong>Khách báo đã chuyển @displayAmount.ToString("N0") đ</strong>
+                                    <div class="mt-1">Đây là <strong>một giao dịch</strong> gồm tiền thuê/phí giao nhận và cọc. Kiểm tra đúng tổng tiền và mã đối soát trước khi xác nhận.</div>
                                 </div>
 
                                 <form asp-action="ConfirmQr"
                                       method="post"
                                       class="mb-2"
                                       data-loading-form
-                                      data-confirm="Bạn đã kiểm tra ngân hàng và chắc chắn đã nhận đủ giao dịch tiền thuê + cọc?">
+                                      data-confirm="Bạn đã kiểm tra ngân hàng và chắc chắn đã nhận đủ @displayAmount.ToString("N0") đ cho tiền thuê + cọc?">
                                     <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <button type="submit"
                                             class="btn btn-success btn-sm w-100"
-                                            data-loading-text="Đang xác nhận...">✓ Xác nhận cả tiền thuê + cọc</button>
+                                            data-loading-text="Đang xác nhận...">✓ Xác nhận giao dịch @displayAmount.ToString("N0") đ</button>
                                 </form>
 
                                 <form asp-action="RejectQr"
                                       method="post"
                                       data-loading-form
-                                      data-confirm="Bạn xác nhận hiện chưa tìm thấy giao dịch tiền thuê + cọc này?">
+                                      data-confirm="Bạn xác nhận hiện chưa tìm thấy giao dịch @displayAmount.ToString("N0") đ này?">
                                     <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <div class="mb-2">
                                         <label class="form-label small fw-semibold">Lý do chưa tìm thấy giao dịch</label>
@@ -224,30 +256,33 @@ else
                                                   rows="2"
                                                   maxlength="500"
                                                   required
-                                                  placeholder="Ví dụ: Đã kiểm tra tài khoản đến 21:10 nhưng chưa thấy giao dịch đúng tổng tiền/mã nội dung."></textarea>
+                                                  placeholder="Ví dụ: Đã kiểm tra tài khoản nhưng chưa thấy giao dịch đúng tổng tiền/mã nội dung."></textarea>
                                     </div>
                                     <button type="submit"
                                             class="btn btn-outline-danger btn-sm w-100"
                                             data-loading-text="Đang ghi nhận...">⚠ Chưa tìm thấy giao dịch</button>
                                 </form>
                             }
-                            else if (payment.Status == PaymentStatus.AwaitingConfirmation && isInitialCheckoutPart)
-                            {
-                                <div class="alert alert-light border py-2 px-2 small mb-0">
-                                    <strong>Đi cùng giao dịch tiền thuê + cọc.</strong>
-                                    <div class="mt-1">Chỉ cần xử lý một trong hai cấu phần; backend sẽ xác nhận hoặc trả lại trạng thái cho cả gói.</div>
-                                </div>
-                            }
                             else if (payment.Status == PaymentStatus.AwaitingConfirmation)
                             {
                                 <div class="alert alert-warning py-2 px-2 small mb-2">
-                                    <strong>Khách báo đã chuyển khoản QR</strong>
-                                    <div class="mt-1">Kiểm tra tài khoản ngân hàng trước khi xác nhận.</div>
+                                    @if (isInitialCheckoutPart)
+                                    {
+                                        <strong>Đang xem cấu phần kế toán</strong>
+                                        <div class="mt-1">Khoản này thuộc giao dịch thanh toán ban đầu tiền thuê + cọc. Backend vẫn xác nhận đồng thời cả gói.</div>
+                                    }
+                                    else
+                                    {
+                                        <strong>Khách báo đã chuyển khoản QR</strong>
+                                        <div class="mt-1">Kiểm tra tài khoản ngân hàng trước khi xác nhận.</div>
+                                    }
                                 </div>
+
                                 <form asp-action="ConfirmQr" method="post" class="mb-2" data-loading-form data-confirm="Bạn đã kiểm tra ngân hàng và chắc chắn đã nhận được tiền?">
                                     <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <button type="submit" class="btn btn-success btn-sm w-100" data-loading-text="Đang xác nhận...">✓ Xác nhận đã nhận tiền</button>
                                 </form>
+
                                 <form asp-action="RejectQr" method="post" data-loading-form data-confirm="Bạn xác nhận hiện chưa tìm thấy giao dịch này?">
                                     <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <div class="mb-2">
@@ -300,7 +335,14 @@ else
                             }
                             else if (payment.Status == PaymentStatus.Paid)
                             {
-                                <span class="text-success small fw-semibold">✓ Đã thanh toán</span>
+                                @if (isGroupedCheckout)
+                                {
+                                    <span class="text-success small fw-semibold">✓ Đã nhận đủ tiền thuê + cọc</span>
+                                }
+                                else
+                                {
+                                    <span class="text-success small fw-semibold">✓ Đã thanh toán</span>
+                                }
                             }
                             else if (payment.Status == PaymentStatus.Refunded)
                             {
@@ -309,9 +351,9 @@ else
                             else if (payment.Status == PaymentStatus.Pending)
                             {
                                 <div class="small">
-                                    @if (isInitialCheckoutPart)
+                                    @if (isGroupedCheckout)
                                     {
-                                        <span class="text-muted">Chờ khách thanh toán gói tiền thuê + cọc</span>
+                                        <span class="text-muted">Chờ khách thanh toán một lần tiền thuê + cọc</span>
                                     }
                                     else
                                     {
