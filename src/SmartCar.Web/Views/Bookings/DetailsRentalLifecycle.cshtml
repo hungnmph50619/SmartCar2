@@ -22,7 +22,7 @@
         <div>
             <div class="text-uppercase small fw-semibold">Cần bạn xác nhận trước khi nhận chìa khóa</div>
             <div class="fw-bold fs-5">Biên bản bàn giao đã sẵn sàng để ký</div>
-            <div class="small mt-1">SmartCar đã ghi nhận bộ ảnh, ODO, nhiên liệu/pin, phụ kiện và ghi chú hiện trạng. Hãy xem đúng biên bản này và ký trực tiếp trên tài khoản của bạn.</div>
+            <div class="small mt-1">SmartCar đã ghi nhận bộ ảnh, ODO, nhiên liệu/pin, phụ kiện và ghi chú hiện trạng. Hãy xem đúng biên bản này; nếu cần bạn có thể bổ sung ảnh/ghi chú của mình trước khi ký.</div>
         </div>
         <a class="btn btn-dark"
            asp-controller="CustomerHandovers"
@@ -32,6 +32,21 @@
 }
 
 <partial name="Details" model="Model" />
+
+@if (Model.Status == BookingStatus.PendingInspection && Model.HasReturn)
+{
+    <div class="alert alert-warning shadow-sm mt-4 d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div>
+            <div class="text-uppercase small fw-semibold">Xe đã được SmartCar tiếp nhận</div>
+            <div class="fw-bold fs-5">Kiểm tra ảnh giao ↔ ảnh trả xe</div>
+            <div class="small mt-1">Bạn có thể xem lại bộ ảnh trước chuyến và ảnh SmartCar chụp lúc nhận xe. Nếu có điểm không đúng, gửi yêu cầu xem xét ngay trên hệ thống.</div>
+        </div>
+        <a class="btn btn-warning"
+           asp-controller="CustomerReturns"
+           asp-action="Review"
+           asp-route-bookingId="@Model.BookingId">Xem đối chiếu & phản hồi →</a>
+    </div>
+}
 
 @if (Model.Status == BookingStatus.Rented)
 {
