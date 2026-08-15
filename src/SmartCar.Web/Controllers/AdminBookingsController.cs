@@ -116,6 +116,17 @@ public sealed class AdminBookingsController : Controller
                                      drivingLicense.ExpiryDate.HasValue &&
                                      drivingLicense.ExpiryDate.Value.Date >= booking.ReturnDate.Date;
 
+        var bookingIdText = id.ToString();
+        var vehiclePreparedAt = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.Action == "VehiclePrepared" &&
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == bookingIdText)
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => (DateTime?)log.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
         ViewBag.CustomerCreatedAt = customerCreatedAt;
         ViewBag.CustomerTotalBookingCount = customerBookingStatuses.Count;
         ViewBag.CustomerCompletedBookingCount = customerBookingStatuses.Count(status => status == BookingStatus.Completed);
@@ -125,6 +136,7 @@ public sealed class AdminBookingsController : Controller
         ViewBag.CitizenIdentityVerified = citizenVerified;
         ViewBag.DrivingLicenseVerified = drivingLicenseVerified;
         ViewBag.CustomerKycVerified = citizenVerified && drivingLicenseVerified;
+        ViewBag.VehiclePreparedAt = vehiclePreparedAt?.ToLocalTime();
 
         return View(booking);
     }
@@ -312,12 +324,12 @@ public sealed class AdminBookingsController : Controller
             _dbContext.Notifications.Add(new Notification
             {
                 UserId = booking.CustomerId,
-                Title = "Xe của bạn đã được chuẩn bị xong",
+                Title = "Xe đã được xác nhận cho đơn của bạn",
                 Message =
                     $"SmartCar đã hoàn tất kiểm tra và chuẩn bị xe cho đơn #{booking.BookingId}. " +
-                    $"Chúng tôi sẽ liên hệ xác nhận trước khi giao tại {booking.PickupLocation} " +
-                    $"lúc {booking.PickupDate:dd/MM/yyyy HH:mm}. " +
-                    $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng đã được thanh toán cùng tiền thuê; bạn không cần thanh toán cọc lần nữa khi nhận xe."
+                    $"Xe đã được xác nhận cho lịch nhận lúc {booking.PickupDate:dd/MM/yyyy HH:mm} tại {booking.PickupLocation}. " +
+                    "Bạn chỉ cần chờ đến thời gian nhận xe; SmartCar sẽ liên hệ lại gần giờ nhận để xác nhận trước khi bàn giao. " +
+                    $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng đã được thanh toán cùng tiền thuê, bạn không cần thanh toán lại khi nhận xe."
             });
 
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -325,18 +337,17 @@ public sealed class AdminBookingsController : Controller
             await WriteAuditAsync(
                 "VehiclePrepared",
                 id,
-                $"Xe của đơn #{id} đã được kiểm tra và chuẩn bị xong; tiền thuê và cọc đã thanh toán; tiếp theo Admin liên hệ khách xác nhận trước khi xuất phát giao xe.",
+                $"Xe của đơn #{id} đã được kiểm tra và xác nhận chuẩn bị xong cho khách. " +
+                $"Lịch nhận {booking.PickupDate:dd/MM/yyyy HH:mm} tại {booking.PickupLocation}. " +
+                "Booking vẫn giữ trạng thái Paid; bước tiếp theo là liên hệ khách gần giờ nhận trước khi chuyển ReadyForPickup.",
                 cancellationToken);
         }
 
         TempData["SuccessMessage"] = alreadyPrepared
-            ? "Xe đã được ghi nhận chuẩn bị xong. Tiếp tục xác nhận lịch nhận với khách."
-            : "Đã ghi nhận xe chuẩn bị xong và thông báo cho khách. Tiếp tục gọi/nhắn khách xác nhận trước khi xuất phát.";
+            ? "Xe đã được xác nhận chuẩn bị xong cho đơn này. Khi gần giờ nhận, hãy gọi/nhắn khách để xác nhận lịch nhận."
+            : "Đã xác nhận xe chuẩn bị xong và thông báo cho khách. Khách hiện chỉ cần chờ đến thời gian nhận xe; gần giờ nhận hãy gọi/nhắn khách xác nhận.";
 
-        return RedirectToAction(
-            "PreparePickup",
-            "AdminBookingOperations",
-            new { bookingId = id });
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     private void SetMessage(OperationResult result, string successMessage)
