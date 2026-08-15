@@ -155,6 +155,11 @@ public sealed class HandoverViewModel
     public List<IFormFile> Images { get; set; } = new();
 
     public string? Notes { get; set; }
+
+    public bool RecipientConfirmed { get; set; }
+    public bool CitizenIdOriginalChecked { get; set; }
+    public bool DrivingLicenseOriginalChecked { get; set; }
+    public bool FinalHandoverConfirmed { get; set; }
 }
 
 public sealed class ReturnViewModel
