@@ -172,6 +172,12 @@ public sealed class CustomerHandoverSignViewModel
     [Required(ErrorMessage = "Vui lòng ký vào biên bản trước khi xác nhận nhận xe.")]
     public string SignatureData { get; set; } = string.Empty;
 
+    [StringLength(1000, ErrorMessage = "Ghi chú bổ sung tối đa 1000 ký tự.")]
+    public string? CustomerNote { get; set; }
+
+    [Display(Name = "Ảnh khách bổ sung")]
+    public List<IFormFile> CustomerImages { get; set; } = new();
+
     public bool Accepted { get; set; }
 }
 
@@ -198,6 +204,28 @@ public sealed class ReturnViewModel
     public List<IFormFile> Images { get; set; } = new();
 
     public string? Notes { get; set; }
+}
+
+public sealed class CustomerReturnReviewViewModel
+{
+    public int BookingId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public string VehicleName { get; set; } = string.Empty;
+    public string LicensePlate { get; set; } = string.Empty;
+    public DateTime HandoverAt { get; set; }
+    public DateTime ReturnedAt { get; set; }
+    public int HandoverMileage { get; set; }
+    public int ReturnMileage { get; set; }
+    public string HandoverFuelLevel { get; set; } = string.Empty;
+    public string ReturnFuelLevel { get; set; } = string.Empty;
+    public string? CustomerHandoverNote { get; set; }
+    public string? ReturnCondition { get; set; }
+    public string? ReturnNotes { get; set; }
+    public IReadOnlyList<string> HandoverImagePaths { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> CustomerHandoverImagePaths { get; set; } = Array.Empty<string>();
+    public IReadOnlyList<string> ReturnImagePaths { get; set; } = Array.Empty<string>();
+    public string ReviewStatus { get; set; } = "Pending";
+    public string? DisputeReason { get; set; }
 }
 
 public sealed class AddChargeViewModel
