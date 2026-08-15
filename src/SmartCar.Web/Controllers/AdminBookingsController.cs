@@ -270,8 +270,66 @@ public sealed class AdminBookingsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult MarkReady(int id)
+    public async Task<IActionResult> MarkReady(
+        int id,
+        CancellationToken cancellationToken)
     {
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .FirstOrDefaultAsync(item => item.BookingId == id, cancellationToken);
+
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        var rentalPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Rental &&
+            payment.Status == PaymentStatus.Paid);
+
+        if (booking.Status != BookingStatus.Paid || !rentalPaid)
+        {
+            TempData["ErrorMessage"] =
+                "Chỉ đơn đã thanh toán tiền thuê mới được ghi nhận xe đã chuẩn bị xong.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var entityId = id.ToString();
+        var alreadyPrepared = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .AnyAsync(log =>
+                log.Action == "VehiclePrepared" &&
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == entityId,
+                cancellationToken);
+
+        if (!alreadyPrepared)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = "Xe của bạn đã được chuẩn bị xong",
+                Message =
+                    $"SmartCar đã hoàn tất kiểm tra và chuẩn bị xe cho đơn #{booking.BookingId}. " +
+                    $"Chúng tôi sẽ liên hệ xác nhận trước khi giao tại {booking.PickupLocation} " +
+                    $"lúc {booking.PickupDate:dd/MM/yyyy HH:mm}. " +
+                    $"Khi nhận xe, khách cần cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng; " +
+                    "cọc sẽ được quyết toán sau khi trả xe."
+            });
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await WriteAuditAsync(
+                "VehiclePrepared",
+                id,
+                $"Xe của đơn #{id} đã được kiểm tra và chuẩn bị xong; tiếp theo Admin liên hệ khách xác nhận trước khi xuất phát giao xe.",
+                cancellationToken);
+        }
+
+        TempData["SuccessMessage"] = alreadyPrepared
+            ? "Xe đã được ghi nhận chuẩn bị xong. Tiếp tục xác nhận lịch nhận với khách."
+            : "Đã ghi nhận xe chuẩn bị xong và thông báo cho khách. Tiếp tục gọi/nhắn khách xác nhận trước khi xuất phát.";
+
         return RedirectToAction(
             "PreparePickup",
             "AdminBookingOperations",
