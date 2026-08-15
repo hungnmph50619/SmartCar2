@@ -1,4 +1,4 @@
-﻿@model IReadOnlyList<SmartCar.Application.Features.Payments.AdminPaymentListItemDto>
+@model IReadOnlyList<SmartCar.Application.Features.Payments.AdminPaymentListItemDto>
 
 @using SmartCar.Domain.Enums
 @using SmartCar.Web.Services
@@ -8,289 +8,155 @@
 @{
     ViewData["Title"] = "Quản lý thanh toán";
 
-    var selectedStatus =
-        ViewBag.Status as PaymentStatus?;
+    var selectedStatus = ViewBag.Status as PaymentStatus?;
+    var selectedType = ViewBag.Type as PaymentType?;
 
-    var selectedType =
-        ViewBag.Type as PaymentType?;
-
-    string GetStatusBadgeClass(PaymentStatus status)
+    string GetStatusBadgeClass(PaymentStatus status) => status switch
     {
-        return status switch
-        {
-            PaymentStatus.Pending =>
-                "bg-secondary",
+        PaymentStatus.Pending => "bg-secondary",
+        PaymentStatus.AwaitingConfirmation => "bg-warning text-dark",
+        PaymentStatus.Paid => "bg-success",
+        PaymentStatus.AwaitingRefund => "bg-info text-dark",
+        PaymentStatus.Refunded => "bg-success",
+        PaymentStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
+    };
 
-            PaymentStatus.AwaitingConfirmation =>
-                "bg-warning text-dark",
-
-            PaymentStatus.Paid =>
-                "bg-success",
-
-            PaymentStatus.AwaitingRefund =>
-                "bg-info text-dark",
-
-            PaymentStatus.Refunded =>
-                "bg-success",
-
-            PaymentStatus.Failed =>
-                "bg-danger",
-
-            _ =>
-                "bg-secondary"
-        };
-    }
-
-    string GetPaymentTimeText(
-        PaymentStatus status,
-        DateTime? paidAt)
+    string GetPaymentTimeText(PaymentStatus status, DateTime? paidAt)
     {
         if (paidAt.HasValue)
         {
-            return paidAt.Value
-                .ToLocalTime()
-                .ToString("dd/MM/yyyy HH:mm");
+            return paidAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
         }
 
         return status switch
         {
-            PaymentStatus.Pending =>
-                "Chưa thanh toán",
-
-            PaymentStatus.AwaitingConfirmation =>
-                "Chờ xác nhận",
-
-            PaymentStatus.AwaitingRefund =>
-                "Chờ hoàn tiền",
-
-            PaymentStatus.Failed =>
-                "Thanh toán thất bại",
-
-            _ =>
-                "-"
+            PaymentStatus.Pending => "Chưa thanh toán",
+            PaymentStatus.AwaitingConfirmation => "Chờ xác nhận",
+            PaymentStatus.AwaitingRefund => "Chờ hoàn tiền",
+            PaymentStatus.Failed => "Thanh toán thất bại",
+            _ => "-"
         };
     }
 }
 
-<div class="d-flex justify-content-between
-    align-items-center
-    flex-wrap
-    gap-3
-    mb-3">
-
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
     <div>
-        <h1 class="h3 mb-1">
-            Quản lý thanh toán
-        </h1>
-
+        <h1 class="h3 mb-1">Quản lý thanh toán</h1>
         <p class="text-muted mb-0">
-            Theo dõi tiền thuê, cọc bảo đảm,
-            gia hạn, phụ phí và các khoản hoàn.
+            Tiền thuê và cọc bảo đảm được khách thanh toán <strong>một lần</strong> nhưng lưu thành hai cấu phần kế toán riêng để cọc không bị tính vào doanh thu.
         </p>
     </div>
-
 </div>
 
-<form method="get"
-      class="row g-2 mb-4">
-
+<form method="get" class="row g-2 mb-4">
     <div class="col-md-4">
-
-        <label class="form-label">
-            Trạng thái
-        </label>
-
-        <select name="status"
-                class="form-select">
-
-            <option value="">
-                Tất cả trạng thái
-            </option>
-
-            @foreach (var status in
-                Enum.GetValues<PaymentStatus>())
+        <label class="form-label">Trạng thái</label>
+        <select name="status" class="form-select">
+            <option value="">Tất cả trạng thái</option>
+            @foreach (var status in Enum.GetValues<PaymentStatus>())
             {
-                <option value="@status"
-                        selected="@(selectedStatus == status)">
-                    @status.ToVietnamese()
-                </option>
+                <option value="@status" selected="@(selectedStatus == status)">@status.ToVietnamese()</option>
             }
-
         </select>
-
     </div>
 
     <div class="col-md-4">
-
-        <label class="form-label">
-            Loại thanh toán
-        </label>
-
-        <select name="type"
-                class="form-select">
-
-            <option value="">
-                Tất cả loại thanh toán
-            </option>
-
-            @foreach (var type in
-                Enum.GetValues<PaymentType>())
+        <label class="form-label">Loại thanh toán</label>
+        <select name="type" class="form-select">
+            <option value="">Tất cả loại thanh toán</option>
+            @foreach (var type in Enum.GetValues<PaymentType>())
             {
-                <option value="@type"
-                        selected="@(selectedType == type)">
-                    @type.ToVietnamese()
-                </option>
+                <option value="@type" selected="@(selectedType == type)">@type.ToVietnamese()</option>
             }
-
         </select>
-
     </div>
 
     <div class="col-md-auto d-flex align-items-end">
-
-        <button class="btn btn-outline-primary"
-                type="submit">
-            Lọc
-        </button>
-
+        <button class="btn btn-outline-primary" type="submit">Lọc</button>
     </div>
-
     <div class="col-md-auto d-flex align-items-end">
-
-        <a asp-action="Index"
-           class="btn btn-outline-secondary">
-            Xóa bộ lọc
-        </a>
-
+        <a asp-action="Index" class="btn btn-outline-secondary">Xóa bộ lọc</a>
     </div>
-
 </form>
 
 @if (Model.Count == 0)
 {
-    <div class="alert alert-info">
-        Chưa có giao dịch phù hợp.
-    </div>
+    <div class="alert alert-info">Chưa có giao dịch phù hợp.</div>
 }
 else
 {
     <div class="table-responsive">
-
-        <table class="table
-            table-bordered
-            table-hover
-            align-middle">
-
+        <table class="table table-bordered table-hover align-middle">
             <thead class="table-light">
-
                 <tr>
-
-                    <th>
-                        Mã GD
-                    </th>
-
-                    <th>
-                        Đơn
-                    </th>
-
-                    <th>
-                        Khách hàng
-                    </th>
-
-                    <th>
-                        Xe
-                    </th>
-
-                    <th>
-                        Loại
-                    </th>
-
-                    <th>
-                        Phương thức
-                    </th>
-
-                    <th class="text-end">
-                        Số tiền
-                    </th>
-
-                    <th>
-                        Trạng thái
-                    </th>
-
-                    <th>
-                        Thời gian
-                    </th>
-
-                    <th>
-                        Mã giao dịch
-                    </th>
-
-                    <th style="min-width:300px;">
-                        Thao tác
-                    </th>
-
+                    <th>Mã GD</th>
+                    <th>Đơn</th>
+                    <th>Khách hàng</th>
+                    <th>Xe</th>
+                    <th>Loại</th>
+                    <th>Phương thức</th>
+                    <th class="text-end">Số tiền</th>
+                    <th>Trạng thái</th>
+                    <th>Thời gian</th>
+                    <th>Mã giao dịch</th>
+                    <th style="min-width:310px;">Thao tác</th>
                 </tr>
-
             </thead>
-
             <tbody>
-
                 @foreach (var payment in Model)
                 {
                     UserBankAccountDto? refundBankAccount = null;
                     var isRefund = payment.Type is PaymentType.Refund or PaymentType.DepositRefund;
                     var isDepositRefund = payment.Type == PaymentType.DepositRefund;
+                    var isInitialCheckoutPart = payment.Type is PaymentType.Rental or PaymentType.Deposit;
 
-                    if (isRefund &&
-                        payment.Status == PaymentStatus.AwaitingRefund)
+                    var pairedCheckoutPayment = isInitialCheckoutPart
+                        ? Model.FirstOrDefault(item =>
+                            item.BookingId == payment.BookingId &&
+                            item.PaymentId != payment.PaymentId &&
+                            item.Type is PaymentType.Rental or PaymentType.Deposit &&
+                            item.Status == payment.Status &&
+                            item.TransactionCode == payment.TransactionCode)
+                        : null;
+
+                    var checkoutTotal = payment.Amount + (pairedCheckoutPayment?.Amount ?? 0);
+                    var showInitialCheckoutAction =
+                        payment.Status == PaymentStatus.AwaitingConfirmation &&
+                        isInitialCheckoutPart &&
+                        (payment.Type == PaymentType.Rental || pairedCheckoutPayment is null);
+
+                    if (isRefund && payment.Status == PaymentStatus.AwaitingRefund)
                     {
-                        refundBankAccount =
-                            await BankAccountService.GetDefaultAsync(
-                                payment.CustomerId);
+                        refundBankAccount = await BankAccountService.GetDefaultAsync(payment.CustomerId);
                     }
 
                     <tr>
-
-                        <td class="fw-semibold">
-                            #@payment.PaymentId
-                        </td>
-
+                        <td class="fw-semibold">#@payment.PaymentId</td>
                         <td>
                             <a asp-controller="AdminBookings"
                                asp-action="Details"
                                asp-route-id="@payment.BookingId"
-                               class="text-decoration-none fw-semibold">
-                                #@payment.BookingId
-                            </a>
+                               class="text-decoration-none fw-semibold">#@payment.BookingId</a>
                         </td>
-
                         <td>
-                            <div class="fw-semibold">
-                                @payment.CustomerName
-                            </div>
-
+                            <div class="fw-semibold">@payment.CustomerName</div>
                             <a asp-controller="AdminCustomers"
                                asp-action="Details"
                                asp-route-id="@payment.CustomerId"
-                               class="small text-decoration-none">
-                                Xem khách hàng
-                            </a>
+                               class="small text-decoration-none">Xem khách hàng</a>
                         </td>
-
                         <td>
-                            <strong>
-                                @payment.VehicleName
-                            </strong>
-                            <br />
-                            <small class="text-muted">
-                                @payment.LicensePlate
-                            </small>
+                            <strong>@payment.VehicleName</strong><br />
+                            <small class="text-muted">@payment.LicensePlate</small>
                         </td>
-
                         <td>
                             @payment.Type.ToVietnamese()
+                            @if (isInitialCheckoutPart)
+                            {
+                                <div class="small text-muted">Cấu phần thanh toán ban đầu</div>
+                            }
                         </td>
-
                         <td>
                             @if (string.IsNullOrWhiteSpace(payment.Method))
                             {
@@ -301,23 +167,9 @@ else
                                 @payment.Method
                             }
                         </td>
-
-                        <td class="text-end fw-semibold">
-                            @payment.Amount.ToString("N0") đ
-                        </td>
-
-                        <td>
-                            <span class="badge @GetStatusBadgeClass(payment.Status)">
-                                @payment.Status.ToVietnamese()
-                            </span>
-                        </td>
-
-                        <td class="small">
-                            @GetPaymentTimeText(
-                                payment.Status,
-                                payment.PaidAt)
-                        </td>
-
+                        <td class="text-end fw-semibold">@payment.Amount.ToString("N0") đ</td>
+                        <td><span class="badge @GetStatusBadgeClass(payment.Status)">@payment.Status.ToVietnamese()</span></td>
+                        <td class="small">@GetPaymentTimeText(payment.Status, payment.PaidAt)</td>
                         <td>
                             @if (string.IsNullOrWhiteSpace(payment.TransactionCode))
                             {
@@ -325,131 +177,114 @@ else
                             }
                             else
                             {
-                                <code class="user-select-all">
-                                    @payment.TransactionCode
-                                </code>
+                                <code class="user-select-all">@payment.TransactionCode</code>
                             }
                         </td>
-
                         <td>
-                            @if (payment.Status == PaymentStatus.AwaitingConfirmation)
+                            @if (showInitialCheckoutAction)
                             {
                                 <div class="alert alert-warning py-2 px-2 small mb-2">
-                                    <strong>Khách báo đã chuyển khoản QR</strong>
-                                    <div class="mt-1">
-                                        Kiểm tra tài khoản ngân hàng trước khi xác nhận. Nếu chưa thấy tiền,
-                                        chỉ ghi nhận là <strong>chưa tìm thấy giao dịch</strong>; mã yêu cầu và lý do xử lý sẽ được giữ trong lịch sử đối soát.
-                                    </div>
+                                    <strong>Đây là một giao dịch tiền thuê + cọc</strong>
+                                    @if (pairedCheckoutPayment is not null)
+                                    {
+                                        <div class="mt-1">
+                                            Khách chỉ chuyển <strong>một lần @checkoutTotal.ToString("N0") đ</strong>.
+                                            Hệ thống lưu riêng tiền thuê/phí giao nhận và cọc để hạch toán đúng.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="mt-1">
+                                            Bạn đang lọc một cấu phần của giao dịch. Khi xác nhận, backend sẽ kiểm tra và xác nhận đồng thời cả tiền thuê và cọc cùng mã đối soát.
+                                        </div>
+                                    }
+                                    <div class="mt-1">Kiểm tra tài khoản ngân hàng và đúng mã đối soát trước khi xác nhận.</div>
                                 </div>
 
                                 <form asp-action="ConfirmQr"
                                       method="post"
                                       class="mb-2"
                                       data-loading-form
-                                      data-confirm="Bạn đã kiểm tra ngân hàng và chắc chắn đã nhận được tiền?">
-
-                                    <input type="hidden"
-                                           name="paymentId"
-                                           value="@payment.PaymentId" />
-
+                                      data-confirm="Bạn đã kiểm tra ngân hàng và chắc chắn đã nhận đủ giao dịch tiền thuê + cọc?">
+                                    <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <button type="submit"
                                             class="btn btn-success btn-sm w-100"
-                                            data-loading-text="Đang xác nhận...">
-                                        ✓ Xác nhận đã nhận tiền
-                                    </button>
+                                            data-loading-text="Đang xác nhận...">✓ Xác nhận cả tiền thuê + cọc</button>
                                 </form>
 
                                 <form asp-action="RejectQr"
                                       method="post"
                                       data-loading-form
-                                      data-confirm="Bạn xác nhận hiện chưa tìm thấy giao dịch này? Lý do và mã yêu cầu sẽ được ghi vào lịch sử đối soát.">
-
-                                    <input type="hidden"
-                                           name="paymentId"
-                                           value="@payment.PaymentId" />
-
+                                      data-confirm="Bạn xác nhận hiện chưa tìm thấy giao dịch tiền thuê + cọc này?">
+                                    <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <div class="mb-2">
-                                        <label class="form-label small fw-semibold">
-                                            Lý do chưa tìm thấy giao dịch
-                                        </label>
+                                        <label class="form-label small fw-semibold">Lý do chưa tìm thấy giao dịch</label>
                                         <textarea name="rejectionReason"
                                                   class="form-control form-control-sm"
                                                   rows="2"
                                                   maxlength="500"
                                                   required
-                                                  placeholder="Ví dụ: Đã kiểm tra MB Bank đến 21:10 nhưng chưa thấy giao dịch đúng số tiền/mã nội dung."></textarea>
+                                                  placeholder="Ví dụ: Đã kiểm tra tài khoản đến 21:10 nhưng chưa thấy giao dịch đúng tổng tiền/mã nội dung."></textarea>
                                     </div>
-
                                     <button type="submit"
                                             class="btn btn-outline-danger btn-sm w-100"
-                                            data-loading-text="Đang ghi nhận...">
-                                        ⚠ Chưa tìm thấy giao dịch
-                                    </button>
+                                            data-loading-text="Đang ghi nhận...">⚠ Chưa tìm thấy giao dịch</button>
                                 </form>
                             }
-                            else if (
-                                isRefund &&
-                                payment.Status == PaymentStatus.AwaitingRefund)
+                            else if (payment.Status == PaymentStatus.AwaitingConfirmation && isInitialCheckoutPart)
                             {
-                                <div class="fw-semibold mb-2">
-                                    @(isDepositRefund ? "Hoàn cọc bảo đảm cho khách" : "Hoàn tiền cho khách")
+                                <div class="alert alert-light border py-2 px-2 small mb-0">
+                                    <strong>Đi cùng giao dịch tiền thuê + cọc.</strong>
+                                    <div class="mt-1">Chỉ cần xử lý một trong hai cấu phần; backend sẽ xác nhận hoặc trả lại trạng thái cho cả gói.</div>
                                 </div>
+                            }
+                            else if (payment.Status == PaymentStatus.AwaitingConfirmation)
+                            {
+                                <div class="alert alert-warning py-2 px-2 small mb-2">
+                                    <strong>Khách báo đã chuyển khoản QR</strong>
+                                    <div class="mt-1">Kiểm tra tài khoản ngân hàng trước khi xác nhận.</div>
+                                </div>
+                                <form asp-action="ConfirmQr" method="post" class="mb-2" data-loading-form data-confirm="Bạn đã kiểm tra ngân hàng và chắc chắn đã nhận được tiền?">
+                                    <input type="hidden" name="paymentId" value="@payment.PaymentId" />
+                                    <button type="submit" class="btn btn-success btn-sm w-100" data-loading-text="Đang xác nhận...">✓ Xác nhận đã nhận tiền</button>
+                                </form>
+                                <form asp-action="RejectQr" method="post" data-loading-form data-confirm="Bạn xác nhận hiện chưa tìm thấy giao dịch này?">
+                                    <input type="hidden" name="paymentId" value="@payment.PaymentId" />
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-semibold">Lý do chưa tìm thấy giao dịch</label>
+                                        <textarea name="rejectionReason" class="form-control form-control-sm" rows="2" maxlength="500" required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm w-100" data-loading-text="Đang ghi nhận...">⚠ Chưa tìm thấy giao dịch</button>
+                                </form>
+                            }
+                            else if (isRefund && payment.Status == PaymentStatus.AwaitingRefund)
+                            {
+                                <div class="fw-semibold mb-2">@(isDepositRefund ? "Hoàn cọc bảo đảm cho khách" : "Hoàn phần tiền chuyến cho khách")</div>
 
                                 @if (refundBankAccount is null)
                                 {
-                                    <div class="alert alert-danger py-2 px-2 small mb-2">
-                                        Khách chưa lưu tài khoản ngân hàng nhận khoản hoàn.
-                                    </div>
-
+                                    <div class="alert alert-danger py-2 px-2 small mb-2">Khách chưa lưu tài khoản ngân hàng nhận khoản hoàn.</div>
                                     <a asp-controller="AdminCustomers"
                                        asp-action="Details"
                                        asp-route-id="@payment.CustomerId"
-                                       class="btn btn-outline-secondary btn-sm w-100">
-                                        Xem thông tin khách hàng
-                                    </a>
+                                       class="btn btn-outline-secondary btn-sm w-100">Xem thông tin khách hàng</a>
                                 }
                                 else
                                 {
                                     <div class="border rounded bg-light p-2 mb-2 small">
-                                        <div class="mb-1">
-                                            <span class="text-muted">Ngân hàng:</span>
-                                            <strong>@refundBankAccount.BankName</strong>
-                                        </div>
-
-                                        <div class="mb-1">
-                                            <span class="text-muted">Số tài khoản:</span>
-                                            <strong class="user-select-all">
-                                                @refundBankAccount.AccountNumber
-                                            </strong>
-                                        </div>
-
-                                        <div class="mb-1">
-                                            <span class="text-muted">Chủ tài khoản:</span>
-                                            <strong>@refundBankAccount.AccountHolderName</strong>
-                                        </div>
-
-                                        <div>
-                                            <span class="text-muted">Cần hoàn:</span>
-                                            <strong class="text-danger">
-                                                @payment.Amount.ToString("N0") đ
-                                            </strong>
-                                        </div>
+                                        <div class="mb-1"><span class="text-muted">Ngân hàng:</span> <strong>@refundBankAccount.BankName</strong></div>
+                                        <div class="mb-1"><span class="text-muted">Số tài khoản:</span> <strong class="user-select-all">@refundBankAccount.AccountNumber</strong></div>
+                                        <div class="mb-1"><span class="text-muted">Chủ tài khoản:</span> <strong>@refundBankAccount.AccountHolderName</strong></div>
+                                        <div><span class="text-muted">Cần hoàn:</span> <strong class="text-danger">@payment.Amount.ToString("N0") đ</strong></div>
                                     </div>
 
                                     <form asp-action="ConfirmRefund"
                                           method="post"
                                           data-loading-form
-                                          data-confirm="@(isDepositRefund ? "Bạn đã thực sự chuyển khoản hoàn cọc cho khách?" : "Bạn đã thực sự chuyển khoản hoàn tiền cho khách?")">
-
-                                        <input type="hidden"
-                                               name="paymentId"
-                                               value="@payment.PaymentId" />
-
+                                          data-confirm="@(isDepositRefund ? "Bạn đã thực sự chuyển khoản hoàn cọc cho khách?" : "Bạn đã thực sự chuyển khoản hoàn phần tiền chuyến cho khách?")">
+                                        <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                         <div class="mb-2">
-                                            <label class="form-label small fw-semibold">
-                                                Mã giao dịch ngân hàng
-                                            </label>
-
+                                            <label class="form-label small fw-semibold">Mã giao dịch ngân hàng</label>
                                             <input type="text"
                                                    name="transactionCode"
                                                    class="form-control form-control-sm"
@@ -457,10 +292,7 @@ else
                                                    placeholder="Ví dụ: FT260812123456"
                                                    required />
                                         </div>
-
-                                        <button type="submit"
-                                                class="btn btn-success btn-sm w-100"
-                                                data-loading-text="Đang xác nhận...">
+                                        <button type="submit" class="btn btn-success btn-sm w-100" data-loading-text="Đang xác nhận...">
                                             ✓ @(isDepositRefund ? "Xác nhận đã hoàn cọc" : "Xác nhận đã hoàn tiền")
                                         </button>
                                     </form>
@@ -468,25 +300,26 @@ else
                             }
                             else if (payment.Status == PaymentStatus.Paid)
                             {
-                                <span class="text-success small fw-semibold">
-                                    ✓ Đã thanh toán
-                                </span>
+                                <span class="text-success small fw-semibold">✓ Đã thanh toán</span>
                             }
                             else if (payment.Status == PaymentStatus.Refunded)
                             {
-                                <span class="text-success small fw-semibold">
-                                    ✓ @(isDepositRefund ? "Đã hoàn cọc" : "Đã hoàn tiền")
-                                </span>
+                                <span class="text-success small fw-semibold">✓ @(isDepositRefund ? "Đã hoàn cọc" : "Đã hoàn tiền")</span>
                             }
                             else if (payment.Status == PaymentStatus.Pending)
                             {
                                 <div class="small">
-                                    <span class="text-muted">Chờ khách thanh toán</span>
+                                    @if (isInitialCheckoutPart)
+                                    {
+                                        <span class="text-muted">Chờ khách thanh toán gói tiền thuê + cọc</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Chờ khách thanh toán</span>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
                                     {
-                                        <div class="text-warning-emphasis mt-1">
-                                            Có lịch sử đối soát trước đó. Mã gần nhất vẫn được giữ lại.
-                                        </div>
+                                        <div class="text-warning-emphasis mt-1">Có lịch sử đối soát trước đó. Mã gần nhất vẫn được giữ lại.</div>
                                     }
                                 </div>
                             }
@@ -496,9 +329,7 @@ else
                                     <span class="text-danger">Giao dịch không còn hiệu lực</span>
                                     @if (!string.IsNullOrWhiteSpace(payment.TransactionCode))
                                     {
-                                        <div class="text-muted mt-1">
-                                            Mã đối soát gần nhất vẫn được lưu để kiểm tra lịch sử.
-                                        </div>
+                                        <div class="text-muted mt-1">Mã đối soát gần nhất vẫn được lưu để kiểm tra lịch sử.</div>
                                     }
                                 </div>
                             }
@@ -509,10 +340,7 @@ else
                         </td>
                     </tr>
                 }
-
             </tbody>
-
         </table>
-
     </div>
 }
