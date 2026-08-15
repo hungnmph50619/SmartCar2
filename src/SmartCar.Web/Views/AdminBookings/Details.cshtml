@@ -18,6 +18,10 @@
     var citizenIdentityVerified = ViewBag.CitizenIdentityVerified is bool citizenValue && citizenValue;
     var drivingLicenseVerified = ViewBag.DrivingLicenseVerified is bool licenseValue && licenseValue;
     var customerKycVerified = ViewBag.CustomerKycVerified is bool kycValue && kycValue;
+    var vehiclePreparedAt = ViewBag.VehiclePreparedAt is DateTime preparedAtValue
+        ? preparedAtValue
+        : (DateTime?)null;
+    var vehiclePrepared = vehiclePreparedAt.HasValue;
 
     var pickupLocationText = string.IsNullOrWhiteSpace(Model.PickupLocation)
         ? "Chưa cập nhật địa điểm nhận xe"
@@ -48,9 +52,13 @@
             "Chờ khách hàng thanh toán",
             "Đơn đã được xác nhận. Tiền thuê và phí giao nhận đã được chốt; chưa chuẩn bị giao xe cho đến khi thanh toán được ghi nhận.",
             "primary"),
+        BookingStatus.Paid when vehiclePrepared => (
+            "Xe đã được xác nhận cho đơn",
+            $"Xe đã được kiểm tra và chuẩn bị xong lúc {vehiclePreparedAt!.Value:dd/MM/yyyy HH:mm}. Khách đã được thông báo và chỉ cần chờ đến thời gian nhận xe. Khi gần giờ nhận, gọi/nhắn khách xác nhận trước khi chuyển sang sẵn sàng giao.",
+            "success"),
         BookingStatus.Paid => (
-            "Xác nhận khách trước khi giao",
-            "Khách hàng đã thanh toán. Kiểm tra xe, gọi/nhắn khách và chỉ chuyển sang sẵn sàng giao khi khách phản hồi sẽ nhận xe đúng giờ, đúng địa điểm.",
+            "Kiểm tra và xác nhận xe đã chuẩn bị",
+            "Khách đã thanh toán tiền thuê và cọc. Hãy kiểm tra xe thực tế; khi xe đạt yêu cầu, xác nhận xe đã chuẩn bị xong để khách biết chắc xe đã được dành cho đơn của họ.",
             "success"),
         BookingStatus.ReadyForPickup => (
             "Lập biên bản bàn giao",
@@ -288,9 +296,9 @@
                 <div class="border rounded-3 p-3 mt-3 bg-light">
                     <div class="fw-semibold mb-2">Quy trình Admin tại thời điểm giao xe</div>
                     <div class="row g-2 small">
-                        <div class="col-md-6"><strong>Trước khi đi:</strong> kiểm tra đơn đã thanh toán, gọi/nhắn khách và chỉ xuất phát sau khi khách phản hồi xác nhận giờ, địa điểm nhận.</div>
+                        <div class="col-md-6"><strong>Sau thanh toán:</strong> kiểm tra xe thực tế và xác nhận “Xe đã chuẩn bị xong” để khách biết chắc xe đã được dành cho đơn.</div>
+                        <div class="col-md-6"><strong>Trước khi đi:</strong> gần giờ nhận, gọi/nhắn khách và chỉ chuyển sang sẵn sàng giao sau khi khách phản hồi xác nhận giờ, địa điểm nhận.</div>
                         <div class="col-md-6"><strong>Tại điểm giao:</strong> gặp đúng người thuê, đối chiếu giấy tờ và lập biên bản trước khi giao chìa khóa.</div>
-                        <div class="col-md-6"><strong>Nếu khách đến muộn:</strong> liên hệ và ghi nhận tình huống; không tự động kết thúc đơn khi khách có phản hồi và hai bên thống nhất chờ.</div>
                         <div class="col-md-6"><strong>NoShow:</strong> chờ ít nhất 30 phút, liên hệ lại tối thiểu 2 lần; giao tận nơi phải xác nhận Admin đã đến đúng điểm giao. Giữ 40% tiền thuê + phí lượt giao đã phát sinh, hoàn phần còn lại.</div>
                     </div>
                 </div>
@@ -361,14 +369,40 @@
 
         @if (Model.Status == BookingStatus.Paid)
         {
-            <div class="card card-body shadow-sm mb-4">
-                <h2 class="h5">Xác nhận khách trước khi giao xe</h2>
-                <p>Khách hàng đã thanh toán. Kiểm tra xe rồi mở bước xác nhận; Admin phải gọi/nhắn và chỉ chuyển đơn sang sẵn sàng giao khi khách thực sự phản hồi sẽ nhận xe đúng giờ, đúng địa điểm.</p>
-                <form asp-action="MarkReady" method="post" data-loading-form>
-                    <input type="hidden" name="id" value="@Model.BookingId" />
-                    <button class="btn btn-primary" type="submit" data-loading-text="Đang mở bước xác nhận...">Gọi khách và xác nhận trước khi đi</button>
-                </form>
-            </div>
+            @if (!vehiclePrepared)
+            {
+                <div class="card card-body shadow-sm mb-4 border-primary">
+                    <h2 class="h5">Xác nhận xe đã chuẩn bị xong</h2>
+                    <p class="mb-2">Khách đã thanh toán tiền thuê và cọc. Hãy kiểm tra tình trạng xe, vệ sinh, giấy tờ, nhiên liệu/pin và khả năng bàn giao thực tế.</p>
+                    <div class="alert alert-light border small">
+                        Khi bấm xác nhận, khách sẽ nhận thông báo rằng <strong>xe đã được xác nhận cho đơn của họ</strong> và chỉ cần chờ đến thời gian nhận xe. Booking vẫn giữ trạng thái <strong>Đã thanh toán</strong>, chưa chuyển sang Sẵn sàng giao xe.
+                    </div>
+                    <form asp-action="MarkReady" method="post" data-loading-form data-confirm="Xác nhận xe đã được kiểm tra và chuẩn bị xong cho đơn này? Khách sẽ được thông báo ngay.">
+                        <input type="hidden" name="id" value="@Model.BookingId" />
+                        <button class="btn btn-primary" type="submit" data-loading-text="Đang xác nhận xe...">✓ Xác nhận xe đã chuẩn bị xong</button>
+                    </form>
+                </div>
+            }
+            else
+            {
+                <div class="card card-body shadow-sm mb-4 border-success">
+                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                        <div>
+                            <h2 class="h5 text-success mb-1">✓ Xe đã được xác nhận cho đơn</h2>
+                            <p class="mb-1">Khách đã được thông báo rằng xe đã chuẩn bị xong và chỉ cần chờ đến lịch nhận.</p>
+                            <div class="small text-muted">Xác nhận lúc: <strong>@vehiclePreparedAt!.Value.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                            <div class="small text-muted">Lịch nhận: <strong>@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong> · @pickupLocationText</div>
+                        </div>
+                        <span class="badge bg-success">Đã chuẩn bị xe</span>
+                    </div>
+                    <hr />
+                    <p class="mb-2">Khi gần giờ nhận xe, gọi/nhắn khách để xác nhận họ sẽ có mặt đúng giờ, đúng địa điểm. Chỉ sau khi khách phản hồi mới chuyển đơn sang <strong>Sẵn sàng giao xe</strong>.</p>
+                    <a class="btn btn-primary align-self-start"
+                       asp-controller="AdminBookingOperations"
+                       asp-action="PreparePickup"
+                       asp-route-bookingId="@Model.BookingId">Gọi khách và xác nhận trước khi đi</a>
+                </div>
+            }
         }
 
         @if (Model.Status == BookingStatus.ReadyForPickup)
