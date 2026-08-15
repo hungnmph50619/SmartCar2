@@ -10,14 +10,8 @@ public sealed record ReturnPreparationDto(
     DateTime HandoverAt,
     int HandoverMileage,
     string HandoverFuelLevel,
-    string? HandoverAccessories,
-    string? HandoverImagePaths,
-    string? CustomerHandoverImagePaths,
-    string? CustomerHandoverNote,
-    string? CustomerCheckoutImagePaths,
-    string? CustomerCheckoutNote,
-    int? CustomerCheckoutMileage,
-    string? CustomerCheckoutFuelLevel,
+    string? HandoverVehicleImagePaths,
+    string? HandoverDocumentImagePaths,
     string VehicleFuelType);
 
 public sealed record CreateReturnRequest(
