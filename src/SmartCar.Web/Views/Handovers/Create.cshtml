@@ -1,4 +1,4 @@
-﻿@model SmartCar.Web.ViewModels.HandoverViewModel
+@model SmartCar.Web.ViewModels.HandoverViewModel
 @using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Biên bản giao xe";
@@ -17,16 +17,12 @@
         vehicleFuelType,
         "Điện",
         StringComparison.OrdinalIgnoreCase);
-
-    var depositReceived = ViewBag.DepositReceived is bool received && received;
-    var depositMethod = ViewBag.DepositMethod as string
-        ?? RentalPolicyConstants.SecurityDepositCashMethod;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
         <h1 class="h3 mb-1">Lập biên bản giao xe - Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Ghi nhận ODO thực tế, nhiên liệu/pin, phụ kiện, cọc bảo đảm và bộ ảnh đối chiếu trước khi giao chìa khóa.</p>
+        <p class="text-muted mb-0">Ghi nhận ODO thực tế, nhiên liệu/pin, phụ kiện và bộ ảnh đối chiếu trước khi giao chìa khóa.</p>
     </div>
     <a class="btn btn-outline-secondary"
        asp-controller="AdminBookings"
@@ -44,7 +40,7 @@
       enctype="multipart/form-data"
       class="card card-body shadow-sm"
       data-loading-form
-      data-confirm="Xác nhận đã nhận cọc và bàn giao xe? Sau thao tác này đơn sẽ chuyển sang trạng thái đang thuê.">
+      data-confirm="Xác nhận bàn giao xe? Sau thao tác này đơn sẽ chuyển sang trạng thái đang thuê.">
     <input asp-for="BookingId" type="hidden" />
     <input asp-for="ExteriorCondition" type="hidden" id="handover-condition-summary" />
     <input asp-for="InteriorCondition" type="hidden" id="handover-interior-summary" />
@@ -214,44 +210,16 @@
                 <span asp-validation-for="ExteriorCondition" class="text-danger small d-block mt-2"></span>
             </section>
 
-            <section class="border border-primary rounded-3 p-3 mb-4 bg-light">
-                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <section class="border border-success rounded-3 p-3 mb-4 bg-light">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                     <div>
-                        <div class="text-uppercase small text-primary fw-semibold">Cọc bảo đảm khi nhận xe</div>
-                        <h2 class="h5 mb-1">@RentalPolicyConstants.SecurityDepositAmount.ToString("N0") đ</h2>
+                        <div class="text-uppercase small text-success fw-semibold">Cọc bảo đảm</div>
+                        <h2 class="h5 mb-1">Đã thanh toán @RentalPolicyConstants.SecurityDepositAmount.ToString("N0") đ</h2>
                         <p class="small text-muted mb-0">
-                            Cọc không tính vào tiền thuê và không phải doanh thu. Sau khi khách trả xe, SmartCar dùng cọc để đối trừ phụ phí có căn cứ; phần còn lại được tạo khoản hoàn cọc.
+                            Cọc đã được khách thanh toán cùng tiền thuê trong một giao dịch trước khi SmartCar chuẩn bị xe. Không thu thêm cọc tại điểm giao. Sau khi trả xe, hệ thống đối trừ phụ phí có căn cứ và hoàn phần cọc còn lại.
                         </p>
                     </div>
-                    <span class="badge bg-primary">Bắt buộc trước khi giao chìa khóa</span>
-                </div>
-
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-6">
-                        <label for="depositMethod" class="form-label fw-semibold">Phương thức nhận cọc</label>
-                        <select id="depositMethod" name="depositMethod" class="form-select" required>
-                            <option value="@RentalPolicyConstants.SecurityDepositCashMethod" selected="@(depositMethod == RentalPolicyConstants.SecurityDepositCashMethod)">@RentalPolicyConstants.SecurityDepositCashMethod</option>
-                            <option value="@RentalPolicyConstants.SecurityDepositTransferMethod" selected="@(depositMethod == RentalPolicyConstants.SecurityDepositTransferMethod)">@RentalPolicyConstants.SecurityDepositTransferMethod</option>
-                        </select>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-check border rounded-3 bg-white p-3 ps-5">
-                            <input class="form-check-input"
-                                   type="checkbox"
-                                   name="depositReceived"
-                                   value="true"
-                                   id="depositReceived"
-                                   checked="@depositReceived"
-                                   required />
-                            <label class="form-check-label fw-semibold" for="depositReceived">
-                                Tôi xác nhận đã thực tế nhận đủ @RentalPolicyConstants.SecurityDepositAmount.ToString("N0") đ tiền cọc từ khách
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="alert alert-warning py-2 small mt-3 mb-0">
-                    Không tick xác nhận nếu chưa thực tế nhận tiền. Hệ thống chỉ ghi cọc khi biên bản bàn giao được lưu thành công.
+                    <span class="badge bg-success">Không thu lần hai</span>
                 </div>
             </section>
 
@@ -315,7 +283,7 @@
                     <div class="d-grid gap-2 small mt-3">
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đúng khách hàng và đúng xe/biển số</span></div>
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã đối chiếu CCCD/GPLX thực tế</span></div>
-                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã nhận cọc @RentalPolicyConstants.SecurityDepositAmount.ToString("N0") đ</span></div>
+                        <div class="d-flex gap-2"><span class="text-success">✓</span><span>Hệ thống đã xác nhận cọc @RentalPolicyConstants.SecurityDepositAmount.ToString("N0") đ cùng tiền thuê</span></div>
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>ODO nhập đúng theo đồng hồ thật của xe</span></div>
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>@(isElectricVehicle ? "SOC pin" : "Mức nhiên liệu") nhập đúng theo đồng hồ</span></div>
                         <div class="d-flex gap-2"><span class="text-success">✓</span><span>Đã kiểm tra phụ kiện/giấy tờ đi kèm</span></div>
@@ -330,7 +298,7 @@
                         <div class="text-muted">Biên bản không chấp nhận ODO nhỏ hơn giá trị này.</div>
                     </div>
                     <p class="small text-muted mb-0">
-                        Sau khi lưu biên bản, hệ thống chuyển đơn sang <strong>Đang thuê</strong>. Chỉ xác nhận khi xe đã được kiểm tra cùng khách, cọc đã được nhận và sẵn sàng giao chìa khóa.
+                        Sau khi lưu biên bản, hệ thống chuyển đơn sang <strong>Đang thuê</strong>. Chỉ xác nhận khi xe đã được kiểm tra cùng khách và sẵn sàng giao chìa khóa.
                     </p>
                 </div>
             </div>
