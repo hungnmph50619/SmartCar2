@@ -6,5 +6,6 @@ public enum PaymentType
     AdditionalCharge = 2,
     Refund = 3,
     Extension = 4,
-    Deposit = 5
+    Deposit = 5,
+    DepositRefund = 6
 }
