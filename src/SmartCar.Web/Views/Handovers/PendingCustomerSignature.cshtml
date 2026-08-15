@@ -1,0 +1,84 @@
+@model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Enums
+
+@{
+    ViewData["Title"] = "Chờ khách ký biên bản";
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <div class="text-uppercase small text-warning fw-semibold">Bàn giao đang chờ xác nhận</div>
+        <h1 class="h3 mb-1">Biên bản đơn #@Model.BookingId đã được tạo</h1>
+        <p class="text-muted mb-0">SmartCar đã chốt ảnh và thông số. Khách cần mở tài khoản của mình, xem biên bản và ký trực tiếp trước khi nhận chìa khóa.</p>
+    </div>
+    <a class="btn btn-outline-secondary"
+       asp-controller="AdminBookings"
+       asp-action="Index">← Danh sách đơn</a>
+</div>
+
+@if (TempData["SuccessMessage"] is string successMessage)
+{
+    <div class="alert alert-success shadow-sm">@successMessage</div>
+}
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+                    <div>
+                        <div class="small text-muted">Biên bản bàn giao điện tử</div>
+                        <h2 class="h5 mb-0">@Model.VehicleName · @Model.LicensePlate</h2>
+                    </div>
+                    <span class="badge bg-warning text-dark px-3 py-2">Chờ chữ ký khách</span>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="small text-muted">Khách thuê</div>
+                            <div class="fw-semibold">@Model.CustomerName</div>
+                            <div class="small">@Model.CustomerPhone</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3 h-100">
+                            <div class="small text-muted">Lịch nhận</div>
+                            <div class="fw-semibold">@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</div>
+                            <div class="small">@Model.PickupLocation</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-4 mb-0">
+                    <strong>Trạng thái hiện tại:</strong> Booking vẫn là <strong>@Model.Status.ToVietnamese()</strong>. Hệ thống chưa chuyển xe sang <strong>Đang thuê</strong> và chưa coi bàn giao hoàn tất cho đến khi chính khách ký biên bản.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <div class="text-uppercase small text-primary fw-semibold">Việc cần làm</div>
+                <h2 class="h5 mt-1">Yêu cầu khách mở SmartCar</h2>
+                <ol class="small ps-3 mb-3">
+                    <li>Mở <strong>Đơn thuê</strong> trên tài khoản của khách.</li>
+                    <li>Chọn <strong>Xem & ký biên bản bàn giao</strong>.</li>
+                    <li>Đọc thông tin, xem ảnh và ký trực tiếp trên màn hình.</li>
+                    <li>Sau khi ký thành công mới giao chìa khóa.</li>
+                </ol>
+
+                @if (!string.IsNullOrWhiteSpace(Model.CustomerPhone))
+                {
+                    <a class="btn btn-outline-primary w-100 mb-2" href="tel:@Model.CustomerPhone">☎ Gọi khách</a>
+                }
+
+                <a class="btn btn-outline-secondary w-100"
+                   asp-controller="AdminBookings"
+                   asp-action="Details"
+                   asp-route-id="@Model.BookingId">Kiểm tra trạng thái đơn</a>
+            </div>
+        </div>
+    </div>
+</div>
