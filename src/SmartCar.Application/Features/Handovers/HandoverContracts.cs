@@ -19,7 +19,7 @@ public sealed record CustomerHandoverSnapshotDto(
     string? Accessories,
     string? Notes,
     IReadOnlyList<string> ImagePaths,
-    bool CanCustomerSign);
+    bool CanCustomerCheckIn);
 
 public sealed record CreateHandoverRequest(
     int BookingId,
@@ -36,9 +36,9 @@ public sealed record ConfirmCustomerHandoverRequest(
     int BookingId,
     string CustomerId,
     string SnapshotHash,
-    string SignaturePath,
+    bool HasPreExistingIssue,
     string? CustomerNote,
-    string? CustomerImagePaths,
+    string CustomerImagePaths,
     string EvidenceHash,
     string? IpAddress,
     string? UserAgent);
@@ -58,7 +58,7 @@ public interface IHandoverService
         CreateHandoverRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<OperationResult> ConfirmCustomerSignatureAsync(
+    Task<OperationResult> ConfirmCustomerCheckInAsync(
         ConfirmCustomerHandoverRequest request,
         CancellationToken cancellationToken = default);
 }
