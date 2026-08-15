@@ -1,0 +1,179 @@
+@model SmartCar.Web.ViewModels.CustomerHandoverCheckInViewModel
+@using SmartCar.Application.Features.Handovers
+@using SmartCar.Web.Services
+@{
+    ViewData["Title"] = "Check-in nhận xe";
+    var snapshot = ViewBag.HandoverSnapshot as CustomerHandoverSnapshotDto;
+    var labels = VehicleEvidenceAuditHelper.StandardPhotoLabels;
+}
+
+@if (snapshot is null)
+{
+    <div class="alert alert-danger">Không thể tải hồ sơ bàn giao.</div>
+    return;
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <div class="text-uppercase small text-primary fw-semibold">Customer check-in</div>
+        <h1 class="h3 mb-1">Ghi nhận tình trạng xe trước chuyến · Đơn #@snapshot.BookingId</h1>
+        <p class="text-muted mb-0">SmartCar có bộ ảnh riêng. Bạn phải tự tạo bộ ảnh check-in độc lập trên chính tài khoản của mình trước khi nhận chìa khóa.</p>
+    </div>
+    <a class="btn btn-outline-secondary"
+       asp-controller="Bookings"
+       asp-action="Details"
+       asp-route-id="@snapshot.BookingId">← Quay lại đơn</a>
+</div>
+
+<div class="alert alert-info shadow-sm">
+    <strong>Vì sao phải tự chụp?</strong>
+    Bộ ảnh này được gắn với tài khoản, đơn thuê, thời gian hệ thống và mã SHA-256. Khi trả xe, bạn sẽ chụp lại cùng 6 góc để tạo cặp bằng chứng trước ↔ sau. Đây là mốc độc lập với ảnh do SmartCar chụp.
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-4"><div class="small text-muted">Người nhận</div><div class="fw-semibold">@snapshot.CustomerName</div></div>
+            <div class="col-md-4"><div class="small text-muted">Xe</div><div class="fw-semibold">@snapshot.VehicleName · @snapshot.LicensePlate</div></div>
+            <div class="col-md-4"><div class="small text-muted">Lịch nhận</div><div class="fw-semibold">@snapshot.PickupDate.ToString("dd/MM/yyyy HH:mm")</div></div>
+            <div class="col-md-4"><div class="small text-muted">ODO SmartCar ghi nhận</div><div class="fw-semibold">@snapshot.Mileage.ToString("N0") km</div></div>
+            <div class="col-md-4"><div class="small text-muted">Nhiên liệu / pin</div><div class="fw-semibold">@snapshot.FuelLevel</div></div>
+            <div class="col-md-4"><div class="small text-muted">Ảnh SmartCar</div><div class="fw-semibold">@snapshot.ImagePaths.Count ảnh</div></div>
+        </div>
+
+        @if (snapshot.ImagePaths.Count > 0)
+        {
+            <hr />
+            <div class="small fw-semibold mb-2">Ảnh kiểm tra độc lập của SmartCar</div>
+            <div class="row g-2">
+                @for (var index = 0; index < snapshot.ImagePaths.Count; index++)
+                {
+                    var path = snapshot.ImagePaths[index];
+                    <div class="col-6 col-md-3 col-lg-2">
+                        <a href="@path" target="_blank" rel="noopener noreferrer">
+                            <img src="@path" class="w-100 rounded border" style="height:110px;object-fit:cover" alt="Ảnh SmartCar @(index + 1)" />
+                        </a>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(snapshot.Notes))
+        {
+            <div class="alert alert-light border mt-3 mb-0"><strong>Ghi chú SmartCar:</strong> @snapshot.Notes</div>
+        }
+    </div>
+</div>
+
+<form asp-action="CheckIn"
+      method="post"
+      enctype="multipart/form-data"
+      data-loading-form
+      data-confirm="Xác nhận đây là bộ ảnh bạn tự ghi nhận tại thời điểm nhận xe và bắt đầu chuyến thuê?">
+    <input asp-for="BookingId" type="hidden" />
+    <input asp-for="SnapshotHash" type="hidden" />
+
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
+
+    <div class="card shadow-sm border-primary mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                <div>
+                    <div class="text-uppercase small text-primary fw-semibold">Bằng chứng do chính khách tạo</div>
+                    <h2 class="h5 mb-1">Chụp đủ 6 góc bắt buộc</h2>
+                    <p class="small text-muted mb-0">Trên điện thoại, nút chọn ảnh sẽ ưu tiên camera sau. Trên máy tính có thể chọn ảnh để phục vụ demo.</p>
+                </div>
+                <span class="badge bg-primary">Bắt buộc 6 ảnh</span>
+            </div>
+
+            <div class="row g-3">
+                @for (var index = 0; index < labels.Length; index++)
+                {
+                    <div class="col-md-6">
+                        <div class="border rounded-3 p-3 h-100 evidence-slot">
+                            <div class="d-flex gap-3 align-items-start">
+                                <div class="badge bg-dark rounded-pill">@(index + 1)</div>
+                                <div class="flex-grow-1">
+                                    <label class="form-label fw-semibold">@labels[index]</label>
+                                    <input type="file"
+                                           name="EvidenceImages"
+                                           accept="image/jpeg,image/png,image/webp"
+                                           capture="environment"
+                                           class="form-control evidence-input"
+                                           required />
+                                    <div class="form-text evidence-file-name">Chưa chọn ảnh</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <span asp-validation-for="EvidenceImages" class="text-danger small d-block mt-2"></span>
+            <div class="small text-muted mt-2">Mỗi ảnh tối đa 5 MB. Nếu có hư hỏng/vết xước cũ, hãy bảo đảm ảnh liên quan nhìn rõ trước khi xác nhận.</div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <h2 class="h5">Hư hỏng đã có sẵn trước khi nhận xe?</h2>
+            <div class="form-check mt-3">
+                <input asp-for="HasPreExistingIssue" class="form-check-input" id="pre-existing-issue" />
+                <label class="form-check-label fw-semibold" for="pre-existing-issue">Có vết xước, móp, vết bẩn hoặc chi tiết cần ghi nhận trước chuyến</label>
+            </div>
+
+            <div class="mt-3" id="pre-existing-note-wrap">
+                <label asp-for="CustomerNote" class="form-label fw-semibold">Mô tả vị trí/tình trạng</label>
+                <textarea asp-for="CustomerNote"
+                          class="form-control"
+                          rows="3"
+                          maxlength="1000"
+                          placeholder="Ví dụ: cản trước bên phải có vết xước khoảng 5 cm trước khi nhận xe..."></textarea>
+                <span asp-validation-for="CustomerNote" class="text-danger small"></span>
+                <div class="form-text">Nếu không phát hiện hư hỏng có sẵn, có thể để trống.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body p-4">
+            <div class="small text-muted mb-2">Mã phiên bản hồ sơ SmartCar (SHA-256)</div>
+            <code class="user-select-all text-break">@Model.SnapshotHash</code>
+
+            <label class="border rounded-3 p-3 d-flex gap-3 align-items-start mt-4" for="accepted-checkin">
+                <input asp-for="Accepted" id="accepted-checkin" type="checkbox" class="form-check-input mt-1" required />
+                <span>
+                    <strong class="d-block">Tôi xác nhận đây là tình trạng chiếc xe tôi đang nhận</strong>
+                    <span class="small text-muted">Tôi đã tự chụp đủ 6 góc, đã xem ODO/nhiên liệu và đã khai các hư hỏng có sẵn nếu có. Sau bước này, bộ ảnh check-in bị khóa và chuyến thuê bắt đầu.</span>
+                </span>
+            </label>
+            <span asp-validation-for="Accepted" class="text-danger small d-block mt-1"></span>
+
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-success px-4" data-loading-text="Đang khóa bằng chứng check-in...">Xác nhận check-in & bắt đầu chuyến</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            document.querySelectorAll('.evidence-input').forEach(input => {
+                input.addEventListener('change', () => {
+                    const label = input.closest('.evidence-slot')?.querySelector('.evidence-file-name');
+                    if (label) label.textContent = input.files?.[0]?.name ?? 'Chưa chọn ảnh';
+                });
+            });
+
+            const issue = document.getElementById('pre-existing-issue');
+            const note = document.getElementById('CustomerNote');
+            const sync = () => {
+                if (!issue || !note) return;
+                note.required = issue.checked;
+            };
+            issue?.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
+}
