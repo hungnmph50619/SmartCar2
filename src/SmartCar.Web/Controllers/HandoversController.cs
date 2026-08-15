@@ -15,8 +15,10 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class HandoversController : Controller
 {
-    private const int MinimumImages = 6;
-    private const int MaximumImages = 15;
+    private const int MinimumVehicleImages = 6;
+    private const int MaximumVehicleImages = 15;
+    private const int MinimumDocumentImages = 1;
+    private const int MaximumDocumentImages = 3;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IHandoverService _handoverService;
@@ -49,7 +51,7 @@ public sealed class HandoversController : Controller
 
         if (booking.Status == BookingStatus.ReadyForPickup && booking.HasHandover)
         {
-            return RedirectToAction(nameof(PendingCustomerCheckIn), new { bookingId });
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
         if (booking.Status != BookingStatus.ReadyForPickup)
@@ -64,14 +66,14 @@ public sealed class HandoversController : Controller
         if (!depositPaid)
         {
             TempData["ErrorMessage"] =
-                $"Chưa xác nhận cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng trong giao dịch thanh toán ban đầu. Không thể lập hồ sơ bàn giao.";
+                $"Chưa xác nhận cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng. Không thể bàn giao xe.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
         if (DateTime.Now >= booking.ReturnDate)
         {
             TempData["ErrorMessage"] =
-                "Đã đến hoặc quá thời gian trả xe, không thể lập hồ sơ giao xe.";
+                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao xe.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
@@ -89,9 +91,7 @@ public sealed class HandoversController : Controller
         return View(new HandoverViewModel
         {
             BookingId = bookingId,
-            HandoverAt = DateTime.Now > booking.PickupDate
-                ? DateTime.Now
-                : booking.PickupDate,
+            HandoverAt = DateTime.Now,
             Mileage = vehicleContext.CurrentMileage
         });
     }
@@ -115,14 +115,12 @@ public sealed class HandoversController : Controller
             {
                 ModelState.AddModelError(
                     string.Empty,
-                    "Đơn không còn ở trạng thái Sẵn sàng giao xe. Hãy quay lại chi tiết đơn để kiểm tra trạng thái hiện tại.");
+                    "Đơn không còn ở trạng thái Sẵn sàng giao xe.");
             }
 
             if (booking.HasHandover)
             {
-                ModelState.AddModelError(
-                    string.Empty,
-                    "Hồ sơ bàn giao đã được lập và đang chờ khách tự check-in tình trạng xe.");
+                ModelState.AddModelError(string.Empty, "Đơn đã có biên bản bàn giao xe.");
             }
 
             if (!booking.Payments.Any(payment =>
@@ -130,7 +128,7 @@ public sealed class HandoversController : Controller
             {
                 ModelState.AddModelError(
                     string.Empty,
-                    $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng chưa được xác nhận thanh toán. Không thể lập hồ sơ giao xe.");
+                    $"Cọc bảo đảm {RentalPolicyConstants.SecurityDepositAmount:N0} đồng chưa được xác nhận thanh toán.");
             }
         }
 
@@ -149,20 +147,43 @@ public sealed class HandoversController : Controller
             SetVehicleContext(vehicleContext);
         }
 
-        await ValidateImagesAsync(model.Images, cancellationToken);
+        await ValidateImageCollectionAsync(
+            model.Images,
+            MinimumVehicleImages,
+            MaximumVehicleImages,
+            nameof(HandoverViewModel.Images),
+            "ảnh hiện trạng xe",
+            cancellationToken);
+
+        await ValidateImageCollectionAsync(
+            model.SignedDocumentImages,
+            MinimumDocumentImages,
+            MaximumDocumentImages,
+            nameof(HandoverViewModel.SignedDocumentImages),
+            "ảnh biên bản giấy đã có chữ ký khách",
+            cancellationToken);
 
         if (!ModelState.IsValid)
         {
             return View(model);
         }
 
-        var imagePaths = await SaveImagesAsync(
+        var vehicleImagePaths = await SaveImagesAsync(
             model.BookingId,
             model.Images,
+            "uploads/handovers",
+            "vehicle",
+            cancellationToken);
+        var documentImagePaths = await SaveImagesAsync(
+            model.BookingId,
+            model.SignedDocumentImages,
+            "uploads/handover-documents",
+            "document",
             cancellationToken);
 
+        var allEvidencePaths = vehicleImagePaths.Concat(documentImagePaths).ToList();
         const string conditionReference =
-            "Tình trạng xe được ghi nhận và đối chiếu theo bộ ảnh kiểm tra độc lập của SmartCar trước chuyến.";
+            "Tình trạng xe được ghi nhận bằng bộ ảnh hiện trạng và biên bản bàn giao giấy có chữ ký của khách.";
 
         var result = await _handoverService.CreateAsync(
             new CreateHandoverRequest(
@@ -172,22 +193,16 @@ public sealed class HandoversController : Controller
                 model.FuelLevel,
                 conditionReference,
                 conditionReference,
-                model.Accessories,
-                string.Join(';', imagePaths),
+                string.Join(';', allEvidencePaths),
                 model.Notes),
             cancellationToken);
 
         if (!result.Succeeded)
         {
-            DeleteSavedImages(imagePaths);
+            DeleteSavedImages(allEvidencePaths);
             foreach (var error in result.Errors)
             {
                 ModelState.AddModelError(string.Empty, error);
-            }
-
-            if (vehicleContext is not null)
-            {
-                SetVehicleContext(vehicleContext);
             }
 
             return View(model);
@@ -196,45 +211,30 @@ public sealed class HandoversController : Controller
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _auditService.WriteAsync(
             adminId,
-            "CreateHandoverDraft",
+            "CompletePhysicalHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập hồ sơ bàn giao SmartCar cho đơn #{model.BookingId}; đã đối chiếu đúng người nhận và CCCD/GPLX bản gốc; " +
-            $"ODO {model.Mileage:N0} km, nhiên liệu/pin {model.FuelLevel}, {imagePaths.Count} ảnh SmartCar. " +
-            "Hồ sơ đang chờ chính khách thuê tự tạo bộ ảnh customer check-in; Booking chưa chuyển sang Rented.",
+            $"Hoàn tất bàn giao đơn #{model.BookingId}. Đã đối chiếu người nhận, CCCD và GPLX bản gốc; " +
+            $"số km khi giao {model.Mileage:N0} km; nhiên liệu/pin {model.FuelLevel}; " +
+            $"{vehicleImagePaths.Count} ảnh hiện trạng xe và {documentImagePaths.Count} ảnh biên bản giấy có chữ ký khách đã được lưu.",
             newValues:
-                $"Images={imagePaths.Count};Mileage={model.Mileage};FuelLevel={model.FuelLevel};AwaitingCustomerCheckIn=true",
+                $"VehicleImages={vehicleImagePaths.Count};SignedDocumentImages={documentImagePaths.Count};Mileage={model.Mileage};FuelLevel={model.FuelLevel}",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã khóa hồ sơ ảnh SmartCar. Chưa giao chìa khóa; yêu cầu khách mở đơn và tự check-in đủ 6 ảnh. Chỉ sau check-in, đơn mới chuyển sang Đang thuê.";
-        return RedirectToAction(nameof(PendingCustomerCheckIn), new { bookingId = model.BookingId });
+            "Đã hoàn tất bàn giao. Ảnh hiện trạng xe và ảnh biên bản giấy có chữ ký khách đã được lưu; đơn chuyển sang Đang thuê.";
+        return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
-    // Route cũ để tránh lỗi bookmark/link đã tạo trước khi đổi tên checkpoint.
+    // Giữ các route cũ để bookmark trước đây không gây lỗi sau khi bỏ bước khách ký/check-in trên app.
     [HttpGet]
     public IActionResult PendingCustomerSignature(int bookingId) =>
-        RedirectToAction(nameof(PendingCustomerCheckIn), new { bookingId });
+        RedirectToAction("Details", "AdminBookings", new { id = bookingId });
 
     [HttpGet]
-    public async Task<IActionResult> PendingCustomerCheckIn(
-        int bookingId,
-        CancellationToken cancellationToken)
-    {
-        var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
-        if (booking is null)
-        {
-            return NotFound();
-        }
-
-        if (booking.Status != BookingStatus.ReadyForPickup || !booking.HasHandover)
-        {
-            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
-        }
-
-        return View("PendingCustomerSignature", booking);
-    }
+    public IActionResult PendingCustomerCheckIn(int bookingId) =>
+        RedirectToAction("Details", "AdminBookings", new { id = bookingId });
 
     private void SetVehicleContext(HandoverVehicleContextDto context)
     {
@@ -280,29 +280,33 @@ public sealed class HandoversController : Controller
         {
             ModelState.AddModelError(
                 nameof(HandoverViewModel.FinalHandoverConfirmed),
-                "Phải xác nhận bộ ảnh/thông số SmartCar đã được ghi đầy đủ trước khi chuyển khách sang bước check-in.");
+                "Phải xác nhận khách đã ký trực tiếp trên biên bản giấy và ảnh biên bản đã được chụp rõ trước khi hoàn tất bàn giao.");
         }
     }
 
-    private async Task ValidateImagesAsync(
+    private async Task ValidateImageCollectionAsync(
         IReadOnlyCollection<IFormFile> images,
+        int minimum,
+        int maximum,
+        string modelKey,
+        string description,
         CancellationToken cancellationToken)
     {
-        var selectedImages = images.Where(file => file.Length > 0).ToList();
-        if (selectedImages.Count < MinimumImages)
+        var selected = images.Where(file => file.Length > 0).ToList();
+        if (selected.Count < minimum)
         {
-            ModelState.AddModelError(nameof(HandoverViewModel.Images),
-                $"Vui lòng tải tối thiểu {MinimumImages} ảnh SmartCar: trước xe, sau xe, hai bên thân xe, đồng hồ ODO/nhiên liệu và nội thất.");
+            ModelState.AddModelError(modelKey,
+                $"Vui lòng tải tối thiểu {minimum} {description}.");
             return;
         }
 
-        if (selectedImages.Count > MaximumImages)
+        if (selected.Count > maximum)
         {
-            ModelState.AddModelError(nameof(HandoverViewModel.Images),
-                $"Chỉ được tải tối đa {MaximumImages} ảnh bàn giao.");
+            ModelState.AddModelError(modelKey,
+                $"Chỉ được tải tối đa {maximum} {description}.");
         }
 
-        foreach (var image in selectedImages)
+        foreach (var image in selected)
         {
             var error = await ImageFileValidator.ValidateAsync(
                 image,
@@ -310,8 +314,7 @@ public sealed class HandoversController : Controller
                 cancellationToken);
             if (error is not null)
             {
-                ModelState.AddModelError(nameof(HandoverViewModel.Images),
-                    $"{image.FileName}: {error}");
+                ModelState.AddModelError(modelKey, $"{image.FileName}: {error}");
             }
         }
     }
@@ -319,9 +322,11 @@ public sealed class HandoversController : Controller
     private async Task<IReadOnlyList<string>> SaveImagesAsync(
         int bookingId,
         IEnumerable<IFormFile> images,
+        string rootFolder,
+        string filePrefix,
         CancellationToken cancellationToken)
     {
-        var relativeFolder = $"uploads/handovers/{bookingId}";
+        var relativeFolder = $"{rootFolder}/{bookingId}";
         var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
         Directory.CreateDirectory(folder);
 
@@ -331,7 +336,7 @@ public sealed class HandoversController : Controller
         {
             index++;
             var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-            var fileName = $"{index:00}-{Guid.NewGuid():N}{extension}";
+            var fileName = $"{filePrefix}-{index:00}-{Guid.NewGuid():N}{extension}";
             var fullPath = Path.Combine(folder, fileName);
 
             await using var stream = System.IO.File.Create(fullPath);
