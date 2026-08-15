@@ -10,6 +10,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -127,6 +128,26 @@ public sealed class AdminBookingsController : Controller
             .Select(log => (DateTime?)log.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+        var latestEarlyReturnLog = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == bookingIdText &&
+                RentalLifecycleAuditHelper.EarlyReturnActions.Contains(log.Action))
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => new { log.Action, log.NewValues, log.CreatedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var latestTerminationLog = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.EntityName == nameof(Booking) &&
+                log.EntityId == bookingIdText &&
+                RentalLifecycleAuditHelper.RentalTerminationActions.Contains(log.Action))
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => new { log.Action, log.NewValues, log.CreatedAt })
+            .FirstOrDefaultAsync(cancellationToken);
+
         ViewBag.CustomerCreatedAt = customerCreatedAt;
         ViewBag.CustomerTotalBookingCount = customerBookingStatuses.Count;
         ViewBag.CustomerCompletedBookingCount = customerBookingStatuses.Count(status => status == BookingStatus.Completed);
@@ -137,6 +158,18 @@ public sealed class AdminBookingsController : Controller
         ViewBag.DrivingLicenseVerified = drivingLicenseVerified;
         ViewBag.CustomerKycVerified = citizenVerified && drivingLicenseVerified;
         ViewBag.VehiclePreparedAt = vehiclePreparedAt?.ToLocalTime();
+        ViewBag.EarlyReturn = latestEarlyReturnLog is null
+            ? null
+            : RentalLifecycleAuditHelper.ParseEarlyReturn(
+                latestEarlyReturnLog.Action,
+                latestEarlyReturnLog.NewValues,
+                latestEarlyReturnLog.CreatedAt.ToLocalTime());
+        ViewBag.RentalTermination = latestTerminationLog is null
+            ? null
+            : RentalLifecycleAuditHelper.ParseTermination(
+                latestTerminationLog.Action,
+                latestTerminationLog.NewValues,
+                latestTerminationLog.CreatedAt.ToLocalTime());
 
         return View(booking);
     }
