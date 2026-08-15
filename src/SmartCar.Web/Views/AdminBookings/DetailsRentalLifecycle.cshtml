@@ -26,8 +26,17 @@
         : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString(pickupLocation)}";
     var customerConfirmedForPickup = Model.Status is BookingStatus.ReadyForPickup or BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
     var handoverCompleted = Model.Status is BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.Completed;
+    var awaitingCustomerSignature = Model.Status == BookingStatus.ReadyForPickup && Model.HasHandover;
     var showHandoverCommand = Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
-    var canStartHandover = Model.Status == BookingStatus.ReadyForPickup && Model.RentalPaid && depositPaid;
+    var canStartHandover = Model.Status == BookingStatus.ReadyForPickup &&
+                           Model.RentalPaid &&
+                           depositPaid &&
+                           !Model.HasHandover;
+    var handoverCheckpointClass = handoverCompleted
+        ? "bg-success-subtle border-success"
+        : awaitingCustomerSignature
+            ? "bg-warning-subtle border-warning"
+            : "bg-light";
 }
 
 @if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Pending")
@@ -116,9 +125,16 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                     <h2 class="h5 mb-1">Điểm giao & tiến trình bàn giao</h2>
                     <p class="text-muted small mb-0">Một nơi để Admin biết phải liên hệ ai, đi đâu và bước tiếp theo là gì.</p>
                 </div>
-                <span class="badge @(Model.Status == BookingStatus.ReadyForPickup ? "bg-success" : "bg-primary") px-3 py-2">
-                    @(Model.Status == BookingStatus.ReadyForPickup ? "Sẵn sàng bàn giao" : "Đang chuẩn bị giao")
-                </span>
+                @if (awaitingCustomerSignature)
+                {
+                    <span class="badge bg-warning text-dark px-3 py-2">Chờ khách ký</span>
+                }
+                else
+                {
+                    <span class="badge @(Model.Status == BookingStatus.ReadyForPickup ? "bg-success" : "bg-primary") px-3 py-2">
+                        @(Model.Status == BookingStatus.ReadyForPickup ? "Sẵn sàng bàn giao" : "Đang chuẩn bị giao")
+                    </span>
+                }
             </div>
 
             <div class="row g-3 align-items-stretch mb-3">
@@ -166,10 +182,15 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                                 <div class="fw-semibold mt-1">Liên hệ khách xác nhận lịch nhận</div>
                                 <div class="small text-muted mt-1">Chỉ chuyển ReadyForPickup sau khi khách xác nhận giờ và địa điểm.</div>
                             }
+                            else if (awaitingCustomerSignature)
+                            {
+                                <div class="fw-semibold mt-1">Chờ khách ký biên bản bàn giao</div>
+                                <div class="small text-muted mt-1">Biên bản và bộ ảnh đã được tạo. Yêu cầu khách mở SmartCar, kiểm tra và ký; chưa giao chìa khóa trước bước này.</div>
+                            }
                             else if (canStartHandover)
                             {
-                                <div class="fw-semibold mt-1">Bắt đầu bàn giao thực tế</div>
-                                <div class="small text-muted mt-1">Đối chiếu người nhận, xe, ảnh, ODO và nhiên liệu trước khi giao chìa khóa.</div>
+                                <div class="fw-semibold mt-1">Lập biên bản bàn giao</div>
+                                <div class="small text-muted mt-1">Đối chiếu người nhận, chụp ảnh, ghi ODO và nhiên liệu để tạo biên bản gửi khách ký.</div>
                             }
                             else
                             {
@@ -190,12 +211,19 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                                    asp-action="PreparePickup"
                                    asp-route-bookingId="@Model.BookingId">☎ Gọi khách & xác nhận</a>
                             }
+                            else if (awaitingCustomerSignature)
+                            {
+                                <a class="btn btn-warning btn-sm w-100"
+                                   asp-controller="Handovers"
+                                   asp-action="PendingCustomerSignature"
+                                   asp-route-bookingId="@Model.BookingId">Xem trạng thái chữ ký →</a>
+                            }
                             else if (canStartHandover)
                             {
                                 <a class="btn btn-success btn-sm w-100"
                                    asp-controller="Handovers"
                                    asp-action="Create"
-                                   asp-route-bookingId="@Model.BookingId">Bắt đầu bàn giao →</a>
+                                   asp-route-bookingId="@Model.BookingId">Lập biên bản bàn giao →</a>
                             }
                             else if (Model.Status == BookingStatus.ReadyForPickup)
                             {
@@ -235,9 +263,13 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
                     </div>
                 </div>
                 <div class="col-6 col-lg-3">
-                    <div class="border rounded-3 p-2 @(handoverCompleted ? "bg-success-subtle border-success" : "bg-light")">
-                        <div class="fw-semibold">@(handoverCompleted ? "✓" : "○") Bàn giao</div>
-                        <div class="text-muted">@(handoverCompleted ? "Đã giao xe" : "Chưa giao")</div>
+                    <div class="border rounded-3 p-2 @handoverCheckpointClass">
+                        <div class="fw-semibold">
+                            @(handoverCompleted ? "✓" : awaitingCustomerSignature ? "◷" : "○") Bàn giao
+                        </div>
+                        <div class="text-muted">
+                            @(handoverCompleted ? "Đã giao xe" : awaitingCustomerSignature ? "Chờ khách ký" : "Chưa giao")
+                        </div>
                     </div>
                 </div>
             </div>
@@ -246,6 +278,10 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
             {
                 <div class="d-flex gap-3 flex-wrap small mt-3 pt-3 border-top text-muted">
                     <span>Cọc bảo đảm: <strong class="@(depositPaid ? "text-success" : "text-danger")">@(depositPaid ? "Đã thanh toán" : "Chưa ghi nhận")</strong></span>
+                    @if (awaitingCustomerSignature)
+                    {
+                        <span>Biên bản: <strong class="text-warning">Đã tạo · chờ khách ký</strong></span>
+                    }
                     @if (vehiclePreparedAt.HasValue)
                     {
                         <span>Chuẩn bị xe lúc: <strong>@vehiclePreparedAt.Value.ToString("dd/MM/yyyy HH:mm")</strong></span>
@@ -285,7 +321,7 @@ else if (Model.Status == BookingStatus.Rented && earlyReturn?.Status == "Approve
         preparedCard?.remove();
     }
 
-    // Khi ReadyForPickup, CTA "Bắt đầu bàn giao" đã nằm ở command card.
+    // Khi ReadyForPickup, thao tác bàn giao/đợi chữ ký đã nằm ở command card.
     if ('@Model.Status' === '@BookingStatus.ReadyForPickup') {
         const legacyHandoverCard = Array.from(document.querySelectorAll('.card')).find(card =>
             card.querySelector('h2')?.textContent?.trim() === 'Bàn giao xe');
