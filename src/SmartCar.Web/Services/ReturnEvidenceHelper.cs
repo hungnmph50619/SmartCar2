@@ -6,6 +6,9 @@ namespace SmartCar.Web.Services;
 
 public static class ReturnEvidenceHelper
 {
+    private const string SignatureRefusedAction = "ReturnDocumentSignatureRefused";
+    private const string SignatureResolvedAction = "ReturnDocumentSignatureDisputeResolved";
+
     public static async Task<RentalEvidenceViewModel?> BuildAsync(
         ApplicationDbContext dbContext,
         int bookingId,
@@ -28,6 +31,33 @@ public static class ReturnEvidenceHelper
             .Where(user => user.Id == booking.CustomerId)
             .Select(user => user.FullName)
             .FirstOrDefaultAsync(cancellationToken) ?? "Khách thuê";
+
+        var bookingKey = bookingId.ToString();
+        var refusal = await dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.Action == SignatureRefusedAction &&
+                log.EntityName == "Booking" &&
+                log.EntityId == bookingKey)
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => new { log.CreatedAt, log.Description })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var resolution = await dbContext.AuditLogs
+            .AsNoTracking()
+            .Where(log =>
+                log.Action == SignatureResolvedAction &&
+                log.EntityName == "Booking" &&
+                log.EntityId == bookingKey)
+            .OrderByDescending(log => log.CreatedAt)
+            .Select(log => new { log.CreatedAt, log.Description })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var disputeActive = refusal is not null &&
+                            (resolution is null || resolution.CreatedAt < refusal.CreatedAt);
+        var resolvedAfterRefusal = refusal is not null &&
+                                   resolution is not null &&
+                                   resolution.CreatedAt >= refusal.CreatedAt;
 
         var handoverPaths = SplitPaths(booking.Handover.ImagePaths);
         var returnPaths = SplitPaths(booking.VehicleReturn.ImagePaths);
@@ -58,7 +88,11 @@ public static class ReturnEvidenceHelper
                 .ToList(),
             ReturnDocumentImagePaths = returnPaths
                 .Where(path => path.Contains("/return-documents/", StringComparison.OrdinalIgnoreCase))
-                .ToList()
+                .ToList(),
+            CustomerSignedReturnDocument = refusal is null,
+            SignatureDisputeActive = disputeActive,
+            SignatureRefusalReason = refusal?.Description,
+            SignatureDisputeResolution = resolvedAfterRefusal ? resolution!.Description : null
         };
     }
 
