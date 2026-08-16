@@ -11,36 +11,53 @@
         ? $"{(fuelDifference.Value > 0 ? "+" : string.Empty)}{fuelDifference.Value}%"
         : null;
     var fuelReduced = fuelDifference.HasValue && fuelDifference.Value < 0;
+
+    var handoverSignedPath = Model.Handover.ImagePaths
+        .FirstOrDefault(path => path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase));
+    var returnSignedPath = Model.Return.ImagePaths
+        .FirstOrDefault(path => path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase));
+    var handoverPhotos = Model.Handover.ImagePaths
+        .Where(path => !path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    var returnPhotos = Model.Return.ImagePaths
+        .Where(path => !path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    var hasSignedDocuments = handoverSignedPath is not null && returnSignedPath is not null;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
         <h1 class="h3 mb-1">Đối chiếu giao - trả xe</h1>
-        <p class="text-muted mb-0">
-            Đơn #@Model.BookingId · @Model.VehicleName · @Model.LicensePlate
-        </p>
+        <p class="text-muted mb-0">Đơn #@Model.BookingId · @Model.VehicleName · @Model.LicensePlate</p>
     </div>
 
-    <a class="btn btn-outline-secondary"
-       asp-controller="AdminBookings"
-       asp-action="Details"
-       asp-route-id="@Model.BookingId">
-        Quay lại đơn
-    </a>
+    <div class="d-flex gap-2 flex-wrap">
+        @if (Model.Status is BookingStatus.AwaitingRefund or BookingStatus.Completed)
+        {
+            <a class="btn btn-outline-primary"
+               asp-controller="AdminTripRecords"
+               asp-action="Details"
+               asp-route-id="@Model.BookingId">Hồ sơ chuyến</a>
+        }
+        <a class="btn btn-outline-secondary"
+           asp-controller="AdminBookings"
+           asp-action="Details"
+           asp-route-id="@Model.BookingId">Quay lại đơn</a>
+    </div>
 </div>
 
 @if (awaitingRefund)
 {
-    <div class="alert alert-warning">
-        <strong>Đã kiểm tra xong.</strong>
-        Chờ hoàn cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong> trước khi hoàn tất chuyến.
+    <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <span><strong>Đã kiểm tra xong.</strong> Chờ hoàn cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong>.</span>
+        <a class="btn btn-sm btn-warning"
+           asp-controller="AdminPayments" asp-action="Index"
+           asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Hoàn cọc</a>
     </div>
 }
 else
 {
-    <div class="alert alert-info">
-        So sánh km, nhiên liệu và ảnh lúc giao với lúc trả trước khi kết thúc chuyến.
-    </div>
+    <div class="alert alert-info">So sánh km, nhiên liệu, ảnh và bản ký trước khi kết thúc chuyến.</div>
 }
 
 <div class="card card-body shadow-sm mb-4">
@@ -68,44 +85,50 @@ else
     <div class="row g-3">
         <div class="col-lg-6">
             <div class="border rounded p-3 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="h5 mb-0">Biên bản giao xe</h2>
-                    <span class="badge bg-primary">Lúc giao</span>
+                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                    <h2 class="h5 mb-0">Biên bản giao</h2>
+                    <span class="badge @(handoverSignedPath is null ? "bg-danger" : "bg-success")">
+                        @(handoverSignedPath is null ? "Thiếu bản ký" : "Đã có chữ ký")
+                    </span>
                 </div>
 
                 <div class="row g-2 mb-3">
-                    <div class="col-6">
-                        <div class="small text-muted">Thời gian</div>
-                        <strong>@Model.Handover.RecordedAt.ToString("dd/MM/yyyy HH:mm")</strong>
-                    </div>
-                    <div class="col-3">
-                        <div class="small text-muted">Số km</div>
-                        <strong>@Model.Handover.Mileage.ToString("N0")</strong>
-                    </div>
-                    <div class="col-3">
-                        <div class="small text-muted">Nhiên liệu</div>
-                        <strong>@Model.Handover.FuelDisplay</strong>
-                    </div>
+                    <div class="col-6"><div class="small text-muted">Thời gian</div><strong>@Model.Handover.RecordedAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div class="col-3"><div class="small text-muted">Số km</div><strong>@Model.Handover.Mileage.ToString("N0")</strong></div>
+                    <div class="col-3"><div class="small text-muted">Nhiên liệu</div><strong>@Model.Handover.FuelDisplay</strong></div>
                 </div>
+
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
+                       asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In</a>
+                    @if (handoverSignedPath is not null)
+                    {
+                        <a class="btn btn-sm btn-outline-success" href="@handoverSignedPath" target="_blank" rel="noopener">Xem bản ký</a>
+                    }
+                </div>
+
+                @if (handoverSignedPath is null && Model.Status != BookingStatus.Completed)
+                {
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned"
+                          method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
+                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                        <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
+                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
+                    </form>
+                }
 
                 @if (!string.IsNullOrWhiteSpace(Model.Handover.Notes))
                 {
-                    <div class="mb-3">
-                        <div class="small text-muted">Ghi chú</div>
-                        <div>@Model.Handover.Notes</div>
-                    </div>
+                    <div class="mb-3"><div class="small text-muted">Ghi chú</div><div>@Model.Handover.Notes</div></div>
                 }
 
-                <div class="small text-muted mb-2">Ảnh lúc giao (@Model.Handover.ImagePaths.Count)</div>
+                <div class="small text-muted mb-2">Ảnh lúc giao (@handoverPhotos.Count)</div>
                 <div class="row g-2">
-                    @foreach (var image in Model.Handover.ImagePaths)
+                    @foreach (var image in handoverPhotos)
                     {
                         <div class="col-6 col-md-4">
                             <a href="@image" target="_blank" rel="noopener">
-                                <img src="@image"
-                                     alt="Ảnh xe lúc giao"
-                                     class="img-fluid rounded border w-100"
-                                     style="height:140px;object-fit:cover" />
+                                <img src="@image" alt="Ảnh xe lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
                             </a>
                         </div>
                     }
@@ -115,51 +138,52 @@ else
 
         <div class="col-lg-6">
             <div class="border rounded p-3 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h2 class="h5 mb-0">Biên bản trả xe</h2>
-                    <span class="badge bg-success">Lúc trả</span>
+                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                    <h2 class="h5 mb-0">Biên bản trả</h2>
+                    <span class="badge @(returnSignedPath is null ? "bg-danger" : "bg-success")">
+                        @(returnSignedPath is null ? "Thiếu bản ký" : "Đã có chữ ký")
+                    </span>
                 </div>
 
                 <div class="row g-2 mb-3">
-                    <div class="col-6">
-                        <div class="small text-muted">Thời gian</div>
-                        <strong>@Model.Return.RecordedAt.ToString("dd/MM/yyyy HH:mm")</strong>
-                    </div>
-                    <div class="col-3">
-                        <div class="small text-muted">Số km</div>
-                        <strong>@Model.Return.Mileage.ToString("N0")</strong>
-                    </div>
-                    <div class="col-3">
-                        <div class="small text-muted">Nhiên liệu</div>
-                        <strong>@Model.Return.FuelDisplay</strong>
-                    </div>
+                    <div class="col-6"><div class="small text-muted">Thời gian</div><strong>@Model.Return.RecordedAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div class="col-3"><div class="small text-muted">Số km</div><strong>@Model.Return.Mileage.ToString("N0")</strong></div>
+                    <div class="col-3"><div class="small text-muted">Nhiên liệu</div><strong>@Model.Return.FuelDisplay</strong></div>
                 </div>
 
-                <div class="mb-3">
-                    <div class="small text-muted">Hư hỏng mới</div>
-                    <strong class="@(Model.Return.HasDamage == true ? "text-danger" : "text-success")">
-                        @(Model.Return.HasDamage == true ? "Có" : "Không")
-                    </strong>
+                <div class="mb-2">Hư hỏng mới: <strong class="@(Model.Return.HasDamage == true ? "text-danger" : "text-success")">@(Model.Return.HasDamage == true ? "Có" : "Không")</strong></div>
+
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
+                       asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In</a>
+                    @if (returnSignedPath is not null)
+                    {
+                        <a class="btn btn-sm btn-outline-success" href="@returnSignedPath" target="_blank" rel="noopener">Xem bản ký</a>
+                    }
                 </div>
+
+                @if (returnSignedPath is null && Model.Status != BookingStatus.Completed)
+                {
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned"
+                          method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
+                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                        <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
+                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
+                    </form>
+                }
 
                 @if (!string.IsNullOrWhiteSpace(Model.Return.Notes))
                 {
-                    <div class="mb-3">
-                        <div class="small text-muted">Ghi chú</div>
-                        <div>@Model.Return.Notes</div>
-                    </div>
+                    <div class="mb-3"><div class="small text-muted">Ghi chú</div><div>@Model.Return.Notes</div></div>
                 }
 
-                <div class="small text-muted mb-2">Ảnh lúc trả (@Model.Return.ImagePaths.Count)</div>
+                <div class="small text-muted mb-2">Ảnh lúc trả (@returnPhotos.Count)</div>
                 <div class="row g-2">
-                    @foreach (var image in Model.Return.ImagePaths)
+                    @foreach (var image in returnPhotos)
                     {
                         <div class="col-6 col-md-4">
                             <a href="@image" target="_blank" rel="noopener">
-                                <img src="@image"
-                                     alt="Ảnh xe lúc trả"
-                                     class="img-fluid rounded border w-100"
-                                     style="height:140px;object-fit:cover" />
+                                <img src="@image" alt="Ảnh xe lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
                             </a>
                         </div>
                     }
@@ -172,15 +196,10 @@ else
 <div class="card card-body shadow-sm mb-4">
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div>
-            <h2 class="h5 mb-1">Phụ phí sau khi trả</h2>
+            <h2 class="h5 mb-1">Phụ phí</h2>
             <p class="text-muted small mb-0">Chỉ thêm khi có căn cứ sau đối chiếu.</p>
         </div>
-        <a class="btn btn-sm btn-outline-primary"
-           asp-controller="AdminBookings"
-           asp-action="Details"
-           asp-route-id="@Model.BookingId">
-            Xử lý phụ phí
-        </a>
+        <a class="btn btn-sm btn-outline-primary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Xử lý phụ phí</a>
     </div>
 
     @if (Model.AdditionalCharges.Count == 0)
@@ -191,92 +210,47 @@ else
     {
         <div class="table-responsive">
             <table class="table align-middle mb-2">
-                <thead>
-                    <tr>
-                        <th>Loại</th>
-                        <th>Nội dung</th>
-                        <th class="text-end">Số tiền</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Loại</th><th>Nội dung</th><th class="text-end">Số tiền</th></tr></thead>
                 <tbody>
                     @foreach (var charge in Model.AdditionalCharges)
                     {
-                        <tr>
-                            <td>@charge.ChargeType.ToVietnamese()</td>
-                            <td>@charge.Description</td>
-                            <td class="text-end fw-semibold">@charge.Amount.ToString("N0") đ</td>
-                        </tr>
+                        <tr><td>@charge.ChargeType.ToVietnamese()</td><td>@charge.Description</td><td class="text-end fw-semibold">@charge.Amount.ToString("N0") đ</td></tr>
                     }
                 </tbody>
             </table>
         </div>
-
-        <div class="d-flex justify-content-between">
-            <span>Tổng phụ phí</span>
-            <strong>@Model.AdditionalAmount.ToString("N0") đ</strong>
-        </div>
-
-        <div class="mt-2">
-            @if (Model.AdditionalChargePaid)
-            {
-                <span class="badge bg-success">Đã thanh toán</span>
-            }
-            else
-            {
-                <span class="badge bg-warning text-dark">Chưa thanh toán</span>
-            }
-        </div>
+        <div class="d-flex justify-content-between"><span>Tổng phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+        <div class="mt-2"><span class="badge @(Model.AdditionalChargePaid ? "bg-success" : "bg-warning text-dark")">@(Model.AdditionalChargePaid ? "Đã thanh toán" : "Chưa thanh toán")</span></div>
     }
 </div>
 
 @if (canComplete)
 {
     <div class="card card-body shadow-sm border-primary">
-        <h2 class="h5">Xác nhận đối chiếu</h2>
+        <h2 class="h5">Kết thúc kiểm tra</h2>
 
-        @if (hasUnpaidCharge)
+        @if (!hasSignedDocuments)
         {
-            <div class="alert alert-warning mb-0">
-                Còn phụ phí <strong>@Model.AdditionalAmount.ToString("N0") đ</strong> chưa thanh toán.
-                Chưa thể kết thúc kiểm tra.
-            </div>
+            <div class="alert alert-warning mb-0">Cần đủ <strong>2 bản có chữ ký</strong> trước khi tiếp tục.</div>
+        }
+        else if (hasUnpaidCharge)
+        {
+            <div class="alert alert-warning mb-0">Còn phụ phí <strong>@Model.AdditionalAmount.ToString("N0") đ</strong> chưa thanh toán.</div>
         }
         else
         {
-            <p class="text-muted">
-                Xe sẽ được giải phóng hoặc chuyển bảo trì. Có tiền cọc thì đơn chuyển sang <strong>Chờ hoàn cọc</strong>.
-            </p>
-
-            <form asp-controller="Returns"
-                  asp-action="Complete"
-                  method="post"
-                  data-loading-form
-                  data-confirm="Xác nhận đã đối chiếu cả hai biên bản và kết thúc kiểm tra xe?">
-
+            <p class="text-muted">Đủ hồ sơ. Có tiền cọc thì đơn chuyển sang <strong>Chờ hoàn cọc</strong>; chưa được tính là hoàn tất.</p>
+            <form asp-controller="Returns" asp-action="Complete" method="post"
+                  data-loading-form data-confirm="Xác nhận đã đối chiếu đủ hồ sơ giao - trả?">
                 <input type="hidden" name="BookingId" value="@Model.BookingId" />
                 <input type="hidden" name="reviewConfirmed" value="true" />
-
                 <div class="form-check mb-2">
-                    <input class="form-check-input"
-                           type="checkbox"
-                           name="RequiresMaintenance"
-                           value="true"
-                           id="inspectionRequiresMaintenance" />
-                    <label class="form-check-label" for="inspectionRequiresMaintenance">
-                        Xe cần bảo trì hoặc sửa chữa
-                    </label>
+                    <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="inspectionRequiresMaintenance" />
+                    <label class="form-check-label" for="inspectionRequiresMaintenance">Xe cần bảo trì hoặc sửa chữa</label>
                 </div>
-
-                <textarea name="MaintenanceNote"
-                          maxlength="1000"
-                          class="form-control mb-3"
-                          rows="2"
-                          placeholder="Nội dung bảo trì nếu có"></textarea>
-
+                <textarea name="MaintenanceNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Nội dung bảo trì nếu có"></textarea>
                 <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">
-                    @(Model.DepositAmount > 0
-                        ? "Xác nhận → Hoàn cọc"
-                        : "Xác nhận → Hoàn tất")
+                    @(Model.DepositAmount > 0 ? "Xác nhận → Hoàn cọc" : "Xác nhận → Hoàn tất")
                 </button>
             </form>
         }
@@ -284,7 +258,8 @@ else
 }
 else if (Model.Status == BookingStatus.Completed)
 {
-    <div class="alert alert-success">
-        <strong>Chuyến đã hoàn tất.</strong> Hai biên bản được giữ lại để tra cứu.
+    <div class="alert alert-success d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <strong>Chuyến đã hoàn tất.</strong>
+        <a class="btn btn-sm btn-success" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Xem hồ sơ chuyến</a>
     </div>
 }
