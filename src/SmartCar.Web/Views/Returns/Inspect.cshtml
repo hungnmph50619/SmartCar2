@@ -6,6 +6,10 @@
     var canComplete = Model.Status == BookingStatus.PendingInspection;
     var hasUnpaidCharge = Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid;
     var awaitingRefund = Model.Status == BookingStatus.AwaitingRefund || Model.RefundStatus == PaymentStatus.AwaitingRefund;
+    var fuelDifference = Model.FuelDifferencePercent;
+    var fuelDifferenceText = fuelDifference.HasValue
+        ? $"{(fuelDifference.Value > 0 ? "+" : string.Empty)}{fuelDifference.Value}%"
+        : null;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
@@ -28,28 +32,35 @@
 {
     <div class="alert alert-warning">
         <strong>Đã kiểm tra xong.</strong>
-        Đơn đang chờ hoàn cọc
-        <strong>@Model.RefundAmount.ToString("N0") đ</strong>.
-        Chỉ sau khi khoản hoàn được xác nhận, chuyến mới chuyển sang <strong>Đã hoàn tất</strong>.
+        Chờ hoàn cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong> trước khi hoàn tất chuyến.
     </div>
 }
 else
 {
     <div class="alert alert-info">
-        <strong>Trước khi kết thúc chuyến:</strong>
-        đối chiếu số km, nhiên liệu và bộ ảnh lúc giao với lúc trả. Nếu có chênh lệch cần thu phí, hãy xử lý phụ phí trước.
+        So sánh km, nhiên liệu và ảnh lúc giao với lúc trả trước khi kết thúc chuyến.
     </div>
 }
 
 <div class="card card-body shadow-sm mb-4">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-        <div>
+    <div class="row g-3 align-items-center mb-3">
+        <div class="col-md-4">
             <div class="small text-muted">Khách hàng</div>
             <strong>@Model.CustomerName</strong>
         </div>
-        <div class="text-end">
+        <div class="col-md-4">
             <div class="small text-muted">Quãng đường đã chạy</div>
             <strong class="fs-5">@Model.DrivenKilometers.ToString("N0") km</strong>
+        </div>
+        <div class="col-md-4">
+            <div class="small text-muted">Nhiên liệu giao → trả</div>
+            <strong class="fs-5 @(fuelDifference < 0 ? "text-danger" : "")">
+                @Model.Handover.FuelDisplay → @Model.Return.FuelDisplay
+                @if (!string.IsNullOrWhiteSpace(fuelDifferenceText))
+                {
+                    <span class="fs-6">(@fuelDifferenceText)</span>
+                }
+            </strong>
         </div>
     </div>
 
@@ -72,7 +83,7 @@ else
                     </div>
                     <div class="col-3">
                         <div class="small text-muted">Nhiên liệu</div>
-                        <strong>@Model.Handover.FuelLevel</strong>
+                        <strong>@Model.Handover.FuelDisplay</strong>
                     </div>
                 </div>
 
@@ -119,7 +130,7 @@ else
                     </div>
                     <div class="col-3">
                         <div class="small text-muted">Nhiên liệu</div>
-                        <strong>@Model.Return.FuelLevel</strong>
+                        <strong>@Model.Return.FuelDisplay</strong>
                     </div>
                 </div>
 
@@ -161,7 +172,7 @@ else
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div>
             <h2 class="h5 mb-1">Phụ phí sau khi trả</h2>
-            <p class="text-muted small mb-0">Đối chiếu xong mới quyết định có phát sinh khoản phải thu hay không.</p>
+            <p class="text-muted small mb-0">Chỉ thêm khi có căn cứ sau đối chiếu.</p>
         </div>
         <a class="btn btn-sm btn-outline-primary"
            asp-controller="AdminBookings"
@@ -232,7 +243,7 @@ else
         else
         {
             <p class="text-muted">
-                Sau bước này, xe sẽ được giải phóng hoặc chuyển bảo trì. Nếu có tiền cọc, đơn chuyển sang <strong>Chờ hoàn cọc</strong>; chưa được coi là hoàn tất.
+                Xe sẽ được giải phóng hoặc chuyển bảo trì. Có tiền cọc thì đơn chuyển sang <strong>Chờ hoàn cọc</strong>.
             </p>
 
             <form asp-controller="Returns"
@@ -251,7 +262,7 @@ else
                            value="true"
                            id="inspectionRequiresMaintenance" />
                     <label class="form-check-label" for="inspectionRequiresMaintenance">
-                        Xe cần bảo trì hoặc sửa chữa sau lượt thuê
+                        Xe cần bảo trì hoặc sửa chữa
                     </label>
                 </div>
 
@@ -263,8 +274,8 @@ else
 
                 <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">
                     @(Model.DepositAmount > 0
-                        ? "Xác nhận đối chiếu → Hoàn cọc"
-                        : "Xác nhận đối chiếu → Hoàn tất chuyến")
+                        ? "Xác nhận → Hoàn cọc"
+                        : "Xác nhận → Hoàn tất")
                 </button>
             </form>
         }
@@ -273,6 +284,6 @@ else
 else if (Model.Status == BookingStatus.Completed)
 {
     <div class="alert alert-success">
-        <strong>Chuyến đã hoàn tất.</strong> Hai biên bản được giữ lại để tra cứu và đối chiếu.
+        <strong>Chuyến đã hoàn tất.</strong> Hai biên bản được giữ lại để tra cứu.
     </div>
 }
