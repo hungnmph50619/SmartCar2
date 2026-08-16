@@ -52,19 +52,22 @@ public sealed class ReturnsController : Controller
             return NotFound();
         }
 
-        if (booking.Status != BookingStatus.Rented)
+        if (booking.Status != BookingStatus.Rented || booking.Handover is null)
         {
             TempData["ErrorMessage"] =
                 "Chỉ đơn đang thuê và đã bàn giao xe mới được lập biên bản trả xe.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
+        SetHandoverBaseline(booking);
+
         return View(new ReturnViewModel
         {
             BookingId = bookingId,
             ReturnedAt = DateTime.Now > booking.ReturnDate
                 ? DateTime.Now
-                : booking.ReturnDate
+                : booking.ReturnDate,
+            Mileage = booking.Handover.Mileage
         });
     }
 
@@ -77,6 +80,7 @@ public sealed class ReturnsController : Controller
         await ValidateImagesAsync(model.Images, cancellationToken);
         if (!ModelState.IsValid)
         {
+            await PopulateHandoverBaselineAsync(model.BookingId, cancellationToken);
             return View(model);
         }
 
@@ -102,6 +106,7 @@ public sealed class ReturnsController : Controller
         {
             DeleteSavedImages(imagePaths);
             AddErrors(result.Errors);
+            await PopulateHandoverBaselineAsync(model.BookingId, cancellationToken);
             return View(model);
         }
 
@@ -341,6 +346,27 @@ public sealed class ReturnsController : Controller
         }
 
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+    }
+
+    private async Task PopulateHandoverBaselineAsync(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var booking = await _bookingService.GetAdminBookingAsync(
+            bookingId,
+            cancellationToken);
+
+        if (booking is not null)
+        {
+            SetHandoverBaseline(booking);
+        }
+    }
+
+    private void SetHandoverBaseline(BookingDetailsDto booking)
+    {
+        ViewBag.HandoverMileage = booking.Handover?.Mileage;
+        ViewBag.HandoverFuelLevel = booking.Handover?.FuelLevel;
+        ViewBag.HandoverAt = booking.Handover?.HandoverAt;
     }
 
     private async Task ValidateImagesAsync(
