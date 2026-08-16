@@ -11,6 +11,9 @@ namespace SmartCar.Infrastructure.Services;
 internal sealed class NotificationService : INotificationService
 {
     private const int ExpiringSoonDays = 30;
+    private const string AdminBookingWorkTitlePrefix = "Đơn #";
+    private const string AdminBookingWorkTitleSuffix = " cần xác nhận";
+
     private readonly ApplicationDbContext _dbContext;
 
     public NotificationService(ApplicationDbContext dbContext)
@@ -23,6 +26,7 @@ internal sealed class NotificationService : INotificationService
         CancellationToken cancellationToken = default)
     {
         await EnsureDocumentExpiryNotificationsAsync(userId, cancellationToken);
+        await EnsureAdminPendingBookingNotificationsAsync(userId, cancellationToken);
 
         return await _dbContext.Notifications
             .AsNoTracking()
@@ -44,6 +48,7 @@ internal sealed class NotificationService : INotificationService
         CancellationToken cancellationToken = default)
     {
         await EnsureDocumentExpiryNotificationsAsync(userId, cancellationToken);
+        await EnsureAdminPendingBookingNotificationsAsync(userId, cancellationToken);
 
         return await _dbContext.Notifications.CountAsync(
             item => item.UserId == userId && !item.IsRead,
@@ -88,6 +93,134 @@ internal sealed class NotificationService : INotificationService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return OperationResult.Success();
+    }
+
+    private async Task EnsureAdminPendingBookingNotificationsAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        var adminRoleId = await _dbContext.Roles
+            .AsNoTracking()
+            .Where(role => role.Name == RoleNames.Admin)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(adminRoleId))
+        {
+            return;
+        }
+
+        var isAdmin = await _dbContext.UserRoles
+            .AsNoTracking()
+            .AnyAsync(item =>
+                item.UserId == userId &&
+                item.RoleId == adminRoleId,
+                cancellationToken);
+
+        if (!isAdmin)
+        {
+            return;
+        }
+
+        var pendingBookings = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.Status == BookingStatus.PendingConfirmation)
+            .OrderBy(booking => booking.CreatedAt)
+            .Select(booking => new
+            {
+                booking.BookingId,
+                booking.PickupDate,
+                booking.PickupMethod,
+                VehicleName = booking.Vehicle.VehicleName
+            })
+            .ToListAsync(cancellationToken);
+
+        var workNotifications = await _dbContext.Notifications
+            .Where(item =>
+                item.UserId == userId &&
+                item.Title.StartsWith(AdminBookingWorkTitlePrefix) &&
+                item.Title.EndsWith(AdminBookingWorkTitleSuffix))
+            .ToListAsync(cancellationToken);
+
+        var pendingBookingIds = pendingBookings
+            .Select(item => item.BookingId)
+            .ToHashSet();
+
+        var changed = false;
+
+        foreach (var booking in pendingBookings)
+        {
+            var title = BuildAdminBookingWorkTitle(booking.BookingId);
+            var existing = workNotifications.FirstOrDefault(item => item.Title == title);
+
+            if (existing is null)
+            {
+                var pickupText = booking.PickupDate.ToString("dd/MM HH:mm");
+                var pickupMethod = booking.PickupMethod == VehiclePickupMethod.Delivery
+                    ? "Giao tận nơi"
+                    : "Nhận tại cửa hàng";
+
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = userId,
+                    Title = title,
+                    Message = $"{booking.VehicleName} · nhận {pickupText} · {pickupMethod}. Mở Quản lý đơn để xác nhận."
+                });
+
+                changed = true;
+                continue;
+            }
+
+            // Đây là công việc cần xử lý, nên giữ trạng thái chưa đọc cho tới khi
+            // đơn được xác nhận hoặc từ chối.
+            if (existing.IsRead)
+            {
+                existing.IsRead = false;
+                existing.ReadAt = null;
+                changed = true;
+            }
+        }
+
+        foreach (var notification in workNotifications.Where(item => !item.IsRead))
+        {
+            var bookingId = TryGetBookingIdFromAdminWorkTitle(notification.Title);
+            if (bookingId.HasValue && !pendingBookingIds.Contains(bookingId.Value))
+            {
+                notification.IsRead = true;
+                notification.ReadAt = DateTime.UtcNow;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private static string BuildAdminBookingWorkTitle(int bookingId) =>
+        $"{AdminBookingWorkTitlePrefix}{bookingId}{AdminBookingWorkTitleSuffix}";
+
+    private static int? TryGetBookingIdFromAdminWorkTitle(string title)
+    {
+        if (!title.StartsWith(AdminBookingWorkTitlePrefix, StringComparison.Ordinal) ||
+            !title.EndsWith(AdminBookingWorkTitleSuffix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var idText = title[
+            AdminBookingWorkTitlePrefix.Length..
+            ^AdminBookingWorkTitleSuffix.Length];
+
+        return int.TryParse(idText, out var bookingId)
+            ? bookingId
+            : null;
     }
 
     private async Task EnsureDocumentExpiryNotificationsAsync(
