@@ -22,6 +22,11 @@ public sealed class ReturnInspectionViewModel
 
     public int DrivenKilometers =>
         Math.Max(0, Return.Mileage - Handover.Mileage);
+
+    public int? FuelDifferencePercent =>
+        Handover.FuelPercent.HasValue && Return.FuelPercent.HasValue
+            ? Return.FuelPercent.Value - Handover.FuelPercent.Value
+            : null;
 }
 
 public sealed class InspectionSnapshotViewModel
@@ -33,4 +38,30 @@ public sealed class InspectionSnapshotViewModel
     public string? Notes { get; init; }
     public IReadOnlyList<string> ImagePaths { get; init; }
         = Array.Empty<string>();
+
+    public int? FuelPercent => ParseFuelPercent(FuelLevel);
+
+    public string FuelDisplay =>
+        FuelPercent.HasValue
+            ? $"{FuelPercent.Value}%"
+            : FuelLevel;
+
+    private static int? ParseFuelPercent(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim();
+        if (normalized.EndsWith('%'))
+        {
+            normalized = normalized[..^1].Trim();
+        }
+
+        return int.TryParse(normalized, out var percent) &&
+               percent >= 0 && percent <= 100
+            ? percent
+            : null;
+    }
 }
