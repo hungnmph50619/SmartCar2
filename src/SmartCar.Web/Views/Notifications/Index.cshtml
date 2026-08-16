@@ -48,6 +48,37 @@
             : null;
     }
 
+    string CompactPaymentMessage(string message)
+    {
+        var bookingId = BookingIdFromMessage(message);
+        if (!bookingId.HasValue)
+        {
+            return message;
+        }
+
+        var transferIndex = message.IndexOf("chuyển", StringComparison.OrdinalIgnoreCase);
+        var currencyIndex = transferIndex >= 0
+            ? message.IndexOf(" đồng", transferIndex, StringComparison.OrdinalIgnoreCase)
+            : -1;
+
+        if (transferIndex < 0 || currencyIndex <= transferIndex)
+        {
+            return message;
+        }
+
+        var amount = message[(transferIndex + "chuyển".Length)..currencyIndex]
+            .Replace("một lần", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Trim();
+
+        var label = message.Contains("phụ phí", StringComparison.OrdinalIgnoreCase)
+            ? "Phụ phí"
+            : message.Contains("gia hạn", StringComparison.OrdinalIgnoreCase)
+                ? "Gia hạn"
+                : "Thuê + cọc";
+
+        return $"Đơn #{bookingId.Value} · {amount} đ · {label}";
+    }
+
     bool IsAdminWorkNotification(string title) =>
         isAdmin &&
         (IsBookingWorkTitle(title) ||
@@ -367,7 +398,9 @@
                                 : $"Đơn #{refundWorkId.Value} cần hoàn cọc")
                             : FriendlyNotificationText(rawDisplayTitle);
 
-                var displayMessage = FriendlyNotificationText(item.Message);
+                var displayMessage = isPaymentReviewAction
+                    ? CompactPaymentMessage(item.Message)
+                    : FriendlyNotificationText(item.Message);
                 var kycCustomerId = isKycWorkItem && separatorIndex > 0
                     ? item.Title[(separatorIndex + 1)..]
                     : null;
