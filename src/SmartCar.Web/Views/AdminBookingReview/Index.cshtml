@@ -1,0 +1,266 @@
+@model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Enums
+@using System.Globalization
+
+@{
+    ViewData["Title"] = $"Xác nhận đơn #{Model.BookingId}";
+
+    var isDelivery = Model.PickupMethod == VehiclePickupMethod.Delivery;
+    var kycVerified = ViewBag.CustomerKycVerified is bool verified && verified;
+    var storeAddress = ViewBag.StoreAddress as string ?? "SmartCar";
+
+    var latitudeText = Model.DeliveryLatitude?.ToString(CultureInfo.InvariantCulture);
+    var longitudeText = Model.DeliveryLongitude?.ToString(CultureInfo.InvariantCulture);
+    var hasDeliveryMap = isDelivery &&
+        !string.IsNullOrWhiteSpace(latitudeText) &&
+        !string.IsNullOrWhiteSpace(longitudeText);
+
+    var mapDirectionsUrl = hasDeliveryMap
+        ? $"https://www.google.com/maps/dir/?api=1&destination={latitudeText},{longitudeText}"
+        : null;
+}
+
+@if (hasDeliveryMap)
+{
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin="" />
+}
+
+<style>
+    .booking-review {
+        max-width: 980px;
+        margin: 0 auto;
+    }
+
+    .review-card {
+        border: 1px solid #e4e8ee;
+        border-radius: 14px;
+        background: #fff;
+    }
+
+    .review-label {
+        color: #6c757d;
+        font-size: .8rem;
+        margin-bottom: .15rem;
+    }
+
+    .review-value {
+        font-weight: 600;
+        color: #172033;
+    }
+
+    #admin-delivery-map {
+        height: 300px;
+        border-radius: 12px;
+        border: 1px solid #dfe4ea;
+    }
+</style>
+
+<div class="booking-review">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+        <div>
+            <div class="text-muted small">ĐƠN #@Model.BookingId</div>
+            <h1 class="h3 mb-1">Xác nhận đơn thuê</h1>
+            <span class="badge bg-warning text-dark">Chờ xác nhận</span>
+        </div>
+
+        <a class="btn btn-outline-secondary"
+           asp-controller="AdminBookings"
+           asp-action="Index">
+            Danh sách đơn
+        </a>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="review-card p-3 mb-3">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="review-label">Khách hàng</div>
+                        <div class="review-value">@Model.CustomerName</div>
+                        @if (!string.IsNullOrWhiteSpace(Model.CustomerPhone))
+                        {
+                            <a class="small text-decoration-none"
+                               href="tel:@Model.CustomerPhone">
+                                ☎ @Model.CustomerPhone
+                            </a>
+                        }
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="review-label">Xe</div>
+                        <div class="review-value">@Model.VehicleName</div>
+                        <div class="small text-muted">@Model.LicensePlate</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="review-label">Nhận xe</div>
+                        <div class="review-value">@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="review-label">Trả xe</div>
+                        <div class="review-value">@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="review-card p-3">
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+                    <div>
+                        <div class="review-label">Cách nhận xe</div>
+                        <div class="review-value">
+                            @(isDelivery ? "Giao xe tận nơi" : "Nhận tại cửa hàng")
+                        </div>
+                    </div>
+
+                    @if (hasDeliveryMap)
+                    {
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="@mapDirectionsUrl"
+                           target="_blank"
+                           rel="noopener">
+                            Mở chỉ đường
+                        </a>
+                    }
+                </div>
+
+                @if (isDelivery)
+                {
+                    <div class="border rounded p-3 bg-light mb-3">
+                        <div class="review-label">Điểm khách yêu cầu giao</div>
+                        <div class="review-value">@Model.DeliveryAddress</div>
+                    </div>
+
+                    @if (hasDeliveryMap)
+                    {
+                        <div id="admin-delivery-map"
+                             data-latitude="@latitudeText"
+                             data-longitude="@longitudeText"
+                             aria-label="Bản đồ vị trí giao xe khách đã chọn">
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning mb-0">
+                            Đơn này chưa có tọa độ giao xe.
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="small text-muted">@storeAddress</div>
+                }
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="review-card p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>Giấy tờ khách</span>
+                    <span class="badge @(kycVerified ? "bg-success" : "bg-danger")">
+                        @(kycVerified ? "Hợp lệ" : "Chưa đủ")
+                    </span>
+                </div>
+
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Tiền thuê / giao xe</span>
+                    <strong>@Model.TotalAmount.ToString("N0") đ</strong>
+                </div>
+
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Tiền cọc</span>
+                    <strong>@Model.DepositAmount.ToString("N0") đ</strong>
+                </div>
+
+                <hr />
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">Khách sẽ thanh toán</span>
+                    <strong class="text-primary fs-5">@Model.UpfrontAmount.ToString("N0") đ</strong>
+                </div>
+            </div>
+
+            <div class="review-card p-3">
+                <form asp-controller="AdminBookings"
+                      asp-action="Confirm"
+                      method="post"
+                      class="mb-3"
+                      data-loading-form
+                      data-confirm="Xác nhận đơn thuê này?">
+                    <input type="hidden" name="id" value="@Model.BookingId" />
+                    <button class="btn btn-success w-100"
+                            type="submit"
+                            @(kycVerified ? null : "disabled")>
+                        Xác nhận đơn
+                    </button>
+                </form>
+
+                @if (!kycVerified)
+                {
+                    <div class="small text-danger mb-3">
+                        Chưa thể xác nhận vì giấy tờ khách chưa hợp lệ đến ngày trả xe.
+                    </div>
+                }
+
+                <form asp-controller="AdminBookings"
+                      asp-action="Reject"
+                      method="post"
+                      data-loading-form
+                      data-confirm="Từ chối đơn thuê này?">
+                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                    <label class="form-label small" for="rejectReason">Nếu từ chối</label>
+                    <textarea id="rejectReason"
+                              name="Reason"
+                              class="form-control mb-2"
+                              rows="2"
+                              maxlength="500"
+                              required
+                              placeholder="Lý do ngắn gọn"></textarea>
+                    <button class="btn btn-outline-danger w-100" type="submit">
+                        Từ chối đơn
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (hasDeliveryMap)
+{
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+
+    <script>
+        (() => {
+            const mapElement = document.getElementById('admin-delivery-map');
+            if (!mapElement || typeof L === 'undefined') {
+                return;
+            }
+
+            const latitude = Number(mapElement.dataset.latitude);
+            const longitude = Number(mapElement.dataset.longitude);
+
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                return;
+            }
+
+            const map = L.map(mapElement, {
+                scrollWheelZoom: false
+            }).setView([latitude, longitude], 16);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            L.marker([latitude, longitude])
+                .addTo(map)
+                .bindPopup('Điểm giao xe khách đã chọn')
+                .openPopup();
+        })();
+    </script>
+}
