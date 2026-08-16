@@ -67,12 +67,20 @@
 
         <div class="col-md-6">
             <label asp-for="FuelLevel" class="form-label fw-semibold">Mức nhiên liệu</label>
-            <input asp-for="FuelLevel"
-                   class="form-control"
-                   maxlength="30"
-                   placeholder="Ví dụ: 100% hoặc 8/8"
-                   required />
+            <div class="input-group">
+                <input asp-for="FuelLevel"
+                       type="number"
+                       min="0"
+                       max="100"
+                       step="1"
+                       inputmode="numeric"
+                       class="form-control"
+                       placeholder="100"
+                       required />
+                <span class="input-group-text">%</span>
+            </div>
             <span asp-validation-for="FuelLevel" class="text-danger small"></span>
+            <div class="form-text">Nhập từ 0 đến 100.</div>
         </div>
 
         <div class="col-12">
