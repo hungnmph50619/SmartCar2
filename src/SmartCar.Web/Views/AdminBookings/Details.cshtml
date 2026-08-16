@@ -97,14 +97,13 @@
     var totalCollected = Model.Payments
         .Where(payment =>
             payment.Status == PaymentStatus.Paid &&
-            payment.Type != PaymentType.Refund &&
-            payment.Type != PaymentType.DepositRefund)
+            payment.Type != PaymentType.Refund)
         .Sum(payment => payment.Amount);
 
     var totalRefunded = Model.Payments
         .Where(payment =>
             payment.Status == PaymentStatus.Refunded &&
-            (payment.Type == PaymentType.Refund || payment.Type == PaymentType.DepositRefund))
+            payment.Type == PaymentType.Refund)
         .Sum(payment => payment.Amount);
 
     var netCollected = Math.Max(0m, totalCollected - totalRefunded);
@@ -297,10 +296,6 @@
 
     <div class="col-lg-8">
 
-        @* ============================================================
-           THÔNG TIN THUÊ XE
-           ============================================================ *@
-
         <div class="card card-body shadow-sm mb-4">
 
             <h2 class="h5 mb-3">
@@ -399,10 +394,6 @@
             }
 
         </div>
-
-        @* ============================================================
-           HỒ SƠ KHÁCH HÀNG
-           ============================================================ *@
 
         <div class="card card-body shadow-sm mb-4 border-0">
 
@@ -1002,9 +993,9 @@
                 </div>
             }
             else if (remainingToCollect > 0 &&
-                     Model.Status is not BookingStatus.Cancelled and
-                     not BookingStatus.Rejected and
-                     not BookingStatus.NoShow)
+                     Model.Status != BookingStatus.Cancelled &&
+                     Model.Status != BookingStatus.Rejected &&
+                     Model.Status != BookingStatus.NoShow)
             {
                 <div class="d-flex justify-content-between small">
                     <span class="text-muted">Còn cần thu</span>
