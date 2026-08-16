@@ -8,30 +8,65 @@
         title.StartsWith("Đơn #", StringComparison.Ordinal) &&
         title.EndsWith(" cần xác nhận", StringComparison.Ordinal);
 
-    int? BookingIdFromWorkTitle(string title)
+    bool IsRefundWorkTitle(string title) =>
+        title.StartsWith("Đơn #", StringComparison.Ordinal) &&
+        title.EndsWith(" cần hoàn cọc", StringComparison.Ordinal);
+
+    bool IsPaymentReviewTitle(string title) =>
+        title == "Có giao dịch QR chờ xác nhận";
+
+    int? BookingIdFromWorkTitle(string title, string suffix)
     {
-        if (!IsBookingWorkTitle(title))
+        if (!title.StartsWith("Đơn #", StringComparison.Ordinal) ||
+            !title.EndsWith(suffix, StringComparison.Ordinal))
         {
             return null;
         }
 
-        var value = title["Đơn #".Length..^" cần xác nhận".Length];
+        var value = title["Đơn #".Length..^suffix.Length];
         return int.TryParse(value, out var bookingId) ? bookingId : null;
     }
+
+    int? BookingIdFromMessage(string message)
+    {
+        const string marker = "Đơn #";
+        var start = message.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        start += marker.Length;
+        var end = start;
+        while (end < message.Length && char.IsDigit(message[end]))
+        {
+            end++;
+        }
+
+        return end > start && int.TryParse(message[start..end], out var bookingId)
+            ? bookingId
+            : null;
+    }
+
+    bool IsAdminWorkNotification(string title) =>
+        isAdmin &&
+        (IsBookingWorkTitle(title) ||
+         IsPaymentReviewTitle(title) ||
+         IsRefundWorkTitle(title));
 
     var unreadRegularCount = Model.Count(item =>
         !item.IsRead &&
         !item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal) &&
-        !(isAdmin && IsBookingWorkTitle(item.Title)));
+        !IsAdminWorkNotification(item.Title));
 
     var pendingWorkCount = Model.Count(item =>
         !item.IsRead &&
         (item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal) ||
-         (isAdmin && IsBookingWorkTitle(item.Title))));
+         IsAdminWorkNotification(item.Title)));
 
     var hasAdminWorkHistory = Model.Any(item =>
         item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal) ||
-        (isAdmin && IsBookingWorkTitle(item.Title)));
+        IsAdminWorkNotification(item.Title));
 
     string FriendlyNotificationText(string value) => value
         .Replace("Hồ sơ KYC đã được xác minh", "Hồ sơ giấy tờ đã được duyệt", StringComparison.Ordinal)
@@ -260,11 +295,11 @@
             <p class="text-muted mb-0">
                 @if (pendingWorkCount > 0 && unreadRegularCount > 0)
                 {
-                    <span><strong>@pendingWorkCount</strong> việc cần xử lý · @unreadRegularCount thông báo chưa đọc.</span>
+                    <span><strong>@pendingWorkCount</strong> việc cần xử lý · @unreadRegularCount chưa đọc.</span>
                 }
                 else if (pendingWorkCount > 0)
                 {
-                    <span><strong>@pendingWorkCount</strong> việc đang chờ xử lý.</span>
+                    <span><strong>@pendingWorkCount</strong> việc cần xử lý.</span>
                 }
                 else if (unreadRegularCount > 0)
                 {
@@ -272,7 +307,7 @@
                 }
                 else
                 {
-                    <span>Bạn đã xử lý và đọc hết các thông báo hiện tại.</span>
+                    <span>Không còn việc cần xử lý.</span>
                 }
             </p>
         </div>
@@ -282,7 +317,7 @@
             <form asp-action="MarkAllRead" method="post">
                 <button class="btn btn-link text-decoration-none notifications-mark-all" type="submit">
                     <span aria-hidden="true">✓✓</span>
-                    <span>Đánh dấu tất cả đã đọc</span>
+                    <span>Đã đọc tất cả</span>
                 </button>
             </form>
         }
@@ -291,7 +326,7 @@
     @if (isAdmin && hasAdminWorkHistory)
     {
         <div class="alert notifications-admin-note py-2 px-3 mb-3">
-            <strong>Việc cần xử lý</strong> chỉ chuyển sang đã xử lý sau khi Admin hoàn tất bước tương ứng.
+            Việc cần xử lý sẽ tự chuyển sang <strong>Đã xử lý</strong> khi hoàn tất.
         </div>
     }
 
@@ -300,7 +335,7 @@
         <div class="notifications-empty">
             <div class="notification-icon notification-tone-info mx-auto mb-3" aria-hidden="true">✓</div>
             <h2 class="h6 fw-bold mb-1">Chưa có thông báo</h2>
-            <p class="text-muted mb-0">Các cập nhật quan trọng về tài khoản và đơn thuê sẽ xuất hiện tại đây.</p>
+            <p class="text-muted mb-0">Thông báo mới sẽ xuất hiện tại đây.</p>
         </div>
     }
     else
@@ -311,21 +346,34 @@
                 var separatorIndex = item.Title.IndexOf('|');
                 var rawDisplayTitle = separatorIndex > 0 ? item.Title[..separatorIndex] : item.Title;
                 var isKycWorkItem = rawDisplayTitle == "Hồ sơ KYC chờ duyệt";
-                var bookingWorkId = isAdmin ? BookingIdFromWorkTitle(rawDisplayTitle) : null;
-                var isBookingWorkItem = bookingWorkId.HasValue;
+                var bookingWorkId = isAdmin && IsBookingWorkTitle(rawDisplayTitle)
+                    ? BookingIdFromWorkTitle(rawDisplayTitle, " cần xác nhận")
+                    : null;
+                var refundWorkId = isAdmin && IsRefundWorkTitle(rawDisplayTitle)
+                    ? BookingIdFromWorkTitle(rawDisplayTitle, " cần hoàn cọc")
+                    : null;
+                var isPaymentReviewAction = isAdmin && IsPaymentReviewTitle(rawDisplayTitle);
+                var paymentBookingId = isPaymentReviewAction
+                    ? BookingIdFromMessage(item.Message)
+                    : null;
 
                 var displayTitle = isKycWorkItem
-                    ? "Hồ sơ xác minh chờ duyệt"
-                    : FriendlyNotificationText(rawDisplayTitle);
+                    ? "Hồ sơ chờ duyệt"
+                    : isPaymentReviewAction
+                        ? (item.IsRead ? "Thanh toán đã xử lý" : "Thanh toán chờ xác nhận")
+                        : refundWorkId.HasValue
+                            ? (item.IsRead
+                                ? $"Đơn #{refundWorkId.Value} đã hoàn cọc"
+                                : $"Đơn #{refundWorkId.Value} cần hoàn cọc")
+                            : FriendlyNotificationText(rawDisplayTitle);
+
                 var displayMessage = FriendlyNotificationText(item.Message);
                 var kycCustomerId = isKycWorkItem && separatorIndex > 0
                     ? item.Title[(separatorIndex + 1)..]
                     : null;
                 var isKycAction = !string.IsNullOrWhiteSpace(kycCustomerId);
-                var isBookingAction = isBookingWorkItem && bookingWorkId.HasValue;
-                var isPaymentReviewAction =
-                    isAdmin &&
-                    rawDisplayTitle == "Có giao dịch QR chờ xác nhận";
+                var isBookingAction = bookingWorkId.HasValue;
+                var isRefundAction = refundWorkId.HasValue;
 
                 var isNeedsUpdate = displayTitle.Contains("cần cập nhật", StringComparison.OrdinalIgnoreCase) ||
                                     displayMessage.Contains("cần cập nhật", StringComparison.OrdinalIgnoreCase) ||
@@ -342,7 +390,7 @@
                                             isIdentityNotification &&
                                             User.IsInRole(SmartCar.Domain.Constants.RoleNames.Customer);
 
-                var isWorkItem = isKycAction || isBookingAction;
+                var isWorkItem = isKycAction || isBookingAction || isPaymentReviewAction || isRefundAction;
 
                 var toneClass = isWorkItem
                     ? (item.IsRead ? "notification-tone-success" : "notification-tone-work")
@@ -390,7 +438,7 @@
                             <span>@item.CreatedAt.ToLocalTime().ToString("HH:mm · dd/MM/yyyy")</span>
                         </div>
 
-                        @if (isKycAction || isBookingAction || isPaymentReviewAction || opensProfileDocuments || (!item.IsRead && !isWorkItem))
+                        @if (isKycAction || isBookingAction || isPaymentReviewAction || isRefundAction || opensProfileDocuments || (!item.IsRead && !isWorkItem))
                         {
                             <div class="notification-actions">
                                 @if (isBookingAction && !item.IsRead)
@@ -398,8 +446,8 @@
                                     <a class="btn btn-sm btn-success stretched-link"
                                        asp-controller="AdminBookingReview"
                                        asp-action="Index"
-                                       asp-route-id="@bookingWorkId.Value">
-                                        Xác nhận đơn →
+                                       asp-route-id="@bookingWorkId!.Value">
+                                        Xác nhận →
                                     </a>
                                 }
                                 else if (isBookingAction && item.IsRead)
@@ -407,7 +455,7 @@
                                     <a class="btn btn-sm btn-outline-secondary stretched-link"
                                        asp-controller="AdminBookings"
                                        asp-action="Details"
-                                       asp-route-id="@bookingWorkId.Value">
+                                       asp-route-id="@bookingWorkId!.Value">
                                         Xem đơn →
                                     </a>
                                 }
@@ -416,7 +464,7 @@
                                     <form asp-action="OpenKyc" method="post">
                                         <input type="hidden" name="id" value="@item.NotificationId" />
                                         <input type="hidden" name="customerId" value="@kycCustomerId" />
-                                        <button class="btn btn-sm btn-primary stretched-link" type="submit">Xử lý hồ sơ →</button>
+                                        <button class="btn btn-sm btn-primary stretched-link" type="submit">Duyệt →</button>
                                     </form>
                                 }
                                 else if (isKycAction && item.IsRead)
@@ -426,16 +474,44 @@
                                        asp-action="Details"
                                        asp-route-id="@kycCustomerId"
                                        asp-route-tab="documents">
-                                        Xem hồ sơ giấy tờ →
+                                        Xem hồ sơ →
                                     </a>
                                 }
-                                else if (isPaymentReviewAction)
+                                else if (isPaymentReviewAction && !item.IsRead)
                                 {
                                     <a class="btn btn-sm btn-primary stretched-link"
                                        asp-controller="AdminPayments"
                                        asp-action="Index"
                                        asp-route-status="@SmartCar.Domain.Enums.PaymentStatus.AwaitingConfirmation">
-                                        Đối soát thanh toán →
+                                        Đối soát →
+                                    </a>
+                                }
+                                else if (isPaymentReviewAction && item.IsRead && paymentBookingId.HasValue)
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary stretched-link"
+                                       asp-controller="AdminBookings"
+                                       asp-action="Details"
+                                       asp-route-id="@paymentBookingId.Value">
+                                        Xem đơn →
+                                    </a>
+                                }
+                                else if (isRefundAction && !item.IsRead)
+                                {
+                                    <a class="btn btn-sm btn-primary stretched-link"
+                                       asp-controller="AdminPayments"
+                                       asp-action="Index"
+                                       asp-route-status="@SmartCar.Domain.Enums.PaymentStatus.AwaitingRefund"
+                                       asp-route-type="@SmartCar.Domain.Enums.PaymentType.Refund">
+                                        Hoàn cọc →
+                                    </a>
+                                }
+                                else if (isRefundAction && item.IsRead)
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary stretched-link"
+                                       asp-controller="AdminBookings"
+                                       asp-action="Details"
+                                       asp-route-id="@refundWorkId!.Value">
+                                        Xem đơn →
                                     </a>
                                 }
                                 else if (opensProfileDocuments)
@@ -443,7 +519,7 @@
                                     <form asp-action="OpenProfileDocuments" method="post">
                                         <input type="hidden" name="id" value="@item.NotificationId" />
                                         <button class="btn btn-sm @(isNeedsUpdate ? "btn-primary" : "btn-outline-primary") stretched-link" type="submit">
-                                            @(isNeedsUpdate ? "Cập nhật hồ sơ →" : "Xem hồ sơ →")
+                                            @(isNeedsUpdate ? "Cập nhật →" : "Xem hồ sơ →")
                                         </button>
                                     </form>
                                 }
@@ -451,7 +527,7 @@
                                 {
                                     <form asp-action="MarkRead" method="post">
                                         <input type="hidden" name="id" value="@item.NotificationId" />
-                                        <button class="btn btn-sm btn-link text-decoration-none px-0" type="submit">Đánh dấu đã đọc</button>
+                                        <button class="btn btn-sm btn-link text-decoration-none px-0" type="submit">Đã đọc</button>
                                     </form>
                                 }
                             </div>
