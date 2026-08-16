@@ -122,6 +122,7 @@ public sealed class AdminRentalDocumentsController : Controller
     {
         var booking = await _dbContext.Bookings
             .Include(item => item.Handover)
+            .Include(item => item.Vehicle)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (booking?.Handover is null)
@@ -152,6 +153,29 @@ public sealed class AdminRentalDocumentsController : Controller
             cancellationToken);
 
         ReplaceSignedPath(booking.Handover, newPath, HandoverSignedMarker);
+
+        var startsRental = booking.Status == BookingStatus.ReadyForPickup;
+        if (startsRental)
+        {
+            if (booking.Vehicle.Status != VehicleStatus.Available)
+            {
+                DeletePhysicalFile(newPath);
+                TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao.";
+                return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+            }
+
+            booking.Status = BookingStatus.Rented;
+            booking.Vehicle.Status = VehicleStatus.Rented;
+            booking.Vehicle.CurrentMileage = booking.Handover.Mileage;
+
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = "Đã bàn giao xe",
+                Message = $"Đơn #{booking.BookingId} đã hoàn tất bàn giao và bắt đầu chuyến thuê."
+            });
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         DeletePhysicalFile(existingSigned);
 
@@ -159,10 +183,15 @@ public sealed class AdminRentalDocumentsController : Controller
             "UploadSignedHandover",
             nameof(VehicleHandover),
             bookingId,
-            $"Tải bản ký tay biên bản giao xe của đơn #{bookingId}.",
+            startsRental
+                ? $"Tải bản giao có chữ ký và bắt đầu chuyến thuê của đơn #{bookingId}."
+                : $"Tải bản ký tay biên bản giao xe của đơn #{bookingId}.",
             cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lưu bản giao xe có chữ ký.";
+        TempData["SuccessMessage"] = startsRental
+            ? "Đã lưu bản ký. Chuyến thuê đã bắt đầu."
+            : "Đã lưu bản giao xe có chữ ký.";
+
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
     }
 
