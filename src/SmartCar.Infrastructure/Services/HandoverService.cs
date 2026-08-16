@@ -12,8 +12,7 @@ internal sealed class HandoverService : IHandoverService
 {
     private readonly ApplicationDbContext _dbContext;
 
-    public HandoverService(
-        ApplicationDbContext dbContext)
+    public HandoverService(ApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
     }
@@ -22,54 +21,44 @@ internal sealed class HandoverService : IHandoverService
         CreateHandoverRequest request,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction =
-            await _dbContext.Database
-                .BeginTransactionAsync(
-                    cancellationToken);
+        await using var transaction = await _dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
 
-        var booking =
-            await _dbContext.Bookings
-                .Include(item => item.Vehicle)
-                .Include(item => item.Payments)
-                .Include(item => item.Handover)
-                .FirstOrDefaultAsync(
-                    item => item.BookingId == request.BookingId,
-                    cancellationToken);
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Vehicle)
+            .Include(item => item.Payments)
+            .Include(item => item.Handover)
+            .FirstOrDefaultAsync(
+                item => item.BookingId == request.BookingId,
+                cancellationToken);
 
         if (booking is null)
         {
-            return OperationResult.Failure(
-                "Không tìm thấy đơn thuê.");
+            return OperationResult.Failure("Không tìm thấy đơn thuê.");
         }
 
         if (booking.Status != BookingStatus.ReadyForPickup)
         {
-            return OperationResult.Failure(
-                "Đơn chưa ở trạng thái sẵn sàng giao xe.");
+            return OperationResult.Failure("Đơn chưa ở trạng thái sẵn sàng giao xe.");
         }
 
         if (booking.Handover is not null)
         {
-            return OperationResult.Failure(
-                "Đơn đã có biên bản giao xe.");
+            return OperationResult.Failure("Đơn đã có biên bản giao xe.");
         }
 
-        var rentalPaid =
-            booking.Payments.Any(
-                payment =>
-                    payment.Type == PaymentType.Rental &&
-                    payment.Status == PaymentStatus.Paid);
+        var rentalPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Rental &&
+            payment.Status == PaymentStatus.Paid);
 
-        var depositPaidAmount =
-            booking.Payments
-                .Where(payment =>
-                    payment.Type == PaymentType.Deposit &&
-                    payment.Status == PaymentStatus.Paid)
-                .Sum(payment => payment.Amount);
+        var depositPaidAmount = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
 
-        var depositSatisfied =
-            booking.DepositAmount <= 0 ||
-            depositPaidAmount >= booking.DepositAmount;
+        var depositSatisfied = booking.DepositAmount <= 0 ||
+                               depositPaidAmount >= booking.DepositAmount;
 
         if (!rentalPaid || !depositSatisfied)
         {
@@ -79,8 +68,7 @@ internal sealed class HandoverService : IHandoverService
 
         if (booking.Vehicle.Status != VehicleStatus.Available)
         {
-            return OperationResult.Failure(
-                "Xe hiện không ở trạng thái sẵn sàng.");
+            return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
 
         if (request.HandoverAt < booking.PickupDate)
@@ -98,8 +86,7 @@ internal sealed class HandoverService : IHandoverService
         if (request.Mileage < booking.Vehicle.CurrentMileage)
         {
             return OperationResult.Failure(
-                $"Số km giao xe không được nhỏ hơn số km hiện tại " +
-                $"({booking.Vehicle.CurrentMileage:N0} km).");
+                $"Số km giao xe không được nhỏ hơn số km hiện tại ({booking.Vehicle.CurrentMileage:N0} km).");
         }
 
         if (!TryParseFuelPercent(request.FuelLevel, out var fuelPercent))
@@ -120,55 +107,38 @@ internal sealed class HandoverService : IHandoverService
                 "Vui lòng tải ít nhất một ảnh tình trạng xe khi bàn giao.");
         }
 
-        var rentalDays =
-            Math.Max(
-                1,
-                (int)Math.Ceiling(
-                    (booking.ReturnDate - booking.PickupDate).TotalDays));
+        var rentalDays = Math.Max(
+            1,
+            (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalDays));
 
-        var includedKilometers =
-            rentalDays * RentalPolicy.IncludedKilometersPerDay;
+        booking.Handover = new VehicleHandover
+        {
+            HandoverAt = request.HandoverAt,
+            Mileage = request.Mileage,
+            FuelLevel = $"{fuelPercent}%",
+            ExteriorCondition = null,
+            InteriorCondition = null,
+            Accessories = null,
+            ImagePaths = Normalize(request.ImagePaths),
+            Notes = Normalize(request.Notes),
+            IncludedKilometers = rentalDays * RentalPolicy.IncludedKilometersPerDay,
+            ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
+            LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
+            TrafficFineTerms = RentalPolicy.TrafficFineTerms,
+            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
+            PenaltyPolicyAccepted = true
+        };
 
-        booking.Handover =
-            new VehicleHandover
-            {
-                HandoverAt = request.HandoverAt,
-                Mileage = request.Mileage,
-                FuelLevel = $"{fuelPercent}%",
-                ExteriorCondition = Normalize(request.ExteriorCondition),
-                InteriorCondition = Normalize(request.InteriorCondition),
-                Accessories = Normalize(request.Accessories),
-                ImagePaths = Normalize(request.ImagePaths),
-                Notes = Normalize(request.Notes),
-                IncludedKilometers = includedKilometers,
-                ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
-                LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
-                TrafficFineTerms = RentalPolicy.TrafficFineTerms,
-                DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
-                PenaltyPolicyAccepted = true
-            };
-
-        booking.Status = BookingStatus.Rented;
-        booking.Vehicle.Status = VehicleStatus.Rented;
-        booking.Vehicle.CurrentMileage = request.Mileage;
-
-        _dbContext.Notifications.Add(
-            new Notification
-            {
-                UserId = booking.CustomerId,
-                Title = "Đã bàn giao xe",
-                Message = $"Xe của đơn #{booking.BookingId} đã được bàn giao thành công."
-            });
-
+        // Chỉ lập bản điện tử ở bước này.
+        // Đơn vẫn ReadyForPickup và xe vẫn Available cho đến khi
+        // bản giấy có chữ ký của khách + đại diện SmartCar được tải lên.
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return OperationResult.Success();
     }
 
-    private static bool TryParseFuelPercent(
-        string? value,
-        out int percent)
+    private static bool TryParseFuelPercent(string? value, out int percent)
     {
         percent = 0;
         if (string.IsNullOrWhiteSpace(value))
@@ -187,11 +157,6 @@ internal sealed class HandoverService : IHandoverService
                percent <= 100;
     }
 
-    private static string? Normalize(
-        string? value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
-    }
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
