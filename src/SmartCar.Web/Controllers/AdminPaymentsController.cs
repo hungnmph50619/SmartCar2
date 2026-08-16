@@ -31,7 +31,13 @@ public sealed class AdminPaymentsController : Controller
         string? section,
         CancellationToken cancellationToken)
     {
-        section = ResolveSection(section, type);
+        var reviewAll =
+            string.IsNullOrWhiteSpace(section) &&
+            !type.HasValue &&
+            status == PaymentStatus.AwaitingConfirmation;
+
+        section = reviewAll ? "review" : ResolveSection(section, type);
+
         ViewBag.Status = status;
         ViewBag.Type = type;
         ViewBag.Section = section;
@@ -43,9 +49,15 @@ public sealed class AdminPaymentsController : Controller
 
         var filtered = payments.Where(payment => section switch
         {
-            "adjustment" => payment.Type is PaymentType.Extension or PaymentType.AdditionalCharge,
-            "refund" => payment.Type == PaymentType.Refund,
-            _ => payment.Type is PaymentType.Rental or PaymentType.Deposit
+            "review" =>
+                payment.Status == PaymentStatus.AwaitingConfirmation &&
+                payment.Type != PaymentType.Refund,
+            "adjustment" =>
+                payment.Type is PaymentType.Extension or PaymentType.AdditionalCharge,
+            "refund" =>
+                payment.Type == PaymentType.Refund,
+            _ =>
+                payment.Type is PaymentType.Rental or PaymentType.Deposit
         }).ToList();
 
         return View(filtered);
@@ -149,7 +161,7 @@ public sealed class AdminPaymentsController : Controller
 
     private static string ResolveSection(string? section, PaymentType? type)
     {
-        if (section is "collection" or "adjustment" or "refund")
+        if (section is "collection" or "adjustment" or "refund" or "review")
         {
             return section;
         }
