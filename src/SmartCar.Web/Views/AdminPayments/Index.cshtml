@@ -41,11 +41,17 @@
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
     <div>
         <h1 class="h3 mb-1">Quản lý tài chính</h1>
-        <p class="text-muted mb-0">Tiền vào, khoản phát sinh và tiền hoàn được tách riêng.</p>
+        <p class="text-muted mb-0">
+            @(section == "review" ? "Các giao dịch đang cần đối soát." : "Tiền vào, khoản phát sinh và tiền hoàn được tách riêng.")
+        </p>
     </div>
 </div>
 
 <div class="nav nav-pills gap-2 mb-4">
+    @if (section == "review")
+    {
+        <a class="nav-link active" asp-action="Index" asp-route-status="@PaymentStatus.AwaitingConfirmation">Cần đối soát</a>
+    }
     <a class="nav-link @(section == "collection" ? "active" : "")" asp-action="Index" asp-route-section="collection">Tiền thu</a>
     <a class="nav-link @(section == "adjustment" ? "active" : "")" asp-action="Index" asp-route-section="adjustment">Phát sinh</a>
     <a class="nav-link @(section == "refund" ? "active" : "")" asp-action="Index" asp-route-section="refund">Hoàn tiền</a>
@@ -57,7 +63,14 @@
         <option value="">Tất cả trạng thái</option>
         @foreach (var status in Enum.GetValues<PaymentStatus>())
         {
-            <option value="@status" selected="@(selectedStatus == status)">@StatusText(status)</option>
+            if (selectedStatus == status)
+            {
+                <option value="@status" selected>@StatusText(status)</option>
+            }
+            else
+            {
+                <option value="@status">@StatusText(status)</option>
+            }
         }
     </select>
     <button class="btn btn-outline-primary" type="submit">Lọc</button>
