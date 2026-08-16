@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
@@ -8,6 +9,7 @@ using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
@@ -23,17 +25,20 @@ public sealed class ReturnsController : Controller
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
     private readonly IWebHostEnvironment _environment;
+    private readonly ApplicationDbContext _dbContext;
 
     public ReturnsController(
         IReturnService returnService,
         IBookingService bookingService,
         IAuditService auditService,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        ApplicationDbContext dbContext)
     {
         _returnService = returnService;
         _bookingService = bookingService;
         _auditService = auditService;
         _environment = environment;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -107,8 +112,79 @@ public sealed class ReturnsController : Controller
             $"Lập biên bản trả xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh, có hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
             cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lập biên bản trả xe và lưu ảnh tình trạng xe. Xe chuyển sang chờ kiểm tra.";
-        return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+        TempData["SuccessMessage"] =
+            "Đã lập biên bản trả xe. Hãy xử lý phụ phí nếu có, sau đó đối chiếu biên bản giao - trả trước khi kết thúc chuyến.";
+
+        return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Inspect(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var booking = await _bookingService.GetAdminBookingAsync(
+            bookingId,
+            cancellationToken);
+
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        var records = await _dbContext.Bookings
+            .AsNoTracking()
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
+            .FirstOrDefaultAsync(
+                item => item.BookingId == bookingId,
+                cancellationToken);
+
+        if (records?.Handover is null || records.VehicleReturn is null)
+        {
+            TempData["ErrorMessage"] =
+                "Cần có cả biên bản giao xe và biên bản trả xe để đối chiếu.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        var refundPayment = booking.Payments
+            .Where(payment => payment.Type == PaymentType.Refund)
+            .OrderByDescending(payment => payment.PaymentId)
+            .FirstOrDefault();
+
+        var model = new ReturnInspectionViewModel
+        {
+            BookingId = booking.BookingId,
+            CustomerName = booking.CustomerName,
+            VehicleName = booking.VehicleName,
+            LicensePlate = booking.LicensePlate,
+            Status = booking.Status,
+            DepositAmount = booking.DepositAmount,
+            AdditionalAmount = booking.AdditionalAmount,
+            AdditionalChargePaid = booking.AdditionalChargePaid,
+            RefundStatus = refundPayment?.Status,
+            RefundAmount = refundPayment?.Amount ?? 0m,
+            AdditionalCharges = booking.AdditionalCharges,
+            Handover = new InspectionSnapshotViewModel
+            {
+                RecordedAt = records.Handover.HandoverAt,
+                Mileage = records.Handover.Mileage,
+                FuelLevel = records.Handover.FuelLevel,
+                Notes = records.Handover.Notes,
+                ImagePaths = SplitImagePaths(records.Handover.ImagePaths)
+            },
+            Return = new InspectionSnapshotViewModel
+            {
+                RecordedAt = records.VehicleReturn.ReturnedAt,
+                Mileage = records.VehicleReturn.Mileage,
+                FuelLevel = records.VehicleReturn.FuelLevel,
+                HasDamage = records.VehicleReturn.HasDamage,
+                Notes = records.VehicleReturn.Notes,
+                ImagePaths = SplitImagePaths(records.VehicleReturn.ImagePaths)
+            }
+        };
+
+        return View(model);
     }
 
     [HttpPost]
@@ -155,6 +231,7 @@ public sealed class ReturnsController : Controller
             bookingId,
             additionalChargeId,
             cancellationToken);
+
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã xóa phụ phí."
             : string.Join("; ", result.Errors);
@@ -176,25 +253,91 @@ public sealed class ReturnsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Complete(
         CompleteBookingViewModel model,
+        bool reviewConfirmed,
         CancellationToken cancellationToken)
     {
+        if (!reviewConfirmed)
+        {
+            TempData["ErrorMessage"] =
+                "Vui lòng đối chiếu biên bản giao và biên bản trả trước khi hoàn tất kiểm tra.";
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+        }
+
         var result = await _returnService.CompleteAsync(
             model.BookingId,
             model.RequiresMaintenance,
             model.MaintenanceNote,
             cancellationToken);
-        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã hoàn tất đơn và cập nhật trạng thái xe."
-            : string.Join("; ", result.Errors);
 
-        if (result.Succeeded)
+        if (!result.Succeeded)
         {
-            await WriteAuditAsync(
-                "CompleteBooking",
-                nameof(Booking),
-                model.BookingId,
-                $"Hoàn tất đơn #{model.BookingId}. Yêu cầu bảo trì: {(model.RequiresMaintenance ? "Có" : "Không")}.",
+            TempData["ErrorMessage"] = string.Join("; ", result.Errors);
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+        }
+
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .FirstOrDefaultAsync(
+                item => item.BookingId == model.BookingId,
                 cancellationToken);
+
+        var awaitingRefund = booking?.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Status == PaymentStatus.AwaitingRefund)
+            .OrderByDescending(payment => payment.PaymentId)
+            .FirstOrDefault();
+
+        if (booking is not null && awaitingRefund is not null)
+        {
+            booking.Status = BookingStatus.AwaitingRefund;
+
+            var completionNotification = await _dbContext.Notifications
+                .Where(notification =>
+                    notification.UserId == booking.CustomerId &&
+                    notification.Title == "Đơn thuê đã hoàn tất" &&
+                    notification.Message.Contains($"#{booking.BookingId}"))
+                .OrderByDescending(notification => notification.NotificationId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (completionNotification is not null)
+            {
+                completionNotification.Title = "Đã kiểm tra xe - chờ hoàn cọc";
+                completionNotification.Message =
+                    $"Đơn #{booking.BookingId} đã được kiểm tra xong. " +
+                    $"Tiền cọc {awaitingRefund.Amount:N0} đồng đang chờ SmartCar hoàn về tài khoản của bạn. " +
+                    "Đơn sẽ hoàn tất sau khi khoản hoàn được xác nhận.";
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            TempData["SuccessMessage"] =
+                $"Đã đối chiếu và kết thúc kiểm tra. Đơn đang chờ hoàn cọc {awaitingRefund.Amount:N0} đ.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = "Đã đối chiếu và hoàn tất chuyến thuê.";
+        }
+
+        await WriteAuditAsync(
+            "CompleteBooking",
+            nameof(Booking),
+            model.BookingId,
+            awaitingRefund is not null
+                ? $"Kết thúc kiểm tra đơn #{model.BookingId}; chuyển sang chờ hoàn cọc. Yêu cầu bảo trì: {(model.RequiresMaintenance ? "Có" : "Không")}."
+                : $"Hoàn tất đơn #{model.BookingId}. Yêu cầu bảo trì: {(model.RequiresMaintenance ? "Có" : "Không")}.",
+            cancellationToken);
+
+        if (awaitingRefund is not null)
+        {
+            return RedirectToAction(
+                "Index",
+                "AdminPayments",
+                new
+                {
+                    status = PaymentStatus.AwaitingRefund,
+                    type = PaymentType.Refund
+                });
         }
 
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
@@ -207,14 +350,16 @@ public sealed class ReturnsController : Controller
         var selectedImages = images.Where(file => file.Length > 0).ToList();
         if (selectedImages.Count == 0)
         {
-            ModelState.AddModelError(nameof(ReturnViewModel.Images),
+            ModelState.AddModelError(
+                nameof(ReturnViewModel.Images),
                 "Vui lòng tải ít nhất một ảnh tình trạng xe khi trả.");
             return;
         }
 
         if (selectedImages.Count > MaximumImages)
         {
-            ModelState.AddModelError(nameof(ReturnViewModel.Images),
+            ModelState.AddModelError(
+                nameof(ReturnViewModel.Images),
                 $"Chỉ được tải tối đa {MaximumImages} ảnh khi trả xe.");
         }
 
@@ -224,9 +369,11 @@ public sealed class ReturnsController : Controller
                 image,
                 MaximumImageBytes,
                 cancellationToken);
+
             if (error is not null)
             {
-                ModelState.AddModelError(nameof(ReturnViewModel.Images),
+                ModelState.AddModelError(
+                    nameof(ReturnViewModel.Images),
                     $"{image.FileName}: {error}");
             }
         }
@@ -263,12 +410,20 @@ public sealed class ReturnsController : Controller
             var fullPath = Path.Combine(
                 _environment.WebRootPath,
                 imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+
             if (System.IO.File.Exists(fullPath))
             {
                 System.IO.File.Delete(fullPath);
             }
         }
     }
+
+    private static IReadOnlyList<string> SplitImagePaths(string? imagePaths) =>
+        string.IsNullOrWhiteSpace(imagePaths)
+            ? Array.Empty<string>()
+            : imagePaths
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
 
     private Task WriteAuditAsync(
         string action,
