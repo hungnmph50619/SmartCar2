@@ -6,6 +6,7 @@
     var pickupText = booking.PickupMethod == VehiclePickupMethod.Delivery
         ? $"Giao tận nơi - {booking.DeliveryAddress}"
         : "Nhận tại cửa hàng";
+    var awaitingSignature = booking.Status == BookingStatus.ReadyForPickup && string.IsNullOrWhiteSpace(Model.SignedDocumentPath);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -23,14 +24,36 @@
         .confirm { margin-top:16px; padding:10px; border:1px solid #999; }
         .signatures { display:grid; grid-template-columns:1fr 1fr; gap:70px; margin-top:34px; text-align:center; }
         .signature-space { height:90px; }
-        .no-print { margin-bottom:14px; }
+        .no-print { margin-bottom:16px; padding:12px; background:#f5f7fa; border:1px solid #d8dde6; border-radius:8px; }
+        .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        button, .back { padding:7px 12px; border:1px solid #777; background:white; border-radius:5px; text-decoration:none; color:#111; cursor:pointer; }
+        .primary { background:#1769e0; color:#fff; border-color:#1769e0; }
+        .upload { margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .hint { margin-top:8px; color:#555; font-size:12px; }
         @@media print { .no-print { display:none; } body { margin:12mm; } }
     </style>
 </head>
 <body>
     <div class="no-print">
-        <button type="button" onclick="window.print()">In biên bản</button>
-        <button type="button" onclick="window.close()">Đóng</button>
+        <div class="actions">
+            <button class="primary" type="button" onclick="window.print()">In biên bản</button>
+            <a class="back" href="/AdminBookings/Index">Danh sách đơn</a>
+        </div>
+
+        @if (awaitingSignature)
+        {
+            <div class="hint"><strong>Bước tiếp:</strong> Hai bên ký tay trên bản in, sau đó chụp/scan và tải ảnh lên. Chuyến chỉ bắt đầu sau bước này.</div>
+            <form class="upload" action="/AdminRentalDocuments/UploadHandoverSigned" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="bookingId" value="@booking.BookingId" />
+                <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" required />
+                <button type="submit">Tải bản đã ký & bắt đầu chuyến</button>
+            </form>
+        }
+        else if (!string.IsNullOrWhiteSpace(Model.SignedDocumentPath))
+        {
+            <div class="hint">✓ Đã lưu bản có chữ ký.</div>
+        }
     </div>
 
     <h1>BIÊN BẢN GIAO XE</h1>
