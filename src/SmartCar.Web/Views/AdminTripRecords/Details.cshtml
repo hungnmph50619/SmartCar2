@@ -69,6 +69,14 @@
                     <a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="@Model.Handover.SignedDocumentPath">Xem bản ký</a>
                 }
             </div>
+            @if (!Model.HasSignedHandover)
+            {
+                <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
+                    <input type="hidden" name="bookingId" value="@booking.BookingId" />
+                    <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
+                    <button class="btn btn-outline-success" type="submit">Bổ sung bản ký</button>
+                </form>
+            }
             <div class="row g-2">
                 @foreach (var image in Model.Handover.ImagePaths.Take(6))
                 {
@@ -100,6 +108,14 @@
                     <a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="@Model.Return.SignedDocumentPath">Xem bản ký</a>
                 }
             </div>
+            @if (!Model.HasSignedReturn)
+            {
+                <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
+                    <input type="hidden" name="bookingId" value="@booking.BookingId" />
+                    <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
+                    <button class="btn btn-outline-success" type="submit">Bổ sung bản ký</button>
+                </form>
+            }
             <div class="row g-2">
                 @foreach (var image in Model.Return.ImagePaths.Take(6))
                 {
@@ -120,7 +136,10 @@
     <div class="row g-4">
         <div class="col-md-4">
             <div class="small text-muted fw-semibold mb-2">TIỀN THU</div>
-            @if (collection.Count == 0) { <div class="text-muted">Không có</div> }
+            @if (collection.Count == 0)
+            {
+                <div class="text-muted">Không có</div>
+            }
             @foreach (var payment in collection)
             {
                 <div class="d-flex justify-content-between border-bottom py-2">
@@ -131,7 +150,10 @@
         </div>
         <div class="col-md-4">
             <div class="small text-muted fw-semibold mb-2">PHÁT SINH</div>
-            @if (adjustments.Count == 0) { <div class="text-muted">Không có</div> }
+            @if (adjustments.Count == 0)
+            {
+                <div class="text-muted">Không có</div>
+            }
             @foreach (var payment in adjustments)
             {
                 <div class="d-flex justify-content-between border-bottom py-2">
@@ -142,7 +164,10 @@
         </div>
         <div class="col-md-4">
             <div class="small text-muted fw-semibold mb-2">HOÀN TIỀN</div>
-            @if (refunds.Count == 0) { <div class="text-muted">Không có</div> }
+            @if (refunds.Count == 0)
+            {
+                <div class="text-muted">Không có</div>
+            }
             @foreach (var payment in refunds)
             {
                 <div class="d-flex justify-content-between border-bottom py-2">
