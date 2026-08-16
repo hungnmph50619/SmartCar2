@@ -82,14 +82,6 @@
                 <label asp-for="HasDamage" class="form-check-label fw-semibold">Có hư hỏng mới</label>
             </div>
         </div>
-        <div class="col-md-6">
-            <label asp-for="ExteriorCondition" class="form-label fw-semibold">Ngoại thất</label>
-            <textarea asp-for="ExteriorCondition" class="form-control" rows="3" placeholder="Chỉ ghi nếu có điểm cần lưu ý"></textarea>
-        </div>
-        <div class="col-md-6">
-            <label asp-for="InteriorCondition" class="form-label fw-semibold">Nội thất</label>
-            <textarea asp-for="InteriorCondition" class="form-control" rows="3" placeholder="Chỉ ghi nếu có điểm cần lưu ý"></textarea>
-        </div>
         <div class="col-12">
             <label asp-for="Images" class="form-label fw-semibold">Ảnh tình trạng xe khi trả</label>
             <input asp-for="Images"
@@ -102,7 +94,7 @@
                    data-preview-target="#return-image-preview"
                    data-file-info-target="#return-file-info" />
             <span asp-validation-for="Images" class="text-danger small"></span>
-            <div class="form-text">1–10 ảnh. Nên chụp cùng góc với lúc giao.</div>
+            <div class="form-text">1–10 ảnh. Nên chụp cùng góc với lúc giao; nếu có hư hỏng, chụp thêm ảnh cận cảnh.</div>
             <div id="return-file-info" class="small text-muted mt-2 d-none"></div>
             <div id="return-image-preview" class="mt-3 d-none">
                 <div class="row g-2" data-preview-list></div>
@@ -111,7 +103,7 @@
         </div>
         <div class="col-12">
             <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
-            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Ý kiến của khách hoặc thông tin cần xử lý"></textarea>
+            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Chỉ ghi hư hỏng, bất thường hoặc ý kiến cần lưu ý"></textarea>
         </div>
     </div>
 
