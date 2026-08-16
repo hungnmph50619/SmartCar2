@@ -1,14 +1,37 @@
-﻿@model IReadOnlyList<SmartCar.Application.Features.Notifications.NotificationDto>
+@model IReadOnlyList<SmartCar.Application.Features.Notifications.NotificationDto>
 @{
     ViewData["Title"] = "Thông báo";
+
+    var isAdmin = User.IsInRole(SmartCar.Domain.Constants.RoleNames.Admin);
+
+    bool IsBookingWorkTitle(string title) =>
+        title.StartsWith("Đơn #", StringComparison.Ordinal) &&
+        title.EndsWith(" cần xác nhận", StringComparison.Ordinal);
+
+    int? BookingIdFromWorkTitle(string title)
+    {
+        if (!IsBookingWorkTitle(title))
+        {
+            return null;
+        }
+
+        var value = title["Đơn #".Length..^" cần xác nhận".Length];
+        return int.TryParse(value, out var bookingId) ? bookingId : null;
+    }
+
     var unreadRegularCount = Model.Count(item =>
         !item.IsRead &&
-        !item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
+        !item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal) &&
+        !(isAdmin && IsBookingWorkTitle(item.Title)));
+
     var pendingWorkCount = Model.Count(item =>
         !item.IsRead &&
-        item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
-    var hasKycWorkHistory = Model.Any(item =>
-        item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal));
+        (item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal) ||
+         (isAdmin && IsBookingWorkTitle(item.Title))));
+
+    var hasAdminWorkHistory = Model.Any(item =>
+        item.Title.StartsWith("Hồ sơ KYC chờ duyệt|", StringComparison.Ordinal) ||
+        (isAdmin && IsBookingWorkTitle(item.Title)));
 
     string FriendlyNotificationText(string value) => value
         .Replace("Hồ sơ KYC đã được xác minh", "Hồ sơ giấy tờ đã được duyệt", StringComparison.Ordinal)
@@ -237,11 +260,11 @@
             <p class="text-muted mb-0">
                 @if (pendingWorkCount > 0 && unreadRegularCount > 0)
                 {
-                    <span><strong>@pendingWorkCount</strong> hồ sơ cần xử lý · @unreadRegularCount thông báo chưa đọc.</span>
+                    <span><strong>@pendingWorkCount</strong> việc cần xử lý · @unreadRegularCount thông báo chưa đọc.</span>
                 }
                 else if (pendingWorkCount > 0)
                 {
-                    <span><strong>@pendingWorkCount</strong> hồ sơ xác minh đang chờ xử lý.</span>
+                    <span><strong>@pendingWorkCount</strong> việc đang chờ xử lý.</span>
                 }
                 else if (unreadRegularCount > 0)
                 {
@@ -265,10 +288,10 @@
         }
     </div>
 
-    @if (User.IsInRole(SmartCar.Domain.Constants.RoleNames.Admin) && hasKycWorkHistory)
+    @if (isAdmin && hasAdminWorkHistory)
     {
         <div class="alert notifications-admin-note py-2 px-3 mb-3">
-            <strong>Hồ sơ chờ duyệt</strong> là công việc quản trị; trạng thái chỉ chuyển sang <strong>Đã xử lý</strong> sau khi bạn duyệt hoặc yêu cầu khách hàng cập nhật.
+            <strong>Việc cần xử lý</strong> chỉ chuyển sang đã xử lý sau khi Admin hoàn tất bước tương ứng.
         </div>
     }
 
@@ -288,6 +311,9 @@
                 var separatorIndex = item.Title.IndexOf('|');
                 var rawDisplayTitle = separatorIndex > 0 ? item.Title[..separatorIndex] : item.Title;
                 var isKycWorkItem = rawDisplayTitle == "Hồ sơ KYC chờ duyệt";
+                var bookingWorkId = isAdmin ? BookingIdFromWorkTitle(rawDisplayTitle) : null;
+                var isBookingWorkItem = bookingWorkId.HasValue;
+
                 var displayTitle = isKycWorkItem
                     ? "Hồ sơ xác minh chờ duyệt"
                     : FriendlyNotificationText(rawDisplayTitle);
@@ -296,8 +322,9 @@
                     ? item.Title[(separatorIndex + 1)..]
                     : null;
                 var isKycAction = !string.IsNullOrWhiteSpace(kycCustomerId);
+                var isBookingAction = isBookingWorkItem && bookingWorkId.HasValue;
                 var isPaymentReviewAction =
-                    User.IsInRole(SmartCar.Domain.Constants.RoleNames.Admin) &&
+                    isAdmin &&
                     rawDisplayTitle == "Có giao dịch QR chờ xác nhận";
 
                 var isNeedsUpdate = displayTitle.Contains("cần cập nhật", StringComparison.OrdinalIgnoreCase) ||
@@ -315,28 +342,30 @@
                                             isIdentityNotification &&
                                             User.IsInRole(SmartCar.Domain.Constants.RoleNames.Customer);
 
-                var toneClass = isKycAction
+                var isWorkItem = isKycAction || isBookingAction;
+
+                var toneClass = isWorkItem
                     ? (item.IsRead ? "notification-tone-success" : "notification-tone-work")
                     : isNeedsUpdate
                         ? "notification-tone-warning"
                         : isApproved
                             ? "notification-tone-success"
                             : "notification-tone-info";
-                var iconText = isKycAction
+                var iconText = isWorkItem
                     ? (item.IsRead ? "✓" : "!")
                     : isNeedsUpdate
                         ? "!"
                         : isApproved
                             ? "✓"
                             : "i";
-                var statusText = isKycAction
+                var statusText = isWorkItem
                     ? (item.IsRead ? "Đã xử lý" : "Cần xử lý")
                     : isNeedsUpdate
                         ? "Cần cập nhật"
                         : isApproved
                             ? "Đã duyệt"
                             : (!item.IsRead ? "Mới" : string.Empty);
-                var statusClass = isKycAction
+                var statusClass = isWorkItem
                     ? (item.IsRead ? "notification-status-success" : "notification-status-warning")
                     : isNeedsUpdate
                         ? "notification-status-warning"
@@ -344,7 +373,7 @@
                             ? "notification-status-success"
                             : "notification-status-info";
 
-                <article class="notification-card @toneClass @(item.IsRead ? string.Empty : "notification-card-unread") @(isKycAction && item.IsRead ? "notification-card-handled" : string.Empty)">
+                <article class="notification-card @toneClass @(item.IsRead ? string.Empty : "notification-card-unread") @(isWorkItem && item.IsRead ? "notification-card-handled" : string.Empty)">
                     <div class="notification-icon" aria-hidden="true">@iconText</div>
 
                     <div class="notification-body">
@@ -361,10 +390,28 @@
                             <span>@item.CreatedAt.ToLocalTime().ToString("HH:mm · dd/MM/yyyy")</span>
                         </div>
 
-                        @if (isKycAction || isPaymentReviewAction || opensProfileDocuments || (!item.IsRead && !isKycAction))
+                        @if (isKycAction || isBookingAction || isPaymentReviewAction || opensProfileDocuments || (!item.IsRead && !isWorkItem))
                         {
                             <div class="notification-actions">
-                                @if (isKycAction && !item.IsRead)
+                                @if (isBookingAction && !item.IsRead)
+                                {
+                                    <a class="btn btn-sm btn-success stretched-link"
+                                       asp-controller="AdminBookingReview"
+                                       asp-action="Index"
+                                       asp-route-id="@bookingWorkId.Value">
+                                        Xác nhận đơn →
+                                    </a>
+                                }
+                                else if (isBookingAction && item.IsRead)
+                                {
+                                    <a class="btn btn-sm btn-outline-secondary stretched-link"
+                                       asp-controller="AdminBookings"
+                                       asp-action="Details"
+                                       asp-route-id="@bookingWorkId.Value">
+                                        Xem đơn →
+                                    </a>
+                                }
+                                else if (isKycAction && !item.IsRead)
                                 {
                                     <form asp-action="OpenKyc" method="post">
                                         <input type="hidden" name="id" value="@item.NotificationId" />
@@ -400,7 +447,7 @@
                                         </button>
                                     </form>
                                 }
-                                else if (!item.IsRead && !isKycAction)
+                                else if (!item.IsRead && !isWorkItem)
                                 {
                                     <form asp-action="MarkRead" method="post">
                                         <input type="hidden" name="id" value="@item.NotificationId" />
@@ -411,7 +458,7 @@
                         }
                     </div>
 
-                    @if (!item.IsRead && !isKycAction)
+                    @if (!item.IsRead && !isWorkItem)
                     {
                         <span class="notification-unread-dot" title="Chưa đọc" aria-label="Chưa đọc"></span>
                     }
