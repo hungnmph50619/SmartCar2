@@ -13,6 +13,8 @@ internal sealed class NotificationService : INotificationService
     private const int ExpiringSoonDays = 30;
     private const string AdminBookingWorkTitlePrefix = "Đơn #";
     private const string AdminBookingWorkTitleSuffix = " cần xác nhận";
+    private const string AdminPaymentReviewTitle = "Có giao dịch QR chờ xác nhận";
+    private const string AdminRefundWorkTitleSuffix = " cần hoàn cọc";
 
     private readonly ApplicationDbContext _dbContext;
 
@@ -27,6 +29,8 @@ internal sealed class NotificationService : INotificationService
     {
         await EnsureDocumentExpiryNotificationsAsync(userId, cancellationToken);
         await EnsureAdminPendingBookingNotificationsAsync(userId, cancellationToken);
+        await EnsureAdminPaymentReviewNotificationsAsync(userId, cancellationToken);
+        await EnsureAdminRefundNotificationsAsync(userId, cancellationToken);
 
         return await _dbContext.Notifications
             .AsNoTracking()
@@ -49,6 +53,8 @@ internal sealed class NotificationService : INotificationService
     {
         await EnsureDocumentExpiryNotificationsAsync(userId, cancellationToken);
         await EnsureAdminPendingBookingNotificationsAsync(userId, cancellationToken);
+        await EnsureAdminPaymentReviewNotificationsAsync(userId, cancellationToken);
+        await EnsureAdminRefundNotificationsAsync(userId, cancellationToken);
 
         return await _dbContext.Notifications.CountAsync(
             item => item.UserId == userId && !item.IsRead,
@@ -99,30 +105,7 @@ internal sealed class NotificationService : INotificationService
         string userId,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            return;
-        }
-
-        var adminRoleId = await _dbContext.Roles
-            .AsNoTracking()
-            .Where(role => role.Name == RoleNames.Admin)
-            .Select(role => role.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (string.IsNullOrWhiteSpace(adminRoleId))
-        {
-            return;
-        }
-
-        var isAdmin = await _dbContext.UserRoles
-            .AsNoTracking()
-            .AnyAsync(item =>
-                item.UserId == userId &&
-                item.RoleId == adminRoleId,
-                cancellationToken);
-
-        if (!isAdmin)
+        if (!await IsAdminAsync(userId, cancellationToken))
         {
             return;
         }
@@ -169,15 +152,13 @@ internal sealed class NotificationService : INotificationService
                 {
                     UserId = userId,
                     Title = title,
-                    Message = $"{booking.VehicleName} · nhận {pickupText} · {pickupMethod}. Mở Quản lý đơn để xác nhận."
+                    Message = $"{booking.VehicleName} · {pickupText} · {pickupMethod}"
                 });
 
                 changed = true;
                 continue;
             }
 
-            // Đây là công việc cần xử lý, nên giữ trạng thái chưa đọc cho tới khi
-            // đơn được xác nhận hoặc từ chối.
             if (existing.IsRead)
             {
                 existing.IsRead = false;
@@ -188,11 +169,13 @@ internal sealed class NotificationService : INotificationService
 
         foreach (var notification in workNotifications.Where(item => !item.IsRead))
         {
-            var bookingId = TryGetBookingIdFromAdminWorkTitle(notification.Title);
+            var bookingId = TryGetBookingIdFromAdminWorkTitle(
+                notification.Title,
+                AdminBookingWorkTitleSuffix);
+
             if (bookingId.HasValue && !pendingBookingIds.Contains(bookingId.Value))
             {
-                notification.IsRead = true;
-                notification.ReadAt = DateTime.UtcNow;
+                MarkHandled(notification);
                 changed = true;
             }
         }
@@ -203,24 +186,262 @@ internal sealed class NotificationService : INotificationService
         }
     }
 
+    private async Task EnsureAdminPaymentReviewNotificationsAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsAdminAsync(userId, cancellationToken))
+        {
+            return;
+        }
+
+        var notifications = await _dbContext.Notifications
+            .Where(item =>
+                item.UserId == userId &&
+                item.Title == AdminPaymentReviewTitle)
+            .ToListAsync(cancellationToken);
+
+        if (notifications.Count == 0)
+        {
+            return;
+        }
+
+        var bookingIds = notifications
+            .Select(item => TryGetBookingIdFromMessage(item.Message))
+            .Where(item => item.HasValue)
+            .Select(item => item!.Value)
+            .Distinct()
+            .ToList();
+
+        if (bookingIds.Count == 0)
+        {
+            return;
+        }
+
+        var pendingPayments = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment =>
+                bookingIds.Contains(payment.BookingId) &&
+                payment.Status == PaymentStatus.AwaitingConfirmation)
+            .Select(payment => new
+            {
+                payment.BookingId,
+                payment.Type
+            })
+            .ToListAsync(cancellationToken);
+
+        var changed = false;
+
+        foreach (var notification in notifications)
+        {
+            var bookingId = TryGetBookingIdFromMessage(notification.Message);
+            if (!bookingId.HasValue)
+            {
+                continue;
+            }
+
+            var expectedType = TryGetPaymentTypeFromMessage(notification.Message);
+            var stillPending = pendingPayments.Any(payment =>
+                payment.BookingId == bookingId.Value &&
+                (!expectedType.HasValue || payment.Type == expectedType.Value));
+
+            if (stillPending && notification.IsRead)
+            {
+                notification.IsRead = false;
+                notification.ReadAt = null;
+                changed = true;
+            }
+            else if (!stillPending && !notification.IsRead)
+            {
+                MarkHandled(notification);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task EnsureAdminRefundNotificationsAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsAdminAsync(userId, cancellationToken))
+        {
+            return;
+        }
+
+        var pendingRefunds = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking => booking.Status == BookingStatus.AwaitingRefund)
+            .Select(booking => new
+            {
+                booking.BookingId,
+                Amount = booking.Payments
+                    .Where(payment =>
+                        payment.Type == PaymentType.Refund &&
+                        payment.Status == PaymentStatus.AwaitingRefund)
+                    .Select(payment => (decimal?)payment.Amount)
+                    .FirstOrDefault()
+            })
+            .Where(item => item.Amount.HasValue)
+            .ToListAsync(cancellationToken);
+
+        var workNotifications = await _dbContext.Notifications
+            .Where(item =>
+                item.UserId == userId &&
+                item.Title.StartsWith(AdminBookingWorkTitlePrefix) &&
+                item.Title.EndsWith(AdminRefundWorkTitleSuffix))
+            .ToListAsync(cancellationToken);
+
+        var pendingIds = pendingRefunds
+            .Select(item => item.BookingId)
+            .ToHashSet();
+
+        var changed = false;
+
+        foreach (var refund in pendingRefunds)
+        {
+            var title = BuildAdminRefundWorkTitle(refund.BookingId);
+            var existing = workNotifications.FirstOrDefault(item => item.Title == title);
+
+            if (existing is null)
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = userId,
+                    Title = title,
+                    Message = $"{refund.Amount!.Value:N0} đ"
+                });
+
+                changed = true;
+                continue;
+            }
+
+            if (existing.IsRead)
+            {
+                existing.IsRead = false;
+                existing.ReadAt = null;
+                changed = true;
+            }
+        }
+
+        foreach (var notification in workNotifications.Where(item => !item.IsRead))
+        {
+            var bookingId = TryGetBookingIdFromAdminWorkTitle(
+                notification.Title,
+                AdminRefundWorkTitleSuffix);
+
+            if (bookingId.HasValue && !pendingIds.Contains(bookingId.Value))
+            {
+                MarkHandled(notification);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task<bool> IsAdminAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return false;
+        }
+
+        var adminRoleId = await _dbContext.Roles
+            .AsNoTracking()
+            .Where(role => role.Name == RoleNames.Admin)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return !string.IsNullOrWhiteSpace(adminRoleId) &&
+               await _dbContext.UserRoles
+                   .AsNoTracking()
+                   .AnyAsync(item =>
+                       item.UserId == userId &&
+                       item.RoleId == adminRoleId,
+                       cancellationToken);
+    }
+
     private static string BuildAdminBookingWorkTitle(int bookingId) =>
         $"{AdminBookingWorkTitlePrefix}{bookingId}{AdminBookingWorkTitleSuffix}";
 
-    private static int? TryGetBookingIdFromAdminWorkTitle(string title)
+    private static string BuildAdminRefundWorkTitle(int bookingId) =>
+        $"{AdminBookingWorkTitlePrefix}{bookingId}{AdminRefundWorkTitleSuffix}";
+
+    private static int? TryGetBookingIdFromAdminWorkTitle(
+        string title,
+        string suffix)
     {
         if (!title.StartsWith(AdminBookingWorkTitlePrefix, StringComparison.Ordinal) ||
-            !title.EndsWith(AdminBookingWorkTitleSuffix, StringComparison.Ordinal))
+            !title.EndsWith(suffix, StringComparison.Ordinal))
         {
             return null;
         }
 
         var idText = title[
             AdminBookingWorkTitlePrefix.Length..
-            ^AdminBookingWorkTitleSuffix.Length];
+            ^suffix.Length];
 
         return int.TryParse(idText, out var bookingId)
             ? bookingId
             : null;
+    }
+
+    private static int? TryGetBookingIdFromMessage(string message)
+    {
+        const string marker = "Đơn #";
+        var start = message.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        start += marker.Length;
+        var end = start;
+        while (end < message.Length && char.IsDigit(message[end]))
+        {
+            end++;
+        }
+
+        return end > start && int.TryParse(message[start..end], out var bookingId)
+            ? bookingId
+            : null;
+    }
+
+    private static PaymentType? TryGetPaymentTypeFromMessage(string message)
+    {
+        if (message.Contains("phụ phí", StringComparison.OrdinalIgnoreCase))
+        {
+            return PaymentType.AdditionalCharge;
+        }
+
+        if (message.Contains("gia hạn", StringComparison.OrdinalIgnoreCase))
+        {
+            return PaymentType.Extension;
+        }
+
+        if (message.Contains("tiền thuê", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("thuê/phí giao", StringComparison.OrdinalIgnoreCase))
+        {
+            return PaymentType.Rental;
+        }
+
+        return null;
+    }
+
+    private static void MarkHandled(Notification notification)
+    {
+        notification.IsRead = true;
+        notification.ReadAt = DateTime.UtcNow;
     }
 
     private async Task EnsureDocumentExpiryNotificationsAsync(
