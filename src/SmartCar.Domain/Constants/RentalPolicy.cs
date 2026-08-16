@@ -42,7 +42,9 @@ namespace SmartCar.Domain.Constants
             "Khách hàng chịu toàn bộ tiền phạt giao thông và chi phí phát sinh theo chứng từ/quyết định của cơ quan có thẩm quyền đối với vi phạm xảy ra trong thời gian thuê.";
 
         public const string DamageCompensationTerms =
-            "Hư hỏng, mất mát do khách hàng gây ra được bồi thường theo chi phí sửa chữa/thay thế thực tế có chứng từ hoặc báo giá hợp lệ; khoản này tách biệt với phạt giao thông và phí vượt kilomet.";
+            "Hư hỏng, mất mát do khách hàng gây ra được bồi thường theo chi phí sửa chữa/thay thế thực tế có chứng từ hoặc báo giá hợp lệ. " +
+            "Nếu yêu cầu gia hạn bị từ chối, khách hàng phải trả xe đúng thời hạn; trường hợp cố tình không trả xe sẽ chịu phí trả muộn và các thiệt hại thực tế có căn cứ, chứng từ phát sinh do việc không trả xe đúng hạn. " +
+            "Các khoản bồi thường được xác định riêng, không tự động gộp với phạt giao thông hoặc phí vượt kilomet.";
 
         // ============================================================
         // TÍNH KHOẢNG CÁCH
