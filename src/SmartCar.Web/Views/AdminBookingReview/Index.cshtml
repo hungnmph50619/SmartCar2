@@ -193,7 +193,7 @@
                     <input type="hidden" name="id" value="@Model.BookingId" />
                     <button class="btn btn-success w-100"
                             type="submit"
-                            @(kycVerified ? null : "disabled")>
+                            disabled="@(!kycVerified)">
                         Xác nhận đơn
                     </button>
                 </form>
