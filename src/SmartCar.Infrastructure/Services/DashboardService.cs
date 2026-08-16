@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Dashboard;
 using SmartCar.Domain.Constants;
@@ -108,13 +108,34 @@ internal sealed class DashboardService : IDashboardService
             ActiveRentals = await _dbContext.Bookings.CountAsync(
                 booking => booking.Status == BookingStatus.Rented,
                 cancellationToken),
-            MonthlyRevenue = await _dbContext.Payments
-                .Where(payment =>
-                    payment.Status == PaymentStatus.Paid &&
-                    payment.Type != PaymentType.Refund &&
-                    payment.PaidAt >= firstDayOfMonth &&
-                    payment.PaidAt < firstDayOfNextMonth)
-                .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0,
+            MonthlyRevenue =
+    await _dbContext.Payments
+        .Where(payment =>
+            payment.Status ==
+                PaymentStatus.Paid &&
+
+            (
+                payment.Type ==
+                    PaymentType.Rental ||
+
+                payment.Type ==
+                    PaymentType.Extension ||
+
+                payment.Type ==
+                    PaymentType.AdditionalCharge
+            ) &&
+
+            payment.PaidAt >=
+                firstDayOfMonth &&
+
+            payment.PaidAt <
+                firstDayOfNextMonth)
+
+        .SumAsync(
+            payment =>
+                (decimal?)payment.Amount,
+            cancellationToken)
+        ?? 0,
             RecentBookings = recentBookings
         };
     }

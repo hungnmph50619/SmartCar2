@@ -12,20 +12,6 @@ public sealed class Phase3AdvancedManagement : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AddColumn<decimal>(
-            name: "DiscountAmount",
-            table: "Bookings",
-            type: "decimal(18,2)",
-            nullable: false,
-            defaultValue: 0m);
-
-        migrationBuilder.AddColumn<string>(
-            name: "PromotionCode",
-            table: "Bookings",
-            type: "nvarchar(50)",
-            maxLength: 50,
-            nullable: true);
-
         migrationBuilder.CreateTable(
             name: "AuditLogs",
             columns: table => new
@@ -45,30 +31,6 @@ public sealed class Phase3AdvancedManagement : Migration
             constraints: table =>
             {
                 table.PrimaryKey("PK_AuditLogs", x => x.AuditLogId);
-            });
-
-        migrationBuilder.CreateTable(
-            name: "Promotions",
-            columns: table => new
-            {
-                PromotionId = table.Column<int>(type: "int", nullable: false)
-                    .Annotation("SqlServer:Identity", "1, 1"),
-                Code = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                PromotionType = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
-                Value = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                MaximumDiscount = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
-                MinimumRentalAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                StartAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                EndAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                UsageLimit = table.Column<int>(type: "int", nullable: true),
-                UsedCount = table.Column<int>(type: "int", nullable: false),
-                IsActive = table.Column<bool>(type: "bit", nullable: false),
-                CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false)
-            },
-            constraints: table =>
-            {
-                table.PrimaryKey("PK_Promotions", x => x.PromotionId);
             });
 
         migrationBuilder.CreateTable(
@@ -147,17 +109,6 @@ public sealed class Phase3AdvancedManagement : Migration
             columns: new[] { "UserId", "CreatedAt" });
 
         migrationBuilder.CreateIndex(
-            name: "IX_Promotions_Code",
-            table: "Promotions",
-            column: "Code",
-            unique: true);
-
-        migrationBuilder.CreateIndex(
-            name: "IX_Promotions_IsActive_StartAt_EndAt",
-            table: "Promotions",
-            columns: new[] { "IsActive", "StartAt", "EndAt" });
-
-        migrationBuilder.CreateIndex(
             name: "IX_VehicleDocuments_VehicleId_DocumentType_ExpiryDate",
             table: "VehicleDocuments",
             columns: new[] { "VehicleId", "DocumentType", "ExpiryDate" });
@@ -176,11 +127,7 @@ public sealed class Phase3AdvancedManagement : Migration
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropTable(name: "AuditLogs");
-        migrationBuilder.DropTable(name: "Promotions");
         migrationBuilder.DropTable(name: "VehicleDocuments");
         migrationBuilder.DropTable(name: "VehicleIncidents");
-
-        migrationBuilder.DropColumn(name: "DiscountAmount", table: "Bookings");
-        migrationBuilder.DropColumn(name: "PromotionCode", table: "Bookings");
     }
 }

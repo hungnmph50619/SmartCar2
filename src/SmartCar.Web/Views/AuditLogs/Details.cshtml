@@ -7,7 +7,7 @@
     {
         if (string.IsNullOrWhiteSpace(payload))
         {
-            return "Không có dữ liệu ghi nhận.";
+            return string.Empty;
         }
 
         try
@@ -26,13 +26,26 @@
 
     string AuditBadgeClass(string action) => action switch
     {
-        "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "text-bg-danger",
-        "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "text-bg-success",
-        "ViewKycDocumentImage" => "text-bg-info",
-        "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "text-bg-primary",
-        "RequestResubmission" or "RequestUpdate" or "AddCharge" => "text-bg-warning",
-        _ => "text-bg-secondary"
+        "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "audit-action-danger",
+        "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "audit-action-success",
+        "ViewKycDocumentImage" => "audit-action-info",
+        "Submit" or "SubmitKycPackage" or "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "audit-action-primary",
+        "RequestResubmission" or "RequestUpdate" or "AddCharge" => "audit-action-warning",
+        _ => "audit-action-secondary"
     };
+
+    string FriendlyIp(string? ip) => ip switch
+    {
+        null or "" => "Không ghi nhận",
+        "::1" or "127.0.0.1" => "Máy cục bộ",
+        _ => ip
+    };
+
+    var hasOldValues = !string.IsNullOrWhiteSpace(Model.OldValues);
+    var hasNewValues = !string.IsNullOrWhiteSpace(Model.NewValues);
+    var hasSnapshot = hasOldValues || hasNewValues;
+    var payloadColumnClass = hasOldValues && hasNewValues ? "col-lg-6" : "col-12";
+    var showEntityId = !string.IsNullOrWhiteSpace(Model.EntityId) && !Guid.TryParse(Model.EntityId, out _);
 }
 
 <link rel="stylesheet" href="~/css/admin-audit.css" asp-append-version="true" />
@@ -40,63 +53,121 @@
 <div class="audit-page audit-detail-page">
     <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-start gap-3 mb-4">
         <div>
-            <div class="text-uppercase small text-primary fw-semibold">NHẬT KÝ #@Model.AuditLogId</div>
-            <h1 class="h2 fw-bold mb-1">Chi tiết thao tác</h1>
-            <p class="text-muted mb-0">Thông tin đầy đủ để truy vết người thực hiện, đối tượng tác động và dữ liệu trước/sau.</p>
+            <div class="small text-primary fw-semibold mb-1">NHẬT KÝ #@Model.AuditLogId</div>
+            <h1 class="h2 fw-bold mb-1">@Model.Action.ToVietnameseAuditAction()</h1>
+            <p class="text-muted mb-0">
+                @Model.EntityName.ToVietnameseEntity()
+                @if (showEntityId)
+                {
+                    <text> #@Model.EntityId</text>
+                }
+                <span class="mx-1">·</span>
+                @Model.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm")
+            </p>
         </div>
         <a class="btn btn-outline-primary" asp-action="Index">← Quay lại nhật ký</a>
     </div>
 
-    <div class="row g-4 align-items-start">
-        <div class="col-xl-8">
-            <section class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <section class="card border-0 shadow-sm audit-detail-summary mb-4">
+        <div class="card-body p-4">
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                <span class="audit-action-badge @AuditBadgeClass(Model.Action)">@Model.Action.ToVietnameseAuditAction()</span>
+                <span class="small text-muted">@Model.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm:ss") · Giờ Việt Nam (UTC+7)</span>
+            </div>
+
+            <div class="audit-description-block mb-4">
+                <span>Nội dung thao tác</span>
+                <p class="mb-0">@Model.Description.ToFriendlyAuditDescription()</p>
+            </div>
+
+            <dl class="audit-info-list mb-0">
+                <div>
+                    <dt>Người thực hiện</dt>
+                    <dd>@(Model.UserName ?? "Hệ thống")</dd>
+                </div>
+                <div>
+                    <dt>Dữ liệu liên quan</dt>
+                    <dd>
+                        @Model.EntityName.ToVietnameseEntity()
+                        @if (showEntityId)
+                        {
+                            <text> #@Model.EntityId</text>
+                        }
+                    </dd>
+                </div>
+                <div>
+                    <dt>Nơi thực hiện</dt>
+                    <dd>
+                        @if (string.IsNullOrWhiteSpace(Model.IpAddress))
+                        {
+                            <span class="text-muted">Không ghi nhận</span>
+                        }
+                        else if (Model.IpAddress is "::1" or "127.0.0.1")
+                        {
+                            <span class="audit-ip-friendly" title="Địa chỉ kỹ thuật: @Model.IpAddress">Máy cục bộ</span>
+                        }
+                        else
+                        {
+                            <span class="audit-ip-friendly">@FriendlyIp(Model.IpAddress)</span>
+                        }
+                    </dd>
+                </div>
+            </dl>
+
+            <details class="audit-tech-details mt-4">
+                <summary>Thông tin kỹ thuật</summary>
+                <p class="small text-muted mt-2 mb-2">Dành cho việc kiểm tra hệ thống khi cần truy vết sâu hơn.</p>
+                <dl class="audit-tech-list mb-0">
+                    <div>
+                        <dt>Mã hành động</dt>
+                        <dd><code class="audit-tech-code">@Model.Action</code></dd>
+                    </div>
+                    <div>
+                        <dt>Loại dữ liệu</dt>
+                        <dd><code class="audit-tech-code">@Model.EntityName</code></dd>
+                    </div>
+                    <div>
+                        <dt>Mã bản ghi</dt>
+                        <dd><code class="audit-tech-code">@(Model.EntityId ?? "Không ghi nhận")</code></dd>
+                    </div>
+                    <div>
+                        <dt>Mã người dùng hệ thống</dt>
+                        <dd><code class="audit-tech-code">@(Model.UserId ?? "Không ghi nhận")</code></dd>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(Model.IpAddress))
+                    {
                         <div>
-                            <span class="badge @AuditBadgeClass(Model.Action) mb-2">@Model.Action.ToVietnameseAuditAction()</span>
-                            <h2 class="h4 fw-bold mb-1">@Model.Description</h2>
-                            <div class="small text-muted">Mã hành động kỹ thuật: <code>@Model.Action</code></div>
+                            <dt>Địa chỉ IP gốc</dt>
+                            <dd><code class="audit-tech-code">@Model.IpAddress</code></dd>
                         </div>
-                        <div class="audit-detail-time text-lg-end">
-                            <span>Thời điểm</span>
-                            <strong>@Model.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm:ss")</strong>
-                            <small>Giờ Việt Nam (UTC+7)</small>
-                        </div>
-                    </div>
+                    }
+                </dl>
+            </details>
+        </div>
+    </section>
 
-                    <div class="audit-detail-grid">
-                        <div class="audit-detail-item">
-                            <span>Người thực hiện</span>
-                            <strong>@(Model.UserName ?? "Hệ thống")</strong>
-                            <small>@(Model.UserId ?? "Không có UserId")</small>
-                        </div>
-                        <div class="audit-detail-item">
-                            <span>Đối tượng</span>
-                            <strong>@Model.EntityName.ToVietnameseEntity()</strong>
-                            <small>@Model.EntityName</small>
-                        </div>
-                        <div class="audit-detail-item">
-                            <span>Mã đối tượng</span>
-                            <strong>#@Model.EntityId</strong>
-                            <small>Dùng để đối chiếu dữ liệu nghiệp vụ</small>
-                        </div>
-                        <div class="audit-detail-item">
-                            <span>Địa chỉ IP</span>
-                            <strong><code>@(Model.IpAddress ?? "Không ghi nhận")</code></strong>
-                            <small>IP tại thời điểm thao tác</small>
-                        </div>
+    <section class="card border-0 shadow-sm audit-data-card">
+        <div class="card-header bg-white border-0 px-4 pt-4 pb-2">
+            <h2 class="h5 fw-bold mb-1">Dữ liệu trước và sau thao tác</h2>
+            <p class="small text-muted mb-0">Chỉ hiển thị khi hệ thống có lưu lại dữ liệu để so sánh.</p>
+        </div>
+        <div class="card-body px-4 pt-2 pb-4">
+            @if (!hasSnapshot)
+            {
+                <div class="audit-no-snapshot">
+                    <span class="audit-no-snapshot-icon" aria-hidden="true">i</span>
+                    <div>
+                        <strong>Không có dữ liệu trước/sau</strong>
+                        <p class="small text-muted mb-0">Thao tác này không lưu bản chụp dữ liệu để so sánh.</p>
                     </div>
                 </div>
-            </section>
-
-            <section class="card border-0 shadow-sm audit-data-card">
-                <div class="card-header bg-white border-0 p-4 pb-2">
-                    <h2 class="h5 fw-bold mb-1">Dữ liệu trước và sau thao tác</h2>
-                    <p class="small text-muted mb-0">Nếu thao tác có lưu snapshot, dữ liệu sẽ được hiển thị ở đây để so sánh.</p>
-                </div>
-                <div class="card-body p-4">
-                    <div class="row g-4">
-                        <div class="col-lg-6">
+            }
+            else
+            {
+                <div class="row g-3">
+                    @if (hasOldValues)
+                    {
+                        <div class="@payloadColumnClass">
                             <div class="audit-payload audit-payload-old h-100">
                                 <div class="audit-payload-heading">
                                     <span>TRƯỚC THAO TÁC</span>
@@ -105,7 +176,11 @@
                                 <pre>@FormatPayload(Model.OldValues)</pre>
                             </div>
                         </div>
-                        <div class="col-lg-6">
+                    }
+
+                    @if (hasNewValues)
+                    {
+                        <div class="@payloadColumnClass">
                             <div class="audit-payload audit-payload-new h-100">
                                 <div class="audit-payload-heading">
                                     <span>SAU THAO TÁC</span>
@@ -114,46 +189,9 @@
                                 <pre>@FormatPayload(Model.NewValues)</pre>
                             </div>
                         </div>
-                    </div>
+                    }
                 </div>
-            </section>
+            }
         </div>
-
-        <div class="col-xl-4">
-            <aside class="card border-0 shadow-sm audit-detail-side">
-                <div class="card-body p-4">
-                    <div class="text-uppercase small text-muted fw-semibold mb-2">GIẢI THÍCH</div>
-                    <h2 class="h5 fw-bold">Nhật ký này dùng để làm gì?</h2>
-                    <p class="small text-muted">Audit Log giúp quản trị viên kiểm tra lịch sử thay đổi và truy vết các thao tác quan trọng khi có tranh chấp, lỗi dữ liệu hoặc yêu cầu kiểm tra bảo mật.</p>
-
-                    <hr />
-
-                    <div class="audit-check-row">
-                        <span>✓</span>
-                        <div><strong>Ai thực hiện?</strong><small>@(Model.UserName ?? "Hệ thống")</small></div>
-                    </div>
-                    <div class="audit-check-row">
-                        <span>✓</span>
-                        <div><strong>Làm gì?</strong><small>@Model.Action.ToVietnameseAuditAction()</small></div>
-                    </div>
-                    <div class="audit-check-row">
-                        <span>✓</span>
-                        <div><strong>Trên dữ liệu nào?</strong><small>@Model.EntityName.ToVietnameseEntity() #@Model.EntityId</small></div>
-                    </div>
-                    <div class="audit-check-row">
-                        <span>✓</span>
-                        <div><strong>Khi nào?</strong><small>@Model.CreatedAt.AddHours(7).ToString("dd/MM/yyyy HH:mm:ss")</small></div>
-                    </div>
-                    <div class="audit-check-row">
-                        <span>✓</span>
-                        <div><strong>Từ đâu?</strong><small>@(Model.IpAddress ?? "Không ghi nhận IP")</small></div>
-                    </div>
-
-                    <div class="alert alert-light border small mt-4 mb-0">
-                        Nhật ký thao tác chỉ dành cho Quản trị viên. Không nên sửa hoặc xóa log để bảo đảm khả năng truy vết.
-                    </div>
-                </div>
-            </aside>
-        </div>
-    </div>
+    </section>
 </div>

@@ -1,3 +1,4 @@
+@using System.Globalization
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Identity
 @using SmartCar.Application.Features.Notifications
@@ -19,8 +20,9 @@
         }
     }
 
+    var viCulture = CultureInfo.GetCultureInfo("vi-VN");
     var displayName = !string.IsNullOrWhiteSpace(currentUser?.FullName)
-        ? currentUser.FullName
+        ? viCulture.TextInfo.ToTitleCase(currentUser.FullName.Trim().ToLower(viCulture))
         : User.Identity?.Name ?? "Tài khoản";
     var avatarInitial = displayName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
 }
@@ -158,6 +160,7 @@
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
     <script src="~/js/profile-interactions.js" asp-append-version="true"></script>
+    <script src="~/js/ui-terminology.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>

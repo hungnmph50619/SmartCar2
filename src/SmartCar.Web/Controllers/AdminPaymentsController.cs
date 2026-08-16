@@ -15,7 +15,8 @@ public sealed class AdminPaymentsController : Controller
     public AdminPaymentsController(
         IPaymentService paymentService)
     {
-        _paymentService = paymentService;
+        _paymentService =
+            paymentService;
     }
 
     [HttpGet]
@@ -24,90 +25,146 @@ public sealed class AdminPaymentsController : Controller
         PaymentType? type,
         CancellationToken cancellationToken)
     {
-        ViewBag.Status = status;
-        ViewBag.Type = type;
+        ViewBag.Status =
+            status;
+
+        ViewBag.Type =
+            type;
 
         var payments =
-            await _paymentService.GetAdminPaymentsAsync(
-                status,
-                type,
-                cancellationToken);
+            await _paymentService
+                .GetAdminPaymentsAsync(
+                    status,
+                    type,
+                    cancellationToken);
 
-        return View(payments);
+        return View(
+            payments);
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ConfirmQr(
-    int paymentId,
-    CancellationToken cancellationToken)
+        int paymentId,
+        int? returnBookingId,
+        CancellationToken cancellationToken)
     {
         var adminId =
-            User.FindFirstValue(ClaimTypes.NameIdentifier)
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
             ?? string.Empty;
 
         var result =
-            await _paymentService.ConfirmQrPaymentAsync(
-                paymentId,
-                adminId,
-                cancellationToken);
+            await _paymentService
+                .ConfirmQrPaymentAsync(
+                    paymentId,
+                    adminId,
+                    cancellationToken);
 
-        TempData[result.Succeeded
-            ? "SuccessMessage"
-            : "ErrorMessage"] = result.Succeeded
+        TempData[
+            result.Succeeded
+                ? "SuccessMessage"
+                : "ErrorMessage"] =
+            result.Succeeded
+
                 ? "Đã xác nhận nhận được tiền."
                 : string.Join("; ", result.Errors);
 
-        return RedirectToAction(nameof(Index));
+                : string.Join(
+                    "; ",
+                    result.Errors);
+
+        return RedirectAfterPaymentAction(
+            returnBookingId);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RejectQr(
         int paymentId,
+        int? returnBookingId,
         CancellationToken cancellationToken)
     {
         var adminId =
-            User.FindFirstValue(ClaimTypes.NameIdentifier)
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
             ?? string.Empty;
 
         var result =
-            await _paymentService.RejectQrPaymentAsync(
-                paymentId,
-                adminId,
-                cancellationToken);
+            await _paymentService
+                .RejectQrPaymentAsync(
+                    paymentId,
+                    adminId,
+                    cancellationToken);
 
-        TempData[result.Succeeded
-            ? "SuccessMessage"
-            : "ErrorMessage"] = result.Succeeded
+        TempData[
+            result.Succeeded
+                ? "SuccessMessage"
+                : "ErrorMessage"] =
+            result.Succeeded
+
                 ? "Đã trả giao dịch về trạng thái chờ thanh toán."
-                : string.Join("; ", result.Errors);
 
-        return RedirectToAction(nameof(Index));
+                : string.Join(
+                    "; ",
+                    result.Errors);
+
+        return RedirectAfterPaymentAction(
+            returnBookingId);
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ConfirmRefund(
-    int paymentId,
-    string transactionCode,
-    CancellationToken cancellationToken)
+        int paymentId,
+        string transactionCode,
+        CancellationToken cancellationToken)
     {
         var adminId =
-            User.FindFirstValue(ClaimTypes.NameIdentifier)
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
             ?? string.Empty;
 
         var result =
-            await _paymentService.ConfirmRefundAsync(
-                paymentId,
-                adminId,
-                transactionCode,
-                cancellationToken);
+            await _paymentService
+                .ConfirmRefundAsync(
+                    paymentId,
+                    adminId,
+                    transactionCode,
+                    cancellationToken);
 
-        TempData[result.Succeeded
-            ? "SuccessMessage"
-            : "ErrorMessage"] = result.Succeeded
+        TempData[
+            result.Succeeded
+                ? "SuccessMessage"
+                : "ErrorMessage"] =
+            result.Succeeded
+
                 ? "Đã xác nhận hoàn tiền cho khách."
-                : string.Join("; ", result.Errors);
 
-        return RedirectToAction(nameof(Index));
+                : string.Join(
+                    "; ",
+                    result.Errors);
+
+        return RedirectToAction(
+            nameof(Index));
+    }
+
+    private IActionResult RedirectAfterPaymentAction(
+        int? returnBookingId)
+    {
+        if (returnBookingId.HasValue &&
+            returnBookingId.Value > 0)
+        {
+            return RedirectToAction(
+                "Details",
+                "AdminBookings",
+                new
+                {
+                    id = returnBookingId.Value
+                });
+        }
+
+        return RedirectToAction(
+            nameof(Index));
     }
 }

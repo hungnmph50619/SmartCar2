@@ -31,7 +31,7 @@ xóa database cũ rồi chạy lại lệnh Update-Database.
 5. CHẠY PHẦN MỀM
 - Build -> Rebuild Solution.
 - Nhấn Ctrl + F5.
-- Seeder tự tạo role, tài khoản demo, 6 xe demo, ảnh xe, giấy tờ xe và mã khuyến mãi.
+- Seeder tự tạo role, tài khoản demo, 6 xe demo, ảnh xe và giấy tờ xe.
 - Dữ liệu demo chỉ được tạo khi database chưa có xe nên không ghi đè dữ liệu đã nhập.
 
 6. TÀI KHOẢN DEMO
@@ -43,18 +43,15 @@ Customer đã xác minh CCCD/GPLX:
 Email: customer@smartcar.vn
 Mật khẩu: SmartCar@123
 
-Mã khuyến mãi demo:
-WELCOME10
-
 7. LUỒNG DEMO CHÍNH
 - Customer đăng nhập, tìm xe theo ngày giờ tương lai và tạo đơn.
 - Admin xác nhận đơn.
-- Customer áp dụng mã khuyến mãi và thanh toán mô phỏng.
+- Customer thanh toán mô phỏng.
 - Admin chuyển đơn sang sẵn sàng giao, lập biên bản giao xe.
 - Customer có thể gửi yêu cầu gia hạn.
 - Admin lập biên bản trả xe, thêm phụ phí và hoàn tất đơn.
 - Customer đánh giá xe sau khi đơn hoàn tất.
-- Admin quản lý giấy tờ xe, bảo trì, sự cố, khuyến mãi, báo cáo và audit log.
+- Admin quản lý giấy tờ xe, bảo trì, sự cố, báo cáo và audit log.
 
 8. QUY TẮC HỦY VÀ HOÀN TIỀN
 - Customer hủy sau khi đã thanh toán: không hoàn tiền.

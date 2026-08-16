@@ -15,7 +15,6 @@ using SmartCar.Application.Features.Maintenance;
 using SmartCar.Application.Features.Notifications;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Application.Features.Payments;
-using SmartCar.Application.Features.Promotions;
 using SmartCar.Application.Features.Reports;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Application.Features.Reviews;
@@ -59,6 +58,14 @@ public static class DependencyInjection
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
 
+        services.Configure<DataProtectionTokenProviderOptions>(options =>
+        {
+            options.TokenLifespan = TimeSpan.FromMinutes(30);
+        });
+
+        services.Configure<SmtpEmailOptions>(
+            configuration.GetSection(SmtpEmailOptions.SectionName));
+
         services.ConfigureApplicationCookie(options =>
         {
             options.LoginPath = "/Account/Login";
@@ -68,6 +75,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<IEmailService, SmtpEmailService>();
         services.AddScoped<IBrandService, BrandService>();
         services.AddScoped<IVehicleService, VehicleService>();
         services.AddScoped<IDocumentService, DocumentService>();
@@ -76,7 +84,6 @@ public static class DependencyInjection
         services.AddScoped<IBookingOperationService, BookingOperationService>();
         services.AddScoped<IExtensionService, ExtensionService>();
         services.AddScoped<IPaymentService, PaymentService>();
-        services.AddScoped<IPromotionService, PromotionService>();
         services.AddScoped<IHandoverService, HandoverService>();
         services.AddScoped<IReturnService, ReturnService>();
         services.AddScoped<IMaintenanceService, MaintenanceService>();
