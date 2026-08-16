@@ -1,9 +1,12 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Payments;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
 
 namespace SmartCar.Web.Controllers;
 
@@ -11,11 +14,14 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminPaymentsController : Controller
 {
     private readonly IPaymentService _paymentService;
+    private readonly ApplicationDbContext _dbContext;
 
     public AdminPaymentsController(
-        IPaymentService paymentService)
+        IPaymentService paymentService,
+        ApplicationDbContext dbContext)
     {
         _paymentService = paymentService;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -35,11 +41,12 @@ public sealed class AdminPaymentsController : Controller
 
         return View(payments);
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ConfirmQr(
-    int paymentId,
-    CancellationToken cancellationToken)
+        int paymentId,
+        CancellationToken cancellationToken)
     {
         var adminId =
             User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -84,12 +91,13 @@ public sealed class AdminPaymentsController : Controller
 
         return RedirectToAction(nameof(Index));
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ConfirmRefund(
-    int paymentId,
-    string transactionCode,
-    CancellationToken cancellationToken)
+        int paymentId,
+        string transactionCode,
+        CancellationToken cancellationToken)
     {
         var adminId =
             User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -102,11 +110,44 @@ public sealed class AdminPaymentsController : Controller
                 transactionCode,
                 cancellationToken);
 
-        TempData[result.Succeeded
-            ? "SuccessMessage"
-            : "ErrorMessage"] = result.Succeeded
-                ? "Đã xác nhận hoàn tiền cho khách."
-                : string.Join("; ", result.Errors);
+        if (!result.Succeeded)
+        {
+            TempData["ErrorMessage"] = string.Join("; ", result.Errors);
+            return RedirectToAction(nameof(Index));
+        }
+
+        var payment = await _dbContext.Payments
+            .Include(item => item.Booking)
+            .FirstOrDefaultAsync(
+                item => item.PaymentId == paymentId,
+                cancellationToken);
+
+        var completedAfterRefund =
+            payment is not null &&
+            payment.Type == PaymentType.Refund &&
+            payment.Status == PaymentStatus.Refunded &&
+            payment.Booking.Status == BookingStatus.AwaitingRefund;
+
+        if (completedAfterRefund)
+        {
+            payment!.Booking.Status = BookingStatus.Completed;
+
+            _dbContext.Notifications.Add(
+                new Notification
+                {
+                    UserId = payment.Booking.CustomerId,
+                    Title = "Đơn thuê đã hoàn tất",
+                    Message =
+                        $"Đơn #{payment.BookingId} đã hoàn tất sau khi SmartCar xác nhận hoàn " +
+                        $"{payment.Amount:N0} đồng tiền cọc."
+                });
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        TempData["SuccessMessage"] = completedAfterRefund
+            ? "Đã xác nhận hoàn cọc. Chuyến thuê đã hoàn tất."
+            : "Đã xác nhận hoàn tiền cho khách.";
 
         return RedirectToAction(nameof(Index));
     }
