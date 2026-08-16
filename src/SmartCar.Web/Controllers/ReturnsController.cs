@@ -52,14 +52,26 @@ public sealed class ReturnsController : Controller
             return NotFound();
         }
 
-        if (booking.Status != BookingStatus.Rented || booking.Handover is null)
+        if (booking.Status != BookingStatus.Rented)
         {
             TempData["ErrorMessage"] =
                 "Chỉ đơn đang thuê và đã bàn giao xe mới được lập biên bản trả xe.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
-        SetHandoverBaseline(booking);
+        var handover = await _dbContext.VehicleHandovers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.BookingId == bookingId,
+                cancellationToken);
+
+        if (handover is null)
+        {
+            TempData["ErrorMessage"] = "Không tìm thấy biên bản giao xe để đối chiếu.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        SetHandoverBaseline(handover);
 
         return View(new ReturnViewModel
         {
@@ -67,7 +79,7 @@ public sealed class ReturnsController : Controller
             ReturnedAt = DateTime.Now > booking.ReturnDate
                 ? DateTime.Now
                 : booking.ReturnDate,
-            Mileage = booking.Handover.Mileage
+            Mileage = handover.Mileage
         });
     }
 
@@ -352,21 +364,23 @@ public sealed class ReturnsController : Controller
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var booking = await _bookingService.GetAdminBookingAsync(
-            bookingId,
-            cancellationToken);
+        var handover = await _dbContext.VehicleHandovers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                item => item.BookingId == bookingId,
+                cancellationToken);
 
-        if (booking is not null)
+        if (handover is not null)
         {
-            SetHandoverBaseline(booking);
+            SetHandoverBaseline(handover);
         }
     }
 
-    private void SetHandoverBaseline(BookingDetailsDto booking)
+    private void SetHandoverBaseline(VehicleHandover handover)
     {
-        ViewBag.HandoverMileage = booking.Handover?.Mileage;
-        ViewBag.HandoverFuelLevel = booking.Handover?.FuelLevel;
-        ViewBag.HandoverAt = booking.Handover?.HandoverAt;
+        ViewBag.HandoverMileage = handover.Mileage;
+        ViewBag.HandoverFuelLevel = handover.FuelLevel;
+        ViewBag.HandoverAt = handover.HandoverAt;
     }
 
     private async Task ValidateImagesAsync(
