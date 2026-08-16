@@ -20,6 +20,7 @@ public static class VietnameseDisplayExtensions
             BookingStatus.ReadyForPickup => "Sẵn sàng giao xe",
             BookingStatus.Rented => "Đang thuê",
             BookingStatus.PendingInspection => "Chờ kiểm tra xe",
+            BookingStatus.AwaitingRefund => "Chờ hoàn cọc",
             BookingStatus.Completed => "Đã hoàn tất",
             BookingStatus.Cancelled => "Đã hủy",
             BookingStatus.NoShow => "Khách không đến nhận xe",
@@ -189,7 +190,6 @@ public static class VietnameseDisplayExtensions
         "MaintenanceRecord" => "Phiếu bảo trì",
         "UserProfile" => "Hồ sơ người dùng",
         "UserAccount" => "Tài khoản người dùng",
-        "UserBankAccount" => "Tài khoản ngân hàng",
         null or "" => "Không xác định",
         _ => value
     };
