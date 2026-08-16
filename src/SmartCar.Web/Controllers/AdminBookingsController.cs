@@ -76,6 +76,16 @@ public sealed class AdminBookingsController : Controller
             return NotFound();
         }
 
+        // Biên bản giao đã lập nhưng chưa ký: đây là bước bắt buộc tiếp theo.
+        // Đưa thẳng Admin tới bản in để tránh hiện lại nút "Lập biên bản".
+        if (booking.Status == BookingStatus.ReadyForPickup && booking.HasHandover)
+        {
+            return RedirectToAction(
+                "HandoverPrint",
+                "AdminRentalDocuments",
+                new { bookingId = id });
+        }
+
         var customerCreatedAt = await _dbContext.Users
             .AsNoTracking()
             .Where(user => user.Id == booking.CustomerId)
