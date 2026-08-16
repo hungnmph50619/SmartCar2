@@ -20,6 +20,8 @@ public sealed class ReturnsController : Controller
 {
     private const int MaximumImages = 10;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
+    private const string HandoverSignedMarker = "signed-handover-";
+    private const string ReturnSignedMarker = "signed-return-";
 
     private readonly IReturnService _returnService;
     private readonly IBookingService _bookingService;
@@ -107,8 +109,8 @@ public sealed class ReturnsController : Controller
                 model.ReturnedAt,
                 model.Mileage,
                 model.FuelLevel,
-                model.ExteriorCondition,
-                model.InteriorCondition,
+                null,
+                null,
                 model.HasDamage,
                 string.Join(';', imagePaths),
                 model.Notes),
@@ -130,7 +132,7 @@ public sealed class ReturnsController : Controller
             cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã lập biên bản trả xe. Hãy xử lý phụ phí nếu có, sau đó đối chiếu biên bản giao - trả trước khi kết thúc chuyến.";
+            "Đã lập biên bản trả xe. In, ký và tải bản ký trước khi kết thúc kiểm tra.";
 
         return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
     }
@@ -276,7 +278,27 @@ public sealed class ReturnsController : Controller
         if (!reviewConfirmed)
         {
             TempData["ErrorMessage"] =
-                "Vui lòng đối chiếu biên bản giao và biên bản trả trước khi hoàn tất kiểm tra.";
+                "Vui lòng đối chiếu biên bản giao và trả trước khi kết thúc kiểm tra.";
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+        }
+
+        var records = await _dbContext.Bookings
+            .AsNoTracking()
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
+            .FirstOrDefaultAsync(item => item.BookingId == model.BookingId, cancellationToken);
+
+        if (records?.Handover is null || records.VehicleReturn is null)
+        {
+            TempData["ErrorMessage"] = "Thiếu biên bản giao hoặc trả xe.";
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+        }
+
+        if (!HasSignedCopy(records.Handover.ImagePaths, HandoverSignedMarker) ||
+            !HasSignedCopy(records.VehicleReturn.ImagePaths, ReturnSignedMarker))
+        {
+            TempData["ErrorMessage"] =
+                "Cần tải đủ bản giao và bản trả có chữ ký của khách + đại diện SmartCar trước khi kết thúc chuyến.";
             return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
         }
 
@@ -321,15 +343,14 @@ public sealed class ReturnsController : Controller
             {
                 completionNotification.Title = "Đã kiểm tra xe - chờ hoàn cọc";
                 completionNotification.Message =
-                    $"Đơn #{booking.BookingId} đã được kiểm tra xong. " +
-                    $"Tiền cọc {awaitingRefund.Amount:N0} đồng đang chờ SmartCar hoàn về tài khoản của bạn. " +
-                    "Đơn sẽ hoàn tất sau khi khoản hoàn được xác nhận.";
+                    $"Đơn #{booking.BookingId} đã kiểm tra xong. " +
+                    $"Đang chờ hoàn cọc {awaitingRefund.Amount:N0} đồng.";
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             TempData["SuccessMessage"] =
-                $"Đã đối chiếu và kết thúc kiểm tra. Đơn đang chờ hoàn cọc {awaitingRefund.Amount:N0} đ.";
+                $"Đã đối chiếu hồ sơ. Chờ hoàn cọc {awaitingRefund.Amount:N0} đ.";
         }
         else
         {
@@ -341,8 +362,8 @@ public sealed class ReturnsController : Controller
             nameof(Booking),
             model.BookingId,
             awaitingRefund is not null
-                ? $"Kết thúc kiểm tra đơn #{model.BookingId}; chuyển sang chờ hoàn cọc. Yêu cầu bảo trì: {(model.RequiresMaintenance ? "Có" : "Không")}."
-                : $"Hoàn tất đơn #{model.BookingId}. Yêu cầu bảo trì: {(model.RequiresMaintenance ? "Có" : "Không")}.",
+                ? $"Kết thúc kiểm tra đơn #{model.BookingId}; chuyển sang chờ hoàn cọc."
+                : $"Hoàn tất đơn #{model.BookingId} sau khi đủ hồ sơ giao-trả có chữ ký.",
             cancellationToken);
 
         if (awaitingRefund is not null)
@@ -352,12 +373,13 @@ public sealed class ReturnsController : Controller
                 "AdminPayments",
                 new
                 {
+                    section = "refund",
                     status = PaymentStatus.AwaitingRefund,
                     type = PaymentType.Refund
                 });
         }
 
-        return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+        return RedirectToAction("Details", "AdminTripRecords", new { id = model.BookingId });
     }
 
     private async Task PopulateHandoverBaselineAsync(
@@ -464,6 +486,10 @@ public sealed class ReturnsController : Controller
             : imagePaths
                 .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToArray();
+
+    private static bool HasSignedCopy(string? imagePaths, string marker) =>
+        SplitImagePaths(imagePaths)
+            .Any(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
 
     private Task WriteAuditAsync(
         string action,
