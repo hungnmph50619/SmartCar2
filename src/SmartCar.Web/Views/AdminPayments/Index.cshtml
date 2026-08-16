@@ -5,7 +5,7 @@
 
 @{
     ViewData["Title"] = "Quản lý thanh toán";
-    var section = ViewBag.Section as string ?? "collection";
+    var currentSection = ViewBag.Section as string ?? "collection";
     var selectedStatus = ViewBag.Status as PaymentStatus?;
 
     string StatusText(PaymentStatus status) => status switch
@@ -42,23 +42,23 @@
     <div>
         <h1 class="h3 mb-1">Quản lý tài chính</h1>
         <p class="text-muted mb-0">
-            @(section == "review" ? "Các giao dịch đang cần đối soát." : "Tiền vào, khoản phát sinh và tiền hoàn được tách riêng.")
+            @(currentSection == "review" ? "Các giao dịch đang cần đối soát." : "Tiền vào, khoản phát sinh và tiền hoàn được tách riêng.")
         </p>
     </div>
 </div>
 
 <div class="nav nav-pills gap-2 mb-4">
-    @if (section == "review")
+    @if (currentSection == "review")
     {
         <a class="nav-link active" asp-action="Index" asp-route-status="@PaymentStatus.AwaitingConfirmation">Cần đối soát</a>
     }
-    <a class="nav-link @(section == "collection" ? "active" : "")" asp-action="Index" asp-route-section="collection">Tiền thu</a>
-    <a class="nav-link @(section == "adjustment" ? "active" : "")" asp-action="Index" asp-route-section="adjustment">Phát sinh</a>
-    <a class="nav-link @(section == "refund" ? "active" : "")" asp-action="Index" asp-route-section="refund">Hoàn tiền</a>
+    <a class="nav-link @(currentSection == "collection" ? "active" : "")" asp-action="Index" asp-route-section="collection">Tiền thu</a>
+    <a class="nav-link @(currentSection == "adjustment" ? "active" : "")" asp-action="Index" asp-route-section="adjustment">Phát sinh</a>
+    <a class="nav-link @(currentSection == "refund" ? "active" : "")" asp-action="Index" asp-route-section="refund">Hoàn tiền</a>
 </div>
 
 <form method="get" class="d-flex gap-2 mb-3 flex-wrap">
-    <input type="hidden" name="section" value="@section" />
+    <input type="hidden" name="section" value="@currentSection" />
     <select name="status" class="form-select" style="max-width:220px">
         <option value="">Tất cả trạng thái</option>
         @foreach (var status in Enum.GetValues<PaymentStatus>())
@@ -74,7 +74,7 @@
         }
     </select>
     <button class="btn btn-outline-primary" type="submit">Lọc</button>
-    <a class="btn btn-outline-secondary" asp-action="Index" asp-route-section="@section">Xóa lọc</a>
+    <a class="btn btn-outline-secondary" asp-action="Index" asp-route-section="@currentSection">Xóa lọc</a>
 </form>
 
 @if (Model.Count == 0)
@@ -121,12 +121,12 @@ else
                                 <div class="d-flex gap-2 flex-wrap">
                                     <form asp-action="ConfirmQr" method="post" data-confirm="Đã kiểm tra ngân hàng và nhận được tiền?">
                                         <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                        <input type="hidden" name="section" value="@section" />
+                                        <input type="hidden" name="section" value="@currentSection" />
                                         <button class="btn btn-sm btn-success" type="submit">Đã nhận</button>
                                     </form>
                                     <form asp-action="RejectQr" method="post" data-confirm="Chưa nhận được giao dịch này?">
                                         <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                        <input type="hidden" name="section" value="@section" />
+                                        <input type="hidden" name="section" value="@currentSection" />
                                         <button class="btn btn-sm btn-outline-danger" type="submit">Chưa nhận</button>
                                     </form>
                                 </div>
