@@ -1,26 +1,41 @@
 ﻿@model SmartCar.Web.ViewModels.ReturnViewModel
 @{
     ViewData["Title"] = "Biên bản trả xe";
+    var handoverMileage = ViewBag.HandoverMileage as int?;
+    var handoverFuelLevel = ViewBag.HandoverFuelLevel as string;
+    var handoverAt = ViewBag.HandoverAt as DateTime?;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
         <h1 class="h3 mb-1">Lập biên bản trả xe - Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Đối chiếu tình trạng xe khi trả với biên bản bàn giao ban đầu.</p>
+        <p class="text-muted mb-0">Ghi số liệu lúc trả và so với mốc lúc giao.</p>
     </div>
     <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại đơn</a>
 </div>
 
-<div class="alert alert-info">
-    <strong>Kiểm tra trước khi xác nhận:</strong> thời gian trả, số km, nhiên liệu, ngoại thất, nội thất, phụ kiện và hư hỏng mới. Phụ phí được thêm sau khi biên bản trả xe được lập.
-</div>
+@if (handoverMileage.HasValue)
+{
+    <div class="alert alert-info d-flex gap-4 flex-wrap align-items-center">
+        <strong>Mốc lúc giao</strong>
+        <span>@handoverMileage.Value.ToString("N0") km</span>
+        @if (!string.IsNullOrWhiteSpace(handoverFuelLevel))
+        {
+            <span>@handoverFuelLevel nhiên liệu</span>
+        }
+        @if (handoverAt.HasValue)
+        {
+            <span class="text-muted">@handoverAt.Value.ToString("dd/MM HH:mm")</span>
+        }
+    </div>
+}
 
 <form asp-action="Create"
       method="post"
       enctype="multipart/form-data"
       class="card card-body shadow-sm"
       data-loading-form
-      data-confirm="Xác nhận đã nhận xe trả? Đơn sẽ chuyển sang bước kiểm tra và xử lý phụ phí.">
+      data-confirm="Xác nhận đã nhận xe trả? Đơn sẽ chuyển sang bước đối chiếu giao - trả.">
     <input asp-for="BookingId" type="hidden" />
     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
 
@@ -32,13 +47,34 @@
         </div>
         <div class="col-md-6">
             <label asp-for="Mileage" class="form-label fw-semibold">Số km khi trả</label>
-            <input asp-for="Mileage" type="number" min="0" class="form-control" required />
+            <input asp-for="Mileage"
+                   type="number"
+                   min="@(handoverMileage ?? 0)"
+                   step="1"
+                   class="form-control"
+                   required />
             <span asp-validation-for="Mileage" class="text-danger small"></span>
+            @if (handoverMileage.HasValue)
+            {
+                <div class="form-text">Không nhỏ hơn @handoverMileage.Value.ToString("N0") km lúc giao.</div>
+            }
         </div>
         <div class="col-md-6">
-            <label asp-for="FuelLevel" class="form-label fw-semibold">Mức nhiên liệu</label>
-            <input asp-for="FuelLevel" class="form-control" placeholder="Ví dụ: 75% hoặc 6/8" required />
+            <label asp-for="FuelLevel" class="form-label fw-semibold">Mức nhiên liệu khi trả</label>
+            <div class="input-group">
+                <input asp-for="FuelLevel"
+                       type="number"
+                       min="0"
+                       max="100"
+                       step="1"
+                       inputmode="numeric"
+                       class="form-control"
+                       placeholder="75"
+                       required />
+                <span class="input-group-text">%</span>
+            </div>
             <span asp-validation-for="FuelLevel" class="text-danger small"></span>
+            <div class="form-text">Nhập từ 0 đến 100.</div>
         </div>
         <div class="col-md-6 d-flex align-items-end">
             <div class="form-check mb-2">
@@ -48,11 +84,11 @@
         </div>
         <div class="col-md-6">
             <label asp-for="ExteriorCondition" class="form-label fw-semibold">Ngoại thất</label>
-            <textarea asp-for="ExteriorCondition" class="form-control" rows="3" placeholder="Mô tả vết xước, móp, kính, lốp và thân xe"></textarea>
+            <textarea asp-for="ExteriorCondition" class="form-control" rows="3" placeholder="Chỉ ghi nếu có điểm cần lưu ý"></textarea>
         </div>
         <div class="col-md-6">
             <label asp-for="InteriorCondition" class="form-label fw-semibold">Nội thất</label>
-            <textarea asp-for="InteriorCondition" class="form-control" rows="3" placeholder="Ghế, màn hình, điều hòa, vệ sinh và mùi trong xe"></textarea>
+            <textarea asp-for="InteriorCondition" class="form-control" rows="3" placeholder="Chỉ ghi nếu có điểm cần lưu ý"></textarea>
         </div>
         <div class="col-12">
             <label asp-for="Images" class="form-label fw-semibold">Ảnh tình trạng xe khi trả</label>
@@ -63,10 +99,10 @@
                    class="form-control"
                    data-image-input
                    data-max-files="10"
-                   data-preview-target="#vehicle-image-preview"
-                   data-file-info-target="#vehicle-file-info" />
+                   data-preview-target="#return-image-preview"
+                   data-file-info-target="#return-file-info" />
             <span asp-validation-for="Images" class="text-danger small"></span>
-            <div class="form-text">Tải từ 1 đến 10 ảnh, mỗi ảnh tối đa 5 MB. Chụp cùng góc với ảnh bàn giao và bổ sung ảnh cận cảnh nếu có hư hỏng.</div>
+            <div class="form-text">1–10 ảnh. Nên chụp cùng góc với lúc giao.</div>
             <div id="return-file-info" class="small text-muted mt-2 d-none"></div>
             <div id="return-image-preview" class="mt-3 d-none">
                 <div class="row g-2" data-preview-list></div>
@@ -75,13 +111,13 @@
         </div>
         <div class="col-12">
             <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
-            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Ý kiến của khách hàng hoặc thông tin cần xử lý tiếp"></textarea>
+            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Ý kiến của khách hoặc thông tin cần xử lý"></textarea>
         </div>
     </div>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
         <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu biên bản...">Xác nhận nhận xe trả</button>
-        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy thao tác</a>
+        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy</a>
     </div>
 </form>
 
