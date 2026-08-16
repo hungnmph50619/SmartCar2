@@ -137,7 +137,7 @@ public sealed class KycAdminNotificationConsolidationFilter : IAsyncActionFilter
                 {
                     UserId = adminId,
                     Title = notificationTitle,
-                    Message = $"{customerName} đã gửi đủ CCCD và GPLX. Hãy mở hồ sơ để đối chiếu cả hai giấy tờ và duyệt KYC trong một lần."
+                    Message = $"{customerName} đã gửi đủ CCCD và GPLX. Hãy mở hồ sơ để đối chiếu cả hai giấy tờ và duyệt hồ sơ trong một lần."
                 });
             }
         }

@@ -69,7 +69,6 @@
                         <div class="kyc-data-item"><span>Số CCCD</span><strong>@citizenFront.DocumentNumber</strong></div>
                         <div class="kyc-data-item"><span>Ngày sinh</span><strong>@(citizenFront.DateOfBirth?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div>
                         <div class="kyc-data-item"><span>Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div>
-                        <div class="kyc-data-item is-wide"><span>Nơi cư trú</span><strong>@(citizenFront.PermanentAddress ?? "Chưa cập nhật")</strong></div>
                     </div>
 
                     <div class="kyc-thumbnail-grid">
@@ -165,7 +164,7 @@
                         <input type="hidden" name="customerId" value="@Model.CustomerId" />
                         <fieldset class="document-checklist mb-3">
                             <legend>Checklist bắt buộc</legend>
-                            <label><input class="form-check-input" type="checkbox" required /> CCCD: họ tên, số CCCD, ngày sinh, hạn sử dụng và nơi cư trú khớp với ảnh.</label>
+                            <label><input class="form-check-input" type="checkbox" required /> CCCD: họ tên, số CCCD, ngày sinh và hạn sử dụng khớp với ảnh.</label>
                             <label><input class="form-check-input" type="checkbox" required /> GPLX: họ tên trên ảnh thuộc cùng người với CCCD; số bằng, hạng bằng và hạn sử dụng khớp với ảnh.</label>
                             <label><input class="form-check-input" type="checkbox" required /> Hạng GPLX cho phép điều khiển xe ô tô phù hợp với dịch vụ SmartCar.</label>
                             <label><input class="form-check-input" type="checkbox" required /> Đã xem đủ 4 ảnh; ảnh đủ rõ để đối chiếu và không thấy dấu hiệu chỉnh sửa bất thường.</label>

@@ -121,7 +121,7 @@ public sealed class KycPackageController : Controller
 
         if (packageAlreadyPending)
         {
-            TempData["ErrorMessage"] = "Hồ sơ KYC của bạn đang chờ Quản trị viên xác minh. Không cần gửi lại.";
+            TempData["ErrorMessage"] = "CCCD và GPLX của bạn đang chờ Quản trị viên xác minh. Không cần gửi lại.";
             return RedirectToProfile(returnVehicleId, pickupDate, returnDate);
         }
 
@@ -157,9 +157,9 @@ public sealed class KycPackageController : Controller
                     document.CustomerDocumentId,
                     holderName,
                     citizen.DateOfBirth!.Value.Date,
+                    citizen.Gender.Trim(),
                     null,
                     null,
-                    citizen.PermanentAddress.Trim(),
                     null,
                     cancellationToken);
             }
@@ -190,7 +190,7 @@ public sealed class KycPackageController : Controller
                 "SubmitKycPackage",
                 nameof(CustomerDocument),
                 user.Id,
-                "Gửi một lần toàn bộ hồ sơ KYC gồm CCCD và GPLX, mỗi loại có mặt trước và mặt sau; người dùng xác nhận hai giấy tờ thuộc cùng một người.",
+                "Gửi một lần toàn bộ hồ sơ xác minh danh tính gồm CCCD và GPLX, mỗi loại có mặt trước và mặt sau; người dùng xác nhận hai giấy tờ thuộc cùng một người.",
                 ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken: cancellationToken);
 
@@ -378,6 +378,7 @@ public sealed class KycPackageController : Controller
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        // Giữ khóa nội bộ cũ để tương thích với các thông báo đang có trong database.
         var title = $"Hồ sơ KYC chờ duyệt|{customer.Id}";
         var oldUnread = await _dbContext.Notifications
             .Where(item => adminIds.Contains(item.UserId) &&
@@ -396,7 +397,7 @@ public sealed class KycPackageController : Controller
             {
                 UserId = adminId,
                 Title = title,
-                Message = $"{customer.FullName} đã gửi đủ CCCD và GPLX trong một lần. Hãy mở hồ sơ để đối chiếu và ra một quyết định KYC."
+                Message = $"{customer.FullName} đã gửi đủ CCCD và GPLX trong một lần. Hãy mở hồ sơ để đối chiếu và ra quyết định xác minh."
             });
         }
     }

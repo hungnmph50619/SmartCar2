@@ -46,12 +46,25 @@ public static class VietnameseDisplayExtensions
         },
         PaymentType type => type switch
         {
+            PaymentType.Deposit =>"Tiền cọc",
             PaymentType.Rental => "Tiền thuê xe",
             PaymentType.AdditionalCharge => "Phụ phí",
             PaymentType.Refund => "Hoàn tiền",
             PaymentType.Extension => "Tiền gia hạn",
             _ => type.ToString()
         },
+        VehiclePickupMethod method =>
+    method switch
+    {
+        VehiclePickupMethod.StorePickup =>
+            "Nhận tại cửa hàng",
+
+        VehiclePickupMethod.Delivery =>
+            "Giao xe tận nơi",
+
+        _ =>
+            method.ToString()
+    },
         AdditionalChargeType type => type switch
         {
             AdditionalChargeType.LateReturn => "Trả xe muộn",
@@ -113,12 +126,6 @@ public static class VietnameseDisplayExtensions
             VehicleDocumentType.Other => "Khác",
             _ => type.ToString()
         },
-        PromotionType type => type switch
-        {
-            PromotionType.Percentage => "Giảm theo phần trăm",
-            PromotionType.FixedAmount => "Giảm số tiền cố định",
-            _ => type.ToString()
-        },
         _ => value.ToString()
     };
 
@@ -136,7 +143,7 @@ public static class VietnameseDisplayExtensions
         "Update" => "Cập nhật",
         "Delete" => "Xóa",
         "ChangeStatus" => "Đổi trạng thái",
-        "Submit" => "Gửi giấy tờ",
+        "Submit" => "Gửi giấy tờ xác minh",
         "SubmitKycPackage" => "Gửi hồ sơ xác minh",
         "Verify" => "Xác minh giấy tờ",
         "VerifyAll" => "Duyệt hồ sơ xác minh",
@@ -158,8 +165,6 @@ public static class VietnameseDisplayExtensions
         "AddCharge" => "Thêm phụ phí",
         "RemoveCharge" => "Xóa phụ phí",
         "CompleteBooking" => "Hoàn tất đơn",
-        "ApplyPromotion" => "Áp dụng khuyến mãi",
-        "RemovePromotion" => "Gỡ khuyến mãi",
         "StartInvestigation" => "Bắt đầu xử lý",
         "Resolve" => "Hoàn tất xử lý",
         "UpdateAvatar" => "Đổi ảnh đại diện",
@@ -174,7 +179,6 @@ public static class VietnameseDisplayExtensions
     {
         "Booking" => "Đơn thuê",
         "Payment" => "Thanh toán",
-        "Promotion" => "Khuyến mãi",
         "CustomerDocument" => "Giấy tờ khách hàng",
         "VehicleDocument" => "Giấy tờ xe",
         "VehicleHandover" => "Biên bản giao xe",
@@ -202,7 +206,12 @@ public static class VietnameseDisplayExtensions
         normalized = normalized
             .Replace("khách hàng .", "khách hàng.", StringComparison.OrdinalIgnoreCase)
             .Replace("khách hàng ,", "khách hàng,", StringComparison.OrdinalIgnoreCase)
-            .Replace(" #", " #", StringComparison.Ordinal);
+            .Replace("Gửi thông tin GPLX cùng ảnh mặt trước và mặt sau để xác minh.", "Khách hàng đã gửi GPLX cùng ảnh mặt trước và mặt sau để xác minh.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Gửi thông tin CCCD cùng ảnh mặt trước và mặt sau để xác minh.", "Khách hàng đã gửi CCCD cùng ảnh mặt trước và mặt sau để xác minh.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Xác minh GPLX mặt sau của khách hàng.", "Quản trị viên đã xác minh ảnh mặt sau GPLX của khách hàng.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Xác minh GPLX của khách hàng.", "Quản trị viên đã xác minh GPLX của khách hàng.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Xác minh CCCD mặt sau của khách hàng.", "Quản trị viên đã xác minh ảnh mặt sau CCCD của khách hàng.", StringComparison.OrdinalIgnoreCase)
+            .Replace("Xác minh CCCD của khách hàng.", "Quản trị viên đã xác minh CCCD của khách hàng.", StringComparison.OrdinalIgnoreCase);
 
         return normalized;
     }

@@ -48,6 +48,22 @@ public sealed class NotificationsController : Controller
         return RedirectToAction(nameof(Index));
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> OpenProfileDocuments(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Challenge();
+        }
+
+        await _notificationService.MarkReadAsync(id, userId, cancellationToken);
+        return RedirectToAction("Index", "Profile", new { tab = "documents" });
+    }
+
     [Authorize(Roles = RoleNames.Admin)]
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -87,7 +103,7 @@ public sealed class NotificationsController : Controller
                 await _notificationService.MarkReadAsync(item.NotificationId, userId, cancellationToken);
             }
 
-            TempData["SuccessMessage"] = "Đã đánh dấu các thông báo thông thường là đã đọc. Hồ sơ KYC chờ duyệt vẫn được giữ cho đến khi xử lý.";
+            TempData["SuccessMessage"] = "Đã đánh dấu các thông báo thông thường là đã đọc. Hồ sơ xác minh chờ duyệt vẫn được giữ cho đến khi xử lý.";
         }
         else
         {

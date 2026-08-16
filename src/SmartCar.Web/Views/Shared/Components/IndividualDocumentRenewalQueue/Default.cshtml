@@ -1,0 +1,54 @@
+@model IReadOnlyList<SmartCar.Web.ViewModels.AdminKycQueueItemViewModel>
+
+@if (Model.Count > 0)
+{
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-header bg-white border-0 p-4 pb-2">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h2 class="h5 fw-bold mb-1">Cập nhật giấy tờ chờ duyệt</h2>
+                    <p class="text-muted mb-0">Khách hàng chỉ gửi lại giấy tờ sắp hết hạn, đã hết hạn hoặc cần cập nhật. Giấy tờ còn lại vẫn được giữ nguyên.</p>
+                </div>
+                <span class="badge bg-warning text-dark px-3 py-2">@Model.Count yêu cầu</span>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Khách hàng</th>
+                        <th>Giấy tờ cập nhật</th>
+                        <th>Gửi lúc</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>
+                            <div class="fw-semibold">@item.CustomerName</div>
+                            <small class="text-muted">@item.CustomerEmail</small>
+                        </td>
+                        <td>
+                            <strong>@item.PendingDocumentText</strong>
+                            <small class="text-muted d-block">Chỉ xác minh giấy tờ vừa cập nhật</small>
+                        </td>
+                        <td>@item.SubmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                        <td><span class="badge bg-warning text-dark">Chờ xác minh</span></td>
+                        <td class="text-end">
+                            <a class="btn btn-primary btn-sm"
+                               asp-controller="AdminCustomers"
+                               asp-action="Details"
+                               asp-route-id="@item.CustomerId"
+                               asp-route-tab="documents">Xem và xác minh</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

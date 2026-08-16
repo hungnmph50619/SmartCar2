@@ -181,16 +181,46 @@
   background: var(--smartcar-blue);
 }
 
-.kyc-step.is-done .kyc-step-number::before {
-  content: "✓";
+.kyc-step.is-pending .kyc-step-number {
+  border-color: #d99a00;
+  color: #6f4d00;
+  background: #fff3cd;
 }
 
-.kyc-step.is-done .kyc-step-number {
+.kyc-step.is-error .kyc-step-number {
+  border-color: #dc3545;
+  color: #fff;
+  background: #dc3545;
+}
+
+.kyc-step.is-done .kyc-step-number,
+.kyc-step.is-pending .kyc-step-number,
+.kyc-step.is-error .kyc-step-number {
   font-size: 0;
 }
 
 .kyc-step.is-done .kyc-step-number::before {
+  content: "✓";
   font-size: 0.9rem;
+}
+
+.kyc-step.is-pending .kyc-step-number::before {
+  content: "◷";
+  font-size: 0.95rem;
+}
+
+.kyc-step.is-error .kyc-step-number::before {
+  content: "!";
+  font-size: 0.95rem;
+}
+
+.kyc-step.is-pending small {
+  color: #8a6200;
+}
+
+.kyc-step.is-error small {
+  color: #b02a37;
+  font-weight: 700;
 }
 
 .kyc-step-line {
@@ -250,6 +280,11 @@
   background: #f6faff;
 }
 
+.kyc-upload-card.has-error {
+  border-color: #dc3545;
+  background: #fff7f7;
+}
+
 .kyc-upload-icon {
   display: grid;
   width: 48px;
@@ -296,8 +331,22 @@
   font-size: 0.74rem;
 }
 
+.kyc-client-error {
+  min-height: 1.1rem;
+  margin-top: 0.35rem;
+  color: #dc3545;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .kyc-submit-card {
   background: linear-gradient(135deg, #f7fbff, #eef6ff);
+}
+
+.kyc-submit-card .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  box-shadow: none;
 }
 
 .kyc-waiting-icon {
@@ -311,7 +360,9 @@
   font-size: 1.5rem;
 }
 
-[data-vn-date].is-invalid {
+[data-vn-date].is-invalid,
+.kyc-package-form .form-control.is-invalid,
+.kyc-package-form .form-select.is-invalid {
   border-color: #dc3545;
   box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.12);
 }

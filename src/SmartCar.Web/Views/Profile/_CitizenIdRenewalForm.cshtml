@@ -1,0 +1,92 @@
+@model SmartCar.Web.ViewModels.ProfileViewModel
+@{
+    var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
+    var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
+    var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
+}
+
+<form asp-controller="DocumentRenewal"
+      asp-action="SubmitCitizenId"
+      method="post"
+      enctype="multipart/form-data"
+      class="card border-warning shadow-sm mt-3"
+      data-kyc-renewal-form
+      data-loading-form>
+    @if (returnVehicleId.HasValue)
+    {
+        <input type="hidden" name="returnVehicleId" value="@returnVehicleId" />
+        <input type="hidden" name="pickupDate" value="@returnPickupDate?.ToString("O")" />
+        <input type="hidden" name="returnDate" value="@returnDate?.ToString("O")" />
+    }
+
+    <div class="card-header bg-warning-subtle border-0 p-4 pb-2">
+        <h3 class="h5 fw-bold mb-1">Cập nhật Căn cước công dân</h3>
+        <p class="text-muted mb-0">Chỉ cần gửi lại CCCD. GPLX đã xác minh của bạn vẫn được giữ nguyên.</p>
+    </div>
+
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-7">
+                <label asp-for="CitizenIdVerification.FullNameOnDocument" class="form-label fw-semibold"></label>
+                <input asp-for="CitizenIdVerification.FullNameOnDocument" class="form-control" maxlength="100" autocomplete="name" required />
+                <span asp-validation-for="CitizenIdVerification.FullNameOnDocument" class="text-danger small"></span>
+            </div>
+            <div class="col-md-5">
+                <label asp-for="CitizenIdVerification.DocumentNumber" class="form-label fw-semibold"></label>
+                <input asp-for="CitizenIdVerification.DocumentNumber" class="form-control" inputmode="numeric" maxlength="12" pattern="[0-9]{12}" autocomplete="off" required />
+                <span asp-validation-for="CitizenIdVerification.DocumentNumber" class="text-danger small"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="CitizenIdVerification.DateOfBirth" class="form-label fw-semibold"></label>
+                <input asp-for="CitizenIdVerification.DateOfBirth" type="date" class="form-control" max="@DateTime.Today.AddYears(-18).ToString("yyyy-MM-dd")" required />
+                <span asp-validation-for="CitizenIdVerification.DateOfBirth" class="text-danger small"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="CitizenIdVerification.Gender" class="form-label fw-semibold"></label>
+                <select asp-for="CitizenIdVerification.Gender" class="form-select" required>
+                    <option value="">-- Chọn giới tính --</option>
+                    <option value="Nam">Nam</option>
+                    <option value="Nữ">Nữ</option>
+                    <option value="Khác">Khác</option>
+                </select>
+                <span asp-validation-for="CitizenIdVerification.Gender" class="text-danger small"></span>
+            </div>
+            <div class="col-md-4">
+                <label asp-for="CitizenIdVerification.ExpiryDate" class="form-label fw-semibold"></label>
+                <input asp-for="CitizenIdVerification.ExpiryDate" type="date" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                <span asp-validation-for="CitizenIdVerification.ExpiryDate" class="text-danger small"></span>
+            </div>
+        </div>
+
+        <div class="row g-3 mt-2">
+            <div class="col-md-6">
+                <label class="kyc-upload-card" data-upload-card>
+                    <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />
+                    <img alt="Xem trước CCCD mặt trước" class="kyc-upload-preview" data-upload-preview />
+                    <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
+                    <strong>CCCD mặt trước mới</strong>
+                    <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
+                    <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                </label>
+                <span asp-validation-for="CitizenIdVerification.FrontImage" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label class="kyc-upload-card" data-upload-card>
+                    <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input required />
+                    <img alt="Xem trước CCCD mặt sau" class="kyc-upload-preview" data-upload-preview />
+                    <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
+                    <strong>CCCD mặt sau mới</strong>
+                    <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
+                    <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                </label>
+                <span asp-validation-for="CitizenIdVerification.BackImage" class="text-danger small"></span>
+            </div>
+        </div>
+
+        <div class="alert alert-light border small mt-3 mb-3">
+            Sau khi gửi, CCCD chuyển sang <strong>Chờ xác minh</strong>. Quản trị viên phải duyệt giấy tờ mới trước khi CCCD được sử dụng lại để thuê xe.
+        </div>
+
+        <button type="submit" class="btn btn-warning fw-semibold" data-loading-text="Đang gửi CCCD...">Gửi CCCD mới để xác minh</button>
+    </div>
+</form>

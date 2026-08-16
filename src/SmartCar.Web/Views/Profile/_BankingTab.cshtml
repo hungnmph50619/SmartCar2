@@ -38,7 +38,36 @@
     var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
     var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
     var returnDate = ViewBag.ReturnDate is DateTime returnAt ? returnAt : (DateTime?)null;
+    var returnVehicleName = ViewBag.ReturnVehicleName as string;
     var hasReturnContext = returnVehicleId.HasValue && returnPickupDate.HasValue && returnDate.HasValue;
+}
+
+@if (hasReturnContext)
+{
+    @if (bankAccount is null)
+    {
+        <div class="alert alert-warning shadow-sm mb-4">
+            <strong>🏦 Cần tài khoản ngân hàng trước khi đặt xe.</strong>
+            <div class="mt-1">Hãy lưu tài khoản nhận tiền bên dưới. SmartCar sử dụng thông tin này để hoàn tiền, hoàn cọc hoặc chuyển trả các khoản phát sinh khi cần.</div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-success shadow-sm mb-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div>
+                <strong>✓ Đã có tài khoản nhận hoàn tiền.</strong>
+                <div class="small mt-1">Bạn có thể quay lại xe đã chọn và tiếp tục gửi yêu cầu thuê.</div>
+            </div>
+            <a class="btn btn-success flex-shrink-0"
+               asp-controller="Vehicles"
+               asp-action="Details"
+               asp-route-id="@returnVehicleId"
+               asp-route-pickupDate="@returnPickupDate?.ToString("O")"
+               asp-route-returnDate="@returnDate?.ToString("O")">
+                @(string.IsNullOrWhiteSpace(returnVehicleName) ? "Tiếp tục đặt xe" : $"Tiếp tục đặt {returnVehicleName}")
+            </a>
+        </div>
+    }
 }
 
 <div class="row g-4 align-items-start">
