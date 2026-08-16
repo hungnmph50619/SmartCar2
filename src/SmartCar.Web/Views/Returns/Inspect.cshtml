@@ -10,6 +10,7 @@
     var fuelDifferenceText = fuelDifference.HasValue
         ? $"{(fuelDifference.Value > 0 ? "+" : string.Empty)}{fuelDifference.Value}%"
         : null;
+    var fuelReduced = fuelDifference.HasValue && fuelDifference.Value < 0;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
@@ -54,7 +55,7 @@ else
         </div>
         <div class="col-md-4">
             <div class="small text-muted">Nhiên liệu giao → trả</div>
-            <strong class="fs-5 @(fuelDifference < 0 ? "text-danger" : "")">
+            <strong class="fs-5 @(fuelReduced ? "text-danger" : "")">
                 @Model.Handover.FuelDisplay → @Model.Return.FuelDisplay
                 @if (!string.IsNullOrWhiteSpace(fuelDifferenceText))
                 {
