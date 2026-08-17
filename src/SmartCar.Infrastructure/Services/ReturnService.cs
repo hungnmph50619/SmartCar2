@@ -31,6 +31,7 @@ internal sealed class ReturnService : IReturnService
             .Include(item => item.Handover)
             .Include(item => item.VehicleReturn)
             .Include(item => item.Payments)
+            .Include(item => item.Extensions)
             .FirstOrDefaultAsync(item => item.BookingId == request.BookingId, cancellationToken);
 
         if (booking is null)
@@ -135,6 +136,14 @@ internal sealed class ReturnService : IReturnService
                     $"{booking.Handover.IncludedKilometers:N0} km x {booking.Handover.ExcessKmFeePerKm:N0} đ/km.",
                 Amount = excessMileageFee
             });
+        }
+
+        foreach (var extension in booking.Extensions.Where(extension =>
+                     extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence))
+        {
+            extension.Status = BookingExtensionStatus.Cancelled;
+            extension.AdminNote = "Yêu cầu tự động đóng vì xe đã được trả.";
+            extension.DecidedAt = DateTime.UtcNow;
         }
 
         booking.VehicleReturn = vehicleReturn;
@@ -325,6 +334,14 @@ internal sealed class ReturnService : IReturnService
         {
             return OperationResult.Failure(
                 "Đơn vẫn còn khoản tiền chưa thanh toán hoặc chưa ghi nhận đủ tiền cọc.");
+        }
+
+        foreach (var extension in booking.Extensions.Where(extension =>
+                     extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence))
+        {
+            extension.Status = BookingExtensionStatus.Cancelled;
+            extension.AdminNote = "Yêu cầu tự động đóng vì chuyến thuê đã kết thúc.";
+            extension.DecidedAt = DateTime.UtcNow;
         }
 
         booking.Status = BookingStatus.Completed;
