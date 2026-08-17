@@ -1,7 +1,10 @@
 @model IReadOnlyList<SmartCar.Application.Features.Extensions.ExtensionDto>
 @using SmartCar.Domain.Enums
+@using SmartCar.Web.ViewModels
 @{
     ViewData["Title"] = "Duyệt gia hạn";
+    var conflictResolutions = ViewBag.ConflictResolutions as IReadOnlyDictionary<int, ExtensionConflictResolutionViewModel>
+        ?? new Dictionary<int, ExtensionConflictResolutionViewModel>();
 
     (string Text, string? ImagePath) ParseEvidence(string? value)
     {
@@ -26,7 +29,7 @@
 <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
     <div>
         <h1 class="h3 mb-1">Yêu cầu gia hạn</h1>
-        <p class="text-muted mb-0">Kiểm tra lý do, minh chứng và xung đột lịch xe trước khi duyệt. Gia hạn chỉ có hiệu lực sau khi khoản gia hạn được thanh toán và đối soát.</p>
+        <p class="text-muted mb-0">Kiểm tra lý do, minh chứng và lịch xe. Nếu ảnh hưởng đơn kế tiếp, phải xử lý khách/xe kế tiếp trước rồi mới duyệt gia hạn.</p>
     </div>
     <span class="badge bg-warning text-dark fs-6">@Model.Count cần xử lý</span>
 </div>
@@ -51,19 +54,23 @@
                 <input class="form-check-input" type="checkbox" name="isForceMajeure" value="true" id="admin-force-majeure" />
                 <label class="form-check-label fw-semibold" for="admin-force-majeure">Khách báo trường hợp bất khả kháng</label>
             </div>
-            <div class="small text-muted">Nếu bất khả kháng, cần ghi nhận tình trạng xe/sự cố và vị trí hiện tại. Nếu lịch xe bị trùng, hệ thống vẫn tiếp nhận để quản trị viên xử lý khách kế tiếp trước khi duyệt.</div>
+            <div class="small text-muted">Nếu bất khả kháng, phải có ảnh minh chứng và vị trí trực tiếp do khách gửi/cung cấp. Nếu lịch xe bị trùng, hệ thống vẫn tiếp nhận để quản trị viên xử lý khách kế tiếp.</div>
         </div>
-        <div class="col-md-6">
-            <label class="form-label">Minh chứng / tình trạng / vị trí</label>
-            <textarea name="evidenceNote" class="form-control" rows="2" maxlength="1000" placeholder="Ví dụ: xe hỏng tại..., vị trí hiện tại..., nội dung khách trình bày..."></textarea>
+        <div class="col-md-4">
+            <label class="form-label">Tình trạng / minh chứng mô tả</label>
+            <textarea name="evidenceNote" class="form-control" rows="2" maxlength="1000" placeholder="Xe hỏng/sự cố, tình trạng hiện tại..."></textarea>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Vị trí trực tiếp khách gửi</label>
+            <input name="customerLiveLocation" class="form-control" maxlength="300" placeholder="Link vị trí hoặc tọa độ khách gửi" />
         </div>
         <div class="col-md-3">
             <label class="form-label">Ảnh minh chứng</label>
             <input name="evidenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" />
             <div class="form-text">JPG/PNG/WEBP, tối đa 5 MB.</div>
         </div>
-        <div class="col-md-3 d-flex align-items-end">
-            <button class="btn btn-primary w-100" type="submit">Ghi nhận yêu cầu</button>
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100" type="submit">Ghi nhận</button>
         </div>
     </form>
 </details>
@@ -78,6 +85,7 @@ else
         @foreach (var item in Model)
         {
             var evidence = ParseEvidence(item.EvidenceNote);
+            conflictResolutions.TryGetValue(item.BookingExtensionId, out var conflictResolution);
 
             <div class="col-xl-6">
                 <div class="card shadow-sm h-100">
@@ -108,19 +116,6 @@ else
                             <div class="col-sm-6"><span class="text-muted">Phí gia hạn</span><div class="fw-semibold text-primary">@item.AdditionalAmount.ToString("N0") đ</div></div>
                         </div>
 
-                        @if (item.HasScheduleConflict)
-                        {
-                            <div class="alert alert-danger py-2">
-                                <strong>Xung đột lịch xe:</strong>
-                                <a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@item.ConflictingBookingId">đơn #@item.ConflictingBookingId</a>
-                                bắt đầu lúc @(item.ConflictingPickupDate?.ToString("dd/MM/yyyy HH:mm") ?? "-").
-                                @if (item.IsForceMajeure)
-                                {
-                                    <div class="small mt-1">Cần liên hệ khách kế tiếp và xử lý phương án đổi xe/hoàn tiền trước khi duyệt yêu cầu này.</div>
-                                }
-                            </div>
-                        }
-
                         @if (!string.IsNullOrWhiteSpace(item.CustomerNote))
                         {
                             <div class="border rounded p-2 mb-2">
@@ -132,8 +127,8 @@ else
                         @if (item.IsForceMajeure)
                         {
                             <div class="border rounded p-2 mb-3 @(string.IsNullOrWhiteSpace(item.EvidenceNote) ? "border-danger" : "border-warning")">
-                                <div class="small text-muted fw-semibold">Minh chứng / tình trạng / vị trí</div>
-                                <div>@(string.IsNullOrWhiteSpace(evidence.Text) ? "Chưa có mô tả minh chứng." : evidence.Text)</div>
+                                <div class="small text-muted fw-semibold">Ảnh, tình trạng và vị trí</div>
+                                <div>@(string.IsNullOrWhiteSpace(evidence.Text) ? "Chưa có mô tả/vị trí đầy đủ." : evidence.Text)</div>
                                 @if (!string.IsNullOrWhiteSpace(evidence.ImagePath))
                                 {
                                     <a href="@evidence.ImagePath" target="_blank" rel="noopener" class="d-inline-block mt-2">
@@ -141,6 +136,86 @@ else
                                     </a>
                                 }
                             </div>
+                        }
+
+                        @if (item.HasScheduleConflict && conflictResolution is not null)
+                        {
+                            <div class="alert alert-danger">
+                                <div class="fw-bold mb-1">Có xung đột với đơn kế tiếp #@conflictResolution.BookingId</div>
+                                <div class="small">
+                                    Khách: <strong>@conflictResolution.CustomerName</strong> ·
+                                    @conflictResolution.VehicleName (@conflictResolution.LicensePlate)<br />
+                                    @conflictResolution.PickupDate.ToString("dd/MM/yyyy HH:mm") → @conflictResolution.ReturnDate.ToString("dd/MM/yyyy HH:mm") ·
+                                    Giá trị đơn: <strong>@conflictResolution.ContractAmount.ToString("N0") đ</strong>
+                                </div>
+                                <a class="btn btn-sm btn-outline-danger mt-2" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@conflictResolution.BookingId">Mở đơn kế tiếp</a>
+                            </div>
+
+                            @if (item.IsForceMajeure)
+                            {
+                                <div class="border rounded p-3 mb-3">
+                                    <div class="fw-bold mb-2">Bước 1 — Ưu tiên đổi xe cho khách kế tiếp</div>
+                                    @if (conflictResolution.Alternatives.Count > 0)
+                                    {
+                                        <form asp-action="MoveConflictingBooking" method="post" class="row g-2">
+                                            <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
+                                            <div class="col-md-7">
+                                                <select name="replacementVehicleId" class="form-select" required>
+                                                    <option value="">Chọn xe thay thế...</option>
+                                                    @foreach (var alternative in conflictResolution.Alternatives)
+                                                    {
+                                                        var priceText = alternative.IsEquivalentPrice
+                                                            ? "giá tương đương"
+                                                            : alternative.PriceDifference > 0
+                                                                ? $"tăng khoảng {alternative.PriceDifference:N0} đ tiền thuê"
+                                                                : $"giảm khoảng {Math.Abs(alternative.PriceDifference):N0} đ tiền thuê";
+                                                        <option value="@alternative.VehicleId">
+                                                            @alternative.VehicleName · @alternative.LicensePlate · @alternative.DailyPrice.ToString("N0") đ/ngày · @priceText
+                                                        </option>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-md-5">
+                                                <div class="form-check pt-2">
+                                                    <input class="form-check-input" type="checkbox" name="customerAccepted" value="true" id="accepted-@item.BookingExtensionId" required />
+                                                    <label class="form-check-label small" for="accepted-@item.BookingExtensionId">Đã liên hệ và khách B đồng ý xe/mức giá này</label>
+                                                </div>
+                                            </div>
+                                            <div class="col-12">
+                                                <button class="btn btn-primary w-100" type="submit">Chuyển đơn B sang xe đã đồng ý</button>
+                                            </div>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <div class="alert alert-warning py-2 mb-0">Hiện không có xe khác trống trong toàn bộ thời gian của đơn B.</div>
+                                    }
+                                </div>
+
+                                <div class="border border-danger rounded p-3 mb-3">
+                                    <div class="fw-bold text-danger mb-1">Bước 2 — Chỉ hủy đơn B khi không thống nhất được phương án đổi xe</div>
+                                    <div class="small text-muted mb-2">
+                                        SmartCar sẽ hủy do phía hệ thống, tạo hoàn 100% các khoản đã thu theo chính sách. Khoản hỗ trợ/bồi thường đề xuất là
+                                        <strong>@conflictResolution.SuggestedCompensationAmount.ToString("N0") đ</strong>, tối đa theo giá trị đơn B và số cọc A đã thu; khoản này được ghi nhận để đối soát từ cọc A khi trả xe.
+                                    </div>
+                                    <form asp-action="CancelConflictingBooking" method="post">
+                                        <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" name="customerContacted" value="true" id="cancel-contacted-@item.BookingExtensionId" required />
+                                            <label class="form-check-label small" for="cancel-contacted-@item.BookingExtensionId">Đã liên hệ khách B; khách không chấp nhận các phương án xe thay thế</label>
+                                        </div>
+                                        <button class="btn btn-outline-danger w-100" type="submit" onclick="return confirm('Xác nhận hủy đơn kế tiếp và tạo các khoản hoàn/hỗ trợ?');">Hủy đơn B & tạo hoàn tiền</button>
+                                    </form>
+                                </div>
+
+                                <div class="alert alert-info small">
+                                    Chưa thể duyệt gia hạn A cho đến khi đơn B được chuyển sang xe khác hoặc được hủy theo quy trình trên.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning small">Yêu cầu thông thường bị xung đột lịch nên không được duyệt. Hãy từ chối và yêu cầu khách trả xe đúng hạn.</div>
+                            }
                         }
 
                         @if (item.Status == BookingExtensionStatus.NeedsEvidence)
@@ -159,21 +234,15 @@ else
                         }
                         else
                         {
-                            <form asp-action="Approve" method="post" class="border rounded p-3 mb-3 bg-light">
-                                <input type="hidden" name="id" value="@item.BookingExtensionId" />
-                                @if (item.HasScheduleConflict)
-                                {
-                                    <div class="form-check mb-2">
-                                        <input class="form-check-input" type="checkbox" name="confirmConflictHandled" value="true" id="conflict-@item.BookingExtensionId" required />
-                                        <label class="form-check-label" for="conflict-@item.BookingExtensionId">
-                                            Tôi xác nhận đã xử lý phương án cho đơn #@item.ConflictingBookingId (liên hệ khách kế tiếp/đổi xe/hoàn tiền nếu cần).
-                                        </label>
-                                    </div>
-                                }
-                                <input name="adminNote" class="form-control form-control-sm mb-2" maxlength="500" placeholder="Ghi chú quyết định (không bắt buộc)" />
-                                <button class="btn btn-success w-100" type="submit">Duyệt & tạo khoản thanh toán gia hạn</button>
-                                <div class="small text-muted mt-2">Ngày trả mới chưa thay đổi ở bước này; chỉ cập nhật sau khi tiền gia hạn được xác nhận.</div>
-                            </form>
+                            @if (!item.HasScheduleConflict)
+                            {
+                                <form asp-action="Approve" method="post" class="border rounded p-3 mb-3 bg-light">
+                                    <input type="hidden" name="id" value="@item.BookingExtensionId" />
+                                    <input name="adminNote" class="form-control form-control-sm mb-2" maxlength="500" placeholder="Ghi chú quyết định (không bắt buộc)" />
+                                    <button class="btn btn-success w-100" type="submit">Duyệt & tạo khoản thanh toán gia hạn</button>
+                                    <div class="small text-muted mt-2">Ngày trả mới chưa thay đổi ở bước này; chỉ cập nhật sau khi tiền gia hạn được xác nhận.</div>
+                                </form>
+                            }
 
                             <div class="row g-2">
                                 <div class="col-md-6">
@@ -181,7 +250,7 @@ else
                                         <summary class="fw-semibold text-warning">Yêu cầu thêm minh chứng</summary>
                                         <form asp-action="RequestEvidence" method="post" class="mt-2">
                                             <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
-                                            <textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="3" required placeholder="Nêu rõ khách cần bổ sung ảnh, tình trạng xe, vị trí..."></textarea>
+                                            <textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="3" required placeholder="Nêu rõ khách cần bổ sung ảnh, tình trạng xe, vị trí trực tiếp..."></textarea>
                                             <button class="btn btn-sm btn-warning w-100" type="submit">Gửi yêu cầu bổ sung</button>
                                         </form>
                                     </details>
