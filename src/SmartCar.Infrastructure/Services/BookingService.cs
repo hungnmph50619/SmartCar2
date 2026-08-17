@@ -606,6 +606,7 @@ internal sealed class BookingService : IBookingService
             RentalAmount = booking.RentalAmount,
             DepositAmount = booking.DepositAmount,
             AdditionalAmount = normalizedAdditionalAmount,
+            DepositDeductionAmount = depositDeduction,
             TotalAmount = normalizedTotalAmount,
             Status = booking.Status,
             CreatedAt = booking.CreatedAt,
