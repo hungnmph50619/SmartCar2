@@ -59,6 +59,11 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
         }
 
+        if (string.IsNullOrWhiteSpace(request.ImagePaths))
+        {
+            return OperationResult.Failure("Biên bản trả xe phải có ảnh đối chiếu tình trạng xe.");
+        }
+
         var drivenKilometers = request.Mileage - booking.Handover.Mileage;
         var elapsedDays = Math.Max(
             1,
@@ -113,7 +118,9 @@ internal sealed class ReturnService : IReturnService
             vehicleReturn.AdditionalCharges.Add(new AdditionalCharge
             {
                 ChargeType = AdditionalChargeType.LateReturn,
-                Description = $"Phí trả xe muộn {lateMinutes} phút ({lateDays} ngày tính phí x 150%).",
+                Description =
+                    $"Phí trả xe muộn {lateMinutes} phút " +
+                    $"({lateDays} ngày tính phí x {lateReturnMultiplier:0.##}).",
                 Amount = lateFee
             });
         }
@@ -159,7 +166,7 @@ internal sealed class ReturnService : IReturnService
     {
         if (request.Amount <= 0 || string.IsNullOrWhiteSpace(request.Description))
         {
-            return OperationResult.Failure("Mô tả và số tiền phụ phí không hợp lệ.");
+            return OperationResult.Failure("Cần mô tả căn cứ và số tiền phụ phí hợp lệ.");
         }
 
         var booking = await ChargeQuery()
@@ -178,6 +185,34 @@ internal sealed class ReturnService : IReturnService
         if (HasPaidAdditionalCharge(booking))
         {
             return OperationResult.Failure("Không thể sửa phụ phí sau khi khách đã thanh toán.");
+        }
+
+        var returnEvidence = SplitImagePaths(booking.VehicleReturn.ImagePaths)
+            .Where(path => !path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (returnEvidence.Length == 0)
+        {
+            return OperationResult.Failure("Không có ảnh trả xe làm căn cứ. Chưa thể tạo phụ phí.");
+        }
+
+        if (request.ChargeType == AdditionalChargeType.Damage)
+        {
+            if (!booking.VehicleReturn.HasDamage)
+            {
+                return OperationResult.Failure("Cần ghi nhận hư hỏng trong biên bản trả xe trước khi tạo phí hư hỏng.");
+            }
+
+            if (!returnEvidence.Any(path => path.Contains("damage-", StringComparison.OrdinalIgnoreCase)))
+            {
+                return OperationResult.Failure("Cần ảnh hư hỏng trong biên bản trả xe trước khi tạo phí hư hỏng.");
+            }
+        }
+
+        if (request.ChargeType == AdditionalChargeType.MissingAccessory &&
+            string.IsNullOrWhiteSpace(booking.Handover?.Accessories))
+        {
+            return OperationResult.Failure("Biên bản giao xe chưa ghi phụ kiện ban đầu nên chưa đủ căn cứ tạo phí thiếu phụ kiện.");
         }
 
         booking.VehicleReturn.AdditionalCharges.Add(new AdditionalCharge
@@ -345,6 +380,7 @@ internal sealed class ReturnService : IReturnService
 
     private IQueryable<Booking> ChargeQuery() =>
         _dbContext.Bookings
+            .Include(booking => booking.Handover)
             .Include(booking => booking.VehicleReturn)
             .ThenInclude(vehicleReturn => vehicleReturn!.AdditionalCharges)
             .Include(booking => booking.Payments);
@@ -399,6 +435,13 @@ internal sealed class ReturnService : IReturnService
         booking.Payments.Any(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
             payment.Status == PaymentStatus.Paid);
+
+    private static IReadOnlyList<string> SplitImagePaths(string? imagePaths) =>
+        string.IsNullOrWhiteSpace(imagePaths)
+            ? Array.Empty<string>()
+            : imagePaths
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
 
     private static bool TryParseFuelPercent(string? value, out int percent)
     {
