@@ -2,6 +2,25 @@
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Duyệt gia hạn";
+
+    (string Text, string? ImagePath) ParseEvidence(string? value)
+    {
+        const string marker = "Ảnh minh chứng: ";
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (string.Empty, null);
+        }
+
+        var index = value.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return (value.Trim(), null);
+        }
+
+        var text = value[..index].Trim().TrimEnd('|').Trim();
+        var imagePath = value[(index + marker.Length)..].Trim();
+        return (text, string.IsNullOrWhiteSpace(imagePath) ? null : imagePath);
+    }
 }
 
 <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
@@ -14,7 +33,7 @@
 
 <details class="card card-body shadow-sm mb-4">
     <summary class="fw-semibold">+ Ghi nhận yêu cầu gia hạn khi khách gọi điện</summary>
-    <form asp-action="CreateForCustomer" method="post" class="row g-3 mt-2">
+    <form asp-action="CreateForCustomer" method="post" enctype="multipart/form-data" class="row g-3 mt-2">
         <div class="col-md-2">
             <label class="form-label">Mã đơn</label>
             <input name="bookingId" type="number" min="1" class="form-control" required placeholder="#" />
@@ -34,9 +53,14 @@
             </div>
             <div class="small text-muted">Nếu bất khả kháng, cần ghi nhận tình trạng xe/sự cố và vị trí hiện tại. Nếu lịch xe bị trùng, hệ thống vẫn tiếp nhận để quản trị viên xử lý khách kế tiếp trước khi duyệt.</div>
         </div>
-        <div class="col-md-9">
+        <div class="col-md-6">
             <label class="form-label">Minh chứng / tình trạng / vị trí</label>
-            <textarea name="evidenceNote" class="form-control" rows="2" maxlength="1000" placeholder="Ví dụ: xe hỏng tại..., khách đã gửi ảnh/video qua kênh hỗ trợ..."></textarea>
+            <textarea name="evidenceNote" class="form-control" rows="2" maxlength="1000" placeholder="Ví dụ: xe hỏng tại..., vị trí hiện tại..., nội dung khách trình bày..."></textarea>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Ảnh minh chứng</label>
+            <input name="evidenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" />
+            <div class="form-text">JPG/PNG/WEBP, tối đa 5 MB.</div>
         </div>
         <div class="col-md-3 d-flex align-items-end">
             <button class="btn btn-primary w-100" type="submit">Ghi nhận yêu cầu</button>
@@ -53,6 +77,8 @@ else
     <div class="row g-4">
         @foreach (var item in Model)
         {
+            var evidence = ParseEvidence(item.EvidenceNote);
+
             <div class="col-xl-6">
                 <div class="card shadow-sm h-100">
                     <div class="card-body">
@@ -86,7 +112,8 @@ else
                         {
                             <div class="alert alert-danger py-2">
                                 <strong>Xung đột lịch xe:</strong>
-                                đơn #@item.ConflictingBookingId bắt đầu lúc @item.ConflictingPickupDate?.ToString("dd/MM/yyyy HH:mm").
+                                <a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@item.ConflictingBookingId">đơn #@item.ConflictingBookingId</a>
+                                bắt đầu lúc @(item.ConflictingPickupDate?.ToString("dd/MM/yyyy HH:mm") ?? "-").
                                 @if (item.IsForceMajeure)
                                 {
                                     <div class="small mt-1">Cần liên hệ khách kế tiếp và xử lý phương án đổi xe/hoàn tiền trước khi duyệt yêu cầu này.</div>
@@ -106,7 +133,13 @@ else
                         {
                             <div class="border rounded p-2 mb-3 @(string.IsNullOrWhiteSpace(item.EvidenceNote) ? "border-danger" : "border-warning")">
                                 <div class="small text-muted fw-semibold">Minh chứng / tình trạng / vị trí</div>
-                                <div>@(string.IsNullOrWhiteSpace(item.EvidenceNote) ? "Chưa có minh chứng đầy đủ." : item.EvidenceNote)</div>
+                                <div>@(string.IsNullOrWhiteSpace(evidence.Text) ? "Chưa có mô tả minh chứng." : evidence.Text)</div>
+                                @if (!string.IsNullOrWhiteSpace(evidence.ImagePath))
+                                {
+                                    <a href="@evidence.ImagePath" target="_blank" rel="noopener" class="d-inline-block mt-2">
+                                        <img src="@evidence.ImagePath" alt="Ảnh minh chứng gia hạn" class="img-thumbnail" style="max-height:180px;max-width:260px;object-fit:contain" />
+                                    </a>
+                                }
                             </div>
                         }
 
