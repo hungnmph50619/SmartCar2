@@ -11,6 +11,7 @@ public sealed class ExtensionConflictResolutionViewModel
     public DateTime ReturnDate { get; init; }
     public decimal ContractAmount { get; init; }
     public decimal DepositPaidByCurrentRenter { get; init; }
+    public bool HasPaidUpfront { get; init; }
     public decimal SuggestedCompensationAmount =>
         Math.Min(ContractAmount, DepositPaidByCurrentRenter);
 
