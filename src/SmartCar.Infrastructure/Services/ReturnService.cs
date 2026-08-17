@@ -13,6 +13,8 @@ internal sealed class ReturnService : IReturnService
     private const int MaximumReasonableKilometersPerDay = 2500;
     private const string AccessoriesComplete = "Đủ";
     private const string AccessoriesMissingPrefix = "Thiếu/mất:";
+    private const string ReturnAccessoriesLabel = "Phụ kiện khi trả:";
+    private const string ReturnNoteSeparator = " | Ghi chú: ";
 
     private readonly ApplicationDbContext _dbContext;
 
@@ -120,13 +122,13 @@ internal sealed class ReturnService : IReturnService
             Mileage = request.Mileage,
             FuelLevel = $"{fuelPercent}%",
             ExteriorCondition = null,
-            InteriorCondition = accessoryStatus,
+            InteriorCondition = null,
             HasDamage = request.HasDamage,
             IsLateReturn = lateMinutes > 0,
             LateMinutes = lateMinutes,
             LateFee = lateFee,
             ImagePaths = Normalize(request.ImagePaths),
-            Notes = Normalize(request.Notes)
+            Notes = BuildReturnNotes(accessoryStatus, request.Notes)
         };
 
         var excessKilometers = Math.Max(
@@ -245,9 +247,7 @@ internal sealed class ReturnService : IReturnService
                 return OperationResult.Failure("Biên bản giao xe chưa ghi phụ kiện ban đầu nên chưa đủ căn cứ tạo phí thiếu phụ kiện.");
             }
 
-            var returnedAccessories = Normalize(booking.VehicleReturn.InteriorCondition);
-            if (returnedAccessories is null ||
-                !returnedAccessories.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase))
+            if (!HasMissingAccessories(booking.VehicleReturn.Notes))
             {
                 return OperationResult.Failure("Biên bản trả xe chưa ghi nhận phụ kiện thiếu/mất nên chưa thể tạo phí này.");
             }
@@ -481,6 +481,20 @@ internal sealed class ReturnService : IReturnService
         booking.Payments.Any(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
             payment.Status == PaymentStatus.Paid);
+
+    private static bool HasMissingAccessories(string? notes) =>
+        !string.IsNullOrWhiteSpace(notes) &&
+        notes.TrimStart().StartsWith(
+            $"{ReturnAccessoriesLabel} {AccessoriesMissingPrefix}",
+            StringComparison.OrdinalIgnoreCase);
+
+    private static string BuildReturnNotes(string accessoryStatus, string? note)
+    {
+        var normalizedNote = Normalize(note);
+        return normalizedNote is null
+            ? $"{ReturnAccessoriesLabel} {accessoryStatus}"
+            : $"{ReturnAccessoriesLabel} {accessoryStatus}{ReturnNoteSeparator}{normalizedNote}";
+    }
 
     private static IReadOnlyList<string> SplitImagePaths(string? imagePaths) =>
         string.IsNullOrWhiteSpace(imagePaths)
