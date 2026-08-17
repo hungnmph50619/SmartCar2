@@ -8,6 +8,9 @@ public sealed class HandoverDocumentViewModel
     public DateTime RecordedAt { get; init; }
     public int Mileage { get; init; }
     public string FuelLevel { get; init; } = string.Empty;
+    public string? ExteriorCondition { get; init; }
+    public string? InteriorCondition { get; init; }
+    public string? Accessories { get; init; }
     public string? Notes { get; init; }
     public int IncludedKilometers { get; init; }
     public decimal ExcessKmFeePerKm { get; init; }
@@ -25,6 +28,8 @@ public sealed class ReturnDocumentViewModel
     public DateTime RecordedAt { get; init; }
     public int Mileage { get; init; }
     public string FuelLevel { get; init; } = string.Empty;
+    public string? ExteriorCondition { get; init; }
+    public string? InteriorCondition { get; init; }
     public bool HasDamage { get; init; }
     public bool IsLateReturn { get; init; }
     public int LateMinutes { get; init; }
