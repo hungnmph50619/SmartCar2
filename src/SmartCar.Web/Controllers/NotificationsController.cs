@@ -10,6 +10,9 @@ namespace SmartCar.Web.Controllers;
 public sealed class NotificationsController : Controller
 {
     private const string KycWorkPrefix = "Hồ sơ KYC chờ duyệt|";
+    private const string BookingWorkPrefix = "Đơn #";
+    private const string BookingWorkSuffix = " cần xác nhận";
+
     private readonly INotificationService _notificationService;
 
     public NotificationsController(INotificationService notificationService)
@@ -77,9 +80,8 @@ public sealed class NotificationsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        // KYC is a work item, not just an informational notification. Opening the
-        // review page must not clear the alert. It is marked handled only after
-        // the admin approves the package or requests resubmission.
+        // KYC là công việc quản trị: chỉ được đánh dấu xử lý sau khi Admin
+        // duyệt hoặc yêu cầu khách cập nhật hồ sơ.
         return RedirectToAction("Review", "AdminKyc", new { customerId });
     }
 
@@ -98,12 +100,14 @@ public sealed class NotificationsController : Controller
             var notifications = await _notificationService.GetAsync(userId, cancellationToken);
             foreach (var item in notifications.Where(item =>
                          !item.IsRead &&
-                         !item.Title.StartsWith(KycWorkPrefix, StringComparison.Ordinal)))
+                         !item.Title.StartsWith(KycWorkPrefix, StringComparison.Ordinal) &&
+                         !IsBookingWorkTitle(item.Title)))
             {
                 await _notificationService.MarkReadAsync(item.NotificationId, userId, cancellationToken);
             }
 
-            TempData["SuccessMessage"] = "Đã đánh dấu các thông báo thông thường là đã đọc. Hồ sơ xác minh chờ duyệt vẫn được giữ cho đến khi xử lý.";
+            TempData["SuccessMessage"] =
+                "Đã đánh dấu các thông báo thường là đã đọc. Công việc đang chờ xử lý vẫn được giữ lại.";
         }
         else
         {
@@ -113,4 +117,8 @@ public sealed class NotificationsController : Controller
 
         return RedirectToAction(nameof(Index));
     }
+
+    private static bool IsBookingWorkTitle(string title) =>
+        title.StartsWith(BookingWorkPrefix, StringComparison.Ordinal) &&
+        title.EndsWith(BookingWorkSuffix, StringComparison.Ordinal);
 }

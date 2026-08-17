@@ -17,6 +17,9 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminBookingsController : Controller
 {
+    private const string HandoverSignedMarker = "signed-handover-";
+    private const string ReturnSignedMarker = "signed-return-";
+
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
@@ -53,7 +56,7 @@ public sealed class AdminBookingsController : Controller
         var bookingIdText = keyword.TrimStart('#');
         var hasBookingId = int.TryParse(bookingIdText, out var bookingId);
 
-        var filteredBookings = bookings
+        return View(bookings
             .Where(booking =>
                 (hasBookingId && booking.BookingId == bookingId) ||
                 booking.CustomerName.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
@@ -61,9 +64,7 @@ public sealed class AdminBookingsController : Controller
                  booking.CustomerPhone.Contains(keyword, StringComparison.OrdinalIgnoreCase)) ||
                 booking.VehicleName.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
                 booking.LicensePlate.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        return View(filteredBookings);
+            .ToList());
     }
 
     [HttpGet]
@@ -73,6 +74,16 @@ public sealed class AdminBookingsController : Controller
         if (booking is null)
         {
             return NotFound();
+        }
+
+        // Biên bản giao đã lập nhưng chưa ký: đây là bước bắt buộc tiếp theo.
+        // Đưa thẳng Admin tới bản in để tránh hiện lại nút "Lập biên bản".
+        if (booking.Status == BookingStatus.ReadyForPickup && booking.HasHandover)
+        {
+            return RedirectToAction(
+                "HandoverPrint",
+                "AdminRentalDocuments",
+                new { bookingId = id });
         }
 
         var customerCreatedAt = await _dbContext.Users
@@ -90,6 +101,7 @@ public sealed class AdminBookingsController : Controller
         var documents = await _documentService.GetCustomerDocumentsAsync(
             booking.CustomerId,
             cancellationToken);
+
         var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
         var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
         var drivingLicense = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
@@ -113,6 +125,12 @@ public sealed class AdminBookingsController : Controller
                                      drivingLicense.ExpiryDate.HasValue &&
                                      drivingLicense.ExpiryDate.Value.Date >= booking.ReturnDate.Date;
 
+        var tripDocuments = await _dbContext.Bookings
+            .AsNoTracking()
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
+            .FirstOrDefaultAsync(item => item.BookingId == id, cancellationToken);
+
         ViewBag.CustomerCreatedAt = customerCreatedAt;
         ViewBag.CustomerTotalBookingCount = customerBookingStatuses.Count;
         ViewBag.CustomerCompletedBookingCount = customerBookingStatuses.Count(status => status == BookingStatus.Completed);
@@ -122,6 +140,8 @@ public sealed class AdminBookingsController : Controller
         ViewBag.CitizenIdentityVerified = citizenVerified;
         ViewBag.DrivingLicenseVerified = drivingLicenseVerified;
         ViewBag.CustomerKycVerified = citizenVerified && drivingLicenseVerified;
+        ViewBag.HandoverSigned = HasSignedCopy(tripDocuments?.Handover?.ImagePaths, HandoverSignedMarker);
+        ViewBag.ReturnSigned = HasSignedCopy(tripDocuments?.VehicleReturn?.ImagePaths, ReturnSignedMarker);
 
         return View(booking);
     }
@@ -194,6 +214,11 @@ public sealed class AdminBookingsController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    private static bool HasSignedCopy(string? paths, string marker) =>
+        !string.IsNullOrWhiteSpace(paths) &&
+        paths.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
+
     private void SetMessage(OperationResult result, string successMessage)
     {
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
@@ -208,15 +233,13 @@ public sealed class AdminBookingsController : Controller
         CancellationToken cancellationToken)
     {
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-
         return _auditService.WriteAsync(
             adminId,
             action,
             nameof(Booking),
             bookingId.ToString(),
             description,
-            ipAddress: ipAddress,
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
     }
 }

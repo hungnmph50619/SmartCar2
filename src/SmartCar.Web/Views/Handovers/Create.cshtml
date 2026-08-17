@@ -1,47 +1,21 @@
 ﻿@model SmartCar.Web.ViewModels.HandoverViewModel
+@using SmartCar.Domain.Constants
 
 @{
     ViewData["Title"] = "Biên bản giao xe";
+    var handoverDate = Model.HandoverAt.ToString("yyyy-MM-dd");
+    var handoverTime = Model.HandoverAt.ToString("HH:mm");
+    var includedDays = Math.Max(1, Model.IncludedKilometers / RentalPolicy.IncludedKilometersPerDay);
+    const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
-
     <div>
-        <h1 class="h3 mb-1">
-            Lập biên bản giao xe - Đơn #@Model.BookingId
-        </h1>
-
-        <p class="text-muted mb-0">
-            Ghi nhận tình trạng xe và chính sách phí/phạt
-            đã thông báo trước khi bàn giao.
-        </p>
+        <h1 class="h3 mb-1">Biên bản giao xe · #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Thông tin và ảnh này là căn cứ đối chiếu khi trả xe.</p>
     </div>
-
-    <a class="btn btn-outline-secondary"
-       asp-controller="AdminBookings"
-       asp-action="Details"
-       asp-route-id="@Model.BookingId">
-
-        Quay lại đơn
-
-    </a>
-
+    <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại</a>
 </div>
-
-
-<div class="alert alert-info">
-
-    <strong>
-        Kiểm tra trước khi xác nhận:
-    </strong>
-
-    đúng khách hàng, đúng xe/biển số, số km,
-    nhiên liệu, ngoại thất, nội thất, phụ kiện,
-    ảnh đủ góc và khách đã được thông báo đầy đủ
-    các mức phí bên dưới.
-
-</div>
-
 
 <form asp-controller="Handovers"
       asp-action="Create"
@@ -49,549 +23,181 @@
       enctype="multipart/form-data"
       class="card card-body shadow-sm"
       data-loading-form
-      data-confirm="Xác nhận bàn giao xe? Sau thao tác này đơn sẽ chuyển sang trạng thái đang thuê và chính sách phí/phạt được lưu vào biên bản.">
+      data-confirm="Lưu biên bản giao xe điện tử? Sau đó cần in, ký và tải bản ký trước khi bắt đầu chuyến thuê.">
 
-    <input asp-for="BookingId"
-           type="hidden" />
-
-
-    @* ============================================================
-       HIỂN THỊ TOÀN BỘ LỖI
-       ============================================================ *@
+    <input asp-for="BookingId" type="hidden" />
+    <input asp-for="HandoverAt" type="hidden" id="handover-at-value" />
 
     @if (!ViewData.ModelState.IsValid)
     {
-        <div class="alert alert-danger"
-             id="handover-validation-summary">
-
-            <div class="fw-bold mb-2">
-                Chưa thể xác nhận giao xe
-            </div>
-
-            <div asp-validation-summary="All"
-                 class="mb-0">
-            </div>
-
-            <div class="small mt-2">
-                Vui lòng kiểm tra lại các thông tin được báo lỗi.
-            </div>
-
+        <div class="alert alert-danger" id="handover-validation-summary">
+            <strong>Chưa thể lưu biên bản.</strong>
+            <div asp-validation-summary="All" class="mb-0 mt-1"></div>
         </div>
     }
 
-
+    <h2 class="h5 mb-3">1. Thông tin giao xe</h2>
     <div class="row g-3">
-
-        @* ========================================================
-           THỜI GIAN GIAO
-           ======================================================== *@
-
         <div class="col-md-6">
-
-            <label asp-for="HandoverAt"
-                   class="form-label fw-semibold">
-
-                Thời gian giao
-
-            </label>
-
-            <input asp-for="HandoverAt"
-                   asp-format="{0:yyyy-MM-ddTHH:mm}"
-                   type="datetime-local"
-                   class="form-control"
-                   required />
-
-            <span asp-validation-for="HandoverAt"
-                  class="text-danger small">
-            </span>
-
-            <div class="form-text">
-                Thời gian giao phải từ thời gian nhận xe đã đặt
-                và trước thời gian trả xe.
+            <label class="form-label fw-semibold">Thời gian giao</label>
+            <div class="row g-2">
+                <div class="col-7"><input type="date" id="handover-date" value="@handoverDate" class="form-control" required /></div>
+                <div class="col-5"><input type="text" id="handover-time" value="@handoverTime" class="form-control" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Giờ 24h, ví dụ 14:30" required /></div>
             </div>
-
+            <div class="form-text">Giờ 24h · ví dụ 14:30.</div>
+            <span asp-validation-for="HandoverAt" class="text-danger small"></span>
         </div>
 
+        <div class="col-md-3">
+            <label asp-for="Mileage" class="form-label fw-semibold">Số km</label>
+            <input asp-for="Mileage" type="number" min="0" step="1" class="form-control" required />
+            <span asp-validation-for="Mileage" class="text-danger small"></span>
+        </div>
 
-        @* ========================================================
-           SỐ KM
-           ======================================================== *@
-
-        <div class="col-md-6">
-
-            <label asp-for="Mileage"
-                   class="form-label fw-semibold">
-
-                Số km khi giao
-
-            </label>
-
-            <input asp-for="Mileage"
-                   type="number"
-                   min="0"
-                   step="1"
-                   class="form-control"
-                   required />
-
-            <span asp-validation-for="Mileage"
-                  class="text-danger small">
-            </span>
-
-            <div class="form-text">
-                Số km không được nhỏ hơn số km hiện tại của xe.
+        <div class="col-md-3">
+            <label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label>
+            <div class="input-group">
+                <input asp-for="FuelLevel" type="number" min="0" max="100" step="1" class="form-control" required />
+                <span class="input-group-text">%</span>
             </div>
-
+            <span asp-validation-for="FuelLevel" class="text-danger small"></span>
         </div>
-
-
-        @* ========================================================
-           NHIÊN LIỆU
-           ======================================================== *@
-
-        <div class="col-md-6">
-
-            <label asp-for="FuelLevel"
-                   class="form-label fw-semibold">
-
-                Mức nhiên liệu
-
-            </label>
-
-            <input asp-for="FuelLevel"
-                   class="form-control"
-                   maxlength="30"
-                   placeholder="Ví dụ: 100% hoặc 8/8"
-                   required />
-
-            <span asp-validation-for="FuelLevel"
-                  class="text-danger small">
-            </span>
-
-        </div>
-
-
-        @* ========================================================
-           PHỤ KIỆN
-           ======================================================== *@
-
-        <div class="col-md-6">
-
-            <label asp-for="Accessories"
-                   class="form-label fw-semibold">
-
-                Phụ kiện bàn giao
-
-            </label>
-
-            <input asp-for="Accessories"
-                   class="form-control"
-                   maxlength="1000"
-                   placeholder="Chìa khóa, đăng ký xe, lốp dự phòng..." />
-
-            <span asp-validation-for="Accessories"
-                  class="text-danger small">
-            </span>
-
-        </div>
-
-
-        @* ========================================================
-           NGOẠI THẤT
-           ======================================================== *@
-
-        <div class="col-md-6">
-
-            <label asp-for="ExteriorCondition"
-                   class="form-label fw-semibold">
-
-                Ngoại thất
-
-            </label>
-
-            <textarea asp-for="ExteriorCondition"
-                      class="form-control"
-                      rows="3"
-                      maxlength="1500"
-                      placeholder="Mô tả vết xước, móp hoặc tình trạng bình thường"></textarea>
-
-            <span asp-validation-for="ExteriorCondition"
-                  class="text-danger small">
-            </span>
-
-        </div>
-
-
-        @* ========================================================
-           NỘI THẤT
-           ======================================================== *@
-
-        <div class="col-md-6">
-
-            <label asp-for="InteriorCondition"
-                   class="form-label fw-semibold">
-
-                Nội thất
-
-            </label>
-
-            <textarea asp-for="InteriorCondition"
-                      class="form-control"
-                      rows="3"
-                      maxlength="1500"
-                      placeholder="Ghế, màn hình, điều hòa, vệ sinh nội thất..."></textarea>
-
-            <span asp-validation-for="InteriorCondition"
-                  class="text-danger small">
-            </span>
-
-        </div>
-
-
-        @* ========================================================
-           ẢNH BÀN GIAO
-           ======================================================== *@
 
         <div class="col-12">
-
-            <label asp-for="Images"
-                   class="form-label fw-semibold">
-
-                Ảnh tình trạng xe khi giao
-
-            </label>
-
-            <input asp-for="Images"
-                   type="file"
-                   multiple
-                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                   class="form-control"
-                   data-image-input
-                   data-max-files="10"
-                   data-preview-target="#handover-image-preview"
-                   data-file-info-target="#handover-file-info" />
-
-            <span asp-validation-for="Images"
-                  class="text-danger small d-block">
-            </span>
-
-            <div class="form-text">
-
-                Từ 1 đến 10 ảnh,
-                tối đa 5 MB/ảnh.
-
-                Nên có bốn góc xe,
-                nội thất,
-                đồng hồ km và mức nhiên liệu.
-
-            </div>
-
-
-            @if (!ViewData.ModelState.IsValid)
-            {
-                <div class="alert alert-warning py-2 mt-2 mb-0 small">
-
-                    Nếu form vừa bị trả lại vì có lỗi,
-                    trình duyệt sẽ không giữ các file ảnh đã chọn.
-
-                    <strong>
-                        Hãy chọn lại ảnh trước khi bấm xác nhận.
-                    </strong>
-
-                </div>
-            }
-
-
-            <div id="handover-file-info"
-                 class="small text-muted mt-2 d-none">
-            </div>
-
-
-            <div id="handover-image-preview"
-                 class="mt-3 d-none">
-
-                <div class="row g-2"
-                     data-preview-list>
-                </div>
-
-                <button type="button"
-                        class="btn btn-sm btn-outline-secondary mt-2"
-                        data-clear-image>
-
-                    Chọn lại ảnh
-
-                </button>
-
-            </div>
-
+            <label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện</label>
+            <input asp-for="Accessories" class="form-control" maxlength="1000" placeholder="VD: 2 chìa khóa, kích, lốp dự phòng" />
+            <div class="form-text">Ghi các phụ kiện bàn giao để đối chiếu khi trả xe.</div>
         </div>
-
     </div>
-
 
     <hr class="my-4" />
 
-
-    @* ============================================================
-       CHÍNH SÁCH PHÍ / PHẠT
-
-       QUAN TRỌNG:
-       Các ô bên dưới chỉ HIỂN THỊ.
-
-       Không dùng asp-for.
-       Không có name.
-       Không POST decimal 5000,00 / 1,50 lên server.
-       ============================================================ *@
-
-    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-
+    <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap mb-2">
         <div>
-
-            <h2 class="h5 mb-1">
-                Chính sách phí/phạt phải thông báo trước cho khách
-            </h2>
-
-            <p class="text-muted small mb-0">
-
-                Phạt giao thông,
-                phí vượt kilomet và bồi thường hư hỏng
-                là các khoản độc lập,
-                không gộp chung.
-
-            </p>
-
+            <h2 class="h5 mb-1">2. Ảnh đối chiếu</h2>
+            <div class="text-muted small">7 ảnh bắt buộc · tối đa 5 MB/ảnh.</div>
         </div>
-
-        <span class="badge text-bg-warning">
-            Lưu vào biên bản
-        </span>
-
+        <span class="badge text-bg-light">Giao ↔ Trả cùng vị trí</span>
     </div>
-
 
     <div class="row g-3">
-
-
-        @* ========================================================
-           KM ĐƯỢC SỬ DỤNG
-           ======================================================== *@
-
-        <div class="col-md-4">
-
-            <label class="form-label fw-semibold">
-                Số km được sử dụng
-            </label>
-
-            <div class="input-group">
-
-                <input type="text"
-                       class="form-control"
-                       value="@Model.IncludedKilometers.ToString("N0")"
-                       readonly />
-
-                <span class="input-group-text">
-                    km/chuyến
-                </span>
-
-            </div>
-
+        <div class="col-6 col-lg-3">
+            <label asp-for="FrontImage" class="form-label">Phía trước *</label>
+            <input asp-for="FrontImage" type="file" accept="@imageAccept" class="form-control" required />
+            <span asp-validation-for="FrontImage" class="text-danger small"></span>
         </div>
-
-
-        @* ========================================================
-           PHÍ VƯỢT KM
-
-           KHÔNG dùng asp-for ở đây.
-           ======================================================== *@
-
-        <div class="col-md-4">
-
-            <label class="form-label fw-semibold">
-                Phí vượt kilomet
-            </label>
-
-            <div class="input-group">
-
-                <input type="text"
-                       class="form-control"
-                       value="@Model.ExcessKmFeePerKm.ToString("N0")"
-                       readonly />
-
-                <span class="input-group-text">
-                    đ/km
-                </span>
-
-            </div>
-
+        <div class="col-6 col-lg-3">
+            <label asp-for="RearImage" class="form-label">Phía sau *</label>
+            <input asp-for="RearImage" type="file" accept="@imageAccept" class="form-control" required />
+            <span asp-validation-for="RearImage" class="text-danger small"></span>
         </div>
-
-
-        @* ========================================================
-           PHÍ TRẢ MUỘN
-
-           KHÔNG dùng asp-for ở đây.
-           ======================================================== *@
-
-        <div class="col-md-4">
-
-            <label class="form-label fw-semibold">
-                Phí trả xe muộn
-            </label>
-
-            <div class="input-group">
-
-                <input type="text"
-                       class="form-control"
-                       value="@Model.LateReturnFeeMultiplier.ToString("0.##")"
-                       readonly />
-
-                <span class="input-group-text">
-                    x giá/ngày
-                </span>
-
-            </div>
-
+        <div class="col-6 col-lg-3">
+            <label asp-for="LeftImage" class="form-label">Bên trái *</label>
+            <input asp-for="LeftImage" type="file" accept="@imageAccept" class="form-control" required />
+            <span asp-validation-for="LeftImage" class="text-danger small"></span>
         </div>
-
-
-        @* ========================================================
-           PHẠT GIAO THÔNG
-           ======================================================== *@
-
-        <div class="col-md-6">
-
-            <label class="form-label fw-semibold">
-                Phạt giao thông
-            </label>
-
-            <textarea class="form-control"
-                      rows="5"
-                      readonly>@Model.TrafficFineTerms</textarea>
-
+        <div class="col-6 col-lg-3">
+            <label asp-for="RightImage" class="form-label">Bên phải *</label>
+            <input asp-for="RightImage" type="file" accept="@imageAccept" class="form-control" required />
+            <span asp-validation-for="RightImage" class="text-danger small"></span>
         </div>
-
-
-        @* ========================================================
-           BỒI THƯỜNG
-           ======================================================== *@
-
-        <div class="col-md-6">
-
-            <label class="form-label fw-semibold">
-                Hư hỏng / mất mát / bồi thường
-            </label>
-
-            <textarea class="form-control"
-                      rows="5"
-                      readonly>@Model.DamageCompensationTerms</textarea>
-
+        <div class="col-6 col-lg-3">
+            <label asp-for="InteriorImage" class="form-label">Nội thất *</label>
+            <input asp-for="InteriorImage" type="file" accept="@imageAccept" class="form-control" required />
+            <span asp-validation-for="InteriorImage" class="text-danger small"></span>
         </div>
-
-
-        @* ========================================================
-           XÁC NHẬN CHÍNH SÁCH
-           ======================================================== *@
-
-        <div class="col-12">
-
-            <div class="form-check border border-warning rounded p-3 ps-5 bg-light">
-
-                <input asp-for="PenaltyPolicyAccepted"
-                       class="form-check-input"
-                       required />
-
-                <label asp-for="PenaltyPolicyAccepted"
-                       class="form-check-label fw-semibold">
-
-                    Tôi xác nhận đã thông báo rõ các mức phí/phạt
-                    trên cho khách và khách đồng ý trước khi nhận xe.
-
-                </label>
-
-                <span asp-validation-for="PenaltyPolicyAccepted"
-                      class="text-danger small d-block mt-1">
-                </span>
-
-            </div>
-
-            <div class="form-text text-danger">
-                Bắt buộc xác nhận trước khi bàn giao xe.
-            </div>
-
+        <div class="col-6 col-lg-3">
+            <label asp-for="OdometerImage" class="form-label">Đồng hồ km *</label>
+            <input asp-for="OdometerImage" type="file" accept="@imageAccept" class="form-control" required />
+            <span asp-validation-for="OdometerImage" class="text-danger small"></span>
         </div>
-
-
-        @* ========================================================
-           GHI CHÚ
-           ======================================================== *@
-
-        <div class="col-12">
-
-            <label asp-for="Notes"
-                   class="form-label fw-semibold">
-
-                Ghi chú khác
-
-            </label>
-
-            <textarea asp-for="Notes"
-                      class="form-control"
-                      rows="3"
-                      maxlength="1500"
-                      placeholder="Thông tin bổ sung đã thống nhất với khách hàng"></textarea>
-
-            <span asp-validation-for="Notes"
-                  class="text-danger small">
-            </span>
-
+        <div class="col-6 col-lg-3">
+            <label asp-for="FuelImage" class="form-label">Nhiên liệu *</label>
+            <input asp-for="FuelImage" type="file" accept="@imageAccept" class="form-control" required />
+            <span asp-validation-for="FuelImage" class="text-danger small"></span>
         </div>
-
+        <div class="col-6 col-lg-3">
+            <label asp-for="Images" class="form-label">Ảnh khác</label>
+            <input asp-for="Images" type="file" multiple accept="@imageAccept" class="form-control" />
+            <span asp-validation-for="Images" class="text-danger small"></span>
+        </div>
     </div>
 
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-warning py-2 mt-3 mb-0 small">Form có lỗi thì trình duyệt không giữ ảnh. Hãy chọn lại ảnh trước khi lưu.</div>
+    }
+
+    <hr class="my-4" />
+
+    <h2 class="h5 mb-3">3. Chính sách đã thông báo</h2>
+    <div class="row g-2 mb-3">
+        <div class="col-md-4">
+            <div class="border rounded p-3 h-100">
+                <div class="small text-muted">Định mức</div>
+                <strong>@RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày</strong>
+                <div class="small text-muted mt-1">Chuyến này: @Model.IncludedKilometers.ToString("N0") km / @includedDays ngày</div>
+            </div>
+        </div>
+        <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Vượt km</div><strong>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</strong></div></div>
+        <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Trả muộn</div><strong>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</strong></div></div>
+    </div>
+
+    <div class="border rounded p-3 mb-2">
+        <strong>Vi phạm giao thông / phạt nguội</strong>
+        <div class="small mt-1">@Model.TrafficFineTerms</div>
+    </div>
+    <div class="border rounded p-3 mb-3">
+        <strong>Hư hỏng / thiếu / trả muộn</strong>
+        <div class="small mt-1">@Model.DamageCompensationTerms</div>
+    </div>
+
+    <div class="form-check border border-warning rounded p-3 ps-5 bg-light mb-3">
+        <input asp-for="PenaltyPolicyAccepted" class="form-check-input" required />
+        <label asp-for="PenaltyPolicyAccepted" class="form-check-label fw-semibold">Đã thông báo và khách đồng ý các chính sách trên trước khi nhận xe.</label>
+        <span asp-validation-for="PenaltyPolicyAccepted" class="text-danger small d-block"></span>
+    </div>
+
+    <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
+    <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Chỉ ghi khi cần, ví dụ vết xước sẵn có"></textarea>
+    <span asp-validation-for="Notes" class="text-danger small"></span>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
-
-        <button class="btn btn-primary"
-                type="submit"
-                data-loading-text="Đang lưu biên bản...">
-
-            Xác nhận giao xe
-
-        </button>
-
-        <a class="btn btn-outline-secondary"
-           asp-controller="AdminBookings"
-           asp-action="Details"
-           asp-route-id="@Model.BookingId">
-
-            Hủy thao tác
-
-        </a>
-
+        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu...">Lưu biên bản</button>
+        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy</a>
     </div>
-
 </form>
 
-
 @section Scripts {
-
     <partial name="_ValidationScriptsPartial" />
-
     <script>
         (() => {
+            const form = document.querySelector('form[data-loading-form]');
+            const hidden = document.getElementById('handover-at-value');
+            const date = document.getElementById('handover-date');
+            const time = document.getElementById('handover-time');
+            const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
-            const summary =
-                document.getElementById(
-                    'handover-validation-summary');
-
-            if (summary) {
-
-                summary.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center'
-                });
-
+            function syncDateTime() {
+                if (!date?.value || !timePattern.test(time?.value || '')) return false;
+                hidden.value = `${date.value}T${time.value}`;
+                return true;
             }
 
+            date?.addEventListener('change', syncDateTime);
+            time?.addEventListener('input', syncDateTime);
+            form?.addEventListener('submit', event => {
+                if (!syncDateTime()) {
+                    event.preventDefault();
+                    time?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
+                    time?.reportValidity();
+                } else {
+                    time?.setCustomValidity('');
+                }
+            });
+
+            syncDateTime();
+            document.getElementById('handover-validation-summary')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         })();
     </script>
 }

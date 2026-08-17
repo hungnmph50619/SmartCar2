@@ -7,6 +7,11 @@ namespace SmartCar.Domain.Constants
         // Tiền cọc = 300% tiền thuê ban đầu
         public const decimal DepositRate = 3.00m;
 
+        // No-show: sau 30 phút, giữ 70% tiền thuê và hoàn 30% tiền thuê còn lại.
+        // Tiền cọc được hoàn theo số cọc còn lại thực tế của đơn.
+        public const int NoShowGraceMinutes = 30;
+        public const decimal NoShowFeeRate = 0.70m;
+
         // ============================================================
         // CHÍNH SÁCH GIAO XE THEO KHOẢNG CÁCH
         // ============================================================
@@ -39,10 +44,12 @@ namespace SmartCar.Domain.Constants
         public const decimal LateReturnFeeMultiplier = 1.50m;
 
         public const string TrafficFineTerms =
-            "Khách hàng chịu toàn bộ tiền phạt giao thông và chi phí phát sinh theo chứng từ/quyết định của cơ quan có thẩm quyền đối với vi phạm xảy ra trong thời gian thuê.";
+            "Vi phạm giao thông/phạt nguội phát sinh trong thời gian thuê do Bên B chịu trách nhiệm. Khi SmartCar thông báo, Bên B trực tiếp làm việc với cơ quan có thẩm quyền; Bên A cung cấp hồ sơ thuê xe cần thiết để xác định người điều khiển. Bên B có trách nhiệm phối hợp xử lý.";
 
         public const string DamageCompensationTerms =
-            "Hư hỏng, mất mát do khách hàng gây ra được bồi thường theo chi phí sửa chữa/thay thế thực tế có chứng từ hoặc báo giá hợp lệ; khoản này tách biệt với phạt giao thông và phí vượt kilomet.";
+            "Hư hỏng, mất mát hoặc thiếu phụ kiện do Bên B gây ra được bồi thường theo thiệt hại thực tế, hợp lý, có ảnh đối chiếu và chứng từ/báo giá hợp lệ. " +
+            "Nếu yêu cầu gia hạn thông thường bị từ chối vì xe đã có đơn kế tiếp, Bên B phải trả xe đúng hạn; trường hợp đã được thông báo từ chối nhưng vẫn cố tình không giao/trả xe đúng hạn làm ảnh hưởng đơn kế tiếp, Bên B chịu phí trả muộn và khoản bồi thường bằng giá hợp đồng của đơn thuê bị ảnh hưởng. " +
+            "Trường hợp bất khả kháng phải có minh chứng và vị trí hiện tại; SmartCar ưu tiên xử lý đổi xe cho khách kế tiếp. Nếu khách kế tiếp không chấp nhận phương án đổi xe và phải hủy đơn, các khoản khách đó đã thanh toán được hoàn theo chính sách; khoản bồi thường (nếu có) được xác định theo thiệt hại thực tế có căn cứ và khấu trừ từ tiền cọc của khách đang thuê. Khoản bồi thường này được thông báo rõ trước khi duyệt/thanh toán gia hạn và không tự động lấy bằng giá hợp đồng của đơn kế tiếp.";
 
         // ============================================================
         // TÍNH KHOẢNG CÁCH

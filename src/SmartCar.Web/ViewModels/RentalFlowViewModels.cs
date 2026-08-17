@@ -153,14 +153,10 @@ public sealed class HandoverViewModel
     [Required(ErrorMessage = "Vui lòng nhập thời gian giao xe.")]
     public DateTime HandoverAt { get; set; } = DateTime.Now;
 
-    [Range(
-        0,
-        int.MaxValue,
-        ErrorMessage = "Số km không hợp lệ.")]
+    [Range(0, int.MaxValue, ErrorMessage = "Số km không hợp lệ.")]
     public int Mileage { get; set; }
 
-    [Required(
-        ErrorMessage = "Vui lòng nhập mức nhiên liệu khi giao xe.")]
+    [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi giao xe.")]
     [StringLength(30)]
     public string FuelLevel { get; set; } = string.Empty;
 
@@ -173,33 +169,34 @@ public sealed class HandoverViewModel
     [StringLength(1000)]
     public string? Accessories { get; set; }
 
-    [Display(Name = "Ảnh bàn giao")]
+    // Ảnh chứng cứ bắt buộc. Controller lưu tên file có tiền tố để tra cứu/đối chiếu.
+    public IFormFile? FrontImage { get; set; }
+    public IFormFile? RearImage { get; set; }
+    public IFormFile? LeftImage { get; set; }
+    public IFormFile? RightImage { get; set; }
+    public IFormFile? InteriorImage { get; set; }
+    public IFormFile? OdometerImage { get; set; }
+    public IFormFile? FuelImage { get; set; }
+
+    [Display(Name = "Ảnh khác")]
     public List<IFormFile> Images { get; set; } = new();
 
     [Range(0, int.MaxValue)]
     public int IncludedKilometers { get; set; }
 
-    [Range(
-        1,
-        1000000,
-        ErrorMessage = "Phí vượt km phải lớn hơn 0.")]
+    [Range(1, 1000000, ErrorMessage = "Phí vượt km phải lớn hơn 0.")]
     public decimal ExcessKmFeePerKm { get; set; }
 
-    [Range(
-        1,
-        10,
-        ErrorMessage = "Hệ số phí trả muộn không hợp lệ.")]
+    [Range(1, 10, ErrorMessage = "Hệ số phí trả muộn không hợp lệ.")]
     public decimal LateReturnFeeMultiplier { get; set; }
 
     [Required]
     [StringLength(1500)]
-    public string TrafficFineTerms { get; set; }
-        = string.Empty;
+    public string TrafficFineTerms { get; set; } = string.Empty;
 
     [Required]
     [StringLength(1500)]
-    public string DamageCompensationTerms { get; set; }
-        = string.Empty;
+    public string DamageCompensationTerms { get; set; } = string.Empty;
 
     [MustBeTrue(
         ErrorMessage =
@@ -212,10 +209,7 @@ public sealed class HandoverViewModel
 
 public sealed class ReturnViewModel
 {
-    [Range(
-        1,
-        int.MaxValue,
-        ErrorMessage = "Đơn thuê không hợp lệ.")]
+    [Range(1, int.MaxValue, ErrorMessage = "Đơn thuê không hợp lệ.")]
     public int BookingId { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập thời gian trả xe.")]
@@ -224,31 +218,34 @@ public sealed class ReturnViewModel
     [Range(0, int.MaxValue)]
     public int Mileage { get; set; }
 
-    [Required(
-        ErrorMessage = "Vui lòng nhập mức nhiên liệu khi trả xe.")]
-    [StringLength(
-        30,
-        ErrorMessage = "Mức nhiên liệu tối đa 30 ký tự.")]
+    [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi trả xe.")]
+    [StringLength(30, ErrorMessage = "Mức nhiên liệu tối đa 30 ký tự.")]
     public string FuelLevel { get; set; } = string.Empty;
 
-    [StringLength(
-        1500,
-        ErrorMessage = "Mô tả ngoại thất tối đa 1500 ký tự.")]
+    [StringLength(1500, ErrorMessage = "Mô tả ngoại thất tối đa 1500 ký tự.")]
     public string? ExteriorCondition { get; set; }
 
-    [StringLength(
-        1500,
-        ErrorMessage = "Mô tả nội thất tối đa 1500 ký tự.")]
+    [StringLength(1500, ErrorMessage = "Mô tả nội thất tối đa 1500 ký tự.")]
     public string? InteriorCondition { get; set; }
 
     public bool HasDamage { get; set; }
 
-    [Display(Name = "Ảnh khi trả xe")]
+    // Ảnh chứng cứ trả xe theo cùng vị trí với lúc giao để đối chiếu trực tiếp.
+    public IFormFile? FrontImage { get; set; }
+    public IFormFile? RearImage { get; set; }
+    public IFormFile? LeftImage { get; set; }
+    public IFormFile? RightImage { get; set; }
+    public IFormFile? InteriorImage { get; set; }
+    public IFormFile? OdometerImage { get; set; }
+    public IFormFile? FuelImage { get; set; }
+
+    [Display(Name = "Ảnh hư hỏng")]
+    public List<IFormFile> DamageImages { get; set; } = new();
+
+    [Display(Name = "Ảnh khác")]
     public List<IFormFile> Images { get; set; } = new();
 
-    [StringLength(
-        1500,
-        ErrorMessage = "Ghi chú tối đa 1500 ký tự.")]
+    [StringLength(1500, ErrorMessage = "Ghi chú tối đa 1500 ký tự.")]
     public string? Notes { get; set; }
 }
 
