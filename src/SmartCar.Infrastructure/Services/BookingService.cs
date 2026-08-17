@@ -122,6 +122,7 @@ internal sealed class BookingService : IBookingService
         var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(
             item =>
                 item.VehicleId == request.VehicleId &&
+                item.IncidentType != IncidentType.TrafficFine &&
                 item.Status != IncidentStatus.Resolved &&
                 item.Status != IncidentStatus.Cancelled,
             cancellationToken);
