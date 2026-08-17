@@ -40,6 +40,8 @@ public sealed class AdminExtensionsController : Controller
         int bookingId,
         DateTime requestedReturnDate,
         string? note,
+        bool isForceMajeure,
+        string? evidenceNote,
         CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
@@ -66,11 +68,18 @@ public sealed class AdminExtensionsController : Controller
 
         var result = await _extensionService.RequestAsync(
             booking.CustomerId,
-            new RequestExtensionRequest(bookingId, requestedReturnDate, phoneNote),
+            new RequestExtensionRequest(
+                bookingId,
+                requestedReturnDate,
+                phoneNote,
+                isForceMajeure,
+                evidenceNote),
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã ghi nhận yêu cầu gia hạn qua điện thoại."
+            ? isForceMajeure
+                ? "Đã ghi nhận yêu cầu bất khả kháng qua điện thoại; yêu cầu đang chờ kiểm tra minh chứng/lịch xe."
+                : "Đã ghi nhận yêu cầu gia hạn qua điện thoại."
             : string.Join("; ", result.Errors);
 
         if (result.Succeeded)
@@ -81,7 +90,7 @@ public sealed class AdminExtensionsController : Controller
                 "CreateExtensionForCustomer",
                 nameof(BookingExtension),
                 bookingId.ToString(),
-                $"Ghi nhận yêu cầu gia hạn qua điện thoại cho đơn #{bookingId} đến {requestedReturnDate:dd/MM/yyyy HH:mm}.",
+                $"Ghi nhận yêu cầu gia hạn qua điện thoại cho đơn #{bookingId} đến {requestedReturnDate:dd/MM/yyyy HH:mm}. Loại: {(isForceMajeure ? "bất khả kháng" : "thông thường")}.",
                 ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken: cancellationToken);
         }
@@ -93,12 +102,40 @@ public sealed class AdminExtensionsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Approve(
         int id,
+        bool confirmConflictHandled,
+        string? adminNote,
         CancellationToken cancellationToken)
     {
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        var result = await _extensionService.ApproveAsync(id, adminId, cancellationToken);
+        var result = await _extensionService.ApproveAsync(
+            id,
+            adminId,
+            confirmConflictHandled,
+            adminNote,
+            cancellationToken);
+
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã duyệt gia hạn và tạo khoản thanh toán."
+            ? "Đã duyệt gia hạn và tạo khoản thanh toán. Ngày trả mới chỉ có hiệu lực sau khi xác nhận thanh toán."
+            : string.Join("; ", result.Errors);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RequestEvidence(
+        int extensionId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var result = await _extensionService.RequestMoreEvidenceAsync(
+            extensionId,
+            adminId,
+            reason,
+            cancellationToken);
+
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã yêu cầu khách bổ sung minh chứng."
             : string.Join("; ", result.Errors);
         return RedirectToAction(nameof(Index));
     }
@@ -119,7 +156,7 @@ public sealed class AdminExtensionsController : Controller
             : SmartCar.Application.Common.OperationResult.Failure("Vui lòng nhập lý do từ chối.");
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã từ chối yêu cầu gia hạn."
+            ? "Đã từ chối yêu cầu gia hạn và gửi lý do cho khách."
             : string.Join("; ", result.Errors);
         return RedirectToAction(nameof(Index));
     }
