@@ -30,7 +30,7 @@
 
     string TypeText(PaymentType type, string? method) => type switch
     {
-        PaymentType.Rental => "Tiền thuê / giao",
+        PaymentType.Rental => "Tiền thuê / giao + cọc",
         PaymentType.Deposit => "Tiền cọc",
         PaymentType.Extension => "Tiền gia hạn",
         PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
