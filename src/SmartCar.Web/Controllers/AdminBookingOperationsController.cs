@@ -42,16 +42,18 @@ public sealed class AdminBookingOperationsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> MarkNoShow(
         int bookingId,
+        bool customerContacted,
         CancellationToken cancellationToken)
     {
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var result = await _operationService.MarkNoShowAsync(
             bookingId,
             adminId,
+            customerContacted,
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã ghi nhận khách không đến nhận xe."
+            ? "Đã ghi nhận không đến và tạo các khoản hoàn theo chính sách."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
