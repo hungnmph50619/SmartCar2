@@ -28,9 +28,7 @@ internal sealed class HandoverService : IHandoverService
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
             .Include(item => item.Handover)
-            .FirstOrDefaultAsync(
-                item => item.BookingId == request.BookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == request.BookingId, cancellationToken);
 
         if (booking is null)
         {
@@ -57,13 +55,30 @@ internal sealed class HandoverService : IHandoverService
                 payment.Status == PaymentStatus.Paid)
             .Sum(payment => payment.Amount);
 
+        var depositRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.DepositRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+
         var depositSatisfied = booking.DepositAmount <= 0 ||
-                               depositPaidAmount >= booking.DepositAmount;
+            Math.Max(0m, depositPaidAmount - depositRefundPlanned) >= booking.DepositAmount;
+
+        var hasOpenSwapPayment = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.VehicleSwapAdjustment &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
+
+        if (hasOpenSwapPayment)
+        {
+            return OperationResult.Failure(
+                "Khách cần thanh toán xong chênh lệch đổi xe trước khi giao xe.");
+        }
 
         if (!rentalPaid || !depositSatisfied)
         {
             return OperationResult.Failure(
-                "Khách hàng phải thanh toán đủ tiền thuê và tiền cọc trước khi giao xe.");
+                "Khách phải thanh toán đủ tiền thuê và tiền cọc trước khi giao xe.");
         }
 
         if (booking.Vehicle.Status != VehicleStatus.Available)
@@ -129,12 +144,8 @@ internal sealed class HandoverService : IHandoverService
             PenaltyPolicyAccepted = true
         };
 
-        // Chỉ lập bản điện tử ở bước này.
-        // Đơn vẫn ReadyForPickup và xe vẫn Available cho đến khi
-        // bản giấy có chữ ký của khách + đại diện SmartCar được tải lên.
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-
         return OperationResult.Success();
     }
 
@@ -152,9 +163,7 @@ internal sealed class HandoverService : IHandoverService
             normalized = normalized[..^1].Trim();
         }
 
-        return int.TryParse(normalized, out percent) &&
-               percent >= 0 &&
-               percent <= 100;
+        return int.TryParse(normalized, out percent) && percent is >= 0 and <= 100;
     }
 
     private static string? Normalize(string? value) =>
