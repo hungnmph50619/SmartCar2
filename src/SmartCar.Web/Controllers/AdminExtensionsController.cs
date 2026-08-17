@@ -390,7 +390,6 @@ public sealed class AdminExtensionsController : Controller
 
         var extension = await _dbContext.BookingExtensions
             .Include(item => item.Booking)
-                .ThenInclude(booking => booking.Payments)
             .FirstOrDefaultAsync(item => item.BookingExtensionId == extensionId, cancellationToken);
 
         if (extension is null ||
@@ -410,40 +409,12 @@ public sealed class AdminExtensionsController : Controller
 
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var conflictBookingId = conflict.BookingId;
-        var conflictContractAmount = conflict.TotalAmount;
-        var currentRenterDepositPaid = extension.Booking.Payments
-            .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
-            .Sum(item => item.Amount);
-        var currentRenterDepositRefunds = extension.Booking.Payments
-            .Where(item =>
-                item.Type == PaymentType.Refund &&
-                item.Method == PaymentMethods.DepositRefund &&
-                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
-            .Sum(item => item.Amount);
-        var currentRenterDepositDeductions = extension.Booking.Payments
-            .Where(item =>
-                item.Type == PaymentType.AdditionalCharge &&
-                item.Method == PaymentMethods.DepositDeduction &&
-                item.Status == PaymentStatus.Paid)
-            .Sum(item => item.Amount);
-        var alreadyReservedCompensation = CompensationLedger.SumReservedAmount(extension.CustomerNote);
-        var unavailableForNewCompensation = Math.Max(
-            currentRenterDepositDeductions,
-            alreadyReservedCompensation);
-        var currentRenterDepositAvailable = Math.Max(
-            0m,
-            currentRenterDepositPaid -
-            currentRenterDepositRefunds -
-            unavailableForNewCompensation);
-        var compensationAmount = Math.Min(
-            conflictContractAmount,
-            currentRenterDepositAvailable);
 
         var cancelResult = await _bookingOperationService.CancelByAdminAsync(
             adminId,
             new CancelBookingRequest(
                 conflictBookingId,
-                $"SmartCar phải hủy do đơn #{extension.BookingId} phát sinh gia hạn bất khả kháng và khách không chấp nhận phương án đổi xe."),
+                $"SmartCar phải hủy do đơn #{extension.BookingId} phát sinh gia hạn bất khả kháng có minh chứng và khách không chấp nhận phương án đổi xe."),
             cancellationToken);
 
         if (!cancelResult.Succeeded)
@@ -452,46 +423,14 @@ public sealed class AdminExtensionsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        extension = await _dbContext.BookingExtensions
-            .Include(item => item.Booking)
-            .FirstAsync(item => item.BookingExtensionId == extensionId, cancellationToken);
-        var cancelledBooking = await _dbContext.Bookings
-            .Include(item => item.Payments)
-            .FirstAsync(item => item.BookingId == conflictBookingId, cancellationToken);
-
-        if (compensationAmount > 0)
+        _dbContext.Notifications.Add(new Notification
         {
-            cancelledBooking.Payments.Add(new Payment
-            {
-                Type = PaymentType.Refund,
-                Amount = compensationAmount,
-                Method = PaymentMethods.CompensationRefund,
-                Status = PaymentStatus.AwaitingRefund
-            });
-            cancelledBooking.RefundAmount += compensationAmount;
-            cancelledBooking.RefundReason = AppendText(
-                cancelledBooking.RefundReason,
-                $"Hỗ trợ/bồi thường do SmartCar không thể thực hiện đơn: {compensationAmount:N0} đồng.");
-
-            extension.CustomerNote = AppendCompensationMarker(
-                extension.CustomerNote,
-                compensationAmount,
-                conflictBookingId);
-
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = cancelledBooking.CustomerId,
-                Title = "Hoàn tiền và hỗ trợ",
-                Message = $"Đơn #{conflictBookingId} đã hủy. SmartCar ghi nhận thêm khoản hỗ trợ {compensationAmount:N0} đồng đang chờ chuyển."
-            });
-
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = extension.Booking.CustomerId,
-                Title = "Ghi nhận bồi thường đơn kế tiếp",
-                Message = $"Đơn #{extension.BookingId}: đã giữ {compensationAmount:N0} đồng từ phần cọc còn khả dụng để đối soát do đơn kế tiếp bị ảnh hưởng."
-            });
-        }
+            UserId = extension.Booking.CustomerId,
+            Title = "Đã xử lý đơn thuê kế tiếp",
+            Message =
+                $"Đơn #{extension.BookingId}: SmartCar đã xử lý xung đột với đơn #{conflictBookingId}. " +
+                "Trường hợp bất khả kháng có minh chứng không bị tự động khấu trừ tiền cọc chỉ vì đơn kế tiếp phải hủy."
+        });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -500,13 +439,13 @@ public sealed class AdminExtensionsController : Controller
             "ResolveExtensionConflictByCancellation",
             nameof(Booking),
             conflictBookingId.ToString(),
-            $"Hủy đơn #{conflictBookingId} do xung đột gia hạn bất khả kháng của đơn #{extension.BookingId}. Hoàn theo chính sách: {cancelResult.RefundAmount:N0} đồng; hỗ trợ: {compensationAmount:N0} đồng.",
+            $"Hủy đơn #{conflictBookingId} do xung đột gia hạn bất khả kháng của đơn #{extension.BookingId}. " +
+            $"Tổng khoản hoàn theo chính sách: {cancelResult.RefundAmount:N0} đồng. Không tạo bồi thường tự động và không khấu trừ cọc A.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
-        TempData["SuccessMessage"] = compensationAmount > 0
-            ? $"Đã hủy B, tạo khoản hoàn và giữ {compensationAmount:N0} đ từ cọc A để đối soát hỗ trợ."
-            : "Đã hủy B và tạo khoản hoàn; cọc A hiện không còn phần khả dụng để ghi nhận thêm hỗ trợ.";
+        TempData["SuccessMessage"] =
+            "Đã hủy đơn B và tạo khoản hoàn theo chính sách. Không khấu trừ cọc A vì đây là trường hợp bất khả kháng có minh chứng.";
 
         return RedirectToAction(nameof(Index));
     }
@@ -586,7 +525,6 @@ public sealed class AdminExtensionsController : Controller
         var conflict = await _dbContext.Bookings
             .AsNoTracking()
             .Include(item => item.Vehicle)
-            .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == extension.ConflictingBookingId.Value, cancellationToken);
 
         if (conflict is null)
@@ -600,37 +538,6 @@ public sealed class AdminExtensionsController : Controller
             .Select(item => item.FullName)
             .FirstOrDefaultAsync(cancellationToken) ?? "Khách hàng";
 
-        var renterPayments = await _dbContext.Payments
-            .AsNoTracking()
-            .Where(item => item.BookingId == extension.BookingId)
-            .Select(item => new { item.Type, item.Status, item.Method, item.Amount })
-            .ToListAsync(cancellationToken);
-        var depositPaid = renterPayments
-            .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
-            .Sum(item => item.Amount);
-        var depositRefunds = renterPayments
-            .Where(item =>
-                item.Type == PaymentType.Refund &&
-                item.Method == PaymentMethods.DepositRefund &&
-                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
-            .Sum(item => item.Amount);
-        var depositDeductions = renterPayments
-            .Where(item =>
-                item.Type == PaymentType.AdditionalCharge &&
-                item.Method == PaymentMethods.DepositDeduction &&
-                item.Status == PaymentStatus.Paid)
-            .Sum(item => item.Amount);
-        var reservedNotes = await _dbContext.BookingExtensions
-            .AsNoTracking()
-            .Where(item => item.BookingId == extension.BookingId)
-            .Select(item => item.CustomerNote)
-            .ToListAsync(cancellationToken);
-        var reservedCompensation = reservedNotes.Sum(CompensationLedger.SumReservedAmount);
-        var unavailableDeposit = Math.Max(depositDeductions, reservedCompensation);
-        var depositAvailableByCurrentRenter = Math.Max(
-            0m,
-            depositPaid - depositRefunds - unavailableDeposit);
-
         var alternatives = await GetAlternativeVehiclesAsync(conflict, cancellationToken);
 
         return new ExtensionConflictResolutionViewModel
@@ -642,8 +549,6 @@ public sealed class AdminExtensionsController : Controller
             LicensePlate = conflict.Vehicle.LicensePlate,
             PickupDate = conflict.PickupDate,
             ReturnDate = conflict.ReturnDate,
-            ContractAmount = conflict.TotalAmount,
-            DepositPaidByCurrentRenter = depositAvailableByCurrentRenter,
             Alternatives = alternatives
         };
     }
@@ -808,17 +713,6 @@ public sealed class AdminExtensionsController : Controller
     private static bool IsForceMajeure(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
         value.Contains(ForceMajeureMarker, StringComparison.Ordinal);
-
-    private static string AppendCompensationMarker(
-        string? customerNote,
-        decimal amount,
-        int affectedBookingId)
-    {
-        var marker = $"{CompensationLedger.Marker}{amount:0.##}|BOOKING:{affectedBookingId}";
-        return string.IsNullOrWhiteSpace(customerNote)
-            ? marker
-            : $"{customerNote.Trim()}\n{marker}";
-    }
 
     private static string AppendText(string? current, string addition) =>
         string.IsNullOrWhiteSpace(current)
