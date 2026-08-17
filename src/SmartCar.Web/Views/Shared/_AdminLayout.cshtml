@@ -2,8 +2,6 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
 @using SmartCar.Application.Features.Notifications
-@using SmartCar.Domain.Constants
-@using SmartCar.Domain.Enums
 @using SmartCar.Infrastructure.Identity
 @using SmartCar.Infrastructure.Persistence
 @inject UserManager<ApplicationUser> UserManager
@@ -15,7 +13,6 @@
     var unreadNotificationCount = 0;
     var unreadRegularNotificationCount = 0;
     var pendingWorkNotificationCount = 0;
-    var pendingKycCount = 0;
 
     if (User.Identity?.IsAuthenticated == true)
     {
@@ -62,28 +59,6 @@
                         0,
                         unreadNotificationCount -
                         pendingWorkNotificationCount);
-
-                var requiredKycTypes = new[]
-                {
-                    DocumentTypes.CitizenId,
-                    DocumentTypes.CitizenIdBack,
-                    DocumentTypes.DrivingLicense,
-                    DocumentTypes.DrivingLicenseBack
-                };
-
-                // Chỉ cần có một giấy tờ KYC Pending là Admin đã có việc.
-                pendingKycCount =
-                    await AdminDbContext.CustomerDocuments
-                        .AsNoTracking()
-                        .Where(document =>
-                            document.Status ==
-                                DocumentStatus.Pending &&
-                            requiredKycTypes.Contains(
-                                document.DocumentType))
-                        .Select(document =>
-                            document.CustomerId)
-                        .Distinct()
-                        .CountAsync();
             }
             else
             {
@@ -112,31 +87,11 @@
             ?.ToString() ??
         string.Empty;
 
-    var currentProfileStatus =
-        ViewContext.HttpContext.Request.Query["profileStatus"]
-            .ToString();
-
-    var currentCustomerTab =
-        ViewContext.HttpContext.Request.Query["tab"]
-            .ToString();
-
-    var customerVerificationActive =
-        currentController is "AdminKyc" or "AdminDocuments" ||
-        (currentController == "AdminCustomers" &&
-         (
-             string.Equals(
-                 currentProfileStatus,
-                 "Pending",
-                 StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(
-                 currentCustomerTab,
-                 "documents",
-                 StringComparison.OrdinalIgnoreCase)
-         ));
-
     var customerManagementActive =
-        currentController == "AdminCustomers" &&
-        !customerVerificationActive;
+        currentController is
+            "AdminCustomers" or
+            "AdminKyc" or
+            "AdminDocuments";
 
     var bookingActive =
         new[]
@@ -299,28 +254,6 @@
                         <span>
                             Quản lý khách hàng
                         </span>
-                    </a>
-
-                    <a class="admin-nav-link @(customerVerificationActive ? "active" : string.Empty)"
-                       asp-controller="AdminCustomers"
-                       asp-action="Index"
-                       asp-route-profileStatus="Pending">
-
-                        <span class="admin-nav-icon">
-                            ✓
-                        </span>
-                        <span>
-                            Xác minh giấy tờ
-                        </span>
-
-                        @if (pendingKycCount > 0)
-                        {
-                            <span class="badge rounded-pill text-bg-warning ms-auto">
-                                @(pendingKycCount > 99
-                                    ? "99+"
-                                    : pendingKycCount)
-                            </span>
-                        }
                     </a>
                 </div>
 
