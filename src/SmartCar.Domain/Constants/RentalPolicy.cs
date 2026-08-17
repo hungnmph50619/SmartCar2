@@ -43,7 +43,9 @@ namespace SmartCar.Domain.Constants
 
         public const string DamageCompensationTerms =
             "Hư hỏng, mất mát do khách hàng gây ra được bồi thường theo chi phí sửa chữa/thay thế thực tế có chứng từ hoặc báo giá hợp lệ. " +
-            "Nếu yêu cầu gia hạn bị từ chối, khách hàng phải trả xe đúng thời hạn; trường hợp cố tình không trả xe sẽ chịu phí trả muộn và các thiệt hại thực tế có căn cứ, chứng từ phát sinh do việc không trả xe đúng hạn. " +
+            "Nếu yêu cầu gia hạn bị SmartCar từ chối, khách hàng phải trả xe đúng thời hạn đã cam kết. " +
+            "Trường hợp khách hàng cố tình không trả xe đúng hạn và việc này làm SmartCar không thể thực hiện đơn thuê kế tiếp, ngoài phí trả muộn khách hàng phải bồi thường khoản tương ứng giá trị tiền thuê và phí giao của đơn thuê kế tiếp bị ảnh hưởng; khoản bồi thường được đối soát theo đơn thực tế và có thể khấu trừ từ tiền cọc. " +
+            "Nếu gia hạn do bất khả kháng làm ảnh hưởng đơn kế tiếp, SmartCar sẽ xử lý phương án đổi xe hoặc hủy/hoàn tiền cho khách kế tiếp trước khi duyệt gia hạn; khoản bồi thường phát sinh (nếu có) được ghi nhận riêng và đối soát với tiền cọc của khách đang thuê. " +
             "Các khoản bồi thường được xác định riêng, không tự động gộp với phạt giao thông hoặc phí vượt kilomet.";
 
         // ============================================================
