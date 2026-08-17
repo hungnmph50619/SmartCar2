@@ -1,0 +1,118 @@
+@model SmartCar.Web.ViewModels.HandoverDocumentViewModel
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
+@{
+    Layout = null;
+    var booking = Model.Booking;
+    var pickupText = booking.PickupMethod == VehiclePickupMethod.Delivery
+        ? $"Giao tận nơi - {booking.DeliveryAddress}"
+        : "Nhận tại cửa hàng";
+    var awaitingSignature = booking.Status == BookingStatus.ReadyForPickup && string.IsNullOrWhiteSpace(Model.SignedDocumentPath);
+    var includedDays = Math.Max(1, booking.NumberOfDays);
+    var effectiveIncludedKilometers = Math.Max(
+        Model.IncludedKilometers,
+        includedDays * RentalPolicy.IncludedKilometersPerDay);
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <title>Biên bản giao xe #@booking.BookingId</title>
+    <style>
+        body { font-family: Arial, sans-serif; color:#111; margin:18mm; font-size:13px; line-height:1.45; }
+        h1 { text-align:center; font-size:21px; margin:0 0 4px; }
+        .sub { text-align:center; margin-bottom:18px; color:#555; }
+        .parties { border:1px solid #aaa; padding:10px; margin-bottom:14px; }
+        .parties div + div { margin-top:5px; }
+        .grid { display:grid; grid-template-columns:1fr 1fr; gap:7px 24px; }
+        table { width:100%; border-collapse:collapse; margin-top:14px; }
+        th,td { border:1px solid #aaa; padding:7px; text-align:left; vertical-align:top; }
+        th { width:30%; }
+        .confirm { margin-top:16px; padding:10px; border:1px solid #999; }
+        .signatures { display:grid; grid-template-columns:1fr 1fr; gap:70px; margin-top:34px; text-align:center; }
+        .signature-space { height:90px; }
+        .no-print { margin-bottom:16px; padding:12px; background:#f5f7fa; border:1px solid #d8dde6; border-radius:8px; }
+        .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        button, .back { padding:7px 12px; border:1px solid #777; background:white; border-radius:5px; text-decoration:none; color:#111; cursor:pointer; }
+        .primary { background:#1769e0; color:#fff; border-color:#1769e0; }
+        .upload { margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .hint { margin-top:8px; color:#555; font-size:12px; }
+        @@media print { .no-print { display:none; } body { margin:12mm; } }
+    </style>
+</head>
+<body>
+    <div class="no-print">
+        <div class="actions">
+            <button class="primary" type="button" onclick="window.print()">In để ký</button>
+            <a class="back" href="/AdminBookings/Index">Danh sách đơn</a>
+        </div>
+
+        @if (awaitingSignature)
+        {
+            <div class="hint"><strong>Bước tiếp:</strong> Hai bên ký bản in, sau đó chụp/scan và tải lại. Chuyến chỉ bắt đầu sau bước này.</div>
+            <form class="upload" action="/AdminRentalDocuments/UploadHandoverSigned" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="bookingId" value="@booking.BookingId" />
+                <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" required />
+                <button type="submit">Tải bản đã ký & bắt đầu chuyến</button>
+            </form>
+        }
+        else if (!string.IsNullOrWhiteSpace(Model.SignedDocumentPath))
+        {
+            <div class="hint">✓ Đã có chữ ký.</div>
+        }
+    </div>
+
+    <h1>BIÊN BẢN GIAO XE</h1>
+    <div class="sub">SmartCar · Đơn #@booking.BookingId</div>
+
+    <div class="parties">
+        <div><strong>Bên A – Bên cho thuê:</strong> SmartCar</div>
+        <div><strong>Bên B – Bên thuê:</strong> @booking.CustomerName · @booking.CustomerPhone</div>
+    </div>
+
+    <div class="grid">
+        <div><strong>Xe:</strong> @booking.VehicleName</div>
+        <div><strong>Biển số:</strong> @booking.LicensePlate</div>
+        <div><strong>Thời gian giao:</strong> @Model.RecordedAt.ToString("dd/MM/yyyy HH:mm")</div>
+        <div><strong>Dự kiến trả:</strong> @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
+        <div><strong>Cách nhận:</strong> @pickupText</div>
+        <div><strong>Ảnh đối chiếu:</strong> @Model.ImagePaths.Count ảnh lưu trên SmartCar</div>
+    </div>
+
+    <table>
+        <tr><th>Số km khi giao</th><td>@Model.Mileage.ToString("N0") km</td></tr>
+        <tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr>
+        <tr><th>Phụ kiện</th><td>@(Model.Accessories ?? "Theo trang bị xe")</td></tr>
+        <tr>
+            <th>Định mức sử dụng</th>
+            <td>
+                @RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày<br />
+                Chuyến này: @effectiveIncludedKilometers.ToString("N0") km / @includedDays ngày
+            </td>
+        </tr>
+        <tr><th>Vượt km</th><td>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</td></tr>
+        <tr><th>Trả muộn</th><td>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</td></tr>
+        <tr><th>Vi phạm / phạt nguội</th><td>@Model.TrafficFineTerms</td></tr>
+        <tr><th>Hư hỏng / thiếu / bồi thường</th><td>@Model.DamageCompensationTerms</td></tr>
+        <tr><th>Ghi chú</th><td>@(Model.Notes ?? "Không có")</td></tr>
+    </table>
+
+    <div class="confirm">
+        Bên B xác nhận đã kiểm tra xe, số km, nhiên liệu, phụ kiện, ảnh đối chiếu lưu trong hồ sơ SmartCar và đã được thông báo các chính sách trên trước khi nhận xe.
+    </div>
+
+    <div class="signatures">
+        <div>
+            <strong>ĐẠI DIỆN BÊN A</strong>
+            <div class="signature-space"></div>
+            <div>(Ký, ghi rõ họ tên)</div>
+        </div>
+        <div>
+            <strong>BÊN B – KHÁCH HÀNG</strong>
+            <div class="signature-space"></div>
+            <div>(Ký, ghi rõ họ tên)</div>
+        </div>
+    </div>
+</body>
+</html>

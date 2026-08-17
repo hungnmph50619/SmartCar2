@@ -1,367 +1,526 @@
 @model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
+@using System.Globalization
+
 @{
     ViewData["Title"] = $"Xử lý đơn #{Model.BookingId}";
-    var canAdminCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
-    var canMarkNoShow = (Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup) &&
-        DateTime.Now >= Model.PickupDate.AddMinutes(30);
 
-    var customerCreatedAt = ViewBag.CustomerCreatedAt is DateTime createdAtValue
-        ? createdAtValue
-        : (DateTime?)null;
-    var customerTotalBookingCount = ViewBag.CustomerTotalBookingCount is int totalValue ? totalValue : 0;
-    var customerCompletedBookingCount = ViewBag.CustomerCompletedBookingCount is int completedValue ? completedValue : 0;
-    var customerCancelledBookingCount = ViewBag.CustomerCancelledBookingCount is int cancelledValue ? cancelledValue : 0;
-    var customerNoShowCount = ViewBag.CustomerNoShowCount is int noShowValue ? noShowValue : 0;
-    var citizenIdentityVerified = ViewBag.CitizenIdentityVerified is bool citizenValue && citizenValue;
-    var drivingLicenseVerified = ViewBag.DrivingLicenseVerified is bool licenseValue && licenseValue;
-    var customerKycVerified = ViewBag.CustomerKycVerified is bool kycValue && kycValue;
+    var customerKycVerified = ViewBag.CustomerKycVerified is bool kyc && kyc;
+    var citizenVerified = ViewBag.CitizenIdentityVerified is bool citizen && citizen;
+    var licenseVerified = ViewBag.DrivingLicenseVerified is bool license && license;
+    var handoverSigned = ViewBag.HandoverSigned is bool hs && hs;
+    var returnSigned = ViewBag.ReturnSigned is bool rs && rs;
+
+    var rentalPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Rental);
+    var depositPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Deposit);
+    var extensionPayments = Model.Payments.Where(p => p.Type == PaymentType.Extension).ToList();
+    var refundPayments = Model.Payments
+        .Where(p => p.Type == PaymentType.Refund)
+        .OrderByDescending(p => p.PaymentId)
+        .ToList();
+
+    var totalCollected = Model.Payments
+        .Where(p => p.Status == PaymentStatus.Paid && p.Type != PaymentType.Refund)
+        .Sum(p => p.Amount);
+    var totalRefunded = Model.Payments
+        .Where(p => p.Status == PaymentStatus.Refunded && p.Type == PaymentType.Refund)
+        .Sum(p => p.Amount);
+    var remainingToCollect = Math.Max(0m, Model.GrandTotalAmount - totalCollected);
+    var extensionAmount = extensionPayments.Sum(p => p.Amount);
+
+    var isDelivery = Model.PickupMethod == VehiclePickupMethod.Delivery;
+    var hasDeliveryMap = isDelivery && Model.DeliveryLatitude.HasValue && Model.DeliveryLongitude.HasValue;
+    var latText = hasDeliveryMap ? Model.DeliveryLatitude!.Value.ToString(CultureInfo.InvariantCulture) : string.Empty;
+    var lngText = hasDeliveryMap ? Model.DeliveryLongitude!.Value.ToString(CultureInfo.InvariantCulture) : string.Empty;
+    var destination = hasDeliveryMap ? $"{latText},{lngText}" : Model.DeliveryAddress;
+    var directionsUrl = !string.IsNullOrWhiteSpace(destination)
+        ? $"https://www.google.com/maps/dir/?api=1&destination={Uri.EscapeDataString(destination)}"
+        : null;
+
+    var canAdminCancel = Model.Status is BookingStatus.PendingConfirmation
+        or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var isNoShowCandidate = Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var noShowAvailableAt = Model.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes);
+    var now = DateTime.Now;
+    var canMarkNoShow = isNoShowCandidate && now >= noShowAvailableAt;
+    var isWaitingForNoShow = isNoShowCandidate && now < noShowAvailableAt;
+    var pickupHasStarted = now >= Model.PickupDate;
+    var minutesPastPickup = pickupHasStarted
+        ? Math.Max(0, (int)Math.Floor((now - Model.PickupDate).TotalMinutes))
+        : 0;
+    var noShowFeePreview = Math.Round(
+        Model.InitialRentalAmount * RentalPolicy.NoShowFeeRate,
+        0,
+        MidpointRounding.AwayFromZero);
+
+    string PaymentText(PaymentStatus? status) => status switch
+    {
+        PaymentStatus.Paid => "Đã thu",
+        PaymentStatus.AwaitingConfirmation => "Chờ xác nhận",
+        PaymentStatus.Pending => "Chưa thanh toán",
+        PaymentStatus.AwaitingRefund => "Chờ hoàn",
+        PaymentStatus.Refunded => "Đã hoàn",
+        PaymentStatus.Failed => "Lỗi",
+        _ => "-"
+    };
+
+    string PaymentBadge(PaymentStatus? status) => status switch
+    {
+        PaymentStatus.Paid or PaymentStatus.Refunded => "bg-success",
+        PaymentStatus.AwaitingConfirmation or PaymentStatus.AwaitingRefund => "bg-warning text-dark",
+        PaymentStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    string RefundText(string? method) => method switch
+    {
+        PaymentMethods.DepositRefund => "Hoàn cọc",
+        PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
+        PaymentMethods.CompensationRefund => "Hỗ trợ / bồi thường",
+        PaymentMethods.BankTransferRefund => "Hoàn tiền thuê / phí giao",
+        _ => "Hoàn tiền"
+    };
+
+    string ExtensionText(BookingExtensionStatus status) => status switch
+    {
+        BookingExtensionStatus.Pending => "Chờ duyệt",
+        BookingExtensionStatus.NeedsEvidence => "Cần bổ sung minh chứng",
+        BookingExtensionStatus.Approved => "Đã duyệt - chờ thanh toán",
+        BookingExtensionStatus.Paid => "Đã thanh toán",
+        BookingExtensionStatus.Rejected => "Đã từ chối",
+        BookingExtensionStatus.Cancelled => "Đã hủy",
+        _ => status.ToString()
+    };
 
     var nextAction = Model.Status switch
     {
-        BookingStatus.PendingConfirmation => (
-            "Kiểm tra và quyết định đơn",
-            "Đối chiếu hồ sơ xác minh giấy tờ, lịch sử thuê xe, lịch xe và thông tin thuê. Sau đó xác nhận hoặc nhập lý do từ chối.",
-            "warning"),
-        BookingStatus.PendingPayment => (
-            "Chờ khách hàng thanh toán",
-            "Đơn đã được xác nhận. Chưa chuẩn bị giao xe cho đến khi tiền thuê được ghi nhận đã thanh toán.",
-            "primary"),
-        BookingStatus.Paid => (
-            "Kiểm tra và chuẩn bị xe",
-            "Khách hàng đã thanh toán. Kiểm tra xe, giấy tờ xe và đánh dấu sẵn sàng bàn giao.",
-            "success"),
-        BookingStatus.ReadyForPickup => (
-            "Lập biên bản bàn giao",
-            "Xe đã sẵn sàng. Kiểm tra người nhận, số km, nhiên liệu, tình trạng xe và phụ kiện trước khi giao.",
-            "success"),
-        BookingStatus.Rented => (
-            "Theo dõi chuyến thuê",
-            "Xử lý yêu cầu gia hạn nếu có. Khi khách trả xe, lập biên bản trả xe.",
-            "primary"),
-        BookingStatus.PendingInspection => (
-            "Kiểm tra xe sau khi trả",
-            "Đối chiếu biên bản giao–trả, thêm phụ phí có căn cứ và chỉ hoàn tất khi các khoản cần thanh toán đã xử lý.",
-            "warning"),
-        BookingStatus.Completed => (
-            "Đơn đã hoàn tất",
-            "Không còn hành động vận hành bắt buộc. Dữ liệu được giữ để báo cáo và truy vết.",
-            "success"),
-        BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.NoShow => (
-            "Đơn đã kết thúc",
-            "Kiểm tra lý do, người thực hiện và khoản hoàn tiền trong phần thông tin bên dưới.",
-            "danger"),
-        _ => (
-            "Theo dõi trạng thái đơn",
-            "Kiểm tra thông tin đơn và chỉ thực hiện hành động phù hợp với trạng thái hiện tại.",
-            "secondary")
+        BookingStatus.PendingConfirmation => ("Kiểm tra đơn", "warning"),
+        BookingStatus.PendingPayment => ("Chờ / đối soát thanh toán", "primary"),
+        BookingStatus.Paid => ("Chuẩn bị xe", "success"),
+        BookingStatus.ReadyForPickup => ("Giao xe", "success"),
+        BookingStatus.Rented => ("Đang thuê", "primary"),
+        BookingStatus.PendingInspection => ("Đối chiếu giao - trả", "warning"),
+        BookingStatus.AwaitingRefund => ("Chờ hoàn tiền", "warning"),
+        BookingStatus.Completed => ("Đã hoàn tất", "success"),
+        BookingStatus.NoShow => ("Không đến nhận", "danger"),
+        BookingStatus.Cancelled or BookingStatus.Rejected => ("Đã kết thúc", "danger"),
+        _ => (Model.Status.ToVietnamese(), "secondary")
     };
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
-    <div>
-        <h1 class="h3 mb-1">Xử lý đơn #@Model.BookingId</h1>
-        <span class="badge bg-@nextAction.Item3">@Model.Status.ToVietnamese()</span>
-    </div>
-    <a class="btn btn-outline-secondary" asp-action="Index">Danh sách đơn</a>
-</div>
+@if (hasDeliveryMap)
+{
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+}
 
-<div class="alert alert-@nextAction.Item3 shadow-sm mb-4" role="status">
-    <div class="text-uppercase small fw-semibold mb-1">Hành động tiếp theo</div>
-    <h2 class="h5 mb-2">@nextAction.Item1</h2>
-    <p class="mb-0">@nextAction.Item2</p>
+<style>
+    #admin-booking-delivery-map { height:190px; border-radius:12px; overflow:hidden; }
+    .money-row { display:flex; justify-content:space-between; gap:12px; padding:.5rem 0; border-bottom:1px solid #edf0f4; }
+    .money-row:last-child { border-bottom:0; }
+</style>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <div class="small text-muted">ĐƠN #@Model.BookingId</div>
+        <h1 class="h3 mb-1">Xử lý đơn thuê</h1>
+        <span class="badge bg-@nextAction.Item2">@nextAction.Item1</span>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        @if (Model.HasHandover && Model.HasReturn)
+        {
+            <a class="btn btn-outline-primary" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Hồ sơ chuyến</a>
+        }
+        <a class="btn btn-outline-secondary" asp-action="Index">Danh sách đơn</a>
+    </div>
 </div>
 
 <div class="row g-4">
     <div class="col-lg-8">
         <div class="card card-body shadow-sm mb-4">
-            <h2 class="h5">Thông tin thuê xe</h2>
-            <div class="row">
-                <div class="col-md-6"><strong>Khách hàng:</strong> @Model.CustomerName<br /><strong>SĐT:</strong> @Model.CustomerPhone</div>
-                <div class="col-md-6"><strong>Xe:</strong> @Model.VehicleName<br /><strong>Biển số:</strong> @Model.LicensePlate</div>
-            </div>
-            <hr />
-            <div><strong>Nhận xe:</strong> @Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</div>
-            <div><strong>Trả xe:</strong> @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
-            <div><strong>Số ngày:</strong> @Model.NumberOfDays</div>
-            @if (!string.IsNullOrWhiteSpace(Model.CancelReason))
-            {
-                <div class="alert alert-danger mt-3 mb-0">
-                    <strong>Lý do:</strong> @Model.CancelReason<br />
-                    <strong>Người hủy:</strong> @Model.CancelledBy.ToVietnameseActor()<br />
-                    <strong>Tiền hoàn:</strong> @Model.RefundAmount.ToString("N0") đ<br />
-                    @Model.RefundReason
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="small text-muted">Khách hàng</div>
+                    <strong>@Model.CustomerName</strong>
+                    <div><a href="tel:@Model.CustomerPhone">@Model.CustomerPhone</a></div>
                 </div>
+                <div class="col-md-6">
+                    <div class="small text-muted">Xe</div>
+                    <strong>@Model.VehicleName</strong>
+                    <div>@Model.LicensePlate</div>
+                </div>
+                <div class="col-md-4"><div class="small text-muted">Nhận</div><strong>@Model.PickupDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                <div class="col-md-4"><div class="small text-muted">Trả</div><strong>@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                <div class="col-md-4"><div class="small text-muted">Thời gian</div><strong>@Model.NumberOfDays ngày tính phí</strong></div>
+            </div>
+
+            <hr />
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div class="flex-grow-1">
+                    <div class="small text-muted">Cách nhận xe</div>
+                    <strong>@(isDelivery ? "Giao tận nơi" : "Nhận tại cửa hàng")</strong>
+                    @if (isDelivery)
+                    {
+                        <div class="mt-1">@Model.DeliveryAddress</div>
+                        @if (directionsUrl is not null)
+                        {
+                            <a class="small text-decoration-none d-inline-block mt-1" href="@directionsUrl" target="_blank" rel="noopener">Mở chỉ đường ↗</a>
+                        }
+                    }
+                </div>
+            </div>
+            @if (hasDeliveryMap)
+            {
+                <div id="admin-booking-delivery-map" class="mt-3" data-latitude="@latText" data-longitude="@lngText"></div>
             }
         </div>
 
-        <div class="card card-body shadow-sm mb-4 border-0">
-            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-                <div>
-                    <div class="text-uppercase small text-muted fw-semibold">Kiểm soát khách thuê</div>
-                    <h2 class="h5 mb-1">Hồ sơ xác minh giấy tờ & độ tin cậy khách hàng</h2>
-                    <p class="text-muted small mb-0">Xác minh giấy tờ gồm 2 bước: đối chiếu CCCD và kiểm tra giấy phép lái xe.</p>
-                </div>
-                <span class="badge @(customerKycVerified ? "bg-success" : "bg-danger") px-3 py-2">
-                    @(customerKycVerified ? "Hồ sơ đã xác minh" : "Hồ sơ chưa đủ")
-                </span>
-            </div>
-
-            <div class="row g-3 mb-3">
-                <div class="col-md-6">
-                    <div class="border rounded p-3 h-100">
-                        <div class="small text-muted">Danh tính CCCD</div>
-                        <strong class="@(citizenIdentityVerified ? "text-success" : "text-danger")">
-                            @(citizenIdentityVerified ? "✓ Đã xác minh thông tin + 2 ảnh" : "✕ Chưa hợp lệ")
-                        </strong>
+        @if (Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                    <div>
+                        <h2 class="h5 mb-1">Giấy tờ khách</h2>
+                        <span class="@(citizenVerified ? "text-success" : "text-danger")">CCCD @(citizenVerified ? "✓" : "✕")</span>
+                        <span class="mx-2">·</span>
+                        <span class="@(licenseVerified ? "text-success" : "text-danger")">GPLX @(licenseVerified ? "✓" : "✕")</span>
                     </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="border rounded p-3 h-100">
-                        <div class="small text-muted">GPLX đến ngày trả</div>
-                        <strong class="@(drivingLicenseVerified ? "text-success" : "text-danger")">
-                            @(drivingLicenseVerified ? "✓ Đã xác minh và còn hiệu lực" : "✕ Chưa hợp lệ")
-                        </strong>
-                    </div>
+                    <span class="badge @(customerKycVerified ? "bg-success" : "bg-danger")">@(customerKycVerified ? "Hợp lệ" : "Chưa đủ")</span>
                 </div>
             </div>
-
-            <div class="row g-3">
-                <div class="col-6 col-md-3">
-                    <div class="bg-light rounded p-3 h-100">
-                        <div class="small text-muted">Tổng đơn</div>
-                        <div class="fs-4 fw-bold">@customerTotalBookingCount</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="bg-light rounded p-3 h-100">
-                        <div class="small text-muted">Hoàn thành</div>
-                        <div class="fs-4 fw-bold text-success">@customerCompletedBookingCount</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="bg-light rounded p-3 h-100">
-                        <div class="small text-muted">Hủy / bị từ chối</div>
-                        <div class="fs-4 fw-bold">@customerCancelledBookingCount</div>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="bg-light rounded p-3 h-100">
-                        <div class="small text-muted">Không đến nhận xe</div>
-                        <div class="fs-4 fw-bold @(customerNoShowCount > 0 ? "text-danger" : string.Empty)">@customerNoShowCount</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3 pt-3 border-top">
-                <div class="small text-muted">
-                    Thành viên từ: <strong>@(customerCreatedAt.HasValue ? customerCreatedAt.Value.ToLocalTime().ToString("dd/MM/yyyy") : "Không xác định")</strong>
-                </div>
-                <a class="btn btn-sm btn-outline-primary"
-                   asp-controller="AdminCustomers"
-                   asp-action="Details"
-                   asp-route-id="@Model.CustomerId"
-                   asp-route-tab="documents">
-                    Xem và đối chiếu giấy tờ
-                </a>
-            </div>
-        </div>
+        }
 
         @if (Model.Status == BookingStatus.PendingConfirmation)
         {
+            <div class="card card-body shadow-sm mb-4 border-warning">
+                <h2 class="h5">Xác nhận đơn</h2>
+                <p class="text-muted">Duyệt hoặc từ chối tại màn xác nhận riêng.</p>
+                <a class="btn btn-warning" asp-controller="AdminBookingReview" asp-action="Index" asp-route-id="@Model.BookingId">Mở xác nhận đơn</a>
+            </div>
+        }
+        else if (Model.Status == BookingStatus.PendingPayment)
+        {
             <div class="card card-body shadow-sm mb-4">
-                <h2 class="h5">Xác nhận yêu cầu</h2>
-                <p class="text-muted">Chỉ xác nhận sau khi danh tính CCCD, GPLX và lịch xe đều hợp lệ đến ngày trả.</p>
-                <form asp-action="Confirm"
-                      method="post"
-                      class="mb-3"
-                      data-loading-form
-                      data-confirm="Xác nhận đơn thuê này và chuyển khách hàng sang bước thanh toán?">
+                <h2 class="h5">Thanh toán</h2>
+                <p class="text-muted mb-3">Khách cần hoàn tất tiền thuê / giao và tiền cọc trước khi chuẩn bị xe.</p>
+                <a class="btn btn-primary" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Mở đối soát tiền thu</a>
+            </div>
+        }
+        else if (Model.Status == BookingStatus.Paid)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <h2 class="h5">Chuẩn bị xe</h2>
+                <form asp-action="MarkReady" method="post" data-loading-form data-confirm="Xác nhận xe đã sẵn sàng bàn giao?">
                     <input type="hidden" name="id" value="@Model.BookingId" />
-                    <button class="btn btn-success" type="submit" data-loading-text="Đang xác nhận...">Xác nhận đơn</button>
-                </form>
-                <form asp-action="Reject"
-                      method="post"
-                      data-loading-form
-                      data-confirm="Từ chối đơn và gửi lý do cho khách hàng?">
-                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                    <label class="form-label">Lý do không duyệt</label>
-                    <textarea name="Reason" maxlength="500" class="form-control mb-2" required placeholder="Nêu rõ lý do để khách hàng biết cách xử lý tiếp theo."></textarea>
-                    <button class="btn btn-outline-danger" type="submit" data-loading-text="Đang từ chối...">Không duyệt đơn</button>
+                    <button class="btn btn-success" type="submit">Xe đã sẵn sàng</button>
                 </form>
             </div>
         }
-
-        @if (Model.Status == BookingStatus.Paid)
+        else if (Model.Status == BookingStatus.ReadyForPickup)
         {
             <div class="card card-body shadow-sm mb-4">
-                <h2 class="h5">Chuẩn bị giao xe</h2>
-                <p>Khách hàng đã thanh toán. Hãy kiểm tra xe và đánh dấu sẵn sàng bàn giao.</p>
-                <form asp-action="MarkReady"
-                      method="post"
-                      data-loading-form
-                      data-confirm="Xác nhận xe đã được kiểm tra và sẵn sàng bàn giao?">
-                    <input type="hidden" name="id" value="@Model.BookingId" />
-                    <button class="btn btn-primary" type="submit" data-loading-text="Đang cập nhật...">Xe đã sẵn sàng</button>
-                </form>
+                <h2 class="h5">Giao xe</h2>
+                <p class="text-muted">Ghi km, phụ kiện và ảnh đối chiếu trước khi giao.</p>
+                <a class="btn btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao</a>
             </div>
         }
 
-        @if (Model.Status == BookingStatus.ReadyForPickup)
+        @if (isWaitingForNoShow)
         {
-            <div class="card card-body shadow-sm mb-4">
-                <h2 class="h5">Bàn giao xe</h2>
-                <p class="text-muted">Biên bản cần ghi số km, nhiên liệu, tình trạng xe, phụ kiện và ảnh thực tế.</p>
-                <a class="btn btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao xe</a>
+            <div class="card card-body shadow-sm mb-4 @(pickupHasStarted ? "border-warning" : string.Empty)">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                    <div>
+                        <h2 class="h6 mb-1">Khách không đến nhận</h2>
+                        <div class="text-muted small">
+                            @if (pickupHasStarted)
+                            {
+                                <span>Đang chờ khách · quá giờ nhận @minutesPastPickup phút.</span>
+                            }
+                            else
+                            {
+                                <span>Chưa đến giờ nhận xe.</span>
+                            }
+                            <br />Xử lý từ <strong>@noShowAvailableAt.ToString("dd/MM/yyyy HH:mm")</strong> · phí 70% tiền thuê, hoàn 30% tiền thuê + cọc@(isDelivery ? " + phí giao chưa thực hiện" : string.Empty).
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        @if (pickupHasStarted)
+                        {
+                            <a class="btn btn-sm btn-outline-primary" href="tel:@Model.CustomerPhone">Gọi khách</a>
+                        }
+                        <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Khách không đến</button>
+                    </div>
+                </div>
             </div>
         }
-
-        @if (canMarkNoShow)
+        else if (canMarkNoShow)
         {
-            <div class="card card-body border-warning shadow-sm mb-4">
-                <h2 class="h5">Khách không đến nhận xe</h2>
-                <p>Đã quá giờ nhận xe 30 phút. Khách không đến nhận xe sẽ không được hoàn tiền.</p>
+            <div class="card card-body shadow-sm mb-4 border-warning">
+                <h2 class="h6 mb-1">Khách chưa đến nhận xe</h2>
+                <div class="small text-muted mb-3">Phí 70% tiền thuê · hoàn 30% tiền thuê · hoàn 100% cọc@(isDelivery ? " · hoàn 100% phí giao chưa thực hiện" : string.Empty).</div>
                 <form asp-controller="AdminBookingOperations"
                       asp-action="MarkNoShow"
                       method="post"
-                      data-loading-form
-                      data-confirm="Ghi nhận khách không đến nhận xe? Đơn sẽ kết thúc và không hoàn tiền.">
+                      data-confirm="Xác nhận khách không đến? Hệ thống giữ 70% tiền thuê, hoàn 30% tiền thuê, hoàn cọc và phí giao chưa thực hiện (nếu có).">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                    <button class="btn btn-warning" type="submit" data-loading-text="Đang ghi nhận...">Ghi nhận khách không đến</button>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="customerContacted" value="true" id="customer-contacted" required />
+                        <label class="form-check-label fw-semibold" for="customer-contacted">Đã liên hệ khách</label>
+                    </div>
+                    <button class="btn btn-warning" type="submit">Khách không đến</button>
                 </form>
+            </div>
+        }
+
+        @if (Model.HasHandover)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                    <div>
+                        <h2 class="h5 mb-1">Biên bản giao</h2>
+                        <span class="badge @(handoverSigned ? "bg-success" : "bg-danger")">@(handoverSigned ? "Đã có chữ ký" : "Thiếu bản ký")</span>
+                    </div>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
+                       asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
+                </div>
+                @if (!handoverSigned && Model.Status != BookingStatus.Completed)
+                {
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="input-group">
+                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                        <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
+                        <button class="btn btn-outline-success" type="submit">Tải bản đã ký</button>
+                    </form>
+                }
             </div>
         }
 
         @if (Model.Status == BookingStatus.Rented)
         {
             <div class="card card-body shadow-sm mb-4">
-                <h2 class="h5">Đơn đang thuê</h2>
-                <div class="d-flex gap-2 flex-wrap">
-                    <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản trả xe</a>
-                    <a class="btn btn-outline-primary" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a>
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
+                    <h2 class="h5 mb-0">Đang thuê</h2>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a class="btn btn-outline-primary" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a>
+                        <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản trả</a>
+                    </div>
                 </div>
+                <p class="small text-muted mb-2">Yêu cầu gia hạn qua điện thoại được ghi nhận tại màn “Yêu cầu gia hạn”, nơi quản trị viên có thể chọn trường hợp thông thường/bất khả kháng và nhập minh chứng.</p>
+
                 @if (Model.Extensions.Count > 0)
                 {
-                    <div class="table-responsive">
-                        <table class="table mt-3 mb-0">
-                        @foreach (var extension in Model.Extensions)
+                    <div class="mt-2">
+                        @foreach (var extension in Model.Extensions.OrderByDescending(x => x.BookingExtensionId))
                         {
-                            <tr>
-                                <td>Đến @extension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
-                                <td>@extension.AdditionalAmount.ToString("N0") đ</td>
-                                <td><span class="badge bg-secondary">@extension.Status.ToVietnamese()</span></td>
-                            </tr>
+                            <div class="d-flex justify-content-between border-top py-2 gap-2 flex-wrap">
+                                <span>Đến @extension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</span>
+                                <span>@extension.AdditionalAmount.ToString("N0") đ · <strong>@ExtensionText(extension.Status)</strong></span>
+                            </div>
                         }
-                        </table>
                     </div>
                 }
+            </div>
+        }
+
+        @if (Model.HasReturn)
+        {
+            <div class="card card-body shadow-sm mb-4">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                    <div>
+                        <h2 class="h5 mb-1">Biên bản trả</h2>
+                        <span class="badge @(returnSigned ? "bg-success" : "bg-danger")">@(returnSigned ? "Đã có chữ ký" : "Thiếu bản ký")</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
+                           asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
+                        <a class="btn btn-sm btn-primary" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@Model.BookingId">Đối chiếu</a>
+                    </div>
+                </div>
             </div>
         }
 
         @if (Model.Status == BookingStatus.PendingInspection)
         {
             <div class="card card-body shadow-sm mb-4">
-                <h2 class="h5">Phụ phí sau khi trả xe</h2>
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+                    <h2 class="h5 mb-0">Phụ phí</h2>
+                    <a class="btn btn-sm btn-outline-primary" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@Model.BookingId">Xem bằng chứng</a>
+                </div>
+                <div class="small text-muted mb-3">Không có căn cứ/ảnh đối chiếu thì hệ thống không cho tạo phụ phí thủ công.</div>
                 <form asp-controller="Returns" asp-action="AddCharge" method="post" class="row g-2 mb-3" data-loading-form>
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-3">
-                        <select name="ChargeType" class="form-select" aria-label="Loại phụ phí">
+                        <select name="ChargeType" class="form-select">
                             @foreach (var type in Enum.GetValues<AdditionalChargeType>())
                             {
                                 <option value="@type">@type.ToVietnamese()</option>
                             }
                         </select>
                     </div>
-                    <div class="col-md-5"><input name="Description" maxlength="250" class="form-control" placeholder="Mô tả và căn cứ phụ phí" required /></div>
+                    <div class="col-md-5"><input name="Description" maxlength="250" class="form-control" placeholder="Căn cứ phụ phí" required /></div>
                     <div class="col-md-2"><input name="Amount" type="number" min="1" class="form-control" placeholder="Số tiền" required /></div>
-                    <div class="col-md-2"><button class="btn btn-warning w-100" type="submit" data-loading-text="Đang thêm...">Thêm</button></div>
+                    <div class="col-md-2"><button class="btn btn-warning w-100" type="submit">Thêm</button></div>
                 </form>
-
-                @if (Model.AdditionalCharges.Count > 0)
+                @foreach (var charge in Model.AdditionalCharges)
                 {
-                    <div class="table-responsive">
-                        <table class="table">
-                        @foreach (var charge in Model.AdditionalCharges)
-                        {
-                            <tr>
-                                <td>@charge.ChargeType.ToVietnamese()</td>
-                                <td>@charge.Description</td>
-                                <td class="text-end">@charge.Amount.ToString("N0") đ</td>
-                                <td class="text-end">
-                                    <form asp-controller="Returns"
-                                          asp-action="RemoveCharge"
-                                          method="post"
-                                          data-loading-form
-                                          data-confirm="Xóa khoản phụ phí này khỏi đơn?">
-                                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                                        <input type="hidden" name="additionalChargeId" value="@charge.AdditionalChargeId" />
-                                        <button class="btn btn-sm btn-outline-danger" type="submit" data-loading-text="Đang xóa...">Xóa</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        }
-                        </table>
+                    <div class="d-flex justify-content-between align-items-center border-top py-2 gap-2">
+                        <span>@charge.ChargeType.ToVietnamese() · @charge.Description</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <strong>@charge.Amount.ToString("N0") đ</strong>
+                            <form asp-controller="Returns" asp-action="RemoveCharge" method="post">
+                                <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                <input type="hidden" name="additionalChargeId" value="@charge.AdditionalChargeId" />
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Xóa</button>
+                            </form>
+                        </div>
                     </div>
                 }
+                <div class="mt-3"><a class="btn btn-primary" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@Model.BookingId">Đối chiếu & kết thúc kiểm tra</a></div>
+            </div>
+        }
 
-                @if (Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid)
-                {
-                    <div class="alert alert-warning">Đang chờ khách hàng thanh toán phụ phí @Model.AdditionalAmount.ToString("N0") đ.</div>
-                }
-                else if (Model.AdditionalAmount > 0)
-                {
-                    <div class="alert alert-success">Khách hàng đã thanh toán toàn bộ phụ phí.</div>
-                }
+        @if (Model.Status == BookingStatus.AwaitingRefund)
+        {
+            <div class="card card-body shadow-sm mb-4 border-warning">
+                <h2 class="h5">Chờ hoàn tiền</h2>
+                <p class="text-muted">Đơn chỉ hoàn tất sau khi xác nhận đã chuyển đủ tổng tiền hoàn cho khách.</p>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a class="btn btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Xử lý hoàn tiền</a>
+                    <a class="btn btn-outline-primary" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Xem hồ sơ</a>
+                </div>
+            </div>
+        }
 
-                <hr />
-                <h3 class="h6">Hoàn tất kiểm tra</h3>
-                <form asp-controller="Returns"
-                      asp-action="Complete"
-                      method="post"
-                      data-loading-form
-                      data-confirm="Hoàn tất đơn và cập nhật trạng thái xe? Hãy chắc chắn mọi phụ phí đã được xử lý.">
-                    <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                    <div class="form-check mb-2">
-                        <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="requiresMaintenance" />
-                        <label class="form-check-label" for="requiresMaintenance">Xe cần bảo trì hoặc sửa chữa sau lượt thuê</label>
-                    </div>
-                    <textarea name="MaintenanceNote" maxlength="1000" class="form-control mb-2" placeholder="Nội dung bảo trì nếu có"></textarea>
-                    <button class="btn btn-success" type="submit" data-loading-text="Đang hoàn tất...">Hoàn tất đơn và cập nhật xe</button>
-                </form>
+        @if (Model.Status == BookingStatus.Completed)
+        {
+            <div class="card card-body shadow-sm mb-4 border-success">
+                <h2 class="h5 text-success">✓ Hồ sơ đã hoàn tất</h2>
+                <p class="text-muted">Biên bản điện tử, ảnh, bản ký và quyết toán được giữ để tra cứu.</p>
+                <a class="btn btn-success" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Xem hồ sơ chuyến thuê</a>
             </div>
         }
 
         @if (canAdminCancel)
         {
-            <div class="card card-body border-danger shadow-sm">
-                <h2 class="h5 text-danger">Quản trị viên hủy đơn</h2>
-                <p class="text-muted">Quản trị viên hủy trước khi giao xe sẽ hoàn 100% số tiền khách hàng đã thanh toán.</p>
-                <form asp-controller="AdminBookingOperations"
-                      asp-action="Cancel"
-                      method="post"
-                      class="row g-2"
-                      data-loading-form
-                      data-confirm="Hủy đơn và hoàn 100% số tiền khách đã thanh toán?">
+            <details class="card card-body shadow-sm border-danger">
+                <summary class="text-danger fw-semibold">Hủy đơn</summary>
+                <form asp-controller="AdminBookingOperations" asp-action="Cancel" method="post" class="row g-2 mt-3" data-confirm="Hủy đơn và xử lý hoàn tiền theo chính sách?">
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                    <div class="col-md-9"><input name="Reason" maxlength="500" class="form-control" required placeholder="Lý do Quản trị viên hủy" /></div>
-                    <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit" data-loading-text="Đang hủy...">Hủy và hoàn tiền</button></div>
+                    <div class="col-md-9"><input name="Reason" maxlength="500" class="form-control" placeholder="Lý do" required /></div>
+                    <div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit">Hủy đơn</button></div>
                 </form>
-            </div>
+            </details>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Model.CancelReason))
+        {
+            <div class="alert alert-danger mt-4"><strong>Lý do kết thúc:</strong> @Model.CancelReason</div>
         }
     </div>
 
     <div class="col-lg-4">
         <div class="card card-body shadow-sm sticky-top" style="top:1rem">
-            <h2 class="h5">Tổng tiền</h2>
-            <div class="d-flex justify-content-between"><span>Tiền thuê và gia hạn</span><strong>@Model.RentalAmount.ToString("N0") đ</strong></div>
-            <div class="d-flex justify-content-between"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h2 class="h5 mb-0">Tài chính đơn thuê</h2>
+                    <div class="small text-muted">Theo trạng thái hiện tại của đơn</div>
+                </div>
+                <a class="small" asp-controller="AdminPayments" asp-action="Index">Mở sổ</a>
+            </div>
+
+            <div class="money-row">
+                <span>Tiền thuê / giao<br /><span class="badge @PaymentBadge(rentalPayment?.Status)">@PaymentText(rentalPayment?.Status)</span></span>
+                <strong>@((Model.InitialRentalAmount + Model.DeliveryFee).ToString("N0")) đ</strong>
+            </div>
+            @if (Model.DepositAmount > 0)
+            {
+                <div class="money-row"><span>Tiền cọc<br /><span class="badge @PaymentBadge(depositPayment?.Status)">@PaymentText(depositPayment?.Status)</span></span><strong>@Model.DepositAmount.ToString("N0") đ</strong></div>
+            }
+            @if (extensionAmount > 0)
+            {
+                <div class="money-row"><span>Gia hạn</span><strong>@extensionAmount.ToString("N0") đ</strong></div>
+            }
+            @if (Model.AdditionalAmount > 0)
+            {
+                <div class="money-row"><span>Phụ phí thực thu</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+            }
+            @if (Model.DepositDeductionAmount > 0)
+            {
+                <div class="money-row">
+                    <span>Khấu trừ từ cọc<br /><span class="badge bg-info text-dark">Đã khấu trừ</span></span>
+                    <strong>@Model.DepositDeductionAmount.ToString("N0") đ</strong>
+                </div>
+            }
+            @if (Model.Status == BookingStatus.NoShow && noShowFeePreview > 0)
+            {
+                <div class="money-row"><span>Phí không đến nhận (70% tiền thuê)</span><strong>@noShowFeePreview.ToString("N0") đ</strong></div>
+            }
+            @foreach (var refund in refundPayments)
+            {
+                <div class="money-row">
+                    <span>@RefundText(refund.Method)<br /><span class="badge @PaymentBadge(refund.Status)">@PaymentText(refund.Status)</span></span>
+                    <strong>@refund.Amount.ToString("N0") đ</strong>
+                </div>
+            }
+
             <hr />
-            <div class="d-flex justify-content-between fs-5"><span>Tổng cộng</span><strong>@Model.TotalAmount.ToString("N0") đ</strong></div>
+            <div class="d-flex justify-content-between"><span>Đã thu từ khách</span><strong class="text-success">@totalCollected.ToString("N0") đ</strong></div>
+            @if (remainingToCollect > 0 && Model.Status is not BookingStatus.Cancelled and not BookingStatus.Rejected and not BookingStatus.NoShow)
+            {
+                <div class="d-flex justify-content-between mt-1"><span>Còn thu</span><strong class="text-danger">@remainingToCollect.ToString("N0") đ</strong></div>
+            }
+            @if (totalRefunded > 0)
+            {
+                <div class="d-flex justify-content-between mt-1"><span>Đã hoàn</span><strong>@totalRefunded.ToString("N0") đ</strong></div>
+            }
+
             <div class="mt-3">
-                <div>Tiền thuê: <strong>@(Model.RentalPaid ? "Đã thanh toán" : "Chưa thanh toán")</strong></div>
-                <div>Gia hạn: <strong>@(Model.ExtensionPaid ? "Đã thanh toán hoặc không có" : "Chưa thanh toán")</strong></div>
-                <div>Phụ phí: <strong>@(Model.AdditionalChargePaid ? "Đã thanh toán hoặc không có" : "Chưa thanh toán")</strong></div>
+                @if (Model.Status == BookingStatus.PendingPayment || rentalPayment?.Status == PaymentStatus.AwaitingConfirmation)
+                {
+                    <a class="btn btn-primary w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Đối soát tiền thu</a>
+                    <div class="small text-muted mt-1">Kiểm tra giao dịch khách báo chuyển; nếu chưa khớp, gửi lý do để khách xác nhận lại.</div>
+                }
+                else if (Model.Status == BookingStatus.Rented)
+                {
+                    <a class="btn btn-primary w-100" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a>
+                    <div class="small text-muted mt-1">Theo dõi yêu cầu gia hạn và khoản thanh toán gia hạn.</div>
+                }
+                else if (Model.Status == BookingStatus.PendingInspection)
+                {
+                    <a class="btn btn-warning w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="adjustment">Theo dõi phụ phí / phát sinh</a>
+                }
+                else if (Model.Status == BookingStatus.AwaitingRefund || Model.Status == BookingStatus.NoShow)
+                {
+                    <a class="btn btn-warning w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund">Xử lý hoàn tiền</a>
+                }
+                else
+                {
+                    <a class="btn btn-outline-primary w-100" asp-controller="AdminPayments" asp-action="Index">Xem giao dịch của hệ thống</a>
+                }
+
+                <div class="d-flex justify-content-center gap-3 flex-wrap mt-3 small">
+                    <a class="text-decoration-none" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Tiền thu</a>
+                    <a class="text-decoration-none" asp-controller="AdminPayments" asp-action="Index" asp-route-section="adjustment">Gia hạn & phụ phí</a>
+                    <a class="text-decoration-none" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund">Hoàn tiền</a>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+@if (hasDeliveryMap)
+{
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const el = document.getElementById("admin-booking-delivery-map");
+            if (!el || typeof L === "undefined") return;
+            const lat = Number.parseFloat(el.dataset.latitude);
+            const lng = Number.parseFloat(el.dataset.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            const map = L.map(el).setView([lat, lng], 16);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19, attribution:"&copy; OpenStreetMap" }).addTo(map);
+            L.marker([lat, lng]).addTo(map).bindPopup("Điểm giao xe").openPopup();
+            setTimeout(() => map.invalidateSize(), 0);
+        });
+    </script>
+}

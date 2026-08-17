@@ -31,5 +31,6 @@ public interface IBookingOperationService
     Task<OperationResult> MarkNoShowAsync(
         int bookingId,
         string adminId,
+        bool customerContacted,
         CancellationToken cancellationToken = default);
 }

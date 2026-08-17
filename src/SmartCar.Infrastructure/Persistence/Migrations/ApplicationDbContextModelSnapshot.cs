@@ -276,6 +276,22 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("DeliveryAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal?>("DeliveryLatitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("decimal(10,7)");
+
+                    b.Property<decimal?>("DeliveryLongitude")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("decimal(10,7)");
+
+                    b.Property<decimal>("DepositAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime?>("NoShowMarkedAt")
                         .HasColumnType("datetime2");
 
@@ -284,6 +300,11 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("PickupDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PickupMethod")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<decimal>("RefundAmount")
                         .HasPrecision(18, 2)
@@ -760,6 +781,15 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.Property<int>("BookingId")
                         .HasColumnType("int");
 
+                    b.Property<string>("DamageCompensationTerms")
+                        .IsRequired()
+                        .HasMaxLength(1500)
+                        .HasColumnType("nvarchar(1500)");
+
+                    b.Property<decimal>("ExcessKmFeePerKm")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("ExteriorCondition")
                         .HasColumnType("nvarchar(max)");
 
@@ -774,14 +804,29 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.Property<string>("ImagePaths")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("IncludedKilometers")
+                        .HasColumnType("int");
+
                     b.Property<string>("InteriorCondition")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("LateReturnFeeMultiplier")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("decimal(6,2)");
 
                     b.Property<int>("Mileage")
                         .HasColumnType("int");
 
                     b.Property<string>("Notes")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("PenaltyPolicyAccepted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("TrafficFineTerms")
+                        .IsRequired()
+                        .HasMaxLength(1500)
+                        .HasColumnType("nvarchar(1500)");
 
                     b.HasKey("VehicleHandoverId");
 

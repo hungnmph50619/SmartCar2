@@ -1,14 +1,60 @@
 @model IReadOnlyList<SmartCar.Application.Features.Extensions.ExtensionDto>
+@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Lịch sử gia hạn";
+
+    string StatusText(BookingExtensionStatus status) => status switch
+    {
+        BookingExtensionStatus.Pending => "Chờ quản trị viên duyệt",
+        BookingExtensionStatus.NeedsEvidence => "Cần bổ sung minh chứng",
+        BookingExtensionStatus.Approved => "Đã duyệt - chờ thanh toán",
+        BookingExtensionStatus.Paid => "Đã thanh toán - gia hạn có hiệu lực",
+        BookingExtensionStatus.Rejected => "Đã từ chối",
+        BookingExtensionStatus.Cancelled => "Đã hủy",
+        _ => status.ToString()
+    };
+
+    string BadgeClass(BookingExtensionStatus status) => status switch
+    {
+        BookingExtensionStatus.Paid => "bg-success",
+        BookingExtensionStatus.Approved => "bg-primary",
+        BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence => "bg-warning text-dark",
+        BookingExtensionStatus.Rejected or BookingExtensionStatus.Cancelled => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    (string Text, string? ImagePath) ParseEvidence(string? value)
+    {
+        const string marker = "Ảnh minh chứng: ";
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (string.Empty, null);
+        }
+
+        var index = value.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return (value.Trim(), null);
+        }
+
+        var text = value[..index].Trim().TrimEnd('|').Trim();
+        var imagePath = value[(index + marker.Length)..].Trim();
+        return (text, string.IsNullOrWhiteSpace(imagePath) ? null : imagePath);
+    }
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
     <div>
         <h1 class="h3 mb-1">Lịch sử gia hạn</h1>
-        <p class="text-muted mb-0">Theo dõi yêu cầu, kết quả duyệt và số tiền gia hạn.</p>
+        <p class="text-muted mb-0">Theo dõi yêu cầu, minh chứng, phản hồi và khoản tiền cần thanh toán.</p>
     </div>
     <a class="btn btn-outline-primary" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a>
+</div>
+
+<div class="alert alert-light border small">
+    Nếu xe đã có đơn kế tiếp, gia hạn thông thường sẽ bị từ chối. Trường hợp bất khả kháng phải có minh chứng và vị trí.
+    SmartCar ưu tiên đổi xe cho khách kế tiếp; nếu phải hủy đơn đó và có <strong>thiệt hại thực tế có căn cứ</strong>, khoản bồi thường sẽ được thông báo rõ và khấu trừ từ tiền cọc trước khi gia hạn được thanh toán.
+    Khoản này không tự động bằng giá hợp đồng của khách kế tiếp và không phải khoản bạn chuyển thêm lần nữa.
 </div>
 
 @if (Model.Count == 0)
@@ -17,26 +63,140 @@
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle">
-            <thead><tr><th>Đơn</th><th>Xe</th><th>Thời gian cũ</th><th>Thời gian mới</th><th>Phí</th><th>Trạng thái</th></tr></thead>
-            <tbody>
-            @foreach (var item in Model)
-            {
-                <tr>
-                    <td><a asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">#@item.BookingId</a></td>
-                    <td>@item.VehicleName</td>
-                    <td>@item.OriginalReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
-                    <td>@item.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
-                    <td>@item.AdditionalAmount.ToString("N0") đ</td>
-                    <td><span class="badge bg-secondary">@item.Status.ToVietnamese()</span></td>
-                </tr>
-                @if (!string.IsNullOrWhiteSpace(item.AdminNote))
-                {
-                    <tr><td colspan="6"><strong>Phản hồi của quản trị viên:</strong> @item.AdminNote</td></tr>
-                }
-            }
-            </tbody>
-        </table>
+    <div class="d-grid gap-3">
+        @foreach (var item in Model)
+        {
+            var evidence = ParseEvidence(item.EvidenceNote);
+            var evidenceInputId = $"evidence-{item.BookingExtensionId}";
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                        <div>
+                            <h2 class="h5 mb-1">
+                                <a class="text-decoration-none" asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">Đơn #@item.BookingId</a>
+                                · @item.VehicleName
+                            </h2>
+                            <span class="badge @(item.IsForceMajeure ? "bg-danger" : "bg-light text-dark border")">@(item.IsForceMajeure ? "Bất khả kháng" : "Gia hạn thông thường")</span>
+                        </div>
+                        <span class="badge @BadgeClass(item.Status)">@StatusText(item.Status)</span>
+                    </div>
+
+                    <div class="row g-3 small">
+                        <div class="col-md-3"><span class="text-muted">Trả cũ</span><div class="fw-semibold">@item.OriginalReturnDate.ToString("dd/MM/yyyy HH:mm")</div></div>
+                        <div class="col-md-3"><span class="text-muted">Đề nghị trả mới</span><div class="fw-semibold">@item.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</div></div>
+                        <div class="col-md-3"><span class="text-muted">Phí gia hạn</span><div class="fw-semibold">@item.AdditionalAmount.ToString("N0") đ</div></div>
+                        <div class="col-md-3"><span class="text-muted">Gửi lúc</span><div class="fw-semibold">@item.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div></div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(item.CustomerNote))
+                    {
+                        <div class="mt-3"><strong>Lý do/ghi chú:</strong> @item.CustomerNote</div>
+                    }
+
+                    @if (item.IsForceMajeure && !string.IsNullOrWhiteSpace(item.EvidenceNote))
+                    {
+                        <div class="mt-2">
+                            <strong>Minh chứng đã gửi:</strong>
+                            @if (!string.IsNullOrWhiteSpace(evidence.Text))
+                            {
+                                <span>@evidence.Text</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(evidence.ImagePath))
+                            {
+                                <div class="mt-2">
+                                    <a href="@evidence.ImagePath" target="_blank" rel="noopener">
+                                        <img src="@evidence.ImagePath" alt="Ảnh minh chứng gia hạn" class="img-thumbnail" style="max-height:170px;max-width:260px;object-fit:contain" />
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (item.HasScheduleConflict && item.IsForceMajeure && item.Status == BookingExtensionStatus.Pending)
+                    {
+                        <div class="alert alert-warning py-2 mt-3 mb-0">
+                            Xe có lịch thuê tiếp theo trong khoảng bạn đề nghị. SmartCar đang liên hệ khách kế tiếp và ưu tiên phương án đổi xe.
+                            Nếu phải hủy đơn kế tiếp, SmartCar sẽ xác định riêng thiệt hại thực tế (nếu có) và thông báo số tiền khấu trừ từ cọc trước khi duyệt gia hạn.
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(item.AdminNote))
+                    {
+                        <div class="alert @(item.Status == BookingExtensionStatus.Rejected ? "alert-danger" : "alert-info") py-2 mt-3 mb-0">
+                            <strong>Phản hồi của SmartCar:</strong> @item.AdminNote
+                        </div>
+                    }
+
+                    @if (item.Status == BookingExtensionStatus.NeedsEvidence)
+                    {
+                        <form asp-action="SupplementEvidence" method="post" enctype="multipart/form-data" class="border rounded p-3 mt-3 bg-light">
+                            <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
+                            <input type="hidden" name="bookingId" value="@item.BookingId" />
+                            <div class="fw-semibold mb-1">Bổ sung và gửi lại minh chứng</div>
+                            <div class="small text-muted mb-3">Cần cả ảnh minh chứng và vị trí trực tiếp để SmartCar xem xét trường hợp bất khả kháng.</div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label small">Tình trạng / vị trí / mô tả minh chứng</label>
+                                    <textarea id="@evidenceInputId" name="evidenceNote" class="form-control" rows="3" maxlength="1000" required placeholder="Mô tả tình trạng xe/sự cố. Sau đó bấm Lấy vị trí hiện tại."></textarea>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2 js-extension-location" data-target="@evidenceInputId">Lấy vị trí hiện tại</button>
+                                    <span class="small text-muted ms-2 js-location-status"></span>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small">Ảnh minh chứng</label>
+                                    <input name="evidenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" required />
+                                    <div class="form-text">Bắt buộc · tối đa 5 MB.</div>
+                                    <input name="customerNote" class="form-control mt-2" maxlength="500" placeholder="Ghi chú thêm" />
+                                </div>
+                                <div class="col-md-3 d-grid align-items-end">
+                                    <button class="btn btn-primary" type="submit">Gửi lại để duyệt</button>
+                                </div>
+                            </div>
+                        </form>
+                    }
+                    else if (item.Status == BookingExtensionStatus.Approved)
+                    {
+                        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mt-3 border-top pt-3">
+                            <div class="small text-muted">
+                                Yêu cầu đã được duyệt. Chỉ chuyển <strong>phí gia hạn hiển thị trên đơn</strong>;
+                                khoản bồi thường từ cọc (nếu có) đã được SmartCar đối soát riêng và không chuyển lại lần nữa.
+                            </div>
+                            <a class="btn btn-primary" asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">Mở đơn để thanh toán</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
     </div>
 }
+
+<script>
+    document.addEventListener("click", function (event) {
+        const button = event.target.closest(".js-extension-location");
+        if (!button) return;
+
+        const target = document.getElementById(button.dataset.target);
+        const status = button.parentElement.querySelector(".js-location-status");
+        if (!navigator.geolocation) {
+            if (status) status.textContent = "Thiết bị không hỗ trợ định vị.";
+            return;
+        }
+
+        button.disabled = true;
+        if (status) status.textContent = "Đang lấy vị trí...";
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                const locationText = `Vị trí trực tiếp: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+                target.value = target.value.trim()
+                    ? `${target.value.trim()} | ${locationText}`
+                    : locationText;
+                if (status) status.textContent = "Đã lấy vị trí.";
+                button.disabled = false;
+            },
+            function () {
+                if (status) status.textContent = "Không lấy được vị trí; hãy cấp quyền vị trí rồi thử lại.";
+                button.disabled = false;
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    });
+</script>

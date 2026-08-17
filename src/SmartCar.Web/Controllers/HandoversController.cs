@@ -15,7 +15,7 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class HandoversController : Controller
 {
-    private const int MaximumImages = 10;
+    private const int MaximumImages = 14;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IHandoverService _handoverService;
@@ -40,7 +40,10 @@ public sealed class HandoversController : Controller
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
+        var booking = await _bookingService.GetAdminBookingAsync(
+            bookingId,
+            cancellationToken);
+
         if (booking is null)
         {
             return NotFound();
@@ -49,14 +52,21 @@ public sealed class HandoversController : Controller
         if (booking.Status != BookingStatus.ReadyForPickup)
         {
             TempData["ErrorMessage"] =
-                "Chỉ đơn đang sẵn sàng giao xe mới được lập biên bản bàn giao.";
+                "Chỉ đơn sẵn sàng giao xe mới được lập biên bản giao.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        if (booking.HasHandover)
+        {
+            TempData["ErrorMessage"] =
+                "Biên bản điện tử đã được lập. Hãy in, ký và tải bản ký.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
         if (DateTime.Now >= booking.ReturnDate)
         {
             TempData["ErrorMessage"] =
-                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao xe.";
+                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao.";
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
@@ -65,7 +75,12 @@ public sealed class HandoversController : Controller
             BookingId = bookingId,
             HandoverAt = DateTime.Now > booking.PickupDate
                 ? DateTime.Now
-                : booking.PickupDate
+                : booking.PickupDate,
+            IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay,
+            ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
+            LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
+            TrafficFineTerms = RentalPolicy.TrafficFineTerms,
+            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms
         });
     }
 
@@ -75,16 +90,67 @@ public sealed class HandoversController : Controller
         HandoverViewModel model,
         CancellationToken cancellationToken)
     {
-        await ValidateImagesAsync(model.Images, cancellationToken);
+        var booking = await _bookingService.GetAdminBookingAsync(
+            model.BookingId,
+            cancellationToken);
+
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        if (booking.Status != BookingStatus.ReadyForPickup || booking.HasHandover)
+        {
+            TempData["ErrorMessage"] =
+                booking.HasHandover
+                    ? "Biên bản điện tử đã tồn tại. Hãy tiếp tục bước ký."
+                    : "Đơn không còn ở trạng thái sẵn sàng giao xe.";
+            return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+        }
+
+        if (DateTime.Now >= booking.ReturnDate)
+        {
+            TempData["ErrorMessage"] =
+                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao.";
+            return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+        }
+
+        // Các mức phí luôn lấy từ server, không nhận giá trị chính sách do browser gửi lên.
+        ModelState.Remove(nameof(HandoverViewModel.IncludedKilometers));
+        ModelState.Remove(nameof(HandoverViewModel.ExcessKmFeePerKm));
+        ModelState.Remove(nameof(HandoverViewModel.LateReturnFeeMultiplier));
+        ModelState.Remove(nameof(HandoverViewModel.TrafficFineTerms));
+        ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
+
+        model.IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay;
+        model.ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee;
+        model.LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier;
+        model.TrafficFineTerms = RentalPolicy.TrafficFineTerms;
+        model.DamageCompensationTerms = RentalPolicy.DamageCompensationTerms;
+
+        var evidenceFiles = BuildEvidenceFiles(model);
+        await ValidateImagesAsync(evidenceFiles, model.Images, cancellationToken);
         if (!ModelState.IsValid)
         {
             return View(model);
         }
 
-        var imagePaths = await SaveImagesAsync(
-            model.BookingId,
-            model.Images,
-            cancellationToken);
+        IReadOnlyList<string> imagePaths;
+        try
+        {
+            imagePaths = await SaveImagesAsync(
+                model.BookingId,
+                evidenceFiles,
+                model.Images,
+                cancellationToken);
+        }
+        catch
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.Images),
+                "Không thể lưu ảnh bàn giao. Vui lòng thử lại.");
+            return View(model);
+        }
 
         var result = await _handoverService.CreateAsync(
             new CreateHandoverRequest(
@@ -96,6 +162,12 @@ public sealed class HandoversController : Controller
                 model.InteriorCondition,
                 model.Accessories,
                 string.Join(';', imagePaths),
+                model.IncludedKilometers,
+                model.ExcessKmFeePerKm,
+                model.LateReturnFeeMultiplier,
+                model.TrafficFineTerms,
+                model.DamageCompensationTerms,
+                model.PenaltyPolicyAccepted,
                 model.Notes),
             cancellationToken);
 
@@ -106,7 +178,6 @@ public sealed class HandoversController : Controller
             {
                 ModelState.AddModelError(string.Empty, error);
             }
-
             return View(model);
         }
 
@@ -116,49 +187,87 @@ public sealed class HandoversController : Controller
             "CreateHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập biên bản giao xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh.",
+            $"Lập biên bản giao điện tử đơn #{model.BookingId}, {model.Mileage:N0} km, {imagePaths.Count} ảnh chứng cứ.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lập biên bản giao xe và lưu ảnh bàn giao.";
+        TempData["SuccessMessage"] =
+            "Đã lưu biên bản điện tử. Hãy in, ký và tải bản ký để bắt đầu chuyến thuê.";
+
         return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
+    // Giữ URL cũ để các liên kết cũ vẫn hoạt động.
+    [HttpGet]
+    public IActionResult Print(int bookingId) =>
+        RedirectToAction(
+            "HandoverPrint",
+            "AdminRentalDocuments",
+            new { bookingId });
+
+    private static IReadOnlyList<(string Label, string FieldName, IFormFile? File)> BuildEvidenceFiles(
+        HandoverViewModel model) =>
+        new (string, string, IFormFile?)[]
+        {
+            ("front", nameof(HandoverViewModel.FrontImage), model.FrontImage),
+            ("rear", nameof(HandoverViewModel.RearImage), model.RearImage),
+            ("left", nameof(HandoverViewModel.LeftImage), model.LeftImage),
+            ("right", nameof(HandoverViewModel.RightImage), model.RightImage),
+            ("interior", nameof(HandoverViewModel.InteriorImage), model.InteriorImage),
+            ("odometer", nameof(HandoverViewModel.OdometerImage), model.OdometerImage),
+            ("fuel", nameof(HandoverViewModel.FuelImage), model.FuelImage)
+        };
+
     private async Task ValidateImagesAsync(
-        IReadOnlyCollection<IFormFile> images,
+        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
+        IReadOnlyCollection<IFormFile> otherImages,
         CancellationToken cancellationToken)
     {
-        var selectedImages = images.Where(file => file.Length > 0).ToList();
-        if (selectedImages.Count == 0)
+        foreach (var evidence in evidenceFiles)
         {
-            ModelState.AddModelError(nameof(HandoverViewModel.Images),
-                "Vui lòng tải ít nhất một ảnh tình trạng xe khi bàn giao.");
-            return;
-        }
-
-        if (selectedImages.Count > MaximumImages)
-        {
-            ModelState.AddModelError(nameof(HandoverViewModel.Images),
-                $"Chỉ được tải tối đa {MaximumImages} ảnh bàn giao.");
-        }
-
-        foreach (var image in selectedImages)
-        {
-            var error = await ImageFileValidator.ValidateAsync(
-                image,
-                MaximumImageBytes,
-                cancellationToken);
-            if (error is not null)
+            if (evidence.File is null || evidence.File.Length == 0)
             {
-                ModelState.AddModelError(nameof(HandoverViewModel.Images),
-                    $"{image.FileName}: {error}");
+                ModelState.AddModelError(evidence.FieldName, "Cần ảnh này để đối chiếu khi trả xe.");
+                continue;
             }
+
+            await ValidateImageAsync(evidence.File, evidence.FieldName, cancellationToken);
+        }
+
+        var selectedOtherImages = otherImages.Where(file => file.Length > 0).ToList();
+        if (evidenceFiles.Count + selectedOtherImages.Count > MaximumImages)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.Images),
+                $"Tổng số ảnh tối đa là {MaximumImages}.");
+        }
+
+        foreach (var image in selectedOtherImages)
+        {
+            await ValidateImageAsync(image, nameof(HandoverViewModel.Images), cancellationToken);
+        }
+    }
+
+    private async Task ValidateImageAsync(
+        IFormFile image,
+        string fieldName,
+        CancellationToken cancellationToken)
+    {
+        var error = await ImageFileValidator.ValidateAsync(
+            image,
+            MaximumImageBytes,
+            cancellationToken);
+
+        if (error is not null)
+        {
+            ModelState.AddModelError(fieldName, $"{image.FileName}: {error}");
         }
     }
 
     private async Task<IReadOnlyList<string>> SaveImagesAsync(
         int bookingId,
-        IEnumerable<IFormFile> images,
+        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
+        IEnumerable<IFormFile> otherImages,
         CancellationToken cancellationToken)
     {
         var relativeFolder = $"uploads/handovers/{bookingId}";
@@ -166,18 +275,51 @@ public sealed class HandoversController : Controller
         Directory.CreateDirectory(folder);
 
         var paths = new List<string>();
-        foreach (var image in images.Where(file => file.Length > 0))
+        try
         {
-            var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-            var fileName = $"{Guid.NewGuid():N}{extension}";
-            var fullPath = Path.Combine(folder, fileName);
+            foreach (var evidence in evidenceFiles.Where(item => item.File is { Length: > 0 }))
+            {
+                paths.Add(await SaveOneImageAsync(
+                    folder,
+                    relativeFolder,
+                    evidence.Label,
+                    evidence.File!,
+                    cancellationToken));
+            }
 
-            await using var stream = System.IO.File.Create(fullPath);
-            await image.CopyToAsync(stream, cancellationToken);
-            paths.Add($"/{relativeFolder}/{fileName}");
+            foreach (var image in otherImages.Where(file => file.Length > 0))
+            {
+                paths.Add(await SaveOneImageAsync(
+                    folder,
+                    relativeFolder,
+                    "other",
+                    image,
+                    cancellationToken));
+            }
+
+            return paths;
         }
+        catch
+        {
+            DeleteSavedImages(paths);
+            throw;
+        }
+    }
 
-        return paths;
+    private static async Task<string> SaveOneImageAsync(
+        string folder,
+        string relativeFolder,
+        string label,
+        IFormFile image,
+        CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+        var fileName = $"{label}-{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using var stream = System.IO.File.Create(fullPath);
+        await image.CopyToAsync(stream, cancellationToken);
+        return $"/{relativeFolder}/{fileName}";
     }
 
     private void DeleteSavedImages(IEnumerable<string> imagePaths)
@@ -187,6 +329,7 @@ public sealed class HandoversController : Controller
             var fullPath = Path.Combine(
                 _environment.WebRootPath,
                 imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+
             if (System.IO.File.Exists(fullPath))
             {
                 System.IO.File.Delete(fullPath);

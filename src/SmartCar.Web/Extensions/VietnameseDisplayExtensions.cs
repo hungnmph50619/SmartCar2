@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Web.Extensions;
@@ -20,6 +20,7 @@ public static class VietnameseDisplayExtensions
             BookingStatus.ReadyForPickup => "Sẵn sàng giao xe",
             BookingStatus.Rented => "Đang thuê",
             BookingStatus.PendingInspection => "Chờ kiểm tra xe",
+            BookingStatus.AwaitingRefund => "Chờ hoàn tiền",
             BookingStatus.Completed => "Đã hoàn tất",
             BookingStatus.Cancelled => "Đã hủy",
             BookingStatus.NoShow => "Khách không đến nhận xe",
@@ -46,11 +47,19 @@ public static class VietnameseDisplayExtensions
         },
         PaymentType type => type switch
         {
+            PaymentType.Deposit => "Tiền cọc",
             PaymentType.Rental => "Tiền thuê xe",
             PaymentType.AdditionalCharge => "Phụ phí",
             PaymentType.Refund => "Hoàn tiền",
             PaymentType.Extension => "Tiền gia hạn",
+            PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
             _ => type.ToString()
+        },
+        VehiclePickupMethod method => method switch
+        {
+            VehiclePickupMethod.StorePickup => "Nhận tại cửa hàng",
+            VehiclePickupMethod.Delivery => "Giao xe tận nơi",
+            _ => method.ToString()
         },
         AdditionalChargeType type => type switch
         {
@@ -66,7 +75,8 @@ public static class VietnameseDisplayExtensions
         BookingExtensionStatus status => status switch
         {
             BookingExtensionStatus.Pending => "Chờ duyệt",
-            BookingExtensionStatus.Approved => "Đã duyệt",
+            BookingExtensionStatus.NeedsEvidence => "Cần bổ sung minh chứng",
+            BookingExtensionStatus.Approved => "Đã duyệt - chờ thanh toán",
             BookingExtensionStatus.Rejected => "Đã từ chối",
             BookingExtensionStatus.Paid => "Đã thanh toán",
             BookingExtensionStatus.Cancelled => "Đã hủy",
@@ -143,7 +153,11 @@ public static class VietnameseDisplayExtensions
         "Confirm" => "Xác nhận đơn",
         "MarkReady" => "Đánh dấu sẵn sàng",
         "Pay" => "Thanh toán",
+        "ConfirmQrPayment" => "Xác nhận thanh toán",
+        "RejectQrPayment" => "Yêu cầu gửi lại xác nhận thanh toán",
         "Refund" => "Hoàn tiền",
+        "RefundBatch" => "Hoàn tiền theo đơn",
+        "RepairForceMajeureCompensation" => "Điều chỉnh quyết toán bất khả kháng cũ",
         "CustomerCancel" => "Khách hàng hủy đơn",
         "AdminCancel" => "Quản trị viên hủy đơn",
         "MarkNoShow" => "Ghi nhận không đến nhận xe",
@@ -158,6 +172,11 @@ public static class VietnameseDisplayExtensions
         "ChangePassword" => "Đổi mật khẩu",
         "UpdateBankAccount" => "Cập nhật tài khoản ngân hàng",
         "ViewKycDocumentImage" => "Xem ảnh giấy tờ xác minh",
+        "CreateExtensionForCustomer" => "Ghi nhận gia hạn qua điện thoại",
+        "ResolveExtensionConflictByVehicleSwap" => "Xử lý xung đột gia hạn bằng đổi xe",
+        "ResolveExtensionConflictByCancellation" => "Xử lý xung đột gia hạn bằng hủy đơn kế tiếp",
+        "UploadHandoverSigned" => "Tải bản giao xe đã ký",
+        "UploadReturnSigned" => "Tải bản trả xe đã ký",
         null or "" => "Không xác định",
         _ => value
     };
@@ -165,6 +184,7 @@ public static class VietnameseDisplayExtensions
     public static string ToVietnameseEntity(this string? value) => value switch
     {
         "Booking" => "Đơn thuê",
+        "BookingExtension" => "Yêu cầu gia hạn",
         "Payment" => "Thanh toán",
         "CustomerDocument" => "Giấy tờ khách hàng",
         "VehicleDocument" => "Giấy tờ xe",
@@ -176,7 +196,6 @@ public static class VietnameseDisplayExtensions
         "MaintenanceRecord" => "Phiếu bảo trì",
         "UserProfile" => "Hồ sơ người dùng",
         "UserAccount" => "Tài khoản người dùng",
-        "UserBankAccount" => "Tài khoản ngân hàng",
         null or "" => "Không xác định",
         _ => value
     };

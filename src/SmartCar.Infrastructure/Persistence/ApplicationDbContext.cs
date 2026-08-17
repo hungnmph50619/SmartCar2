@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Domain.Entities;
 using SmartCar.Infrastructure.Identity;
@@ -140,10 +140,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.CustomerId).HasMaxLength(450).IsRequired();
             entity.Property(booking => booking.DailyPrice).HasPrecision(18, 2);
             entity.Property(booking => booking.RentalAmount).HasPrecision(18, 2);
+            entity.Property(booking => booking.DepositAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.AdditionalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.TotalAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.RefundAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.Status).HasConversion<string>().HasMaxLength(40);
+            entity.Property(booking => booking.PickupMethod).HasConversion<string>().HasMaxLength(30);
+            entity.Property(booking => booking.DeliveryAddress).HasMaxLength(500);
+            entity.Property(booking => booking.DeliveryLatitude).HasPrecision(10, 7);
+            entity.Property(booking => booking.DeliveryLongitude).HasPrecision(10, 7);
             entity.Property(booking => booking.CancelReason).HasMaxLength(500);
             entity.Property(booking => booking.CancelledBy).HasMaxLength(30);
             entity.Property(booking => booking.RefundReason).HasMaxLength(500);
@@ -203,6 +208,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithOne(booking => booking.Handover)
                 .HasForeignKey<VehicleHandover>(handover => handover.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(handover => handover.ExcessKmFeePerKm).HasPrecision(18, 2);
+            entity.Property(handover => handover.LateReturnFeeMultiplier).HasPrecision(6, 2);
+            entity.Property(handover => handover.TrafficFineTerms).HasMaxLength(1500).IsRequired();
+            entity.Property(handover => handover.DamageCompensationTerms).HasMaxLength(1500).IsRequired();
         });
 
         builder.Entity<VehicleReturn>(entity =>

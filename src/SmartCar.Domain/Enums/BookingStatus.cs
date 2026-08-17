@@ -11,5 +11,6 @@ public enum BookingStatus
     PendingInspection = 7,
     Completed = 8,
     Cancelled = 9,
-    NoShow = 10
+    NoShow = 10,
+    AwaitingRefund = 11
 }

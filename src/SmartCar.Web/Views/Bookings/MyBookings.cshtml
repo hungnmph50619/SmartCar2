@@ -1,4 +1,4 @@
-@model IReadOnlyList<SmartCar.Application.Features.Bookings.BookingListItemDto>
+﻿@model IReadOnlyList<SmartCar.Application.Features.Bookings.BookingListItemDto>
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Đơn thuê của tôi";
@@ -49,10 +49,10 @@
         margin-bottom: 1.5rem;
     }
 
-    .my-bookings-header h1 {
-        font-weight: 700;
-        letter-spacing: -.02em;
-    }
+        .my-bookings-header h1 {
+            font-weight: 700;
+            letter-spacing: -.02em;
+        }
 
     .my-bookings-empty {
         max-width: 680px;
@@ -76,10 +76,10 @@
         background: #edf5ff;
     }
 
-    .my-bookings-empty-icon svg {
-        width: 38px;
-        height: 38px;
-    }
+        .my-bookings-empty-icon svg {
+            width: 38px;
+            height: 38px;
+        }
 
     .my-bookings-empty h2 {
         margin-bottom: .5rem;
@@ -117,18 +117,18 @@
         transition: all .16s ease;
     }
 
-    .booking-filter:hover {
-        border-color: #9ec3ff;
-        color: #0d6efd;
-        background: #f7fbff;
-    }
+        .booking-filter:hover {
+            border-color: #9ec3ff;
+            color: #0d6efd;
+            background: #f7fbff;
+        }
 
-    .booking-filter.active {
-        border-color: #0d6efd;
-        color: #fff;
-        background: #0d6efd;
-        box-shadow: 0 5px 14px rgba(13, 110, 253, .18);
-    }
+        .booking-filter.active {
+            border-color: #0d6efd;
+            color: #fff;
+            background: #0d6efd;
+            box-shadow: 0 5px 14px rgba(13, 110, 253, .18);
+        }
 
     .booking-filter-count {
         margin-left: .3rem;
@@ -155,11 +155,11 @@
         transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
     }
 
-    .booking-card:hover {
-        border-color: #c5d6ee;
-        box-shadow: 0 11px 28px rgba(15, 23, 42, .075);
-        transform: translateY(-1px);
-    }
+        .booking-card:hover {
+            border-color: #c5d6ee;
+            box-shadow: 0 11px 28px rgba(15, 23, 42, .075);
+            transform: translateY(-1px);
+        }
 
     .booking-image-wrap {
         min-height: 128px;
@@ -185,10 +185,10 @@
         color: #7a8ba5;
     }
 
-    .booking-image-placeholder svg {
-        width: 52px;
-        height: 52px;
-    }
+        .booking-image-placeholder svg {
+            width: 52px;
+            height: 52px;
+        }
 
     .booking-main {
         min-width: 0;
@@ -458,8 +458,8 @@
 
                     <div class="booking-side">
                         <div class="text-end">
-                            <div class="booking-total-label">Tổng tiền</div>
-                            <div class="booking-total">@booking.TotalAmount.ToString("N0") đ</div>
+                            <div class="booking-total-label">Tổng thanh toán</div>
+                            <div class="booking-total">@booking.GrandTotalAmount.ToString("N0") đ</div>
                         </div>
                         <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@booking.BookingId">Xem chi tiết →</a>
                     </div>

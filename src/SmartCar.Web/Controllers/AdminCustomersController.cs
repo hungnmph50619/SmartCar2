@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -241,9 +241,24 @@ public sealed class AdminCustomersController : Controller
 
         var state = ResolveProfileState(documents);
         var activeTab = NormalizeTab(tab);
-        var paidIn = payments
-            .Where(payment => payment.Status == PaymentStatus.Paid && payment.Type != PaymentType.Refund)
-            .Sum(payment => payment.Amount);
+        var paidIn =
+    payments
+        .Where(payment =>
+            payment.Status ==
+                PaymentStatus.Paid &&
+
+            (
+                payment.Type ==
+                    PaymentType.Rental ||
+
+                payment.Type ==
+                    PaymentType.Extension ||
+
+                payment.Type ==
+                    PaymentType.AdditionalCharge
+            ))
+        .Sum(payment =>
+            payment.Amount);
         var refunds = payments
             .Where(payment => payment.Type == PaymentType.Refund &&
                               (payment.Status == PaymentStatus.Paid || payment.Status == PaymentStatus.Refunded))

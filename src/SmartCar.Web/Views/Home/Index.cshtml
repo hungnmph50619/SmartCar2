@@ -1,4 +1,4 @@
-@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
+﻿@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
 @using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Trang chủ";
@@ -320,8 +320,8 @@
                     <a asp-controller="Vehicles"
                        asp-action="Details"
                        asp-route-id="@vehicle.VehicleId"
-                       asp-route-pickupDate="@pickupDate"
-                       asp-route-returnDate="@returnDate"
+                       asp-route-pickupDate="@pickupDate.ToString("O")"
+                       asp-route-returnDate="@returnDate.ToString("O")"
                        class="featured-card-link h-100"
                        aria-label="Xem chi tiết @vehicle.VehicleName">
                         <article class="featured-car-card h-100">
