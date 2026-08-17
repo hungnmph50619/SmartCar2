@@ -41,6 +41,33 @@
     chỉ nhập <strong>thiệt hại thực tế có căn cứ</strong> để bồi thường từ cọc A; không tự động lấy bằng giá hợp đồng B.
 </div>
 
+<details class="card card-body shadow-sm mb-4 border-danger">
+    <summary class="fw-semibold text-danger">Ghi nhận A cố tình không trả xe sau khi đã bị từ chối gia hạn</summary>
+    <div class="small text-muted mt-2 mb-3">
+        Chỉ dùng cho TH1: A đã được thông báo từ chối gia hạn vì xe có đơn B, nhưng vẫn cố tình không trả đúng hạn và làm B không nhận được xe.
+        Hệ thống sẽ lấy <strong>giá hợp đồng B</strong> làm khoản bồi thường, khấu trừ từ cọc A và gộp vào khoản hoàn cho B.
+    </div>
+    <form asp-controller="AdminExtensionCompensations" asp-action="RecordIntentionalConflictCompensation" method="post" class="row g-2" data-confirm="Xác nhận đây là trường hợp A đã bị từ chối gia hạn nhưng vẫn cố tình không trả xe đúng hạn, làm ảnh hưởng đơn B?">
+        <div class="col-md-3">
+            <label class="form-label">Đơn A đang/đã thuê</label>
+            <input name="renterBookingId" type="number" min="1" class="form-control" required placeholder="#A" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Đơn B bị ảnh hưởng</label>
+            <input name="affectedBookingId" type="number" min="1" class="form-control" required placeholder="#B" />
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="violationConfirmed" value="true" id="violation-confirmed" required />
+                <label class="form-check-label" for="violation-confirmed">Đã xác minh A được thông báo từ chối nhưng vẫn cố tình không trả xe đúng hạn và làm ảnh hưởng B</label>
+            </div>
+        </div>
+        <div class="col-12">
+            <button class="btn btn-outline-danger" type="submit">Ghi nhận bồi thường bằng giá hợp đồng B</button>
+        </div>
+    </form>
+</details>
+
 <details class="card card-body shadow-sm mb-4">
     <summary class="fw-semibold">+ Ghi nhận yêu cầu qua điện thoại</summary>
     <form asp-controller="AdminExtensions" asp-action="CreateForCustomer" method="post" enctype="multipart/form-data" class="row g-3 mt-2" id="admin-extension-phone-form">
