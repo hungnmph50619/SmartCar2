@@ -52,6 +52,7 @@ public static class VietnameseDisplayExtensions
             PaymentType.AdditionalCharge => "Phụ phí",
             PaymentType.Refund => "Hoàn tiền",
             PaymentType.Extension => "Tiền gia hạn",
+            PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
             _ => type.ToString()
         },
         VehiclePickupMethod method => method switch
