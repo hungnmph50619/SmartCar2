@@ -58,7 +58,11 @@ internal sealed class PaymentService : IPaymentService
                 payment.Type,
                 payment.Type == PaymentType.Rental
                     ? payment.Amount + payment.Booking.Payments
-                        .Where(deposit => deposit.Type == PaymentType.Deposit)
+                        .Where(deposit =>
+                            deposit.Type == PaymentType.Deposit &&
+                            (payment.TransactionCode != null
+                                ? deposit.TransactionCode == payment.TransactionCode
+                                : deposit.TransactionCode == null && deposit.Status == payment.Status))
                         .Sum(deposit => deposit.Amount)
                     : payment.Amount,
                 payment.Method,
@@ -183,9 +187,14 @@ internal sealed class PaymentService : IPaymentService
         if (paymentType == PaymentType.Rental && booking.DepositAmount > 0)
         {
             bundledDeposit = booking.Payments
-                .FirstOrDefault(item => item.Type == PaymentType.Deposit);
+                .FirstOrDefault(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status != PaymentStatus.Paid);
 
-            if (bundledDeposit is null)
+            if (bundledDeposit is null &&
+                !booking.Payments.Any(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.Paid))
             {
                 bundledDeposit = new Payment
                 {
@@ -197,7 +206,7 @@ internal sealed class PaymentService : IPaymentService
                 };
                 booking.Payments.Add(bundledDeposit);
             }
-            else if (bundledDeposit.Status != PaymentStatus.Paid)
+            else if (bundledDeposit is not null)
             {
                 bundledDeposit.Amount = booking.DepositAmount;
                 bundledDeposit.Method = PaymentMethods.BankQr;
@@ -279,21 +288,12 @@ internal sealed class PaymentService : IPaymentService
         if (originalType == PaymentType.Rental)
         {
             bundledDeposit = booking.Payments
-                .FirstOrDefault(item => item.Type == PaymentType.Deposit);
+                .FirstOrDefault(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.AwaitingConfirmation);
 
-            if (booking.DepositAmount > 0)
+            if (booking.DepositAmount > 0 && bundledDeposit is not null)
             {
-                if (bundledDeposit is null)
-                {
-                    bundledDeposit = new Payment
-                    {
-                        BookingId = booking.BookingId,
-                        Type = PaymentType.Deposit,
-                        Amount = booking.DepositAmount
-                    };
-                    booking.Payments.Add(bundledDeposit);
-                }
-
                 bundledDeposit.Amount = booking.DepositAmount;
                 bundledDeposit.Method = PaymentMethods.BankQr;
                 bundledDeposit.Status = PaymentStatus.Paid;
