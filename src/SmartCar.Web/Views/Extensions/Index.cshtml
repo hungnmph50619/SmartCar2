@@ -22,6 +22,25 @@
         BookingExtensionStatus.Rejected or BookingExtensionStatus.Cancelled => "bg-danger",
         _ => "bg-secondary"
     };
+
+    (string Text, string? ImagePath) ParseEvidence(string? value)
+    {
+        const string marker = "Ảnh minh chứng: ";
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (string.Empty, null);
+        }
+
+        var index = value.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return (value.Trim(), null);
+        }
+
+        var text = value[..index].Trim().TrimEnd('|').Trim();
+        var imagePath = value[(index + marker.Length)..].Trim();
+        return (text, string.IsNullOrWhiteSpace(imagePath) ? null : imagePath);
+    }
 }
 
 <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
@@ -41,6 +60,9 @@ else
     <div class="d-grid gap-3">
         @foreach (var item in Model)
         {
+            var evidence = ParseEvidence(item.EvidenceNote);
+            var evidenceInputId = $"evidence-{item.BookingExtensionId}";
+
             <div class="card shadow-sm">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
@@ -69,7 +91,21 @@ else
                     }
                     @if (item.IsForceMajeure && !string.IsNullOrWhiteSpace(item.EvidenceNote))
                     {
-                        <div class="mt-2"><strong>Minh chứng đã gửi:</strong> @item.EvidenceNote</div>
+                        <div class="mt-2">
+                            <strong>Minh chứng đã gửi:</strong>
+                            @if (!string.IsNullOrWhiteSpace(evidence.Text))
+                            {
+                                <span>@evidence.Text</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(evidence.ImagePath))
+                            {
+                                <div class="mt-2">
+                                    <a href="@evidence.ImagePath" target="_blank" rel="noopener">
+                                        <img src="@evidence.ImagePath" alt="Ảnh minh chứng gia hạn" class="img-thumbnail" style="max-height:170px;max-width:260px;object-fit:contain" />
+                                    </a>
+                                </div>
+                            }
+                        </div>
                     }
 
                     @if (item.HasScheduleConflict && item.IsForceMajeure && item.Status == BookingExtensionStatus.Pending)
@@ -88,19 +124,25 @@ else
 
                     @if (item.Status == BookingExtensionStatus.NeedsEvidence)
                     {
-                        <form asp-action="SupplementEvidence" method="post" class="border rounded p-3 mt-3 bg-light">
+                        <form asp-action="SupplementEvidence" method="post" enctype="multipart/form-data" class="border rounded p-3 mt-3 bg-light">
                             <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
                             <input type="hidden" name="bookingId" value="@item.BookingId" />
                             <div class="fw-semibold mb-2">Bổ sung và gửi lại minh chứng</div>
                             <div class="row g-2">
-                                <div class="col-md-7">
-                                    <textarea name="evidenceNote" class="form-control" rows="3" maxlength="1000" required placeholder="Mô tả tình trạng xe/sự cố, vị trí hiện tại và bằng chứng bạn có. Nếu có ảnh/video, liên hệ hotline để cung cấp theo hướng dẫn."></textarea>
+                                <div class="col-md-6">
+                                    <label class="form-label small">Tình trạng / vị trí / mô tả minh chứng</label>
+                                    <textarea id="@evidenceInputId" name="evidenceNote" class="form-control" rows="3" maxlength="1000" placeholder="Mô tả tình trạng xe/sự cố và vị trí hiện tại. Có thể bấm nút lấy vị trí bên dưới."></textarea>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary mt-2 js-extension-location" data-target="@evidenceInputId">Lấy vị trí hiện tại</button>
+                                    <span class="small text-muted ms-2 js-location-status"></span>
                                 </div>
                                 <div class="col-md-3">
-                                    <input name="customerNote" class="form-control" maxlength="500" placeholder="Ghi chú thêm (nếu có)" />
+                                    <label class="form-label small">Ảnh minh chứng</label>
+                                    <input name="evidenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" />
+                                    <div class="form-text">Tối đa 5 MB.</div>
+                                    <input name="customerNote" class="form-control mt-2" maxlength="500" placeholder="Ghi chú thêm" />
                                 </div>
-                                <div class="col-md-2 d-grid">
-                                    <button class="btn btn-primary" type="submit">Gửi lại</button>
+                                <div class="col-md-3 d-grid align-items-end">
+                                    <button class="btn btn-primary" type="submit">Gửi lại để duyệt</button>
                                 </div>
                             </div>
                         </form>
@@ -117,3 +159,34 @@ else
         }
     </div>
 }
+
+<script>
+    document.addEventListener("click", function (event) {
+        const button = event.target.closest(".js-extension-location");
+        if (!button) return;
+
+        const target = document.getElementById(button.dataset.target);
+        const status = button.parentElement.querySelector(".js-location-status");
+        if (!navigator.geolocation) {
+            if (status) status.textContent = "Thiết bị không hỗ trợ định vị.";
+            return;
+        }
+
+        button.disabled = true;
+        if (status) status.textContent = "Đang lấy vị trí...";
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                const locationText = `Vị trí trực tiếp: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+                target.value = target.value.trim()
+                    ? `${target.value.trim()} | ${locationText}`
+                    : locationText;
+                if (status) status.textContent = "Đã lấy vị trí.";
+                button.disabled = false;
+            },
+            function () {
+                if (status) status.textContent = "Không lấy được vị trí; bạn có thể nhập thủ công.";
+                button.disabled = false;
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    });
+</script>
