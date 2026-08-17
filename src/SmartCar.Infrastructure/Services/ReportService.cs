@@ -183,11 +183,12 @@ internal sealed class ReportService : IReportService
             })
             .ToListAsync(cancellationToken);
 
-        var confirmedRefunds = await _dbContext.Payments
+        var depositSettlementRefunds = await _dbContext.Payments
             .AsNoTracking()
             .Where(item =>
                 item.Type == PaymentType.Refund &&
-                item.Status == PaymentStatus.Refunded)
+                (item.Status == PaymentStatus.AwaitingRefund ||
+                 item.Status == PaymentStatus.Refunded))
             .Select(item => new
             {
                 item.BookingId,
@@ -215,7 +216,7 @@ internal sealed class ReportService : IReportService
             .Select(item => new { item.BookingId, item.CustomerNote })
             .ToListAsync(cancellationToken);
 
-        var refundsByBooking = confirmedRefunds
+        var refundsByBooking = depositSettlementRefunds
             .GroupBy(item => item.BookingId)
             .ToDictionary(group => group.Key, group => group.ToList());
         var depositDeductionsByBooking = allDepositDeductions
@@ -256,14 +257,14 @@ internal sealed class ReportService : IReportService
                             .Where(item => item.Method != PaymentMethods.CompensationRefund)
                             .Sum(item => item.Amount) ?? 0m);
 
-                var refundedDeposit = Math.Min(
+                var refundedOrReservedDeposit = Math.Min(
                     paid,
                     explicitDepositRefund + legacyReturnRefund + legacyCancelledRefund);
                 var deductedDeposit = depositDeductionsByBooking.GetValueOrDefault(group.Key);
                 var reservedDeposit = compensationReservedByBooking.GetValueOrDefault(group.Key);
                 var unavailableDeposit = Math.Max(deductedDeposit, reservedDeposit);
 
-                return Math.Max(0m, paid - refundedDeposit - unavailableDeposit);
+                return Math.Max(0m, paid - refundedOrReservedDeposit - unavailableDeposit);
             });
 
         var rows = new List<VehiclePerformanceDto>(vehicles.Count);
