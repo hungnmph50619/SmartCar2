@@ -1,8 +1,9 @@
-using System.Globalization;
+using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Extensions;
 using SmartCar.Application.Features.Payments;
 using SmartCar.Domain.Constants;
@@ -15,19 +16,20 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminPaymentsController : Controller
 {
-    private const string CompensationMarker = "[NEXT_BOOKING_COMPENSATION]";
-
     private readonly IPaymentService _paymentService;
     private readonly IExtensionService _extensionService;
+    private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
 
     public AdminPaymentsController(
         IPaymentService paymentService,
         IExtensionService extensionService,
+        IAuditService auditService,
         ApplicationDbContext dbContext)
     {
         _paymentService = paymentService;
         _extensionService = extensionService;
+        _auditService = auditService;
         _dbContext = dbContext;
     }
 
@@ -177,210 +179,120 @@ public sealed class AdminPaymentsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ConfirmRefund(
-        int paymentId,
-        string transactionCode,
+    public async Task<IActionResult> ConfirmRefundBatch(
+        int bookingId,
+        string? transactionCode,
         string? section,
         CancellationToken cancellationToken)
     {
-        var compensationDeduction = await ApplyExtensionCompensationDeductionAsync(
-            paymentId,
-            cancellationToken);
-
-        if (!compensationDeduction.Succeeded)
+        transactionCode = transactionCode?.Trim();
+        if (string.IsNullOrWhiteSpace(transactionCode))
         {
-            TempData["ErrorMessage"] = compensationDeduction.Error;
+            TempData["ErrorMessage"] = "Vui lòng nhập mã giao dịch của lần chuyển hoàn tiền.";
             return RedirectToAction(nameof(Index), new { section = "refund" });
         }
+
+        if (transactionCode.Length > 100)
+        {
+            TempData["ErrorMessage"] = "Mã giao dịch hoàn tiền tối đa 100 ký tự.";
+            return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking is null)
+        {
+            TempData["ErrorMessage"] = "Không tìm thấy đơn thuê cần hoàn tiền.";
+            return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
+        var pendingRefunds = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Status == PaymentStatus.AwaitingRefund)
+            .OrderBy(item => item.PaymentId)
+            .ToList();
+
+        if (pendingRefunds.Count == 0)
+        {
+            TempData["ErrorMessage"] = "Đơn này không còn khoản hoàn tiền nào đang chờ xử lý.";
+            return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
+        if (pendingRefunds.Any(item => item.Amount <= 0))
+        {
+            TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ. Vui lòng kiểm tra lại dữ liệu trước khi xác nhận.";
+            return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
+        var refundedAt = DateTime.UtcNow;
+        var totalRefund = pendingRefunds.Sum(item => item.Amount);
+        var breakdown = pendingRefunds
+            .GroupBy(item => RefundPurposeText(item.Method))
+            .Select(group => $"{group.Key}: {group.Sum(item => item.Amount):N0} đồng")
+            .ToArray();
+
+        foreach (var refund in pendingRefunds)
+        {
+            refund.Status = PaymentStatus.Refunded;
+            refund.PaidAt = refundedAt;
+            refund.TransactionCode = transactionCode;
+        }
+
+        var completedAfterRefund = booking.Status == BookingStatus.AwaitingRefund;
+        if (completedAfterRefund)
+        {
+            booking.Status = BookingStatus.Completed;
+        }
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Hoàn tiền thành công",
+            Message =
+                $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {totalRefund:N0} đồng " +
+                $"({string.Join("; ", breakdown)}). Mã giao dịch: {transactionCode}."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        var result = await _paymentService.ConfirmRefundAsync(
-            paymentId,
+        await _auditService.WriteAsync(
             adminId,
-            transactionCode,
-            cancellationToken);
+            "RefundBatch",
+            nameof(Payment),
+            booking.BookingId.ToString(),
+            $"Hoàn tiền theo đơn #{booking.BookingId}: tổng {totalRefund:N0} đồng ({string.Join("; ", breakdown)}). Mã giao dịch: {transactionCode}.",
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
 
-        if (!result.Succeeded)
-        {
-            TempData["ErrorMessage"] = string.Join("; ", result.Errors);
-            return RedirectToAction(nameof(Index), new { section = "refund" });
-        }
-
-        var payment = await _dbContext.Payments
-            .Include(item => item.Booking)
-                .ThenInclude(booking => booking.Payments)
-            .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
-
-        var hasOtherPendingRefund = payment?.Booking.Payments.Any(item =>
-            item.Type == PaymentType.Refund &&
-            item.Status == PaymentStatus.AwaitingRefund) == true;
-
-        var completedAfterRefund = payment is not null &&
-            payment.Type == PaymentType.Refund &&
-            payment.Status == PaymentStatus.Refunded &&
-            payment.Booking.Status == BookingStatus.AwaitingRefund &&
-            !hasOtherPendingRefund;
+        TempData["SuccessMessage"] = completedAfterRefund
+            ? $"Đã hoàn tổng {totalRefund:N0} đ. Chuyến thuê đã hoàn tất."
+            : $"Đã hoàn tổng {totalRefund:N0} đ cho đơn #{booking.BookingId}.";
 
         if (completedAfterRefund)
         {
-            payment!.Booking.Status = BookingStatus.Completed;
-
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = payment.Booking.CustomerId,
-                Title = "Đơn thuê đã hoàn tất",
-                Message = compensationDeduction.DeductedAmount > 0
-                    ? $"Đơn #{payment.BookingId} đã hoàn tất. Đã khấu trừ {compensationDeduction.DeductedAmount:N0} đồng theo phương án bồi thường và hoàn phần cọc còn lại."
-                    : $"Đơn #{payment.BookingId} đã hoàn tất. Các khoản hoàn đã được xử lý."
-            });
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        TempData["SuccessMessage"] = completedAfterRefund
-            ? "Đã xử lý khoản hoàn cuối cùng. Chuyến thuê đã hoàn tất."
-            : hasOtherPendingRefund
-                ? "Đã xác nhận khoản hoàn này. Vẫn còn khoản hoàn khác cần xử lý."
-                : "Đã xác nhận hoàn tiền.";
-
-        if (completedAfterRefund && payment is not null)
-        {
-            return RedirectToAction("Details", "AdminTripRecords", new { id = payment.BookingId });
+            return RedirectToAction("Details", "AdminTripRecords", new { id = booking.BookingId });
         }
 
         return RedirectToAction(nameof(Index), new { section = section ?? "refund" });
     }
 
-    private async Task<(bool Succeeded, decimal DeductedAmount, string? Error)> ApplyExtensionCompensationDeductionAsync(
-        int paymentId,
-        CancellationToken cancellationToken)
+    private static string RefundPurposeText(string? method) => method switch
     {
-        var payment = await _dbContext.Payments
-            .Include(item => item.Booking)
-                .ThenInclude(booking => booking.Payments)
-            .Include(item => item.Booking)
-                .ThenInclude(booking => booking.Extensions)
-            .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
-
-        if (payment is null)
-        {
-            return (false, 0m, "Không tìm thấy khoản hoàn tiền.");
-        }
-
-        var isDepositRefund =
-            payment.Method == PaymentMethods.DepositRefund ||
-            (payment.Method == PaymentMethods.BankTransferRefund && payment.Booking.VehicleReturn is not null);
-
-        if (payment.Type != PaymentType.Refund ||
-            payment.Status != PaymentStatus.AwaitingRefund ||
-            payment.Booking.Status != BookingStatus.AwaitingRefund ||
-            !isDepositRefund)
-        {
-            return (true, 0m, null);
-        }
-
-        var alreadyApplied = payment.Booking.Payments.Any(item =>
-            item.Type == PaymentType.AdditionalCharge &&
-            item.Status == PaymentStatus.Paid &&
-            item.Method == PaymentMethods.DepositDeduction &&
-            !string.IsNullOrWhiteSpace(item.TransactionCode) &&
-            item.TransactionCode.StartsWith("EXT-COMP-", StringComparison.Ordinal));
-
-        if (alreadyApplied)
-        {
-            return (true, 0m, null);
-        }
-
-        var compensationAmount = payment.Booking.Extensions
-            .Sum(extension => ExtractCompensationAmount(extension.CustomerNote));
-
-        if (compensationAmount <= 0)
-        {
-            return (true, 0m, null);
-        }
-
-        var deduction = Math.Min(payment.Amount, compensationAmount);
-        if (deduction <= 0)
-        {
-            return (true, 0m, null);
-        }
-
-        payment.Amount -= deduction;
-        payment.Booking.RefundAmount = Math.Max(0m, payment.Booking.RefundAmount - deduction);
-        payment.Booking.AdditionalAmount += deduction;
-        payment.Booking.TotalAmount += deduction;
-        payment.Booking.RefundReason = AppendText(
-            payment.Booking.RefundReason,
-            $"Khấu trừ {deduction:N0} đồng từ cọc để bồi thường đơn thuê kế tiếp.");
-
-        payment.Booking.Payments.Add(new Payment
-        {
-            Type = PaymentType.AdditionalCharge,
-            Amount = deduction,
-            Method = PaymentMethods.DepositDeduction,
-            Status = PaymentStatus.Paid,
-            PaidAt = DateTime.UtcNow,
-            TransactionCode = $"EXT-COMP-{payment.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
-        });
-
-        _dbContext.Notifications.Add(new Notification
-        {
-            UserId = payment.Booking.CustomerId,
-            Title = "Đối soát tiền cọc",
-            Message = $"Đơn #{payment.BookingId}: khấu trừ {deduction:N0} đồng theo phương án bồi thường. Cọc còn hoàn: {payment.Amount:N0} đồng."
-        });
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return (true, deduction, null);
-    }
-
-    private static decimal ExtractCompensationAmount(string? customerNote)
-    {
-        if (string.IsNullOrWhiteSpace(customerNote))
-        {
-            return 0m;
-        }
-
-        var total = 0m;
-        var searchIndex = 0;
-        while (searchIndex < customerNote.Length)
-        {
-            var markerIndex = customerNote.IndexOf(
-                CompensationMarker,
-                searchIndex,
-                StringComparison.Ordinal);
-
-            if (markerIndex < 0)
-            {
-                break;
-            }
-
-            var valueStart = markerIndex + CompensationMarker.Length;
-            var valueEnd = customerNote.IndexOfAny(new[] { '|', '\r', '\n' }, valueStart);
-            var rawValue = valueEnd < 0
-                ? customerNote[valueStart..]
-                : customerNote[valueStart..valueEnd];
-
-            if (decimal.TryParse(
-                    rawValue.Trim(),
-                    NumberStyles.Number,
-                    CultureInfo.InvariantCulture,
-                    out var parsed) &&
-                parsed > 0)
-            {
-                total += parsed;
-            }
-
-            searchIndex = valueEnd < 0 ? customerNote.Length : valueEnd + 1;
-        }
-
-        return total;
-    }
-
-    private static string AppendText(string? current, string addition) =>
-        string.IsNullOrWhiteSpace(current)
-            ? addition
-            : $"{current.Trim()} {addition}";
+        PaymentMethods.DepositRefund => "Hoàn cọc",
+        PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
+        PaymentMethods.CompensationRefund => "Hỗ trợ/bồi thường",
+        PaymentMethods.BankTransferRefund => "Hoàn tiền thuê/phí giao",
+        _ => "Hoàn tiền"
+    };
 
     private static string ResolveSection(string? section, PaymentType? type)
     {
