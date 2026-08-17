@@ -20,7 +20,6 @@ public sealed class AdminExtensionsController : Controller
 {
     private const long MaximumEvidenceImageBytes = 5 * 1024 * 1024;
     private const string ForceMajeureMarker = "[FORCE_MAJEURE]";
-    private const string CompensationMarker = "[NEXT_BOOKING_COMPENSATION]";
 
     private static readonly BookingStatus[] BlockingStatuses =
     {
@@ -421,8 +420,24 @@ public sealed class AdminExtensionsController : Controller
                 item.Method == PaymentMethods.DepositRefund &&
                 item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
             .Sum(item => item.Amount);
-        var currentRenterDepositHeld = Math.Max(0m, currentRenterDepositPaid - currentRenterDepositRefunds);
-        var compensationAmount = Math.Min(conflictContractAmount, currentRenterDepositHeld);
+        var currentRenterDepositDeductions = extension.Booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.AdditionalCharge &&
+                item.Method == PaymentMethods.DepositDeduction &&
+                item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var alreadyReservedCompensation = CompensationLedger.SumReservedAmount(extension.CustomerNote);
+        var unavailableForNewCompensation = Math.Max(
+            currentRenterDepositDeductions,
+            alreadyReservedCompensation);
+        var currentRenterDepositAvailable = Math.Max(
+            0m,
+            currentRenterDepositPaid -
+            currentRenterDepositRefunds -
+            unavailableForNewCompensation);
+        var compensationAmount = Math.Min(
+            conflictContractAmount,
+            currentRenterDepositAvailable);
 
         var cancelResult = await _bookingOperationService.CancelByAdminAsync(
             adminId,
@@ -474,7 +489,7 @@ public sealed class AdminExtensionsController : Controller
             {
                 UserId = extension.Booking.CustomerId,
                 Title = "Ghi nhận bồi thường đơn kế tiếp",
-                Message = $"Đơn #{extension.BookingId}: ghi nhận {compensationAmount:N0} đồng để đối soát từ tiền cọc do đơn kế tiếp bị ảnh hưởng."
+                Message = $"Đơn #{extension.BookingId}: đã giữ {compensationAmount:N0} đồng từ phần cọc còn khả dụng để đối soát do đơn kế tiếp bị ảnh hưởng."
             });
         }
 
@@ -490,8 +505,8 @@ public sealed class AdminExtensionsController : Controller
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = compensationAmount > 0
-            ? $"Đã hủy B, tạo khoản hoàn và hỗ trợ {compensationAmount:N0} đ."
-            : "Đã hủy B và tạo khoản hoàn.";
+            ? $"Đã hủy B, tạo khoản hoàn và giữ {compensationAmount:N0} đ từ cọc A để đối soát hỗ trợ."
+            : "Đã hủy B và tạo khoản hoàn; cọc A hiện không còn phần khả dụng để ghi nhận thêm hỗ trợ.";
 
         return RedirectToAction(nameof(Index));
     }
@@ -599,7 +614,22 @@ public sealed class AdminExtensionsController : Controller
                 item.Method == PaymentMethods.DepositRefund &&
                 item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
             .Sum(item => item.Amount);
-        var depositPaidByCurrentRenter = Math.Max(0m, depositPaid - depositRefunds);
+        var depositDeductions = renterPayments
+            .Where(item =>
+                item.Type == PaymentType.AdditionalCharge &&
+                item.Method == PaymentMethods.DepositDeduction &&
+                item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var reservedNotes = await _dbContext.BookingExtensions
+            .AsNoTracking()
+            .Where(item => item.BookingId == extension.BookingId)
+            .Select(item => item.CustomerNote)
+            .ToListAsync(cancellationToken);
+        var reservedCompensation = reservedNotes.Sum(CompensationLedger.SumReservedAmount);
+        var unavailableDeposit = Math.Max(depositDeductions, reservedCompensation);
+        var depositAvailableByCurrentRenter = Math.Max(
+            0m,
+            depositPaid - depositRefunds - unavailableDeposit);
 
         var alternatives = await GetAlternativeVehiclesAsync(conflict, cancellationToken);
 
@@ -613,7 +643,7 @@ public sealed class AdminExtensionsController : Controller
             PickupDate = conflict.PickupDate,
             ReturnDate = conflict.ReturnDate,
             ContractAmount = conflict.TotalAmount,
-            DepositPaidByCurrentRenter = depositPaidByCurrentRenter,
+            DepositPaidByCurrentRenter = depositAvailableByCurrentRenter,
             Alternatives = alternatives
         };
     }
@@ -784,7 +814,7 @@ public sealed class AdminExtensionsController : Controller
         decimal amount,
         int affectedBookingId)
     {
-        var marker = $"{CompensationMarker}{amount:0.##}|BOOKING:{affectedBookingId}";
+        var marker = $"{CompensationLedger.Marker}{amount:0.##}|BOOKING:{affectedBookingId}";
         return string.IsNullOrWhiteSpace(customerNote)
             ? marker
             : $"{customerNote.Trim()}\n{marker}";
