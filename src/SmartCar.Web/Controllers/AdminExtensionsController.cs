@@ -111,19 +111,19 @@ public sealed class AdminExtensionsController : Controller
         {
             if (string.IsNullOrWhiteSpace(note))
             {
-                TempData["ErrorMessage"] = "Vui lòng ghi rõ lý do bất khả kháng khách trình bày qua điện thoại.";
+                TempData["ErrorMessage"] = "Vui lòng ghi rõ lý do bất khả kháng.";
                 return RedirectToAction(nameof(Index));
             }
 
             if (evidenceImage is null || evidenceImage.Length == 0)
             {
-                TempData["ErrorMessage"] = "Yêu cầu bất khả kháng qua điện thoại phải có ảnh minh chứng khách gửi.";
+                TempData["ErrorMessage"] = "Bất khả kháng phải có ảnh minh chứng.";
                 return RedirectToAction(nameof(Index));
             }
 
             if (string.IsNullOrWhiteSpace(customerLiveLocation))
             {
-                TempData["ErrorMessage"] = "Vui lòng ghi vị trí trực tiếp khách đã gửi/cung cấp cho SmartCar.";
+                TempData["ErrorMessage"] = "Bất khả kháng phải có vị trí hiện tại.";
                 return RedirectToAction(nameof(Index));
             }
         }
@@ -142,7 +142,6 @@ public sealed class AdminExtensionsController : Controller
         var phoneNote = string.IsNullOrWhiteSpace(note)
             ? "SmartCar ghi nhận yêu cầu qua điện thoại."
             : $"SmartCar ghi nhận yêu cầu qua điện thoại. {note.Trim()}";
-
         var liveLocation = isForceMajeure && !string.IsNullOrWhiteSpace(customerLiveLocation)
             ? $"Vị trí trực tiếp khách cung cấp: {customerLiveLocation.Trim()}"
             : null;
@@ -163,9 +162,7 @@ public sealed class AdminExtensionsController : Controller
         }
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? isForceMajeure
-                ? "Đã ghi nhận yêu cầu bất khả kháng kèm ảnh và vị trí."
-                : "Đã ghi nhận yêu cầu gia hạn."
+            ? "Đã ghi nhận yêu cầu gia hạn."
             : string.Join("; ", result.Errors);
 
         if (result.Succeeded)
@@ -305,6 +302,11 @@ public sealed class AdminExtensionsController : Controller
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending
             });
+
+            if (conflict.Status == BookingStatus.ReadyForPickup)
+            {
+                conflict.Status = BookingStatus.Paid;
+            }
         }
 
         if (rentalRefund > 0)
@@ -345,9 +347,11 @@ public sealed class AdminExtensionsController : Controller
                 ? $"Đơn #{conflict.BookingId} đã đổi từ {oldVehicleName} sang {replacement.VehicleName} ({replacement.LicensePlate}). Cần thanh toán thêm {amountToCollect:N0} đồng."
                 : totalRefund > 0
                     ? $"Đơn #{conflict.BookingId} đã đổi từ {oldVehicleName} sang {replacement.VehicleName} ({replacement.LicensePlate}). SmartCar sẽ hoàn chênh lệch {totalRefund:N0} đồng."
-                    : overallDifference == 0
-                        ? $"Đơn #{conflict.BookingId} đã đổi sang {replacement.VehicleName} ({replacement.LicensePlate}), không phát sinh chênh lệch."
-                        : $"Đơn #{conflict.BookingId} đã đổi sang {replacement.VehicleName} ({replacement.LicensePlate}). Số tiền phải trả đã được cập nhật theo xe mới."
+                    : overallDifference > 0
+                        ? $"Đơn #{conflict.BookingId} đã đổi sang {replacement.VehicleName} ({replacement.LicensePlate}). Số cần thanh toán tăng {overallDifference:N0} đồng."
+                        : overallDifference < 0
+                            ? $"Đơn #{conflict.BookingId} đã đổi sang {replacement.VehicleName} ({replacement.LicensePlate}). Số cần thanh toán giảm {Math.Abs(overallDifference):N0} đồng."
+                            : $"Đơn #{conflict.BookingId} đã đổi sang {replacement.VehicleName} ({replacement.LicensePlate}), không phát sinh chênh lệch."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -367,7 +371,7 @@ public sealed class AdminExtensionsController : Controller
             ? $"Đã đổi xe cho B. Cần thu thêm {amountToCollect:N0} đ."
             : totalRefund > 0
                 ? $"Đã đổi xe cho B. Chờ hoàn {totalRefund:N0} đ."
-                : "Đã đổi xe cho B. Không phát sinh thanh toán mới.";
+                : "Đã đổi xe cho B. Số tiền đã được cập nhật.";
 
         return RedirectToAction(nameof(Index));
     }
@@ -411,7 +415,14 @@ public sealed class AdminExtensionsController : Controller
         var currentRenterDepositPaid = extension.Booking.Payments
             .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
             .Sum(item => item.Amount);
-        var compensationAmount = Math.Min(conflictContractAmount, currentRenterDepositPaid);
+        var currentRenterDepositRefunds = extension.Booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.DepositRefund &&
+                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+            .Sum(item => item.Amount);
+        var currentRenterDepositHeld = Math.Max(0m, currentRenterDepositPaid - currentRenterDepositRefunds);
+        var compensationAmount = Math.Min(conflictContractAmount, currentRenterDepositHeld);
 
         var cancelResult = await _bookingOperationService.CancelByAdminAsync(
             adminId,
@@ -574,13 +585,21 @@ public sealed class AdminExtensionsController : Controller
             .Select(item => item.FullName)
             .FirstOrDefaultAsync(cancellationToken) ?? "Khách hàng";
 
-        var depositPaidByCurrentRenter = await _dbContext.Payments
+        var renterPayments = await _dbContext.Payments
             .AsNoTracking()
+            .Where(item => item.BookingId == extension.BookingId)
+            .Select(item => new { item.Type, item.Status, item.Method, item.Amount })
+            .ToListAsync(cancellationToken);
+        var depositPaid = renterPayments
+            .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var depositRefunds = renterPayments
             .Where(item =>
-                item.BookingId == extension.BookingId &&
-                item.Type == PaymentType.Deposit &&
-                item.Status == PaymentStatus.Paid)
-            .SumAsync(item => (decimal?)item.Amount, cancellationToken) ?? 0m;
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.DepositRefund &&
+                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+            .Sum(item => item.Amount);
+        var depositPaidByCurrentRenter = Math.Max(0m, depositPaid - depositRefunds);
 
         var alternatives = await GetAlternativeVehiclesAsync(conflict, cancellationToken);
 
