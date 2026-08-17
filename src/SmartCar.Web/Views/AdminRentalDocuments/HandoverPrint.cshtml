@@ -9,6 +9,9 @@
         : "Nhận tại cửa hàng";
     var awaitingSignature = booking.Status == BookingStatus.ReadyForPickup && string.IsNullOrWhiteSpace(Model.SignedDocumentPath);
     var includedDays = Math.Max(1, booking.NumberOfDays);
+    var effectiveIncludedKilometers = Math.Max(
+        Model.IncludedKilometers,
+        includedDays * RentalPolicy.IncludedKilometersPerDay);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -40,7 +43,7 @@
 <body>
     <div class="no-print">
         <div class="actions">
-            <button class="primary" type="button" onclick="window.print()">In biên bản</button>
+            <button class="primary" type="button" onclick="window.print()">In để ký</button>
             <a class="back" href="/AdminBookings/Index">Danh sách đơn</a>
         </div>
 
@@ -56,7 +59,7 @@
         }
         else if (!string.IsNullOrWhiteSpace(Model.SignedDocumentPath))
         {
-            <div class="hint">✓ Đã lưu bản có chữ ký.</div>
+            <div class="hint">✓ Đã có chữ ký.</div>
         }
     </div>
 
@@ -85,7 +88,7 @@
             <th>Định mức sử dụng</th>
             <td>
                 @RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày<br />
-                Chuyến này: @Model.IncludedKilometers.ToString("N0") km / @includedDays ngày
+                Chuyến này: @effectiveIncludedKilometers.ToString("N0") km / @includedDays ngày
             </td>
         </tr>
         <tr><th>Vượt km</th><td>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</td></tr>
