@@ -37,6 +37,7 @@ internal static class VehicleStatusResolver
 
         var hasOpenIncident = await dbContext.VehicleIncidents.AnyAsync(incident =>
             incident.VehicleId == vehicle.VehicleId &&
+            incident.IncidentType != IncidentType.TrafficFine &&
             (!excludedIncidentId.HasValue ||
              incident.VehicleIncidentId != excludedIncidentId.Value) &&
             incident.Status != IncidentStatus.Resolved &&
