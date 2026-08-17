@@ -3,27 +3,54 @@
     ViewData["Title"] = "Hiệu suất và tài chính đội xe";
     var hasUnusualAdditionalCharges = Model.TotalAdditionalChargeRevenue > 10_000_000m &&
         Model.TotalAdditionalChargeRevenue > Math.Max(1m, Model.TotalRentalRevenue) * 10m;
+
+    var today = DateTime.Today;
+    var sevenDaysStart = today.AddDays(-6);
+    var thirtyDaysStart = today.AddDays(-29);
+    var monthStart = new DateTime(today.Year, today.Month, 1);
+
+    var vehicleRows = Model.Vehicles
+        .Select(item => new
+        {
+            Item = item,
+            IsUnusual = item.AdditionalChargeRevenue > 10_000_000m &&
+                item.AdditionalChargeRevenue > Math.Max(1m, item.RentalRevenue) * 10m
+        })
+        .OrderByDescending(row => row.IsUnusual)
+        .ThenBy(row => row.Item.VehicleName)
+        .ToList();
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-2">
     <div>
         <h1 class="h3 mb-1">Hiệu suất và tài chính đội xe</h1>
         <p class="text-muted mb-0">Doanh thu, tiền cần xử lý và hiệu quả từng xe.</p>
+        <div class="small text-muted mt-1">Tiền cọc được quản lý riêng, không tính vào doanh thu.</div>
     </div>
-</div>
-
-<div class="alert alert-info py-2 mb-4">
-    <strong>Cọc được quản lý riêng</strong> và không tính vào doanh thu.
 </div>
 
 @if (hasUnusualAdditionalCharges)
 {
-    <div class="alert alert-warning py-2 mb-4">
-        <strong>Cần kiểm tra phụ phí:</strong> tổng phụ phí đang cao bất thường. Mở “Dòng tiền” ở bảng dưới để xem đơn gây chênh lệch.
+    <div class="alert alert-warning py-2 mb-3 mt-3">
+        <strong>Cần kiểm tra phụ phí:</strong> tổng phụ phí đang cao bất thường. Mở “Xem dòng tiền” ở bảng dưới để tìm đơn gây chênh lệch.
     </div>
 }
 
-<form method="get" class="card card-body shadow-sm mb-4">
+<form method="get" class="card card-body shadow-sm mb-4 mt-3">
+    <div class="d-flex gap-2 flex-wrap mb-3">
+        <a class="btn btn-sm btn-outline-primary"
+           asp-action="Index"
+           asp-route-fromDate="@sevenDaysStart.ToString("yyyy-MM-dd")"
+           asp-route-toDate="@today.ToString("yyyy-MM-dd")">7 ngày</a>
+        <a class="btn btn-sm btn-outline-primary"
+           asp-action="Index"
+           asp-route-fromDate="@thirtyDaysStart.ToString("yyyy-MM-dd")"
+           asp-route-toDate="@today.ToString("yyyy-MM-dd")">30 ngày</a>
+        <a class="btn btn-sm btn-outline-primary"
+           asp-action="Index"
+           asp-route-fromDate="@monthStart.ToString("yyyy-MM-dd")"
+           asp-route-toDate="@today.ToString("yyyy-MM-dd")">Tháng này</a>
+    </div>
     <div class="row g-3 align-items-end">
         <div class="col-md-4">
             <label class="form-label">Từ ngày</label>
@@ -71,18 +98,6 @@
 </div>
 
 <div class="card shadow-sm mb-4">
-    <div class="card-header bg-white"><strong>Cơ cấu trong kỳ</strong></div>
-    <div class="card-body">
-        <div class="row g-3 text-center text-md-start">
-            <div class="col-6 col-md-3"><div class="small text-muted">Thuê / giao</div><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div>
-            <div class="col-6 col-md-3"><div class="small text-muted">Gia hạn</div><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
-            <div class="col-6 col-md-3"><div class="small text-muted">Phụ phí đã thu</div><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
-            <div class="col-6 col-md-3"><div class="small text-muted">Hoàn cọc</div><strong class="text-primary">@Model.TotalDepositRefunds.ToString("N0") đ</strong></div>
-        </div>
-    </div>
-</div>
-
-<div class="card shadow-sm mb-4">
     <div class="card-header bg-white">
         <strong>Tiền cần theo dõi</strong>
         <div class="small text-muted">Trạng thái hiện tại, không phụ thuộc khoảng ngày.</div>
@@ -114,6 +129,18 @@
     </div>
 </div>
 
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white"><strong>Cơ cấu trong kỳ</strong></div>
+    <div class="card-body">
+        <div class="row g-3 text-center text-md-start">
+            <div class="col-6 col-md-3"><div class="small text-muted">Thuê / giao</div><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-md-3"><div class="small text-muted">Gia hạn</div><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-md-3"><div class="small text-muted">Phụ phí</div><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-md-3"><div class="small text-muted">Hoàn cọc</div><strong class="text-primary">@Model.TotalDepositRefunds.ToString("N0") đ</strong></div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card card-body shadow-sm h-100">
@@ -137,8 +164,19 @@
 
 <div class="card shadow-sm">
     <div class="card-header bg-white">
-        <strong>Hiệu quả theo xe</strong>
-        <div class="small text-muted">Mở “Dòng tiền” để kiểm tra số liệu.</div>
+        <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
+            <div>
+                <strong>Hiệu quả theo xe</strong>
+                <div class="small text-muted">Tìm nhanh xe và mở dòng tiền khi cần đối chiếu.</div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap align-items-center">
+                <input id="fleet-search" type="search" class="form-control form-control-sm" style="min-width:230px" placeholder="Tìm xe / biển số" aria-label="Tìm xe hoặc biển số" />
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="fleet-unusual-only" />
+                    <label class="form-check-label small" for="fleet-unusual-only">Chỉ xe bất thường</label>
+                </div>
+            </div>
+        </div>
     </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -150,38 +188,39 @@
                     <th style="min-width:155px">Chi phí</th>
                     <th style="min-width:155px">Lợi nhuận</th>
                     <th style="min-width:210px">Khai thác</th>
-                    <th>Đơn xong</th>
-                    <th style="min-width:180px">Đối soát</th>
+                    <th style="min-width:160px">Chi tiết</th>
                 </tr>
             </thead>
-            <tbody>
-            @if (Model.Vehicles.Count == 0)
+            <tbody id="fleet-report-body">
+            @if (vehicleRows.Count == 0)
             {
-                <tr><td colspan="8" class="text-center text-muted py-4">Chưa có dữ liệu.</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">Chưa có dữ liệu.</td></tr>
             }
             else
             {
-                @foreach (var item in Model.Vehicles)
+                @foreach (var row in vehicleRows)
                 {
-                    var unusualVehicleCharge = item.AdditionalChargeRevenue > 10_000_000m &&
-                        item.AdditionalChargeRevenue > Math.Max(1m, item.RentalRevenue) * 10m;
-                    <tr class="@(unusualVehicleCharge ? "table-warning" : string.Empty)">
+                    var item = row.Item;
+                    <tr class="fleet-vehicle-row @(row.IsUnusual ? "table-warning" : string.Empty)"
+                        data-search="@($"{item.VehicleName} {item.LicensePlate}")"
+                        data-unusual="@(row.IsUnusual ? "true" : "false")">
                         <td>
                             <strong>@item.VehicleName</strong>
                             <div class="small text-muted">@item.LicensePlate</div>
-                            @if (unusualVehicleCharge)
+                            <div class="small text-muted mt-1">@item.CompletedBookings đơn hoàn tất</div>
+                            @if (row.IsUnusual)
                             {
-                                <span class="badge bg-warning text-dark mt-1">Kiểm tra phụ phí</span>
+                                <span class="badge bg-warning text-dark mt-1">Phụ phí bất thường</span>
                             }
                         </td>
                         <td>
                             <div class="fw-semibold">@item.Revenue.ToString("N0") đ</div>
                             <div class="small text-muted">Thuê: @item.RentalRevenue.ToString("N0")</div>
                             <div class="small text-muted">Gia hạn: @item.ExtensionRevenue.ToString("N0")</div>
-                            <div class="small text-muted">Phụ phí: @item.AdditionalChargeRevenue.ToString("N0")</div>
+                            <div class="small @(row.IsUnusual ? "text-danger fw-semibold" : "text-muted")">Phụ phí: @item.AdditionalChargeRevenue.ToString("N0")</div>
                         </td>
                         <td>
-                            <div class="text-warning">Hoàn tiền thuê: @item.RevenueRefunds.ToString("N0") đ</div>
+                            <div class="text-warning">Hoàn thuê: @item.RevenueRefunds.ToString("N0") đ</div>
                             <div class="small text-primary">Hoàn cọc: @item.DepositRefunds.ToString("N0") đ</div>
                         </td>
                         <td>
@@ -194,14 +233,18 @@
                         </td>
                         <td class="fw-bold @(item.NetOperatingProfit >= 0 ? "text-success" : "text-danger")">@item.NetOperatingProfit.ToString("N0") đ</td>
                         <td>
-                            <div class="d-flex justify-content-between small"><span>@item.RentalDays / @item.AvailableDays ngày</span><span>@item.FleetUtilizationRate.ToString("0.##")%</span></div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <strong>@item.FleetUtilizationRate.ToString("0.##")%</strong>
+                                <span class="text-muted">@item.RentalDays/@item.AvailableDays ngày</span>
+                            </div>
                             <div class="progress mb-1" style="height:9px"><div class="progress-bar" style="width:@($"{Math.Min(100m, item.FleetUtilizationRate):0.##}%")"></div></div>
                             <div class="small text-muted">Khả dụng: @item.AvailableUtilizationRate.ToString("0.##")%</div>
                         </td>
-                        <td>@item.CompletedBookings</td>
                         <td>
                             <details>
-                                <summary class="text-primary" style="cursor:pointer">Dòng tiền (@item.Transactions.Count)</summary>
+                                <summary class="text-primary" style="cursor:pointer">
+                                    Xem dòng tiền <span class="badge bg-light text-dark">@item.Transactions.Count</span>
+                                </summary>
                                 <div class="mt-2" style="min-width:390px; max-height:330px; overflow:auto">
                                     @if (item.Transactions.Count == 0)
                                     {
@@ -231,6 +274,9 @@
                         </td>
                     </tr>
                 }
+                <tr id="fleet-filter-empty" class="d-none">
+                    <td colspan="7" class="text-center text-muted py-4">Không có xe phù hợp bộ lọc.</td>
+                </tr>
             }
             </tbody>
         </table>
@@ -238,3 +284,35 @@
 </div>
 
 <div class="small text-muted mt-3">Lợi nhuận ước tính chưa gồm khấu hao, bảo hiểm, thuế và chi phí chung.</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const searchInput = document.getElementById('fleet-search');
+            const unusualOnly = document.getElementById('fleet-unusual-only');
+            const rows = Array.from(document.querySelectorAll('.fleet-vehicle-row'));
+            const emptyRow = document.getElementById('fleet-filter-empty');
+
+            if (!searchInput || !unusualOnly || rows.length === 0) return;
+
+            const applyFilter = () => {
+                const query = searchInput.value.trim().toLocaleLowerCase('vi-VN');
+                let visibleCount = 0;
+
+                rows.forEach(row => {
+                    const haystack = (row.dataset.search || '').toLocaleLowerCase('vi-VN');
+                    const matchesText = !query || haystack.includes(query);
+                    const matchesUnusual = !unusualOnly.checked || row.dataset.unusual === 'true';
+                    const visible = matchesText && matchesUnusual;
+                    row.classList.toggle('d-none', !visible);
+                    if (visible) visibleCount++;
+                });
+
+                emptyRow?.classList.toggle('d-none', visibleCount !== 0);
+            };
+
+            searchInput.addEventListener('input', applyFilter);
+            unusualOnly.addEventListener('change', applyFilter);
+        })();
+    </script>
+}
