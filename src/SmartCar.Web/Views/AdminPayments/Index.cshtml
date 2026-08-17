@@ -30,7 +30,7 @@
 
     string TypeText(PaymentType type, string? method) => type switch
     {
-        PaymentType.Rental => "Tiền thuê / giao + cọc",
+        PaymentType.Rental => "Tiền thuê / giao",
         PaymentType.Deposit => "Tiền cọc",
         PaymentType.Extension => "Tiền gia hạn",
         PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
@@ -38,7 +38,8 @@
         PaymentType.Refund when method == PaymentMethods.DepositRefund => "Hoàn cọc",
         PaymentType.Refund when method == PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
         PaymentType.Refund when method == PaymentMethods.CompensationRefund => "Hỗ trợ / bồi thường",
-        PaymentType.Refund => "Hoàn tiền",
+        PaymentType.Refund when method == PaymentMethods.BankTransferRefund => "Hoàn tiền thuê",
+        PaymentType.Refund => "Hoàn tiền thuê",
         _ => type.ToString()
     };
 }
