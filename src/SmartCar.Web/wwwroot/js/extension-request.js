@@ -21,22 +21,21 @@ document.addEventListener("DOMContentLoaded", () => {
             evidencePanel.dataset.extensionForceEvidence = "true";
             evidencePanel.innerHTML = `
                 <div class="border rounded p-3 bg-light">
-                    <div class="fw-semibold mb-2">Minh chứng bắt buộc khi bất khả kháng</div>
+                    <div class="fw-semibold mb-2">Minh chứng bất khả kháng</div>
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Ảnh tình trạng xe / sự cố</label>
+                            <label class="form-label">Ảnh</label>
                             <input type="file" name="evidenceImage" accept="image/jpeg,image/png,image/webp" class="form-control" />
-                            <div class="form-text">JPG, PNG hoặc WEBP; tối đa 5 MB.</div>
+                            <div class="form-text">Tối đa 5 MB.</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Vị trí trực tiếp</label>
+                            <label class="form-label">Vị trí hiện tại</label>
                             <div class="d-flex gap-2 flex-wrap">
-                                <button type="button" class="btn btn-outline-secondary" data-extension-live-location>Lấy vị trí hiện tại</button>
-                                <span class="small text-muted align-self-center" data-extension-location-status>Chưa lấy vị trí.</span>
+                                <button type="button" class="btn btn-outline-secondary" data-extension-live-location>Lấy vị trí</button>
+                                <span class="small text-muted align-self-center" data-extension-location-status>Chưa có vị trí.</span>
                             </div>
                             <input type="hidden" name="evidenceLatitude" />
                             <input type="hidden" name="evidenceLongitude" />
-                            <div class="form-text">Trình duyệt sẽ hỏi quyền vị trí. SmartCar dùng tọa độ này để xác minh tình huống bất khả kháng.</div>
                         </div>
                     </div>
                 </div>`;
@@ -81,7 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             locationButton.disabled = true;
-            if (locationStatus) locationStatus.textContent = "Đang lấy vị trí...";
+            if (locationStatus) locationStatus.textContent = "Đang lấy...";
 
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -101,11 +100,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         .replace(/\s*\|?\s*Vị trí trực tiếp:\s*-?\d+(?:\.\d+)?,\s*-?\d+(?:\.\d+)?/i, "")
                         .trim();
                     evidenceNote.value = currentText ? `${currentText} | ${locationText}` : locationText;
-                    if (locationStatus) locationStatus.textContent = `Đã lấy vị trí ${lat}, ${lng}.`;
+                    if (locationStatus) locationStatus.textContent = `Đã lấy ${lat}, ${lng}`;
                     locationButton.disabled = false;
                 },
                 () => {
-                    if (locationStatus) locationStatus.textContent = "Không lấy được vị trí. Hãy cấp quyền vị trí rồi thử lại.";
+                    if (locationStatus) locationStatus.textContent = "Không lấy được vị trí. Hãy cấp quyền rồi thử lại.";
                     locationButton.disabled = false;
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
@@ -116,16 +115,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            const hasLocation = latitude instanceof HTMLInputElement && longitude instanceof HTMLInputElement &&
+            const hasLocation = latitude instanceof HTMLInputElement &&
+                longitude instanceof HTMLInputElement &&
                 latitude.value.trim() && longitude.value.trim();
 
             if (!hasLocation) {
                 event.preventDefault();
                 if (latitude instanceof HTMLInputElement) {
-                    latitude.setCustomValidity("Vui lòng bấm Lấy vị trí hiện tại trước khi gửi yêu cầu bất khả kháng.");
+                    latitude.setCustomValidity("Vui lòng lấy vị trí trước khi gửi.");
                     latitude.reportValidity();
                 }
-                if (locationStatus) locationStatus.textContent = "Cần lấy vị trí trực tiếp trước khi gửi.";
+                if (locationStatus) locationStatus.textContent = "Cần lấy vị trí trước khi gửi.";
             }
         });
 
