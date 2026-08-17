@@ -29,7 +29,8 @@ internal sealed class ReportService : IReportService
     {
         PaymentType.Rental,
         PaymentType.Extension,
-        PaymentType.AdditionalCharge
+        PaymentType.AdditionalCharge,
+        PaymentType.VehicleSwapAdjustment
     };
 
     private readonly ApplicationDbContext _dbContext;
@@ -200,8 +201,14 @@ internal sealed class ReportService : IReportService
                 }
 
                 var explicitDepositRefund = refunds
+                    .Where(item => item.Method == PaymentMethods.DepositRefund)
+                    .Sum(item => item.Amount);
+
+                var legacyReturnRefund = refunds
                     .Where(item =>
-                        item.Method == PaymentMethods.DepositRefund ||
+                        item.Method != PaymentMethods.VehicleSwapRefund &&
+                        item.Method != PaymentMethods.CompensationRefund &&
+                        item.Method != PaymentMethods.DepositRefund &&
                         item.HasVehicleReturn)
                     .Sum(item => item.Amount);
 
@@ -209,9 +216,16 @@ internal sealed class ReportService : IReportService
                 var legacyCancelledRefund = explicitDepositRefund > 0 ||
                     bookingStatus is not (BookingStatus.Cancelled or BookingStatus.NoShow or BookingStatus.Rejected)
                     ? 0m
-                    : Math.Min(paid, refunds.Sum(item => item.Amount));
+                    : Math.Min(
+                        paid,
+                        refunds
+                            .Where(item => item.Method != PaymentMethods.CompensationRefund)
+                            .Sum(item => item.Amount));
 
-                var refundedDeposit = Math.Min(paid, explicitDepositRefund + legacyCancelledRefund);
+                var refundedDeposit = Math.Min(
+                    paid,
+                    explicitDepositRefund + legacyReturnRefund + legacyCancelledRefund);
+
                 return Math.Max(0m, paid - refundedDeposit);
             });
 
@@ -224,7 +238,9 @@ internal sealed class ReportService : IReportService
                 .ToList();
 
             var rentalRevenue = vehiclePayments
-                .Where(item => item.Type == PaymentType.Rental)
+                .Where(item =>
+                    item.Type == PaymentType.Rental ||
+                    item.Type == PaymentType.VehicleSwapAdjustment)
                 .Sum(item => item.Amount);
 
             var extensionRevenue = vehiclePayments
@@ -241,13 +257,23 @@ internal sealed class ReportService : IReportService
                 .Where(item =>
                     item.Type == PaymentType.Refund &&
                     item.Method != PaymentMethods.DepositRefund &&
-                    !item.HasVehicleReturn)
+                    item.Method != PaymentMethods.CompensationRefund &&
+                    !(item.HasVehicleReturn && item.Method != PaymentMethods.VehicleSwapRefund))
                 .Sum(item => item.Amount);
 
             var depositRefunds = vehiclePayments
                 .Where(item =>
                     item.Type == PaymentType.Refund &&
-                    (item.Method == PaymentMethods.DepositRefund || item.HasVehicleReturn))
+                    (item.Method == PaymentMethods.DepositRefund ||
+                     (item.HasVehicleReturn &&
+                      item.Method != PaymentMethods.VehicleSwapRefund &&
+                      item.Method != PaymentMethods.CompensationRefund)))
+                .Sum(item => item.Amount);
+
+            var compensationCost = vehiclePayments
+                .Where(item =>
+                    item.Type == PaymentType.Refund &&
+                    item.Method == PaymentMethods.CompensationRefund)
                 .Sum(item => item.Amount);
 
             var vehicleBookings = bookings
@@ -272,11 +298,9 @@ internal sealed class ReportService : IReportService
                 periodDays);
 
             var availableDays = Math.Max(0, periodDays - maintenanceDays);
-
             var fleetUtilizationRate = Math.Min(
                 100m,
                 Math.Round(rentalDays * 100m / periodDays, 2));
-
             var availableUtilizationRate = availableDays == 0
                 ? 0m
                 : Math.Min(
@@ -294,7 +318,6 @@ internal sealed class ReportService : IReportService
             var vehicleIncidents = incidentRecords
                 .Where(item => item.VehicleId == vehicle.VehicleId)
                 .ToList();
-
             var incidentCost = vehicleIncidents
                 .Sum(item => item.ActualCost + item.FineAmount);
 
@@ -302,7 +325,8 @@ internal sealed class ReportService : IReportService
                 revenue -
                 revenueRefunds -
                 maintenanceCost -
-                incidentCost;
+                incidentCost -
+                compensationCost;
 
             var transactions = new List<ReportTransactionDto>();
 
@@ -310,17 +334,14 @@ internal sealed class ReportService : IReportService
             {
                 if (payment.Type == PaymentType.Refund)
                 {
-                    var isDepositRefund =
-                        payment.Method == PaymentMethods.DepositRefund ||
-                        payment.HasVehicleReturn;
-
-                    var category = isDepositRefund
-                        ? "Hoàn cọc"
-                        : payment.Method == PaymentMethods.VehicleSwapRefund
-                            ? "Hoàn chênh lệch đổi xe"
-                            : payment.Method == PaymentMethods.CompensationRefund
-                                ? "Hỗ trợ/bồi thường"
-                                : "Hoàn doanh thu";
+                    var category = payment.Method switch
+                    {
+                        PaymentMethods.CompensationRefund => "Hỗ trợ/bồi thường",
+                        PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
+                        PaymentMethods.DepositRefund => "Hoàn cọc",
+                        _ when payment.HasVehicleReturn => "Hoàn cọc",
+                        _ => "Hoàn doanh thu"
+                    };
 
                     transactions.Add(new ReportTransactionDto(
                         payment.OccurredAt,
@@ -335,24 +356,17 @@ internal sealed class ReportService : IReportService
                 var category = payment.Type switch
                 {
                     PaymentType.Rental => "Tiền thuê",
+                    PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
                     PaymentType.Extension => "Gia hạn",
                     PaymentType.AdditionalCharge => "Phụ phí",
                     _ => payment.Type.ToString()
-                };
-
-                var description = payment.Type switch
-                {
-                    PaymentType.Rental => "Tiền thuê và phí giao xe",
-                    PaymentType.Extension => "Tiền gia hạn",
-                    PaymentType.AdditionalCharge => "Khoản phát sinh đã thu",
-                    _ => "Khoản thu đã xác nhận"
                 };
 
                 transactions.Add(new ReportTransactionDto(
                     payment.OccurredAt,
                     payment.BookingId,
                     category,
-                    description,
+                    category,
                     payment.Amount,
                     false));
             }
@@ -412,6 +426,7 @@ internal sealed class ReportService : IReportService
                 depositRefunds,
                 maintenanceCost,
                 incidentCost,
+                compensationCost,
                 netOperatingProfit,
                 rentalDays,
                 availableDays,
@@ -432,6 +447,7 @@ internal sealed class ReportService : IReportService
         var totalDepositRefunds = rows.Sum(item => item.DepositRefunds);
         var totalMaintenanceCost = rows.Sum(item => item.MaintenanceCost);
         var totalIncidentCost = rows.Sum(item => item.IncidentCost);
+        var totalCompensationCost = rows.Sum(item => item.CompensationCost);
 
         return new FleetReportDto(
             from,
@@ -442,10 +458,11 @@ internal sealed class ReportService : IReportService
             rows.Sum(item => item.Revenue),
             totalRevenueRefunds,
             totalDepositRefunds,
-            totalRevenueRefunds + totalDepositRefunds,
+            totalRevenueRefunds + totalDepositRefunds + totalCompensationCost,
             totalMaintenanceCost,
             totalIncidentCost,
-            totalMaintenanceCost + totalIncidentCost,
+            totalCompensationCost,
+            totalMaintenanceCost + totalIncidentCost + totalCompensationCost,
             rows.Sum(item => item.NetOperatingProfit),
             rows.Count == 0
                 ? 0m
@@ -494,7 +511,6 @@ internal sealed class ReportService : IReportService
                 {
                     currentEnd = range.End;
                 }
-
                 continue;
             }
 
