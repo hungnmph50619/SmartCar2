@@ -4,20 +4,22 @@
     var handoverMileage = ViewBag.HandoverMileage as int?;
     var handoverFuelLevel = ViewBag.HandoverFuelLevel as string;
     var handoverAt = ViewBag.HandoverAt as DateTime?;
+    var includedKilometers = ViewBag.HandoverIncludedKilometers as int? ?? 0;
+    var excessKmFee = ViewBag.HandoverExcessKmFeePerKm as decimal? ?? 0m;
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
-        <h1 class="h3 mb-1">Lập biên bản trả xe - Đơn #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Ghi số liệu lúc trả và so với mốc lúc giao.</p>
+        <h1 class="h3 mb-1">Biên bản trả xe - Đơn #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Nhập số liệu lúc trả và kiểm tra phụ phí trước khi lưu.</p>
     </div>
-    <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại đơn</a>
+    <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại</a>
 </div>
 
 @if (handoverMileage.HasValue)
 {
-    <div class="alert alert-info d-flex gap-4 flex-wrap align-items-center">
-        <strong>Mốc lúc giao</strong>
+    <div class="alert alert-info d-flex gap-4 flex-wrap align-items-center py-2">
+        <strong>Lúc giao</strong>
         <span>@handoverMileage.Value.ToString("N0") km</span>
         @if (!string.IsNullOrWhiteSpace(handoverFuelLevel))
         {
@@ -35,32 +37,49 @@
       enctype="multipart/form-data"
       class="card card-body shadow-sm"
       data-loading-form
-      data-confirm="Xác nhận đã nhận xe trả? Đơn sẽ chuyển sang bước đối chiếu giao - trả.">
+      data-confirm="Xác nhận số liệu trả xe? Đơn sẽ chuyển sang bước đối chiếu.">
     <input asp-for="BookingId" type="hidden" />
     <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
 
     <div class="row g-3">
         <div class="col-md-6">
             <label asp-for="ReturnedAt" class="form-label fw-semibold">Thời gian trả</label>
-            <input asp-for="ReturnedAt" type="datetime-local" class="form-control" required />
+            <input asp-for="ReturnedAt" type="datetime-local" class="form-control" required data-return-time />
             <span asp-validation-for="ReturnedAt" class="text-danger small"></span>
         </div>
         <div class="col-md-6">
-            <label asp-for="Mileage" class="form-label fw-semibold">Số km khi trả</label>
+            <label asp-for="Mileage" class="form-label fw-semibold">Km lúc trả</label>
             <input asp-for="Mileage"
                    type="number"
                    min="@(handoverMileage ?? 0)"
                    step="1"
                    class="form-control"
-                   required />
+                   required
+                   data-return-mileage />
             <span asp-validation-for="Mileage" class="text-danger small"></span>
-            @if (handoverMileage.HasValue)
-            {
-                <div class="form-text">Không nhỏ hơn @handoverMileage.Value.ToString("N0") km lúc giao.</div>
-            }
         </div>
+
+        @if (handoverMileage.HasValue)
+        {
+            <div class="col-12">
+                <div class="border rounded p-3 bg-light" id="mileage-preview"
+                     data-handover-mileage="@handoverMileage.Value"
+                     data-handover-time="@(handoverAt?.ToString("yyyy-MM-ddTHH:mm:ss") ?? string.Empty)"
+                     data-included-km="@includedKilometers"
+                     data-fee-per-km="@excessKmFee">
+                    <div class="d-flex flex-wrap gap-4 small">
+                        <div><span class="text-muted">Đã chạy</span><div class="fw-semibold" data-driven>0 km</div></div>
+                        <div><span class="text-muted">Định mức</span><div class="fw-semibold">@includedKilometers.ToString("N0") km</div></div>
+                        <div><span class="text-muted">Vượt</span><div class="fw-semibold" data-excess>0 km</div></div>
+                        <div><span class="text-muted">Phụ phí dự kiến</span><div class="fw-bold text-danger" data-fee>0 đ</div></div>
+                    </div>
+                    <div class="small text-danger mt-2 d-none" data-mileage-warning></div>
+                </div>
+            </div>
+        }
+
         <div class="col-md-6">
-            <label asp-for="FuelLevel" class="form-label fw-semibold">Mức nhiên liệu khi trả</label>
+            <label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label>
             <div class="input-group">
                 <input asp-for="FuelLevel"
                        type="number"
@@ -74,7 +93,6 @@
                 <span class="input-group-text">%</span>
             </div>
             <span asp-validation-for="FuelLevel" class="text-danger small"></span>
-            <div class="form-text">Nhập từ 0 đến 100.</div>
         </div>
         <div class="col-md-6 d-flex align-items-end">
             <div class="form-check mb-2">
@@ -83,7 +101,7 @@
             </div>
         </div>
         <div class="col-12">
-            <label asp-for="Images" class="form-label fw-semibold">Ảnh tình trạng xe khi trả</label>
+            <label asp-for="Images" class="form-label fw-semibold">Ảnh khi trả</label>
             <input asp-for="Images"
                    type="file"
                    multiple
@@ -94,7 +112,7 @@
                    data-preview-target="#return-image-preview"
                    data-file-info-target="#return-file-info" />
             <span asp-validation-for="Images" class="text-danger small"></span>
-            <div class="form-text">1–10 ảnh. Nên chụp cùng góc với lúc giao; nếu có hư hỏng, chụp thêm ảnh cận cảnh.</div>
+            <div class="form-text">1–10 ảnh. Chụp rõ xe và hư hỏng nếu có.</div>
             <div id="return-file-info" class="small text-muted mt-2 d-none"></div>
             <div id="return-image-preview" class="mt-3 d-none">
                 <div class="row g-2" data-preview-list></div>
@@ -103,16 +121,65 @@
         </div>
         <div class="col-12">
             <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
-            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Chỉ ghi hư hỏng, bất thường hoặc ý kiến cần lưu ý"></textarea>
+            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="Chỉ ghi điểm cần lưu ý"></textarea>
         </div>
     </div>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
-        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu biên bản...">Xác nhận nhận xe trả</button>
+        <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu...">Xác nhận trả xe</button>
         <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy</a>
     </div>
 </form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const preview = document.getElementById('mileage-preview');
+            const mileage = document.querySelector('[data-return-mileage]');
+            const returnedAt = document.querySelector('[data-return-time]');
+            if (!preview || !mileage) return;
+
+            const handoverMileage = Number(preview.dataset.handoverMileage || 0);
+            const handoverTime = new Date(preview.dataset.handoverTime || '');
+            const included = Number(preview.dataset.includedKm || 0);
+            const feePerKm = Number(preview.dataset.feePerKm || 0);
+            const money = value => new Intl.NumberFormat('vi-VN').format(value) + ' đ';
+            const number = value => new Intl.NumberFormat('vi-VN').format(value);
+
+            const render = () => {
+                const current = Number(mileage.value || handoverMileage);
+                const driven = Math.max(0, current - handoverMileage);
+                const excess = Math.max(0, driven - included);
+                const fee = excess * feePerKm;
+
+                preview.querySelector('[data-driven]').textContent = `${number(driven)} km`;
+                preview.querySelector('[data-excess]').textContent = `${number(excess)} km`;
+                preview.querySelector('[data-fee]').textContent = money(fee);
+
+                const warning = preview.querySelector('[data-mileage-warning]');
+                if (!warning) return;
+
+                let days = 1;
+                if (returnedAt?.value && !Number.isNaN(handoverTime.getTime())) {
+                    const end = new Date(returnedAt.value);
+                    const hours = Math.max(0, (end - handoverTime) / 3600000);
+                    days = Math.max(1, Math.ceil(hours / 24));
+                }
+
+                const maxReasonable = days * 2500;
+                if (driven > maxReasonable) {
+                    warning.textContent = `Số km tăng ${number(driven)} km trong ${days} ngày là bất thường. Kiểm tra lại công-tơ-mét trước khi lưu.`;
+                    warning.classList.remove('d-none');
+                } else {
+                    warning.textContent = '';
+                    warning.classList.add('d-none');
+                }
+            };
+
+            mileage.addEventListener('input', render);
+            returnedAt?.addEventListener('change', render);
+            render();
+        })();
+    </script>
 }
