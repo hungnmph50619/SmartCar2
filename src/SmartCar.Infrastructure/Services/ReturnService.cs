@@ -24,17 +24,14 @@ internal sealed class ReturnService : IReturnService
         CancellationToken cancellationToken = default)
     {
         await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync(
-                cancellationToken);
+            await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Handover)
             .Include(item => item.VehicleReturn)
             .Include(item => item.Payments)
-            .FirstOrDefaultAsync(
-                item => item.BookingId == request.BookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == request.BookingId, cancellationToken);
 
         if (booking is null)
         {
@@ -83,15 +80,12 @@ internal sealed class ReturnService : IReturnService
         var lateMinutes = request.ReturnedAt > booking.ReturnDate
             ? (int)Math.Ceiling((request.ReturnedAt - booking.ReturnDate).TotalMinutes)
             : 0;
-
         var lateDays = lateMinutes > 0
             ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
             : 0;
-
         var lateReturnMultiplier = booking.Handover.LateReturnFeeMultiplier >= 1
             ? booking.Handover.LateReturnFeeMultiplier
             : RentalPolicy.LateReturnFeeMultiplier;
-
         var lateFee = lateDays * booking.DailyPrice * lateReturnMultiplier;
 
         var vehicleReturn = new VehicleReturn
@@ -112,7 +106,6 @@ internal sealed class ReturnService : IReturnService
         var excessKilometers = Math.Max(
             0,
             drivenKilometers - booking.Handover.IncludedKilometers);
-
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
 
         if (lateFee > 0)
@@ -157,7 +150,6 @@ internal sealed class ReturnService : IReturnService
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-
         return OperationResult.Success();
     }
 
@@ -243,8 +235,7 @@ internal sealed class ReturnService : IReturnService
         string? maintenanceNote,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -267,10 +258,20 @@ internal sealed class ReturnService : IReturnService
             payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
 
         var depositPaid = booking.Payments
-            .Where(payment => payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid)
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.Paid)
             .Sum(payment => payment.Amount);
 
-        var depositSatisfied = booking.DepositAmount <= 0 || depositPaid >= booking.DepositAmount;
+        var depositAlreadyRefundedOrPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.DepositRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+
+        var effectiveDeposit = Math.Max(0m, depositPaid - depositAlreadyRefundedOrPlanned);
+        var depositSatisfied = booking.DepositAmount <= 0 || effectiveDeposit >= booking.DepositAmount;
 
         var extensionPaid = booking.Extensions.All(extension =>
             extension.Status != BookingExtensionStatus.Approved);
@@ -281,10 +282,14 @@ internal sealed class ReturnService : IReturnService
                 payment.Status == PaymentStatus.Paid &&
                 payment.Amount >= booking.AdditionalAmount);
 
-        if (!rentalPaid || !depositSatisfied || !extensionPaid || !additionalPaid)
+        var swapAdjustmentPaid = booking.Payments.All(payment =>
+            payment.Type != PaymentType.VehicleSwapAdjustment ||
+            payment.Status == PaymentStatus.Paid);
+
+        if (!rentalPaid || !depositSatisfied || !extensionPaid || !additionalPaid || !swapAdjustmentPaid)
         {
             return OperationResult.Failure(
-                "Đơn vẫn còn khoản tiền chưa được thanh toán hoặc chưa ghi nhận đủ tiền cọc.");
+                "Đơn vẫn còn khoản tiền chưa thanh toán hoặc chưa ghi nhận đủ tiền cọc.");
         }
 
         booking.Status = BookingStatus.Completed;
@@ -292,25 +297,21 @@ internal sealed class ReturnService : IReturnService
             ? VehicleStatus.Maintenance
             : VehicleStatus.Available;
 
-        var hasDepositRefund = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Refund &&
-            payment.Method == PaymentMethods.DepositRefund &&
-            payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded);
-
-        if (depositPaid > 0 && !hasDepositRefund)
+        var depositToRefund = effectiveDeposit;
+        if (depositToRefund > 0)
         {
             booking.Payments.Add(new Payment
             {
                 Type = PaymentType.Refund,
-                Amount = depositPaid,
+                Amount = depositToRefund,
                 Method = PaymentMethods.DepositRefund,
                 Status = PaymentStatus.AwaitingRefund
             });
 
-            booking.RefundAmount += depositPaid;
+            booking.RefundAmount += depositToRefund;
             booking.RefundReason = AppendText(
                 booking.RefundReason,
-                $"Hoàn cọc sau khi kiểm tra xe: {depositPaid:N0} đồng.");
+                $"Hoàn cọc còn lại sau khi kiểm tra xe: {depositToRefund:N0} đồng.");
         }
 
         if (requiresMaintenance)
@@ -332,8 +333,8 @@ internal sealed class ReturnService : IReturnService
         {
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã hoàn tất",
-            Message = depositPaid > 0
-                ? $"Đơn #{booking.BookingId} đã kiểm tra xong. Cọc {depositPaid:N0} đồng đang chờ hoàn."
+            Message = depositToRefund > 0
+                ? $"Đơn #{booking.BookingId} đã kiểm tra xong. Cọc còn lại {depositToRefund:N0} đồng đang chờ hoàn."
                 : $"Đơn #{booking.BookingId} đã hoàn tất. Bạn có thể đánh giá chuyến thuê."
         });
 
