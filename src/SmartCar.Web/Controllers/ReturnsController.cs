@@ -18,7 +18,7 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class ReturnsController : Controller
 {
-    private const int MaximumImages = 10;
+    private const int MaximumImages = 18;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
@@ -87,14 +87,36 @@ public sealed class ReturnsController : Controller
         ReturnViewModel model,
         CancellationToken cancellationToken)
     {
-        await ValidateImagesAsync(model.Images, cancellationToken);
+        var evidenceFiles = BuildEvidenceFiles(model);
+        await ValidateImagesAsync(
+            evidenceFiles,
+            model.DamageImages,
+            model.Images,
+            model.HasDamage,
+            cancellationToken);
+
         if (!ModelState.IsValid)
         {
             await PopulateHandoverBaselineAsync(model.BookingId, cancellationToken);
             return View(model);
         }
 
-        var imagePaths = await SaveImagesAsync(model.BookingId, model.Images, cancellationToken);
+        IReadOnlyList<string> imagePaths;
+        try
+        {
+            imagePaths = await SaveImagesAsync(
+                model.BookingId,
+                evidenceFiles,
+                model.DamageImages,
+                model.Images,
+                cancellationToken);
+        }
+        catch
+        {
+            ModelState.AddModelError(nameof(ReturnViewModel.Images), "Không thể lưu ảnh trả xe. Vui lòng thử lại.");
+            await PopulateHandoverBaselineAsync(model.BookingId, cancellationToken);
+            return View(model);
+        }
 
         var result = await _returnService.CreateAsync(
             new CreateReturnRequest(
@@ -102,8 +124,8 @@ public sealed class ReturnsController : Controller
                 model.ReturnedAt,
                 model.Mileage,
                 model.FuelLevel,
-                null,
-                null,
+                model.ExteriorCondition,
+                model.InteriorCondition,
                 model.HasDamage,
                 string.Join(';', imagePaths),
                 model.Notes),
@@ -121,11 +143,11 @@ public sealed class ReturnsController : Controller
             "CreateReturn",
             nameof(VehicleReturn),
             model.BookingId,
-            $"Lập biên bản trả xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh, có hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
+            $"Lập biên bản trả xe đơn #{model.BookingId}, {model.Mileage:N0} km, {imagePaths.Count} ảnh chứng cứ, hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
             cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã lập biên bản trả xe. In, ký và tải bản ký trước khi kết thúc kiểm tra.";
+            "Đã lưu biên bản trả xe. Hãy in, ký và tải bản ký trước khi kết thúc kiểm tra.";
 
         return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
     }
@@ -177,6 +199,9 @@ public sealed class ReturnsController : Controller
                 RecordedAt = records.Handover.HandoverAt,
                 Mileage = records.Handover.Mileage,
                 FuelLevel = records.Handover.FuelLevel,
+                ExteriorCondition = records.Handover.ExteriorCondition,
+                InteriorCondition = records.Handover.InteriorCondition,
+                Accessories = records.Handover.Accessories,
                 Notes = records.Handover.Notes,
                 ImagePaths = SplitImagePaths(records.Handover.ImagePaths)
             },
@@ -185,6 +210,8 @@ public sealed class ReturnsController : Controller
                 RecordedAt = records.VehicleReturn.ReturnedAt,
                 Mileage = records.VehicleReturn.Mileage,
                 FuelLevel = records.VehicleReturn.FuelLevel,
+                ExteriorCondition = records.VehicleReturn.ExteriorCondition,
+                InteriorCondition = records.VehicleReturn.InteriorCondition,
                 HasDamage = records.VehicleReturn.HasDamage,
                 Notes = records.VehicleReturn.Notes,
                 ImagePaths = SplitImagePaths(records.VehicleReturn.ImagePaths)
@@ -386,47 +413,83 @@ public sealed class ReturnsController : Controller
         ViewBag.HandoverAt = handover.HandoverAt;
         ViewBag.HandoverIncludedKilometers = handover.IncludedKilometers;
         ViewBag.HandoverExcessKmFeePerKm = handover.ExcessKmFeePerKm;
+        ViewBag.HandoverExteriorCondition = handover.ExteriorCondition;
+        ViewBag.HandoverInteriorCondition = handover.InteriorCondition;
+        ViewBag.HandoverAccessories = handover.Accessories;
     }
 
+    private static IReadOnlyList<(string Label, string FieldName, IFormFile? File)> BuildEvidenceFiles(
+        ReturnViewModel model) =>
+        new (string, string, IFormFile?)[]
+        {
+            ("front", nameof(ReturnViewModel.FrontImage), model.FrontImage),
+            ("rear", nameof(ReturnViewModel.RearImage), model.RearImage),
+            ("left", nameof(ReturnViewModel.LeftImage), model.LeftImage),
+            ("right", nameof(ReturnViewModel.RightImage), model.RightImage),
+            ("interior", nameof(ReturnViewModel.InteriorImage), model.InteriorImage),
+            ("odometer", nameof(ReturnViewModel.OdometerImage), model.OdometerImage),
+            ("fuel", nameof(ReturnViewModel.FuelImage), model.FuelImage)
+        };
+
     private async Task ValidateImagesAsync(
-        IReadOnlyCollection<IFormFile> images,
+        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
+        IReadOnlyCollection<IFormFile> damageImages,
+        IReadOnlyCollection<IFormFile> otherImages,
+        bool hasDamage,
         CancellationToken cancellationToken)
     {
-        var selectedImages = images.Where(file => file.Length > 0).ToList();
-        if (selectedImages.Count == 0)
+        foreach (var evidence in evidenceFiles)
         {
-            ModelState.AddModelError(
-                nameof(ReturnViewModel.Images),
-                "Vui lòng tải ít nhất một ảnh tình trạng xe khi trả.");
-            return;
-        }
-
-        if (selectedImages.Count > MaximumImages)
-        {
-            ModelState.AddModelError(
-                nameof(ReturnViewModel.Images),
-                $"Chỉ được tải tối đa {MaximumImages} ảnh khi trả xe.");
-        }
-
-        foreach (var image in selectedImages)
-        {
-            var error = await ImageFileValidator.ValidateAsync(
-                image,
-                MaximumImageBytes,
-                cancellationToken);
-
-            if (error is not null)
+            if (evidence.File is null || evidence.File.Length == 0)
             {
-                ModelState.AddModelError(
-                    nameof(ReturnViewModel.Images),
-                    $"{image.FileName}: {error}");
+                ModelState.AddModelError(evidence.FieldName, "Cần ảnh này để đối chiếu với lúc giao.");
+                continue;
             }
+
+            await ValidateImageAsync(evidence.File, evidence.FieldName, cancellationToken);
+        }
+
+        var selectedDamageImages = damageImages.Where(file => file.Length > 0).ToList();
+        var selectedOtherImages = otherImages.Where(file => file.Length > 0).ToList();
+
+        if (hasDamage && selectedDamageImages.Count == 0)
+        {
+            ModelState.AddModelError(nameof(ReturnViewModel.DamageImages), "Đã đánh dấu hư hỏng thì phải có ảnh hư hỏng.");
+        }
+
+        if (evidenceFiles.Count + selectedDamageImages.Count + selectedOtherImages.Count > MaximumImages)
+        {
+            ModelState.AddModelError(nameof(ReturnViewModel.Images), $"Tổng số ảnh tối đa là {MaximumImages}.");
+        }
+
+        foreach (var image in selectedDamageImages)
+        {
+            await ValidateImageAsync(image, nameof(ReturnViewModel.DamageImages), cancellationToken);
+        }
+
+        foreach (var image in selectedOtherImages)
+        {
+            await ValidateImageAsync(image, nameof(ReturnViewModel.Images), cancellationToken);
+        }
+    }
+
+    private async Task ValidateImageAsync(
+        IFormFile image,
+        string fieldName,
+        CancellationToken cancellationToken)
+    {
+        var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
+        if (error is not null)
+        {
+            ModelState.AddModelError(fieldName, $"{image.FileName}: {error}");
         }
     }
 
     private async Task<IReadOnlyList<string>> SaveImagesAsync(
         int bookingId,
-        IEnumerable<IFormFile> images,
+        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
+        IEnumerable<IFormFile> damageImages,
+        IEnumerable<IFormFile> otherImages,
         CancellationToken cancellationToken)
     {
         var relativeFolder = $"uploads/returns/{bookingId}";
@@ -434,18 +497,46 @@ public sealed class ReturnsController : Controller
         Directory.CreateDirectory(folder);
 
         var paths = new List<string>();
-        foreach (var image in images.Where(file => file.Length > 0))
+        try
         {
-            var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-            var fileName = $"{Guid.NewGuid():N}{extension}";
-            var fullPath = Path.Combine(folder, fileName);
+            foreach (var evidence in evidenceFiles.Where(item => item.File is { Length: > 0 }))
+            {
+                paths.Add(await SaveOneImageAsync(folder, relativeFolder, evidence.Label, evidence.File!, cancellationToken));
+            }
 
-            await using var stream = System.IO.File.Create(fullPath);
-            await image.CopyToAsync(stream, cancellationToken);
-            paths.Add($"/{relativeFolder}/{fileName}");
+            foreach (var image in damageImages.Where(file => file.Length > 0))
+            {
+                paths.Add(await SaveOneImageAsync(folder, relativeFolder, "damage", image, cancellationToken));
+            }
+
+            foreach (var image in otherImages.Where(file => file.Length > 0))
+            {
+                paths.Add(await SaveOneImageAsync(folder, relativeFolder, "other", image, cancellationToken));
+            }
+
+            return paths;
         }
+        catch
+        {
+            DeleteSavedImages(paths);
+            throw;
+        }
+    }
 
-        return paths;
+    private static async Task<string> SaveOneImageAsync(
+        string folder,
+        string relativeFolder,
+        string label,
+        IFormFile image,
+        CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+        var fileName = $"{label}-{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using var stream = System.IO.File.Create(fullPath);
+        await image.CopyToAsync(stream, cancellationToken);
+        return $"/{relativeFolder}/{fileName}";
     }
 
     private void DeleteSavedImages(IEnumerable<string> imagePaths)
