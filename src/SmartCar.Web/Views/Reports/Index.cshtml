@@ -1,21 +1,27 @@
 @model SmartCar.Application.Features.Reports.FleetReportDto
 @{
     ViewData["Title"] = "Hiệu suất và tài chính đội xe";
+    var hasUnusualAdditionalCharges = Model.TotalAdditionalChargeRevenue > 10_000_000m &&
+        Model.TotalAdditionalChargeRevenue > Math.Max(1m, Model.TotalRentalRevenue) * 10m;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h1 class="h3 mb-1">Hiệu suất và tài chính đội xe</h1>
-        <p class="text-muted mb-0">
-            Theo dõi doanh thu thực thu, dòng tiền hoàn, chi phí vận hành và hiệu quả khai thác theo từng xe.
-        </p>
+        <p class="text-muted mb-0">Doanh thu, tiền cần xử lý và hiệu quả từng xe.</p>
     </div>
 </div>
 
-<div class="alert alert-info border mb-4">
-    <strong>Nguyên tắc báo cáo:</strong>
-    tiền cọc được quản lý riêng, không cộng vào doanh thu. Hoàn cọc là dòng tiền ra nhưng không tự động tính là chi phí làm giảm lợi nhuận vận hành.
+<div class="alert alert-info py-2 mb-4">
+    <strong>Cọc được quản lý riêng</strong> và không tính vào doanh thu.
 </div>
+
+@if (hasUnusualAdditionalCharges)
+{
+    <div class="alert alert-warning py-2 mb-4">
+        <strong>Cần kiểm tra phụ phí:</strong> tổng phụ phí đang cao bất thường. Mở “Dòng tiền” ở bảng dưới để xem đơn gây chênh lệch.
+    </div>
+}
 
 <form method="get" class="card card-body shadow-sm mb-4">
     <div class="row g-3 align-items-end">
@@ -28,98 +34,79 @@
             <input name="toDate" type="date" value="@Model.ToDate.ToString("yyyy-MM-dd")" class="form-control" />
         </div>
         <div class="col-md-4">
-            <button class="btn btn-primary w-100" type="submit">Cập nhật báo cáo</button>
+            <button class="btn btn-primary w-100" type="submit">Cập nhật</button>
         </div>
     </div>
 </form>
 
-<div class="row g-3 mb-3">
+<div class="row g-3 mb-4">
     <div class="col-md-3">
         <div class="card card-body shadow-sm h-100">
-            <span class="text-muted">Doanh thu thực thu</span>
+            <span class="text-muted">Doanh thu</span>
             <strong class="fs-4">@Model.TotalRevenue.ToString("N0") đ</strong>
-            <small class="text-muted">Không bao gồm tiền cọc.</small>
+            <small class="text-muted">Không gồm cọc.</small>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card card-body shadow-sm h-100">
             <span class="text-muted">Hoàn doanh thu</span>
             <strong class="fs-4 text-warning">@Model.TotalRevenueRefunds.ToString("N0") đ</strong>
-            <small class="text-muted">Khoản thu bị hoàn lại, không gồm hoàn cọc.</small>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card card-body shadow-sm h-100">
             <span class="text-muted">Chi phí vận hành</span>
             <strong class="fs-4 text-danger">@Model.TotalOperatingCost.ToString("N0") đ</strong>
-            <small class="text-muted">Bảo trì + chi phí sự cố/phạt.</small>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card card-body shadow-sm h-100">
-            <span class="text-muted">Lợi nhuận vận hành ước tính</span>
+            <span class="text-muted">Lợi nhuận ước tính</span>
             <strong class="fs-4 @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">
                 @Model.TotalNetOperatingProfit.ToString("N0") đ
             </strong>
-            <small class="text-muted">Doanh thu - hoàn doanh thu - chi phí vận hành.</small>
         </div>
     </div>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card card-body shadow-sm h-100">
-            <span class="text-muted">Tiền thuê / phí giao</span>
-            <strong class="fs-5">@Model.TotalRentalRevenue.ToString("N0") đ</strong>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-body shadow-sm h-100">
-            <span class="text-muted">Tiền gia hạn</span>
-            <strong class="fs-5">@Model.TotalExtensionRevenue.ToString("N0") đ</strong>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-body shadow-sm h-100">
-            <span class="text-muted">Phụ phí đã thu</span>
-            <strong class="fs-5">@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-body shadow-sm h-100">
-            <span class="text-muted">Hoàn cọc trong kỳ</span>
-            <strong class="fs-5 text-primary">@Model.TotalDepositRefunds.ToString("N0") đ</strong>
-            <small class="text-muted">Dòng tiền ra, không tính là chi phí.</small>
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white"><strong>Cơ cấu trong kỳ</strong></div>
+    <div class="card-body">
+        <div class="row g-3 text-center text-md-start">
+            <div class="col-6 col-md-3"><div class="small text-muted">Thuê / giao</div><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-md-3"><div class="small text-muted">Gia hạn</div><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-md-3"><div class="small text-muted">Phụ phí đã thu</div><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-md-3"><div class="small text-muted">Hoàn cọc</div><strong class="text-primary">@Model.TotalDepositRefunds.ToString("N0") đ</strong></div>
         </div>
     </div>
 </div>
 
 <div class="card shadow-sm mb-4">
     <div class="card-header bg-white">
-        <strong>Dòng tiền cần quản trị hiện tại</strong>
-        <div class="small text-muted">Ba chỉ số này là trạng thái hiện tại của hệ thống, không phụ thuộc khoảng ngày báo cáo.</div>
+        <strong>Tiền cần theo dõi</strong>
+        <div class="small text-muted">Trạng thái hiện tại, không phụ thuộc khoảng ngày.</div>
     </div>
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-4">
                 <div class="border rounded p-3 h-100">
-                    <div class="text-muted">Công nợ chưa thu</div>
-                    <div class="fs-4 fw-bold text-danger">@Model.OutstandingReceivables.ToString("N0") đ</div>
-                    <small class="text-muted">Khoản thuê, gia hạn hoặc phụ phí đang chờ khách/chờ đối soát.</small>
+                    <div class="text-muted">Cần thu / chờ đối soát</div>
+                    <div class="fs-4 fw-bold text-warning">@Model.OutstandingReceivables.ToString("N0") đ</div>
+                    <small class="text-muted">Chưa thanh toán hoặc khách đã báo chuyển nhưng chưa xác nhận.</small>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="border rounded p-3 h-100">
                     <div class="text-muted">Cọc đang giữ</div>
                     <div class="fs-4 fw-bold text-primary">@Model.DepositsHeld.ToString("N0") đ</div>
-                    <small class="text-muted">Tiền cọc đã nhận nhưng chưa ghi nhận hoàn cọc hoàn tất.</small>
+                    <small class="text-muted">Cọc đã nhận nhưng chưa hoàn xong.</small>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="border rounded p-3 h-100">
-                    <div class="text-muted">Hoàn tiền chờ xử lý</div>
+                    <div class="text-muted">Chờ hoàn tiền</div>
                     <div class="fs-4 fw-bold text-warning">@Model.PendingRefunds.ToString("N0") đ</div>
-                    <small class="text-muted">Khoản hoàn đang chờ Admin thực hiện/chốt giao dịch.</small>
+                    <small class="text-muted">Admin chưa xác nhận chuyển hoàn.</small>
                 </div>
             </div>
         </div>
@@ -130,32 +117,22 @@
     <div class="col-md-6">
         <div class="card card-body shadow-sm h-100">
             <div class="d-flex justify-content-between mb-2">
-                <div>
-                    <strong>Khai thác toàn kỳ</strong>
-                    <div class="small text-muted">Ngày thuê / tổng số ngày trong kỳ.</div>
-                </div>
+                <div><strong>Khai thác toàn kỳ</strong><div class="small text-muted">Ngày thuê / tổng ngày.</div></div>
                 <span>@Model.AverageFleetUtilizationRate.ToString("0.##")%</span>
             </div>
-            <div class="progress" style="height:20px">
-                <div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageFleetUtilizationRate):0.##}%")">
-                    @Model.AverageFleetUtilizationRate.ToString("0.##")%
-                </div>
+            <div class="progress" style="height:18px">
+                <div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageFleetUtilizationRate):0.##}%")"></div>
             </div>
         </div>
     </div>
     <div class="col-md-6">
         <div class="card card-body shadow-sm h-100">
             <div class="d-flex justify-content-between mb-2">
-                <div>
-                    <strong>Khai thác trên ngày khả dụng</strong>
-                    <div class="small text-muted">Loại trừ ngày xe nằm bảo trì khỏi mẫu số.</div>
-                </div>
+                <div><strong>Khai thác khi xe khả dụng</strong><div class="small text-muted">Không tính ngày bảo trì.</div></div>
                 <span>@Model.AverageAvailableUtilizationRate.ToString("0.##")%</span>
             </div>
-            <div class="progress" style="height:20px">
-                <div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageAvailableUtilizationRate):0.##}%")">
-                    @Model.AverageAvailableUtilizationRate.ToString("0.##")%
-                </div>
+            <div class="progress" style="height:18px">
+                <div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageAvailableUtilizationRate):0.##}%")"></div>
             </div>
         </div>
     </div>
@@ -164,7 +141,7 @@
 <div class="card shadow-sm">
     <div class="card-header bg-white">
         <strong>Hiệu quả theo xe</strong>
-        <div class="small text-muted">Mở “Dòng tiền” để truy ngược số liệu về từng đơn thuê và từng khoản chi.</div>
+        <div class="small text-muted">Mở “Dòng tiền” để kiểm tra số liệu.</div>
     </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
@@ -174,32 +151,37 @@
                     <th style="min-width:170px">Doanh thu</th>
                     <th style="min-width:145px">Hoàn tiền</th>
                     <th style="min-width:155px">Chi phí</th>
-                    <th style="min-width:155px">Lợi nhuận vận hành</th>
+                    <th style="min-width:155px">Lợi nhuận</th>
                     <th style="min-width:210px">Khai thác</th>
-                    <th>Đơn hoàn tất</th>
+                    <th>Đơn xong</th>
                     <th style="min-width:180px">Đối soát</th>
                 </tr>
             </thead>
             <tbody>
             @if (Model.Vehicles.Count == 0)
             {
-                <tr><td colspan="8" class="text-center text-muted py-4">Chưa có dữ liệu xe.</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-4">Chưa có dữ liệu.</td></tr>
             }
             else
             {
                 @foreach (var item in Model.Vehicles)
                 {
-                    <tr>
+                    var unusualVehicleCharge = item.AdditionalChargeRevenue > 10_000_000m &&
+                        item.AdditionalChargeRevenue > Math.Max(1m, item.RentalRevenue) * 10m;
+                    <tr class="@(unusualVehicleCharge ? "table-warning" : string.Empty)">
                         <td>
                             <strong>@item.VehicleName</strong>
                             <div class="small text-muted">@item.LicensePlate</div>
+                            @if (unusualVehicleCharge)
+                            {
+                                <span class="badge bg-warning text-dark mt-1">Kiểm tra phụ phí</span>
+                            }
                         </td>
                         <td>
                             <div class="fw-semibold">@item.Revenue.ToString("N0") đ</div>
                             <div class="small text-muted">Thuê: @item.RentalRevenue.ToString("N0")</div>
                             <div class="small text-muted">Gia hạn: @item.ExtensionRevenue.ToString("N0")</div>
                             <div class="small text-muted">Phụ phí: @item.AdditionalChargeRevenue.ToString("N0")</div>
-                            <div class="small text-muted">@item.RevenuePerRentalDay.ToString("N0") đ/ngày thuê</div>
                         </td>
                         <td>
                             <div class="text-warning">Hoàn thu: @item.RevenueRefunds.ToString("N0") đ</div>
@@ -208,20 +190,15 @@
                         <td>
                             <div>Bảo trì: @item.MaintenanceCost.ToString("N0") đ</div>
                             <div>Sự cố/phạt: @item.IncidentCost.ToString("N0") đ</div>
-                            <div class="small text-muted">@item.IncidentCount sự cố</div>
                         </td>
-                        <td class="fw-bold @(item.NetOperatingProfit >= 0 ? "text-success" : "text-danger")">
-                            @item.NetOperatingProfit.ToString("N0") đ
-                        </td>
+                        <td class="fw-bold @(item.NetOperatingProfit >= 0 ? "text-success" : "text-danger")">@item.NetOperatingProfit.ToString("N0") đ</td>
                         <td>
                             <div class="d-flex justify-content-between small">
-                                <span>@item.RentalDays ngày thuê / @item.AvailableDays ngày khả dụng</span>
+                                <span>@item.RentalDays / @item.AvailableDays ngày</span>
                                 <span>@item.FleetUtilizationRate.ToString("0.##")%</span>
                             </div>
-                            <div class="progress mb-1" style="height:9px">
-                                <div class="progress-bar" style="width:@($"{Math.Min(100m, item.FleetUtilizationRate):0.##}%")"></div>
-                            </div>
-                            <div class="small text-muted">Trên ngày khả dụng: @item.AvailableUtilizationRate.ToString("0.##")%</div>
+                            <div class="progress mb-1" style="height:9px"><div class="progress-bar" style="width:@($"{Math.Min(100m, item.FleetUtilizationRate):0.##}%")"></div></div>
+                            <div class="small text-muted">Khả dụng: @item.AvailableUtilizationRate.ToString("0.##")%</div>
                         </td>
                         <td>@item.CompletedBookings</td>
                         <td>
@@ -230,7 +207,7 @@
                                 <div class="mt-2" style="min-width:390px; max-height:330px; overflow:auto">
                                     @if (item.Transactions.Count == 0)
                                     {
-                                        <div class="small text-muted">Không có giao dịch/chi phí trong kỳ.</div>
+                                        <div class="small text-muted">Không có giao dịch trong kỳ.</div>
                                     }
                                     else
                                     {
@@ -242,15 +219,9 @@
                                                     <td class="small text-nowrap">@transaction.OccurredAt.ToString("dd/MM/yyyy")</td>
                                                     <td class="small">
                                                         <div class="fw-semibold">@transaction.Category</div>
-                                                        <div class="text-muted">@transaction.Description</div>
                                                         @if (transaction.BookingId.HasValue)
                                                         {
-                                                            <a asp-controller="AdminBookings"
-                                                               asp-action="Details"
-                                                               asp-route-id="@transaction.BookingId.Value"
-                                                               class="text-decoration-none">
-                                                                Đơn #@transaction.BookingId.Value
-                                                            </a>
+                                                            <a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@transaction.BookingId.Value" class="text-decoration-none">Đơn #@transaction.BookingId.Value</a>
                                                         }
                                                     </td>
                                                     <td class="small text-end text-nowrap @(transaction.IsOutflow ? "text-danger" : "text-success")">
@@ -272,6 +243,4 @@
     </div>
 </div>
 
-<div class="small text-muted mt-3">
-    “Lợi nhuận vận hành ước tính” chưa bao gồm khấu hao xe, bảo hiểm, đăng kiểm, chi phí vốn, nhân sự, thuế và các chi phí quản trị chung chưa được lưu trong hệ thống.
-</div>
+<div class="small text-muted mt-3">Lợi nhuận ước tính chưa gồm khấu hao, bảo hiểm, thuế và chi phí chung.</div>
