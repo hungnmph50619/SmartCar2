@@ -37,18 +37,23 @@
 
 <details class="card card-body shadow-sm mb-4">
     <summary class="fw-semibold">+ Ghi nhận yêu cầu qua điện thoại</summary>
-    <form asp-action="CreateForCustomer" method="post" enctype="multipart/form-data" class="row g-3 mt-2">
+    <form asp-action="CreateForCustomer" method="post" enctype="multipart/form-data" class="row g-3 mt-2" id="admin-extension-phone-form">
+        <input name="requestedReturnDate" type="hidden" id="admin-requested-return-value" />
         <div class="col-md-2">
             <label class="form-label">Mã đơn</label>
             <input name="bookingId" type="number" min="1" class="form-control" required placeholder="#" />
         </div>
         <div class="col-md-4">
             <label class="form-label">Trả mới</label>
-            <input name="requestedReturnDate" type="datetime-local" class="form-control" required />
+            <div class="row g-2">
+                <div class="col-7"><input type="date" id="admin-requested-return-date" class="form-control" required /></div>
+                <div class="col-5"><input type="text" id="admin-requested-return-time" class="form-control" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Giờ 24h, ví dụ 14:30" required /></div>
+            </div>
+            <div class="form-text">Giờ 24h · ví dụ 14:30.</div>
         </div>
         <div class="col-md-6">
             <label class="form-label">Lý do</label>
-            <input name="note" class="form-control" maxlength="300" placeholder="Ghi đúng nội dung khách trình bày" />
+            <input name="note" class="form-control" maxlength="300" placeholder="Ghi đúng nội dung khách trình bày" required />
         </div>
         <div class="col-12">
             <div class="form-check">
@@ -284,6 +289,30 @@ else
 <script>
     (() => {
         const money = value => new Intl.NumberFormat('vi-VN').format(Math.abs(value)) + ' đ';
+        const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+        const phoneForm = document.getElementById('admin-extension-phone-form');
+        const hiddenReturn = document.getElementById('admin-requested-return-value');
+        const returnDate = document.getElementById('admin-requested-return-date');
+        const returnTime = document.getElementById('admin-requested-return-time');
+
+        const syncAdminReturn = () => {
+            if (!phoneForm || !hiddenReturn || !returnDate || !returnTime) return true;
+            if (!returnDate.value || !timePattern.test(returnTime.value || '')) return false;
+            hiddenReturn.value = `${returnDate.value}T${returnTime.value}`;
+            returnTime.setCustomValidity('');
+            return true;
+        };
+
+        returnDate?.addEventListener('change', syncAdminReturn);
+        returnTime?.addEventListener('input', syncAdminReturn);
+        phoneForm?.addEventListener('submit', event => {
+            if (!syncAdminReturn()) {
+                event.preventDefault();
+                returnTime?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
+                returnTime?.reportValidity();
+            }
+        });
 
         document.querySelectorAll('[data-swap-form]').forEach(form => {
             const select = form.querySelector('[data-swap-select]');
