@@ -1,10 +1,10 @@
 namespace SmartCar.Domain.Constants;
 
 /// <summary>
-/// Tương thích với dữ liệu thử nghiệm cũ từng ghi khoản bồi thường tự động
-/// khi gia hạn bất khả kháng làm ảnh hưởng đơn kế tiếp.
-/// Chính sách hiện tại không tự động giữ hoặc khấu trừ cọc trong trường hợp này,
-/// nên các marker cũ không còn làm giảm tiền cọc khả dụng.
+/// Marker chỉ dùng để nhận diện dữ liệu thử nghiệm cũ từng tự động gán
+/// mức bồi thường cho gia hạn bất khả kháng. Dữ liệu mới không dùng marker này:
+/// quản trị viên phải nhập thiệt hại thực tế có căn cứ và hệ thống ghi nhận
+/// khoản khấu trừ cọc bằng giao dịch riêng. Vì vậy marker cũ không còn giữ cọc.
 /// </summary>
 public static class CompensationLedger
 {
