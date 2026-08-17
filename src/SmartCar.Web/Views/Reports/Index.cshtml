@@ -3,6 +3,7 @@
     ViewData["Title"] = "Hiệu suất và tài chính đội xe";
     var hasUnusualAdditionalCharges = Model.TotalAdditionalChargeRevenue > 10_000_000m &&
         Model.TotalAdditionalChargeRevenue > Math.Max(1m, Model.TotalRentalRevenue) * 10m;
+    var totalOutstanding = Model.OutstandingReceivables + Model.OutstandingDeposits;
 
     var today = DateTime.Today;
     var sevenDaysStart = today.AddDays(-6);
@@ -107,8 +108,10 @@
             <div class="col-md-4">
                 <div class="border rounded p-3 h-100">
                     <div class="text-muted">Cần thu / chờ đối soát</div>
-                    <div class="fs-4 fw-bold text-warning">@Model.OutstandingReceivables.ToString("N0") đ</div>
-                    <small class="text-muted">Chưa thanh toán hoặc đã báo chuyển nhưng chưa xác nhận.</small>
+                    <div class="fs-4 fw-bold text-warning">@totalOutstanding.ToString("N0") đ</div>
+                    <div class="small mt-2">Thuê & phát sinh: <strong>@Model.OutstandingReceivables.ToString("N0") đ</strong></div>
+                    <div class="small">Cọc: <strong>@Model.OutstandingDeposits.ToString("N0") đ</strong></div>
+                    <small class="text-muted d-block mt-1">Cọc chỉ theo dõi dòng tiền, không tính vào doanh thu.</small>
                 </div>
             </div>
             <div class="col-md-4">
@@ -145,7 +148,7 @@
     <div class="col-md-6">
         <div class="card card-body shadow-sm h-100">
             <div class="d-flex justify-content-between mb-2">
-                <div><strong>Khai thác toàn kỳ</strong><div class="small text-muted">Ngày thuê / tổng ngày.</div></div>
+                <div><strong>Tỷ lệ xe được thuê</strong><div class="small text-muted">Số ngày thuê / toàn bộ số ngày trong kỳ.</div></div>
                 <span>@Model.AverageFleetUtilizationRate.ToString("0.##")%</span>
             </div>
             <div class="progress" style="height:18px"><div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageFleetUtilizationRate):0.##}%")"></div></div>
@@ -154,7 +157,7 @@
     <div class="col-md-6">
         <div class="card card-body shadow-sm h-100">
             <div class="d-flex justify-content-between mb-2">
-                <div><strong>Khai thác khi xe khả dụng</strong><div class="small text-muted">Không tính ngày bảo trì.</div></div>
+                <div><strong>Tỷ lệ thuê khi xe sẵn sàng</strong><div class="small text-muted">Số ngày thuê / số ngày xe có thể cho thuê; không tính ngày bảo trì.</div></div>
                 <span>@Model.AverageAvailableUtilizationRate.ToString("0.##")%</span>
             </div>
             <div class="progress" style="height:18px"><div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageAvailableUtilizationRate):0.##}%")"></div></div>
@@ -233,12 +236,9 @@
                         </td>
                         <td class="fw-bold @(item.NetOperatingProfit >= 0 ? "text-success" : "text-danger")">@item.NetOperatingProfit.ToString("N0") đ</td>
                         <td>
-                            <div class="d-flex justify-content-between small mb-1">
-                                <strong>@item.FleetUtilizationRate.ToString("0.##")%</strong>
-                                <span class="text-muted">@item.RentalDays/@item.AvailableDays ngày</span>
-                            </div>
+                            <div class="small mb-1"><strong>Được thuê: @item.FleetUtilizationRate.ToString("0.##")%</strong> · @item.RentalDays ngày</div>
                             <div class="progress mb-1" style="height:9px"><div class="progress-bar" style="width:@($"{Math.Min(100m, item.FleetUtilizationRate):0.##}%")"></div></div>
-                            <div class="small text-muted">Khả dụng: @item.AvailableUtilizationRate.ToString("0.##")%</div>
+                            <div class="small text-muted">Khi sẵn sàng: @item.AvailableUtilizationRate.ToString("0.##")%</div>
                         </td>
                         <td>
                             <details>
