@@ -49,6 +49,7 @@ public sealed record FleetReportDto(
     decimal AverageFleetUtilizationRate,
     decimal AverageAvailableUtilizationRate,
     decimal OutstandingReceivables,
+    decimal OutstandingDeposits,
     decimal DepositsHeld,
     decimal PendingRefunds,
     IReadOnlyList<VehiclePerformanceDto> Vehicles);
