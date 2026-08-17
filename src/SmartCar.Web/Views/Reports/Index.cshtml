@@ -26,7 +26,7 @@
     <div>
         <h1 class="h3 mb-1">Hiệu suất và tài chính đội xe</h1>
         <p class="text-muted mb-0">Doanh thu, tiền cần xử lý và hiệu quả từng xe.</p>
-        <div class="small text-muted mt-1">Tiền cọc được quản lý riêng, không tính vào doanh thu.</div>
+        <div class="small text-muted mt-1">Cọc đang giữ được quản lý riêng. Phần cọc đã khấu trừ để quyết toán nghĩa vụ được tách riêng và không được xem là tiền khách chuyển thêm.</div>
     </div>
 </div>
 
@@ -72,7 +72,7 @@
         <div class="card card-body shadow-sm h-100">
             <span class="text-muted">Doanh thu</span>
             <strong class="fs-4">@Model.TotalRevenue.ToString("N0") đ</strong>
-            <small class="text-muted">Không gồm cọc.</small>
+            <small class="text-muted">Không gồm phần cọc còn phải hoàn cho khách.</small>
         </div>
     </div>
     <div class="col-md-3">
@@ -111,21 +111,21 @@
                     <div class="fs-4 fw-bold text-warning">@totalOutstanding.ToString("N0") đ</div>
                     <div class="small mt-2">Thuê & phát sinh: <strong>@Model.OutstandingReceivables.ToString("N0") đ</strong></div>
                     <div class="small">Cọc: <strong>@Model.OutstandingDeposits.ToString("N0") đ</strong></div>
-                    <small class="text-muted d-block mt-1">Cọc chỉ theo dõi dòng tiền, không tính vào doanh thu.</small>
+                    <small class="text-muted d-block mt-1">Cọc chỉ theo dõi dòng tiền, chưa tính vào doanh thu khi còn phải hoàn.</small>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="border rounded p-3 h-100">
-                    <div class="text-muted">Cọc đang giữ</div>
+                    <div class="text-muted">Cọc còn khả dụng</div>
                     <div class="fs-4 fw-bold text-primary">@Model.DepositsHeld.ToString("N0") đ</div>
-                    <small class="text-muted">Cọc đã nhận nhưng chưa hoàn xong.</small>
+                    <small class="text-muted">Sau khi trừ phần đã hoàn, đã khấu trừ hoặc đã giữ chỗ bồi thường.</small>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="border rounded p-3 h-100">
                     <div class="text-muted">Chờ hoàn tiền</div>
                     <div class="fs-4 fw-bold text-warning">@Model.PendingRefunds.ToString("N0") đ</div>
-                    <small class="text-muted">Admin chưa xác nhận chuyển hoàn.</small>
+                    <small class="text-muted">Quản trị viên chưa xác nhận chuyển hoàn.</small>
                 </div>
             </div>
         </div>
@@ -136,10 +136,11 @@
     <div class="card-header bg-white"><strong>Cơ cấu trong kỳ</strong></div>
     <div class="card-body">
         <div class="row g-3 text-center text-md-start">
-            <div class="col-6 col-md-3"><div class="small text-muted">Thuê / giao</div><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div>
-            <div class="col-6 col-md-3"><div class="small text-muted">Gia hạn</div><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
-            <div class="col-6 col-md-3"><div class="small text-muted">Phụ phí</div><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
-            <div class="col-6 col-md-3"><div class="small text-muted">Hoàn cọc</div><strong class="text-primary">@Model.TotalDepositRefunds.ToString("N0") đ</strong></div>
+            <div class="col-6 col-lg"><div class="small text-muted">Thuê / giao</div><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-lg"><div class="small text-muted">Gia hạn</div><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-lg"><div class="small text-muted">Phụ phí thực thu</div><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
+            <div class="col-6 col-lg"><div class="small text-muted">Khấu trừ cọc</div><strong>@Model.TotalDepositDeductionRecovery.ToString("N0") đ</strong></div>
+            <div class="col-6 col-lg"><div class="small text-muted">Hoàn cọc</div><strong class="text-primary">@Model.TotalDepositRefunds.ToString("N0") đ</strong></div>
         </div>
     </div>
 </div>
@@ -186,7 +187,7 @@
             <thead>
                 <tr>
                     <th>Xe</th>
-                    <th style="min-width:170px">Doanh thu</th>
+                    <th style="min-width:180px">Doanh thu</th>
                     <th style="min-width:145px">Hoàn tiền</th>
                     <th style="min-width:155px">Chi phí</th>
                     <th style="min-width:155px">Lợi nhuận</th>
@@ -221,6 +222,10 @@
                             <div class="small text-muted">Thuê: @item.RentalRevenue.ToString("N0")</div>
                             <div class="small text-muted">Gia hạn: @item.ExtensionRevenue.ToString("N0")</div>
                             <div class="small @(row.IsUnusual ? "text-danger fw-semibold" : "text-muted")">Phụ phí: @item.AdditionalChargeRevenue.ToString("N0")</div>
+                            @if (item.DepositDeductionRecovery > 0)
+                            {
+                                <div class="small text-muted">Khấu trừ cọc: @item.DepositDeductionRecovery.ToString("N0")</div>
+                            }
                         </td>
                         <td>
                             <div class="text-warning">Hoàn thuê: @item.RevenueRefunds.ToString("N0") đ</div>
@@ -283,7 +288,7 @@
     </div>
 </div>
 
-<div class="small text-muted mt-3">Lợi nhuận ước tính chưa gồm khấu hao, bảo hiểm, thuế và chi phí chung.</div>
+<div class="small text-muted mt-3">Lợi nhuận ước tính chưa gồm khấu hao, bảo hiểm, thuế và chi phí chung. Khấu trừ cọc là khoản đã quyết toán từ tiền cọc đã nhận trước đó, không phải một lần chuyển tiền mới của khách.</div>
 
 @section Scripts {
     <script>
