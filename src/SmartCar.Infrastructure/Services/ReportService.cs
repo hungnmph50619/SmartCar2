@@ -232,19 +232,19 @@ internal sealed class ReportService : IReportService
             .Sum(group =>
             {
                 var paid = group.Sum(item => item.Amount);
-                var refunds = refundsByBooking.GetValueOrDefault(group.Key) ?? new List<dynamic>();
+                refundsByBooking.TryGetValue(group.Key, out var refunds);
 
-                var explicitDepositRefund = refunds
+                var explicitDepositRefund = refunds?
                     .Where(item => item.Method == PaymentMethods.DepositRefund)
-                    .Sum(item => (decimal)item.Amount);
+                    .Sum(item => item.Amount) ?? 0m;
 
-                var legacyReturnRefund = refunds
+                var legacyReturnRefund = refunds?
                     .Where(item =>
                         item.Method != PaymentMethods.VehicleSwapRefund &&
                         item.Method != PaymentMethods.CompensationRefund &&
                         item.Method != PaymentMethods.DepositRefund &&
                         item.HasVehicleReturn)
-                    .Sum(item => (decimal)item.Amount);
+                    .Sum(item => item.Amount) ?? 0m;
 
                 var bookingStatus = group.Select(item => item.Status).FirstOrDefault();
                 var legacyCancelledRefund = explicitDepositRefund > 0 ||
@@ -252,9 +252,9 @@ internal sealed class ReportService : IReportService
                     ? 0m
                     : Math.Min(
                         paid,
-                        refunds
+                        refunds?
                             .Where(item => item.Method != PaymentMethods.CompensationRefund)
-                            .Sum(item => (decimal)item.Amount));
+                            .Sum(item => item.Amount) ?? 0m);
 
                 var refundedDeposit = Math.Min(
                     paid,
