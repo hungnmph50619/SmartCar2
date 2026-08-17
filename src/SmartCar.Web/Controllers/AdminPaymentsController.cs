@@ -302,6 +302,9 @@ public sealed class AdminPaymentsController : Controller
         var legacyExtensions = await _dbContext.BookingExtensions
             .Include(item => item.Booking)
                 .ThenInclude(booking => booking.Payments)
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.VehicleReturn)
+                    .ThenInclude(vehicleReturn => vehicleReturn!.AdditionalCharges)
             .Where(item =>
                 item.CustomerNote != null &&
                 item.CustomerNote.Contains(ForceMajeureMarker) &&
@@ -336,6 +339,24 @@ public sealed class AdminPaymentsController : Controller
             foreach (var deduction in legacyDeductions)
             {
                 deduction.Status = PaymentStatus.Failed;
+            }
+
+            if (legacyDeductions.Count > 0 && currentBooking.VehicleReturn is not null)
+            {
+                var actualAdditionalAmount = currentBooking.VehicleReturn.AdditionalCharges.Sum(charge => charge.Amount);
+                var staleAdditionalAmount = Math.Min(
+                    legacyDeductions.Sum(payment => payment.Amount),
+                    Math.Max(0m, currentBooking.AdditionalAmount - actualAdditionalAmount));
+
+                if (staleAdditionalAmount > 0)
+                {
+                    currentBooking.AdditionalAmount = Math.Max(
+                        actualAdditionalAmount,
+                        currentBooking.AdditionalAmount - staleAdditionalAmount);
+                    currentBooking.TotalAmount = Math.Max(
+                        0m,
+                        currentBooking.TotalAmount - staleAdditionalAmount);
+                }
             }
 
             foreach (var reservation in reservations)
