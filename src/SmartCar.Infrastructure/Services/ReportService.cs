@@ -12,6 +12,7 @@ internal sealed class ReportService : IReportService
     {
         BookingStatus.Rented,
         BookingStatus.PendingInspection,
+        BookingStatus.AwaitingRefund,
         BookingStatus.Completed
     };
 
@@ -144,6 +145,7 @@ internal sealed class ReportService : IReportService
             .AsNoTracking()
             .Where(item =>
                 RevenueTypes.Contains(item.Type) &&
+                item.Method != PaymentMethods.DepositDeduction &&
                 (item.Status == PaymentStatus.Pending ||
                  item.Status == PaymentStatus.AwaitingConfirmation) &&
                 OpenReceivableStatuses.Contains(item.Booking.Status))
@@ -196,23 +198,45 @@ internal sealed class ReportService : IReportService
             })
             .ToListAsync(cancellationToken);
 
+        var allDepositDeductions = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(item =>
+                item.Type == PaymentType.AdditionalCharge &&
+                item.Method == PaymentMethods.DepositDeduction &&
+                item.Status == PaymentStatus.Paid)
+            .Select(item => new { item.BookingId, item.Amount })
+            .ToListAsync(cancellationToken);
+
+        var compensationNotes = await _dbContext.BookingExtensions
+            .AsNoTracking()
+            .Where(item =>
+                item.CustomerNote != null &&
+                item.CustomerNote.Contains(CompensationLedger.Marker))
+            .Select(item => new { item.BookingId, item.CustomerNote })
+            .ToListAsync(cancellationToken);
+
         var refundsByBooking = confirmedRefunds
             .GroupBy(item => item.BookingId)
             .ToDictionary(group => group.Key, group => group.ToList());
+        var depositDeductionsByBooking = allDepositDeductions
+            .GroupBy(item => item.BookingId)
+            .ToDictionary(group => group.Key, group => group.Sum(item => item.Amount));
+        var compensationReservedByBooking = compensationNotes
+            .GroupBy(item => item.BookingId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(item => CompensationLedger.SumReservedAmount(item.CustomerNote)));
 
         var depositsHeld = paidDeposits
             .GroupBy(item => item.BookingId)
             .Sum(group =>
             {
                 var paid = group.Sum(item => item.Amount);
-                if (!refundsByBooking.TryGetValue(group.Key, out var refunds))
-                {
-                    return paid;
-                }
+                var refunds = refundsByBooking.GetValueOrDefault(group.Key) ?? new List<dynamic>();
 
                 var explicitDepositRefund = refunds
                     .Where(item => item.Method == PaymentMethods.DepositRefund)
-                    .Sum(item => item.Amount);
+                    .Sum(item => (decimal)item.Amount);
 
                 var legacyReturnRefund = refunds
                     .Where(item =>
@@ -220,7 +244,7 @@ internal sealed class ReportService : IReportService
                         item.Method != PaymentMethods.CompensationRefund &&
                         item.Method != PaymentMethods.DepositRefund &&
                         item.HasVehicleReturn)
-                    .Sum(item => item.Amount);
+                    .Sum(item => (decimal)item.Amount);
 
                 var bookingStatus = group.Select(item => item.Status).FirstOrDefault();
                 var legacyCancelledRefund = explicitDepositRefund > 0 ||
@@ -230,13 +254,16 @@ internal sealed class ReportService : IReportService
                         paid,
                         refunds
                             .Where(item => item.Method != PaymentMethods.CompensationRefund)
-                            .Sum(item => item.Amount));
+                            .Sum(item => (decimal)item.Amount));
 
                 var refundedDeposit = Math.Min(
                     paid,
                     explicitDepositRefund + legacyReturnRefund + legacyCancelledRefund);
+                var deductedDeposit = depositDeductionsByBooking.GetValueOrDefault(group.Key);
+                var reservedDeposit = compensationReservedByBooking.GetValueOrDefault(group.Key);
+                var unavailableDeposit = Math.Max(deductedDeposit, reservedDeposit);
 
-                return Math.Max(0m, paid - refundedDeposit);
+                return Math.Max(0m, paid - refundedDeposit - unavailableDeposit);
             });
 
         var rows = new List<VehiclePerformanceDto>(vehicles.Count);
@@ -258,10 +285,22 @@ internal sealed class ReportService : IReportService
                 .Sum(item => item.Amount);
 
             var additionalChargeRevenue = vehiclePayments
-                .Where(item => item.Type == PaymentType.AdditionalCharge)
+                .Where(item =>
+                    item.Type == PaymentType.AdditionalCharge &&
+                    item.Method != PaymentMethods.DepositDeduction)
                 .Sum(item => item.Amount);
 
-            var revenue = rentalRevenue + extensionRevenue + additionalChargeRevenue;
+            var depositDeductionRecovery = vehiclePayments
+                .Where(item =>
+                    item.Type == PaymentType.AdditionalCharge &&
+                    item.Method == PaymentMethods.DepositDeduction)
+                .Sum(item => item.Amount);
+
+            var revenue =
+                rentalRevenue +
+                extensionRevenue +
+                additionalChargeRevenue +
+                depositDeductionRecovery;
 
             var revenueRefunds = vehiclePayments
                 .Where(item =>
@@ -368,6 +407,7 @@ internal sealed class ReportService : IReportService
                     PaymentType.Rental => "Tiền thuê",
                     PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
                     PaymentType.Extension => "Gia hạn",
+                    PaymentType.AdditionalCharge when payment.Method == PaymentMethods.DepositDeduction => "Khấu trừ tiền cọc",
                     PaymentType.AdditionalCharge => "Phụ phí",
                     _ => payment.Type.ToString()
                 };
@@ -431,6 +471,7 @@ internal sealed class ReportService : IReportService
                 rentalRevenue,
                 extensionRevenue,
                 additionalChargeRevenue,
+                depositDeductionRecovery,
                 revenue,
                 revenueRefunds,
                 depositRefunds,
@@ -465,6 +506,7 @@ internal sealed class ReportService : IReportService
             rows.Sum(item => item.RentalRevenue),
             rows.Sum(item => item.ExtensionRevenue),
             rows.Sum(item => item.AdditionalChargeRevenue),
+            rows.Sum(item => item.DepositDeductionRecovery),
             rows.Sum(item => item.Revenue),
             totalRevenueRefunds,
             totalDepositRefunds,
