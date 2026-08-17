@@ -30,7 +30,7 @@ public sealed record ExtensionDto(
     int? ConflictingBookingId,
     DateTime? ConflictingPickupDate)
 {
-    // Constructor tương thích với các call site cũ chưa truyền thông tin bất khả kháng/xung đột.
+    // Constructor tương thích với call site cũ chưa truyền thông tin bất khả kháng/xung đột.
     public ExtensionDto(
         int bookingExtensionId,
         int bookingId,
@@ -82,17 +82,11 @@ public interface IExtensionService
         RequestExtensionRequest request,
         CancellationToken cancellationToken = default);
 
-    // Giữ chữ ký cũ để những call site/test cũ vẫn biên dịch.
     Task<OperationResult> ApproveAsync(
         int extensionId,
         string adminId,
-        CancellationToken cancellationToken = default);
-
-    Task<OperationResult> ApproveAsync(
-        int extensionId,
-        string adminId,
-        bool confirmConflictHandled,
-        string? adminNote,
+        bool confirmConflictHandled = false,
+        string? adminNote = null,
         CancellationToken cancellationToken = default);
 
     Task<OperationResult> RequestMoreEvidenceAsync(
