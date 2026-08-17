@@ -1,4 +1,5 @@
 @model SmartCar.Application.Features.Bookings.BookingDetailsDto
+@using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 @using System.Globalization
 
@@ -14,7 +15,10 @@
     var rentalPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Rental);
     var depositPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Deposit);
     var extensionPayments = Model.Payments.Where(p => p.Type == PaymentType.Extension).ToList();
-    var refundPayment = Model.Payments.Where(p => p.Type == PaymentType.Refund).OrderByDescending(p => p.PaymentId).FirstOrDefault();
+    var refundPayments = Model.Payments
+        .Where(p => p.Type == PaymentType.Refund)
+        .OrderByDescending(p => p.PaymentId)
+        .ToList();
 
     var totalCollected = Model.Payments
         .Where(p => p.Status == PaymentStatus.Paid && p.Type != PaymentType.Refund)
@@ -36,8 +40,17 @@
 
     var canAdminCancel = Model.Status is BookingStatus.PendingConfirmation
         or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
-    var canMarkNoShow = Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup
-        && DateTime.Now >= Model.PickupDate.AddMinutes(30);
+    var isNoShowCandidate = Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var noShowAvailableAt = Model.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes);
+    var canMarkNoShow = isNoShowCandidate && DateTime.Now >= noShowAvailableAt;
+    var isWaitingForNoShow = isNoShowCandidate && DateTime.Now >= Model.PickupDate && DateTime.Now < noShowAvailableAt;
+    var minutesPastPickup = isWaitingForNoShow
+        ? Math.Max(0, (int)Math.Floor((DateTime.Now - Model.PickupDate).TotalMinutes))
+        : 0;
+    var noShowFeePreview = Math.Round(
+        (rentalPayment?.Amount ?? 0m) * RentalPolicy.NoShowFeeRate,
+        0,
+        MidpointRounding.AwayFromZero);
 
     string PaymentText(PaymentStatus? status) => status switch
     {
@@ -58,6 +71,15 @@
         _ => "bg-secondary"
     };
 
+    string RefundText(string? method) => method switch
+    {
+        PaymentMethods.DepositRefund => "Hoàn cọc",
+        PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
+        PaymentMethods.CompensationRefund => "Hỗ trợ / bồi thường",
+        PaymentMethods.BankTransferRefund => "Hoàn tiền thuê",
+        _ => "Hoàn tiền thuê"
+    };
+
     string ExtensionText(BookingExtensionStatus status) => status switch
     {
         BookingExtensionStatus.Pending => "Chờ duyệt",
@@ -74,12 +96,13 @@
         BookingStatus.PendingConfirmation => ("Kiểm tra đơn", "warning"),
         BookingStatus.PendingPayment => ("Chờ / đối soát thanh toán", "primary"),
         BookingStatus.Paid => ("Chuẩn bị xe", "success"),
-        BookingStatus.ReadyForPickup => ("Lập biên bản giao", "success"),
+        BookingStatus.ReadyForPickup => ("Giao xe", "success"),
         BookingStatus.Rented => ("Đang thuê", "primary"),
         BookingStatus.PendingInspection => ("Đối chiếu giao - trả", "warning"),
         BookingStatus.AwaitingRefund => ("Hoàn cọc", "warning"),
         BookingStatus.Completed => ("Đã hoàn tất", "success"),
-        BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.NoShow => ("Đã kết thúc", "danger"),
+        BookingStatus.NoShow => ("Không đến nhận", "danger"),
+        BookingStatus.Cancelled or BookingStatus.Rejected => ("Đã kết thúc", "danger"),
         _ => (Model.Status.ToVietnamese(), "secondary")
     };
 }
@@ -195,8 +218,39 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Giao xe</h2>
-                <p class="text-muted">Ghi km, nhiên liệu, ảnh và chính sách trước khi giao.</p>
+                <p class="text-muted">Ghi km, tình trạng, phụ kiện và ảnh đối chiếu trước khi giao.</p>
                 <a class="btn btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao</a>
+            </div>
+        }
+
+        @if (isWaitingForNoShow)
+        {
+            <div class="card card-body shadow-sm mb-4 border-warning">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                    <div>
+                        <h2 class="h6 mb-1">Đang chờ khách</h2>
+                        <div class="text-muted small">Quá giờ nhận @minutesPastPickup phút · có thể ghi nhận không đến sau @RentalPolicy.NoShowGraceMinutes phút.</div>
+                    </div>
+                    <a class="btn btn-sm btn-outline-primary" href="tel:@Model.CustomerPhone">Gọi khách</a>
+                </div>
+            </div>
+        }
+        else if (canMarkNoShow)
+        {
+            <div class="card card-body shadow-sm mb-4 border-warning">
+                <h2 class="h6 mb-1">Khách chưa đến nhận xe</h2>
+                <div class="small text-muted mb-3">Phí 70% tiền thuê · hoàn 30% tiền thuê · hoàn 100% cọc còn lại.</div>
+                <form asp-controller="AdminBookingOperations"
+                      asp-action="MarkNoShow"
+                      method="post"
+                      data-confirm="Xác nhận khách không đến? Hệ thống giữ 70% tiền thuê, hoàn 30% tiền thuê và hoàn cọc còn lại.">
+                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="customerContacted" value="true" id="customer-contacted" required />
+                        <label class="form-check-label fw-semibold" for="customer-contacted">Đã liên hệ khách</label>
+                    </div>
+                    <button class="btn btn-warning" type="submit">Khách không đến</button>
+                </form>
             </div>
         }
 
@@ -240,7 +294,7 @@
                         @foreach (var extension in Model.Extensions.OrderByDescending(x => x.BookingExtensionId))
                         {
                             <div class="d-flex justify-content-between border-top py-2 gap-2 flex-wrap">
-                                <span>Đến @extension.RequestedReturnDate.ToString("dd/MM HH:mm")</span>
+                                <span>Đến @extension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</span>
                                 <span>@extension.AdditionalAmount.ToString("N0") đ · <strong>@ExtensionText(extension.Status)</strong></span>
                             </div>
                         }
@@ -269,7 +323,11 @@
         @if (Model.Status == BookingStatus.PendingInspection)
         {
             <div class="card card-body shadow-sm mb-4">
-                <h2 class="h5">Phụ phí</h2>
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+                    <h2 class="h5 mb-0">Phụ phí</h2>
+                    <a class="btn btn-sm btn-outline-primary" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@Model.BookingId">Xem bằng chứng</a>
+                </div>
+                <div class="small text-muted mb-3">Không có căn cứ/ảnh đối chiếu thì hệ thống không cho tạo phụ phí thủ công.</div>
                 <form asp-controller="Returns" asp-action="AddCharge" method="post" class="row g-2 mb-3" data-loading-form>
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-3">
@@ -318,19 +376,8 @@
         {
             <div class="card card-body shadow-sm mb-4 border-success">
                 <h2 class="h5 text-success">✓ Hồ sơ đã hoàn tất</h2>
-                <p class="text-muted">Biên bản, ảnh, chữ ký và quyết toán được giữ để tra cứu.</p>
+                <p class="text-muted">Biên bản điện tử, ảnh, bản ký và quyết toán được giữ để tra cứu.</p>
                 <a class="btn btn-success" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Xem hồ sơ chuyến thuê</a>
-            </div>
-        }
-
-        @if (canMarkNoShow)
-        {
-            <div class="card card-body shadow-sm mb-4 border-warning">
-                <h2 class="h6">Khách không đến nhận</h2>
-                <form asp-controller="AdminBookingOperations" asp-action="MarkNoShow" method="post" data-confirm="Ghi nhận khách không đến nhận xe?">
-                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                    <button class="btn btn-outline-warning" type="submit">Ghi nhận không đến</button>
-                </form>
             </div>
         }
 
@@ -378,9 +425,16 @@
             {
                 <div class="money-row"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
             }
-            @if (refundPayment is not null)
+            @if (Model.Status == BookingStatus.NoShow && noShowFeePreview > 0)
             {
-                <div class="money-row"><span>Hoàn tiền<br /><span class="badge @PaymentBadge(refundPayment.Status)">@PaymentText(refundPayment.Status)</span></span><strong>@refundPayment.Amount.ToString("N0") đ</strong></div>
+                <div class="money-row"><span>Phí không đến nhận (70%)</span><strong>@noShowFeePreview.ToString("N0") đ</strong></div>
+            }
+            @foreach (var refund in refundPayments)
+            {
+                <div class="money-row">
+                    <span>@RefundText(refund.Method)<br /><span class="badge @PaymentBadge(refund.Status)">@PaymentText(refund.Status)</span></span>
+                    <strong>@refund.Amount.ToString("N0") đ</strong>
+                </div>
             }
 
             <hr />
@@ -409,9 +463,9 @@
                 {
                     <a class="btn btn-warning w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="adjustment">Theo dõi phụ phí / phát sinh</a>
                 }
-                else if (Model.Status == BookingStatus.AwaitingRefund)
+                else if (Model.Status == BookingStatus.AwaitingRefund || Model.Status == BookingStatus.NoShow)
                 {
-                    <a class="btn btn-warning w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund">Xử lý hoàn cọc</a>
+                    <a class="btn btn-warning w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund">Xử lý hoàn tiền</a>
                 }
                 else
                 {
