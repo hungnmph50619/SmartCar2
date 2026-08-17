@@ -164,8 +164,8 @@ public sealed class AdminExtensionsController : Controller
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? isForceMajeure
-                ? "Đã ghi nhận yêu cầu bất khả kháng qua điện thoại kèm ảnh và vị trí khách cung cấp."
-                : "Đã ghi nhận yêu cầu gia hạn qua điện thoại."
+                ? "Đã ghi nhận yêu cầu bất khả kháng kèm ảnh và vị trí."
+                : "Đã ghi nhận yêu cầu gia hạn."
             : string.Join("; ", result.Errors);
 
         if (result.Succeeded)
@@ -194,7 +194,7 @@ public sealed class AdminExtensionsController : Controller
     {
         if (!customerAccepted)
         {
-            TempData["ErrorMessage"] = "Chỉ đổi xe sau khi khách của đơn kế tiếp đã đồng ý phương án xe và mức giá mới.";
+            TempData["ErrorMessage"] = "Chỉ đổi xe sau khi khách B đồng ý xe và mức giá mới.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -216,7 +216,7 @@ public sealed class AdminExtensionsController : Controller
         var conflict = await FindConflictingBookingAsync(extension, cancellationToken);
         if (conflict is null)
         {
-            TempData["ErrorMessage"] = "Đơn kế tiếp không còn xung đột; hãy tải lại danh sách và tiếp tục duyệt gia hạn.";
+            TempData["ErrorMessage"] = "Đơn B không còn xung đột. Hãy tải lại trang.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -243,7 +243,7 @@ public sealed class AdminExtensionsController : Controller
 
         if (replacementHasConflict)
         {
-            TempData["ErrorMessage"] = "Xe thay thế vừa phát sinh lịch thuê trùng. Vui lòng chọn xe khác.";
+            TempData["ErrorMessage"] = "Xe thay thế vừa có lịch trùng. Vui lòng chọn xe khác.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -262,9 +262,12 @@ public sealed class AdminExtensionsController : Controller
         }
 
         var deliveryFee = Math.Max(0m, conflict.TotalAmount - conflict.RentalAmount - conflict.AdditionalAmount);
+        var oldRentalAmount = conflict.RentalAmount;
+        var oldDepositAmount = conflict.DepositAmount;
         var newRentalAmount = conflict.NumberOfDays * replacement.DailyPrice;
         var newDepositAmount = RentalPolicy.CalculateDeposit(newRentalAmount);
         var newRentalPaymentAmount = newRentalAmount + deliveryFee;
+        var overallDifference = (newRentalAmount + newDepositAmount) - (oldRentalAmount + oldDepositAmount);
 
         var rentalPayment = conflict.Payments.FirstOrDefault(item => item.Type == PaymentType.Rental);
         var depositPayment = conflict.Payments.FirstOrDefault(item => item.Type == PaymentType.Deposit);
@@ -272,13 +275,12 @@ public sealed class AdminExtensionsController : Controller
         if ((rentalPayment?.Status == PaymentStatus.AwaitingConfirmation && rentalPayment.Amount != newRentalPaymentAmount) ||
             (depositPayment?.Status == PaymentStatus.AwaitingConfirmation && depositPayment.Amount != newDepositAmount))
         {
-            TempData["ErrorMessage"] = "Đơn kế tiếp đang chờ đối soát số tiền cũ. Hãy xử lý giao dịch này trước hoặc chọn xe có giá tương đương.";
+            TempData["ErrorMessage"] = "Đơn B đang chờ đối soát số tiền cũ. Hãy xử lý giao dịch trước khi đổi xe.";
             return RedirectToAction(nameof(Index));
         }
 
-        decimal paidPriceDifference = 0m;
-        paidPriceDifference += AdjustPaymentAmount(rentalPayment, newRentalPaymentAmount);
-        paidPriceDifference += AdjustPaymentAmount(depositPayment, newDepositAmount);
+        var rentalPaidDifference = AdjustPaymentAmount(rentalPayment, newRentalPaymentAmount);
+        var depositPaidDifference = AdjustPaymentAmount(depositPayment, newDepositAmount);
 
         var oldVehicleName = conflict.Vehicle.VehicleName;
         var oldVehicleId = conflict.VehicleId;
@@ -289,42 +291,63 @@ public sealed class AdminExtensionsController : Controller
         conflict.DepositAmount = newDepositAmount;
         conflict.TotalAmount = newRentalAmount + deliveryFee + conflict.AdditionalAmount;
 
-        if (paidPriceDifference > 0)
+        var amountToCollect = Math.Max(0m, rentalPaidDifference) + Math.Max(0m, depositPaidDifference);
+        var rentalRefund = Math.Abs(Math.Min(0m, rentalPaidDifference));
+        var depositRefund = Math.Abs(Math.Min(0m, depositPaidDifference));
+        var totalRefund = rentalRefund + depositRefund;
+
+        if (amountToCollect > 0)
         {
             conflict.Payments.Add(new Payment
             {
-                Type = PaymentType.AdditionalCharge,
-                Amount = paidPriceDifference,
+                Type = PaymentType.VehicleSwapAdjustment,
+                Amount = amountToCollect,
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending
             });
         }
-        else if (paidPriceDifference < 0)
+
+        if (rentalRefund > 0)
         {
-            var refundAmount = Math.Abs(paidPriceDifference);
             conflict.Payments.Add(new Payment
             {
                 Type = PaymentType.Refund,
-                Amount = refundAmount,
-                Method = PaymentMethods.BankTransferRefund,
+                Amount = rentalRefund,
+                Method = PaymentMethods.VehicleSwapRefund,
                 Status = PaymentStatus.AwaitingRefund
             });
-            conflict.RefundAmount += refundAmount;
+        }
+
+        if (depositRefund > 0)
+        {
+            conflict.Payments.Add(new Payment
+            {
+                Type = PaymentType.Refund,
+                Amount = depositRefund,
+                Method = PaymentMethods.DepositRefund,
+                Status = PaymentStatus.AwaitingRefund
+            });
+        }
+
+        if (totalRefund > 0)
+        {
+            conflict.RefundAmount += totalRefund;
             conflict.RefundReason = AppendText(
                 conflict.RefundReason,
-                $"Đổi xe theo phương án xử lý gia hạn bất khả kháng; hoàn chênh lệch {refundAmount:N0} đồng.");
+                $"Đổi xe: hoàn chênh lệch {totalRefund:N0} đồng.");
         }
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = conflict.CustomerId,
-            Title = "SmartCar đề xuất và ghi nhận đổi xe",
-            Message = paidPriceDifference switch
-            {
-                > 0 => $"Đơn #{conflict.BookingId} đã được chuyển từ {oldVehicleName} sang {replacement.VehicleName} ({replacement.LicensePlate}) theo phương án bạn đã đồng ý. Chênh lệch cần thanh toán thêm: {paidPriceDifference:N0} đồng.",
-                < 0 => $"Đơn #{conflict.BookingId} đã được chuyển từ {oldVehicleName} sang {replacement.VehicleName} ({replacement.LicensePlate}) theo phương án bạn đã đồng ý. Chênh lệch được hoàn: {Math.Abs(paidPriceDifference):N0} đồng.",
-                _ => $"Đơn #{conflict.BookingId} đã được chuyển từ {oldVehicleName} sang {replacement.VehicleName} ({replacement.LicensePlate}) với mức giá tương đương."
-            }
+            Title = "Đã xác nhận đổi xe",
+            Message = amountToCollect > 0
+                ? $"Đơn #{conflict.BookingId} đã đổi từ {oldVehicleName} sang {replacement.VehicleName} ({replacement.LicensePlate}). Cần thanh toán thêm {amountToCollect:N0} đồng."
+                : totalRefund > 0
+                    ? $"Đơn #{conflict.BookingId} đã đổi từ {oldVehicleName} sang {replacement.VehicleName} ({replacement.LicensePlate}). SmartCar sẽ hoàn chênh lệch {totalRefund:N0} đồng."
+                    : overallDifference == 0
+                        ? $"Đơn #{conflict.BookingId} đã đổi sang {replacement.VehicleName} ({replacement.LicensePlate}), không phát sinh chênh lệch."
+                        : $"Đơn #{conflict.BookingId} đã đổi sang {replacement.VehicleName} ({replacement.LicensePlate}). Số tiền phải trả đã được cập nhật theo xe mới."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -336,11 +359,16 @@ public sealed class AdminExtensionsController : Controller
             "ResolveExtensionConflictByVehicleSwap",
             nameof(Booking),
             conflict.BookingId.ToString(),
-            $"Đổi xe đơn #{conflict.BookingId} từ xe #{oldVehicleId} sang xe #{replacement.VehicleId} để xử lý xung đột gia hạn bất khả kháng của đơn #{extension.BookingId}. Chênh lệch đã thanh toán: {paidPriceDifference:N0} đồng.",
+            $"Đổi xe đơn #{conflict.BookingId} từ xe #{oldVehicleId} sang xe #{replacement.VehicleId}. Thu thêm: {amountToCollect:N0}; hoàn: {totalRefund:N0} đồng.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã chuyển đơn kế tiếp sang xe khách đã đồng ý. Xung đột lịch xe đã được xử lý.";
+        TempData["SuccessMessage"] = amountToCollect > 0
+            ? $"Đã đổi xe cho B. Cần thu thêm {amountToCollect:N0} đ."
+            : totalRefund > 0
+                ? $"Đã đổi xe cho B. Chờ hoàn {totalRefund:N0} đ."
+                : "Đã đổi xe cho B. Không phát sinh thanh toán mới.";
+
         return RedirectToAction(nameof(Index));
     }
 
@@ -353,7 +381,7 @@ public sealed class AdminExtensionsController : Controller
     {
         if (!customerContacted)
         {
-            TempData["ErrorMessage"] = "Vui lòng xác nhận đã liên hệ khách của đơn kế tiếp và khách không chấp nhận phương án đổi xe.";
+            TempData["ErrorMessage"] = "Vui lòng xác nhận đã liên hệ khách B và khách không chấp nhận phương án đổi xe.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -373,7 +401,7 @@ public sealed class AdminExtensionsController : Controller
         var conflict = await FindConflictingBookingAsync(extension, cancellationToken);
         if (conflict is null)
         {
-            TempData["ErrorMessage"] = "Đơn kế tiếp không còn xung đột.";
+            TempData["ErrorMessage"] = "Đơn B không còn xung đột.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -411,13 +439,13 @@ public sealed class AdminExtensionsController : Controller
             {
                 Type = PaymentType.Refund,
                 Amount = compensationAmount,
-                Method = PaymentMethods.BankTransferRefund,
+                Method = PaymentMethods.CompensationRefund,
                 Status = PaymentStatus.AwaitingRefund
             });
             cancelledBooking.RefundAmount += compensationAmount;
             cancelledBooking.RefundReason = AppendText(
                 cancelledBooking.RefundReason,
-                $"Hỗ trợ/bồi thường do SmartCar không thể thực hiện đơn sau xử lý gia hạn bất khả kháng: {compensationAmount:N0} đồng.");
+                $"Hỗ trợ/bồi thường do SmartCar không thể thực hiện đơn: {compensationAmount:N0} đồng.");
 
             extension.CustomerNote = AppendCompensationMarker(
                 extension.CustomerNote,
@@ -427,15 +455,15 @@ public sealed class AdminExtensionsController : Controller
             _dbContext.Notifications.Add(new Notification
             {
                 UserId = cancelledBooking.CustomerId,
-                Title = "Hoàn tiền và hỗ trợ do thay đổi lịch xe",
-                Message = $"Đơn #{conflictBookingId} đã được SmartCar hủy sau khi không thống nhất được phương án đổi xe. Ngoài khoản hoàn của đơn, SmartCar ghi nhận thêm khoản hỗ trợ {compensationAmount:N0} đồng đang chờ chuyển."
+                Title = "Hoàn tiền và hỗ trợ",
+                Message = $"Đơn #{conflictBookingId} đã hủy. SmartCar ghi nhận thêm khoản hỗ trợ {compensationAmount:N0} đồng đang chờ chuyển."
             });
 
             _dbContext.Notifications.Add(new Notification
             {
                 UserId = extension.Booking.CustomerId,
-                Title = "Ghi nhận bồi thường đơn thuê kế tiếp",
-                Message = $"Do gia hạn bất khả kháng của đơn #{extension.BookingId} làm hủy đơn #{conflictBookingId}, SmartCar ghi nhận khoản bồi thường {compensationAmount:N0} đồng để đối soát/khấu trừ từ tiền cọc khi trả xe."
+                Title = "Ghi nhận bồi thường đơn kế tiếp",
+                Message = $"Đơn #{extension.BookingId}: ghi nhận {compensationAmount:N0} đồng để đối soát từ tiền cọc do đơn kế tiếp bị ảnh hưởng."
             });
         }
 
@@ -446,13 +474,13 @@ public sealed class AdminExtensionsController : Controller
             "ResolveExtensionConflictByCancellation",
             nameof(Booking),
             conflictBookingId.ToString(),
-            $"Hủy đơn #{conflictBookingId} do xung đột gia hạn bất khả kháng của đơn #{extension.BookingId}. Hoàn theo chính sách: {cancelResult.RefundAmount:N0} đồng; hỗ trợ bổ sung: {compensationAmount:N0} đồng.",
+            $"Hủy đơn #{conflictBookingId} do xung đột gia hạn bất khả kháng của đơn #{extension.BookingId}. Hoàn theo chính sách: {cancelResult.RefundAmount:N0} đồng; hỗ trợ: {compensationAmount:N0} đồng.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = compensationAmount > 0
-            ? $"Đã hủy đơn kế tiếp, tạo hoàn tiền và khoản hỗ trợ {compensationAmount:N0} đồng. Khoản này đã được ghi nhận để đối soát từ cọc của khách đang thuê."
-            : "Đã hủy đơn kế tiếp và tạo khoản hoàn theo chính sách. Xung đột lịch xe đã được xử lý.";
+            ? $"Đã hủy B, tạo khoản hoàn và hỗ trợ {compensationAmount:N0} đ."
+            : "Đã hủy B và tạo khoản hoàn.";
 
         return RedirectToAction(nameof(Index));
     }
@@ -474,7 +502,7 @@ public sealed class AdminExtensionsController : Controller
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã duyệt gia hạn và tạo khoản thanh toán. Ngày trả mới chỉ có hiệu lực sau khi xác nhận thanh toán."
+            ? "Đã duyệt gia hạn. Ngày trả mới có hiệu lực sau khi xác nhận thanh toán."
             : string.Join("; ", result.Errors);
         return RedirectToAction(nameof(Index));
     }
@@ -515,7 +543,7 @@ public sealed class AdminExtensionsController : Controller
             : SmartCar.Application.Common.OperationResult.Failure("Vui lòng nhập lý do từ chối.");
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã từ chối yêu cầu gia hạn và gửi lý do cho khách."
+            ? "Đã từ chối và thông báo cho khách."
             : string.Join("; ", result.Errors);
         return RedirectToAction(nameof(Index));
     }
