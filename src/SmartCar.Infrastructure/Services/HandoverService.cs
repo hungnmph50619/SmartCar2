@@ -119,7 +119,7 @@ internal sealed class HandoverService : IHandoverService
         if (string.IsNullOrWhiteSpace(request.ImagePaths))
         {
             return OperationResult.Failure(
-                "Vui lòng tải ít nhất một ảnh tình trạng xe khi bàn giao.");
+                "Biên bản giao xe phải có ảnh đối chiếu tình trạng xe.");
         }
 
         var rentalDays = Math.Max(
@@ -131,9 +131,9 @@ internal sealed class HandoverService : IHandoverService
             HandoverAt = request.HandoverAt,
             Mileage = request.Mileage,
             FuelLevel = $"{fuelPercent}%",
-            ExteriorCondition = null,
-            InteriorCondition = null,
-            Accessories = null,
+            ExteriorCondition = Normalize(request.ExteriorCondition),
+            InteriorCondition = Normalize(request.InteriorCondition),
+            Accessories = Normalize(request.Accessories),
             ImagePaths = Normalize(request.ImagePaths),
             Notes = Normalize(request.Notes),
             IncludedKilometers = rentalDays * RentalPolicy.IncludedKilometersPerDay,
