@@ -42,10 +42,12 @@
         or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup;
     var isNoShowCandidate = Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
     var noShowAvailableAt = Model.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes);
-    var canMarkNoShow = isNoShowCandidate && DateTime.Now >= noShowAvailableAt;
-    var isWaitingForNoShow = isNoShowCandidate && DateTime.Now >= Model.PickupDate && DateTime.Now < noShowAvailableAt;
-    var minutesPastPickup = isWaitingForNoShow
-        ? Math.Max(0, (int)Math.Floor((DateTime.Now - Model.PickupDate).TotalMinutes))
+    var now = DateTime.Now;
+    var canMarkNoShow = isNoShowCandidate && now >= noShowAvailableAt;
+    var isWaitingForNoShow = isNoShowCandidate && now < noShowAvailableAt;
+    var pickupHasStarted = now >= Model.PickupDate;
+    var minutesPastPickup = pickupHasStarted
+        ? Math.Max(0, (int)Math.Floor((now - Model.PickupDate).TotalMinutes))
         : 0;
     var noShowFeePreview = Math.Round(
         (rentalPayment?.Amount ?? 0m) * RentalPolicy.NoShowFeeRate,
@@ -218,20 +220,36 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Giao xe</h2>
-                <p class="text-muted">Ghi km, tình trạng, phụ kiện và ảnh đối chiếu trước khi giao.</p>
+                <p class="text-muted">Ghi km, phụ kiện và ảnh đối chiếu trước khi giao.</p>
                 <a class="btn btn-primary" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản giao</a>
             </div>
         }
 
         @if (isWaitingForNoShow)
         {
-            <div class="card card-body shadow-sm mb-4 border-warning">
+            <div class="card card-body shadow-sm mb-4 @(pickupHasStarted ? "border-warning" : string.Empty)">
                 <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
                     <div>
-                        <h2 class="h6 mb-1">Đang chờ khách</h2>
-                        <div class="text-muted small">Quá giờ nhận @minutesPastPickup phút · có thể ghi nhận không đến sau @RentalPolicy.NoShowGraceMinutes phút.</div>
+                        <h2 class="h6 mb-1">Khách không đến nhận</h2>
+                        <div class="text-muted small">
+                            @if (pickupHasStarted)
+                            {
+                                <span>Đang chờ khách · quá giờ nhận @minutesPastPickup phút.</span>
+                            }
+                            else
+                            {
+                                <span>Chưa đến giờ nhận xe.</span>
+                            }
+                            <br />Xử lý từ <strong>@noShowAvailableAt.ToString("dd/MM/yyyy HH:mm")</strong> · phí 70%, hoàn thuê 30% + cọc.
+                        </div>
                     </div>
-                    <a class="btn btn-sm btn-outline-primary" href="tel:@Model.CustomerPhone">Gọi khách</a>
+                    <div class="d-flex gap-2 flex-wrap">
+                        @if (pickupHasStarted)
+                        {
+                            <a class="btn btn-sm btn-outline-primary" href="tel:@Model.CustomerPhone">Gọi khách</a>
+                        }
+                        <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Khách không đến</button>
+                    </div>
                 </div>
             </div>
         }
