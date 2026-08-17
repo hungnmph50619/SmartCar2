@@ -72,6 +72,7 @@
     <table>
         <tr><th>Số km khi trả</th><td>@Model.Mileage.ToString("N0") km</td></tr>
         <tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr>
+        <tr><th>Phụ kiện lúc giao</th><td>@(booking.Handover?.Accessories ?? "Không ghi nhận")</td></tr>
         <tr><th>Phụ kiện khi trả</th><td>@(returnedAccessories ?? "Chưa ghi nhận cấu trúc")</td></tr>
         <tr><th>Hư hỏng mới</th><td>@(Model.HasDamage ? "Có" : "Không")</td></tr>
         <tr><th>Trả muộn</th><td>@(Model.IsLateReturn ? $"Có - {Model.LateMinutes} phút" : "Không")</td></tr>
