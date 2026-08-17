@@ -1,4 +1,5 @@
 ﻿@model SmartCar.Web.ViewModels.ReturnViewModel
+@using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Biên bản trả xe";
     var handoverMileage = ViewBag.HandoverMileage as int?;
@@ -9,6 +10,11 @@
     var handoverAccessories = ViewBag.HandoverAccessories as string;
     var returnDate = Model.ReturnedAt.ToString("yyyy-MM-dd");
     var returnTime = Model.ReturnedAt.ToString("HH:mm");
+    var storedAccessoryStatus = Model.InteriorCondition?.Trim() ?? "Đủ";
+    var accessoryIsMissing = storedAccessoryStatus.StartsWith("Thiếu/mất:", StringComparison.OrdinalIgnoreCase);
+    var missingAccessoryText = accessoryIsMissing
+        ? storedAccessoryStatus["Thiếu/mất:".Length..].Trim()
+        : string.Empty;
     const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 }
 
@@ -31,7 +37,7 @@
         </div>
         @if (!string.IsNullOrWhiteSpace(handoverAccessories))
         {
-            <div class="small mt-2"><strong>Phụ kiện:</strong> @handoverAccessories</div>
+            <div class="small mt-2"><strong>Phụ kiện lúc giao:</strong> @handoverAccessories</div>
         }
     </div>
 }
@@ -44,6 +50,7 @@
       data-confirm="Lưu biên bản trả xe và chuyển sang bước đối chiếu?">
     <input asp-for="BookingId" type="hidden" />
     <input asp-for="ReturnedAt" type="hidden" id="returned-at-value" data-return-time />
+    <input asp-for="InteriorCondition" type="hidden" id="return-accessories-value" />
 
     @if (!ViewData.ModelState.IsValid)
     {
@@ -81,10 +88,11 @@
                      data-fee-per-km="@excessKmFee">
                     <div class="d-flex flex-wrap gap-4 small">
                         <div><span class="text-muted">Đã chạy</span><div class="fw-semibold" data-driven>0 km</div></div>
-                        <div><span class="text-muted">Tổng định mức chuyến</span><div class="fw-semibold">@includedKilometers.ToString("N0") km</div></div>
+                        <div><span class="text-muted">Tổng định mức chuyến</span><div class="fw-semibold" data-included-display>@includedKilometers.ToString("N0") km</div></div>
                         <div><span class="text-muted">Vượt</span><div class="fw-semibold" data-excess>0 km</div></div>
                         <div><span class="text-muted">Phụ phí dự kiến</span><div class="fw-bold text-danger" data-fee>0 đ</div></div>
                     </div>
+                    <div class="small text-muted mt-2">Định mức: @RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày.</div>
                     <div class="small text-danger mt-2 d-none" data-mileage-warning></div>
                 </div>
             </div>
@@ -97,6 +105,21 @@
                 <span class="input-group-text">%</span>
             </div>
             <span asp-validation-for="FuelLevel" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Phụ kiện khi trả</label>
+            <select id="return-accessories-status" class="form-select" required>
+                <option value="Đủ" selected="@(!accessoryIsMissing)">Đủ như lúc giao</option>
+                <option value="Thiếu" selected="@(accessoryIsMissing)">Thiếu / mất</option>
+            </select>
+            <div class="form-text">Đối chiếu với danh sách phụ kiện lúc giao ở phía trên.</div>
+        </div>
+
+        <div class="col-12 @(accessoryIsMissing ? string.Empty : "d-none")" id="missing-accessories-box">
+            <label class="form-label fw-semibold text-danger">Thiếu / mất phụ kiện nào? *</label>
+            <input id="missing-accessories" class="form-control" maxlength="1000" value="@missingAccessoryText" placeholder="Ví dụ: thiếu 1 chìa khóa phụ, cáp sạc..." />
+            <div class="form-text">Thông tin này sẽ xuất hiện trong biên bản trả để khách ký xác nhận.</div>
         </div>
     </div>
 
@@ -138,7 +161,7 @@
 
     <div class="mt-3">
         <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
-        <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Thiếu phụ kiện, vết xước hoặc điểm cần lưu ý"></textarea>
+        <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Điểm cần lưu ý khác khi nhận lại xe"></textarea>
     </div>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
@@ -160,11 +183,37 @@
             const hasDamage = document.getElementById('has-damage');
             const damageBox = document.getElementById('damage-evidence');
             const damageImages = document.getElementById('damage-images');
+            const accessoryStatus = document.getElementById('return-accessories-status');
+            const accessoryHidden = document.getElementById('return-accessories-value');
+            const missingAccessoriesBox = document.getElementById('missing-accessories-box');
+            const missingAccessories = document.getElementById('missing-accessories');
             const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
             function syncDateTime() {
                 if (!dateInput?.value || !timePattern.test(timeInput?.value || '')) return false;
                 hiddenTime.value = `${dateInput.value}T${timeInput.value}`;
+                return true;
+            }
+
+            function syncAccessories() {
+                const missing = accessoryStatus?.value === 'Thiếu';
+                missingAccessoriesBox?.classList.toggle('d-none', !missing);
+                if (missingAccessories) {
+                    missingAccessories.required = missing;
+                    missingAccessories.setCustomValidity('');
+                }
+
+                if (missing) {
+                    const detail = missingAccessories?.value.trim() || '';
+                    accessoryHidden.value = detail ? `Thiếu/mất: ${detail}` : 'Thiếu/mất:';
+                    if (!detail) {
+                        missingAccessories?.setCustomValidity('Vui lòng ghi rõ phụ kiện bị thiếu hoặc mất.');
+                        return false;
+                    }
+                    return true;
+                }
+
+                accessoryHidden.value = 'Đủ';
                 return true;
             }
 
@@ -178,25 +227,29 @@
                 if (!preview || !mileage) return;
                 const handoverMileage = Number(preview.dataset.handoverMileage || 0);
                 const handoverTime = new Date(preview.dataset.handoverTime || '');
-                const included = Number(preview.dataset.includedKm || 0);
+                const storedIncluded = Number(preview.dataset.includedKm || 0);
                 const feePerKm = Number(preview.dataset.feePerKm || 0);
                 const current = Number(mileage.value || handoverMileage);
                 const driven = Math.max(0, current - handoverMileage);
-                const excess = Math.max(0, driven - included);
-                const fee = excess * feePerKm;
                 const number = value => new Intl.NumberFormat('vi-VN').format(value);
 
-                preview.querySelector('[data-driven]').textContent = `${number(driven)} km`;
-                preview.querySelector('[data-excess]').textContent = `${number(excess)} km`;
-                preview.querySelector('[data-fee]').textContent = `${number(fee)} đ`;
-
-                const warning = preview.querySelector('[data-mileage-warning]');
                 let days = 1;
                 if (hiddenTime?.value && !Number.isNaN(handoverTime.getTime())) {
                     const end = new Date(hiddenTime.value);
                     const hours = Math.max(0, (end - handoverTime) / 3600000);
                     days = Math.max(1, Math.ceil(hours / 24));
                 }
+
+                const effectiveIncluded = Math.max(storedIncluded, days * @RentalPolicy.IncludedKilometersPerDay);
+                const excess = Math.max(0, driven - effectiveIncluded);
+                const fee = excess * feePerKm;
+
+                preview.querySelector('[data-driven]').textContent = `${number(driven)} km`;
+                preview.querySelector('[data-included-display]').textContent = `${number(effectiveIncluded)} km`;
+                preview.querySelector('[data-excess]').textContent = `${number(excess)} km`;
+                preview.querySelector('[data-fee]').textContent = `${number(fee)} đ`;
+
+                const warning = preview.querySelector('[data-mileage-warning]');
                 const maxReasonable = days * 2500;
                 if (driven > maxReasonable) {
                     warning.textContent = `Số km tăng ${number(driven)} km trong ${days} ngày là bất thường. Kiểm tra lại công-tơ-mét.`;
@@ -211,17 +264,27 @@
             timeInput?.addEventListener('input', () => { syncDateTime(); renderMileage(); });
             mileage?.addEventListener('input', renderMileage);
             hasDamage?.addEventListener('change', toggleDamage);
+            accessoryStatus?.addEventListener('change', syncAccessories);
+            missingAccessories?.addEventListener('input', syncAccessories);
             form?.addEventListener('submit', event => {
-                if (!syncDateTime()) {
+                const timeValid = syncDateTime();
+                const accessoriesValid = syncAccessories();
+                if (!timeValid || !accessoriesValid) {
                     event.preventDefault();
-                    timeInput?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
-                    timeInput?.reportValidity();
+                    if (!timeValid) {
+                        timeInput?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
+                        timeInput?.reportValidity();
+                    } else {
+                        timeInput?.setCustomValidity('');
+                        missingAccessories?.reportValidity();
+                    }
                 } else {
                     timeInput?.setCustomValidity('');
                 }
             });
 
             syncDateTime();
+            syncAccessories();
             toggleDamage();
             renderMileage();
             document.getElementById('return-validation-summary')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
