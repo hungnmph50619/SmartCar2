@@ -37,8 +37,14 @@ internal sealed class BookingOperationService : IBookingOperationService
     public async Task<OperationResult> MarkNoShowAsync(
         int bookingId,
         string adminId,
+        bool customerContacted,
         CancellationToken cancellationToken = default)
     {
+        if (!customerContacted)
+        {
+            return OperationResult.Failure("Hãy xác nhận đã liên hệ khách trước khi ghi nhận không đến nhận xe.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var booking = await _dbContext.Bookings
@@ -57,11 +63,31 @@ internal sealed class BookingOperationService : IBookingOperationService
                 "Chỉ đơn đã thanh toán nhưng chưa giao xe mới được ghi nhận khách không đến nhận.");
         }
 
-        if (DateTime.Now < booking.PickupDate.AddMinutes(30))
+        if (DateTime.Now < booking.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes))
         {
             return OperationResult.Failure(
-                "Chỉ được ghi nhận khách không đến nhận xe sau giờ nhận ít nhất 30 phút.");
+                $"Chỉ được ghi nhận không đến sau giờ nhận ít nhất {RentalPolicy.NoShowGraceMinutes} phút.");
         }
+
+        var grossRentalPaid = booking.Payments
+            .Where(payment =>
+                payment.Status == PaymentStatus.Paid &&
+                payment.Type == PaymentType.Rental)
+            .Sum(payment => payment.Amount);
+
+        var rentalRefundAlreadyPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.BankTransferRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+
+        var remainingRentalPaid = Math.Max(0m, grossRentalPaid - rentalRefundAlreadyPlanned);
+        var noShowFee = Math.Round(
+            remainingRentalPaid * RentalPolicy.NoShowFeeRate,
+            0,
+            MidpointRounding.AwayFromZero);
+        var rentalRefund = Math.Max(0m, remainingRentalPaid - noShowFee);
 
         var depositPaid = booking.Payments
             .Where(payment =>
@@ -77,6 +103,7 @@ internal sealed class BookingOperationService : IBookingOperationService
             .Sum(payment => payment.Amount);
 
         var remainingDeposit = Math.Max(0m, depositPaid - depositRefundAlreadyPlanned);
+        var newRefundAmount = rentalRefund + remainingDeposit;
         var existingRefundTotal = booking.Payments
             .Where(payment => payment.Type == PaymentType.Refund)
             .Sum(payment => payment.Amount);
@@ -84,13 +111,24 @@ internal sealed class BookingOperationService : IBookingOperationService
         booking.Status = BookingStatus.NoShow;
         booking.NoShowMarkedAt = DateTime.UtcNow;
         booking.CancelledBy = "Quản trị viên";
-        booking.CancelReason = "Khách không đến nhận xe đúng thời gian quy định.";
-        booking.RefundAmount = existingRefundTotal + remainingDeposit;
+        booking.CancelReason =
+            $"Khách không đến nhận xe sau {RentalPolicy.NoShowGraceMinutes} phút; quản trị viên xác nhận đã liên hệ khách.";
+        booking.RefundAmount = existingRefundTotal + newRefundAmount;
         booking.RefundReason = AppendText(
             booking.RefundReason,
-            remainingDeposit > 0
-                ? $"Không hoàn tiền thuê. Hoàn phần cọc còn lại {remainingDeposit:N0} đồng."
-                : "Không hoàn tiền thuê; không còn cọc cần hoàn.");
+            $"Phí không đến nhận {RentalPolicy.NoShowFeeRate:P0}: {noShowFee:N0} đồng. " +
+            $"Hoàn tiền thuê {rentalRefund:N0} đồng; hoàn cọc còn lại {remainingDeposit:N0} đồng.");
+
+        if (rentalRefund > 0)
+        {
+            booking.Payments.Add(new Payment
+            {
+                Type = PaymentType.Refund,
+                Amount = rentalRefund,
+                Method = PaymentMethods.BankTransferRefund,
+                Status = PaymentStatus.AwaitingRefund
+            });
+        }
 
         if (remainingDeposit > 0)
         {
@@ -111,10 +149,10 @@ internal sealed class BookingOperationService : IBookingOperationService
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Khách không đến nhận xe",
-            Message = remainingDeposit > 0
-                ? $"Đơn #{booking.BookingId}: tiền thuê không hoàn; cọc còn lại {remainingDeposit:N0} đồng đang chờ hoàn."
-                : $"Đơn #{booking.BookingId}: tiền thuê không hoàn."
+            Title = "Không đến nhận xe",
+            Message =
+                $"Đơn #{booking.BookingId}: phí không đến nhận {noShowFee:N0} đồng; " +
+                $"hoàn tiền thuê {rentalRefund:N0} đồng và hoàn cọc {remainingDeposit:N0} đồng."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -125,7 +163,7 @@ internal sealed class BookingOperationService : IBookingOperationService
             "MarkNoShow",
             nameof(Booking),
             booking.BookingId.ToString(),
-            $"Khách không đến nhận. Không hoàn tiền thuê; hoàn cọc còn lại {remainingDeposit:N0} đồng.",
+            $"Khách không đến; đã liên hệ khách. Phí no-show {noShowFee:N0}; hoàn thuê {rentalRefund:N0}; hoàn cọc {remainingDeposit:N0} đồng.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
