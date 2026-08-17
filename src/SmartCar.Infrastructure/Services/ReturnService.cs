@@ -343,17 +343,26 @@ internal sealed class ReturnService : IReturnService
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
 
-        var effectiveDeposit = Math.Max(0m, depositPaid - depositAlreadyRefundedOrPlanned);
-        var depositSatisfied = booking.DepositAmount <= 0 || effectiveDeposit >= booking.DepositAmount;
+        var depositAlreadyDeducted = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method == PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+
+        var depositSatisfied = booking.DepositAmount <= 0 ||
+            Math.Max(0m, depositPaid - depositAlreadyRefundedOrPlanned) >= booking.DepositAmount;
 
         var extensionPaid = booking.Extensions.All(extension =>
             extension.Status != BookingExtensionStatus.Approved);
 
-        var additionalPaid = booking.AdditionalAmount <= 0 ||
-            booking.Payments.Any(payment =>
+        var cashAdditionalPaid = booking.Payments
+            .Where(payment =>
                 payment.Type == PaymentType.AdditionalCharge &&
-                payment.Status == PaymentStatus.Paid &&
-                payment.Amount >= booking.AdditionalAmount);
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+        var additionalPaid = booking.AdditionalAmount <= 0 || cashAdditionalPaid >= booking.AdditionalAmount;
 
         var swapAdjustmentPaid = booking.Payments.All(payment =>
             payment.Type != PaymentType.VehicleSwapAdjustment ||
@@ -373,12 +382,34 @@ internal sealed class ReturnService : IReturnService
             extension.DecidedAt = DateTime.UtcNow;
         }
 
-        booking.Status = BookingStatus.Completed;
-        booking.Vehicle.Status = requiresMaintenance
-            ? VehicleStatus.Maintenance
-            : VehicleStatus.Available;
+        var depositAvailableBeforeNewDeduction = Math.Max(
+            0m,
+            depositPaid - depositAlreadyRefundedOrPlanned - depositAlreadyDeducted);
+        var reservedCompensation = booking.Extensions.Sum(extension =>
+            CompensationLedger.SumReservedAmount(extension.CustomerNote));
+        var compensationNotYetApplied = Math.Max(0m, reservedCompensation - depositAlreadyDeducted);
+        var newDepositDeduction = Math.Min(
+            depositAvailableBeforeNewDeduction,
+            compensationNotYetApplied);
 
-        var depositToRefund = effectiveDeposit;
+        if (newDepositDeduction > 0)
+        {
+            booking.Payments.Add(new Payment
+            {
+                Type = PaymentType.AdditionalCharge,
+                Amount = newDepositDeduction,
+                Method = PaymentMethods.DepositDeduction,
+                Status = PaymentStatus.Paid,
+                PaidAt = DateTime.UtcNow,
+                TransactionCode = $"EXT-COMP-{booking.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+            });
+        }
+
+        var totalDepositDeducted = depositAlreadyDeducted + newDepositDeduction;
+        var depositToRefund = Math.Max(
+            0m,
+            depositAvailableBeforeNewDeduction - newDepositDeduction);
+
         if (depositToRefund > 0)
         {
             booking.Payments.Add(new Payment
@@ -390,10 +421,26 @@ internal sealed class ReturnService : IReturnService
             });
 
             booking.RefundAmount += depositToRefund;
+        }
+
+        if (totalDepositDeducted > 0)
+        {
+            booking.RefundReason = AppendText(
+                booking.RefundReason,
+                $"Cọc còn giữ trước quyết toán: {depositAvailableBeforeNewDeduction:N0} đồng. " +
+                $"Khấu trừ bồi thường: {newDepositDeduction:N0} đồng. " +
+                $"Cọc còn hoàn: {depositToRefund:N0} đồng.");
+        }
+        else if (depositToRefund > 0)
+        {
             booking.RefundReason = AppendText(
                 booking.RefundReason,
                 $"Hoàn cọc còn lại sau khi kiểm tra xe: {depositToRefund:N0} đồng.");
         }
+
+        booking.Vehicle.Status = requiresMaintenance
+            ? VehicleStatus.Maintenance
+            : VehicleStatus.Available;
 
         if (requiresMaintenance)
         {
@@ -410,12 +457,21 @@ internal sealed class ReturnService : IReturnService
             });
         }
 
+        var hasPendingRefund = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Refund &&
+            payment.Status == PaymentStatus.AwaitingRefund);
+        booking.Status = hasPendingRefund
+            ? BookingStatus.AwaitingRefund
+            : BookingStatus.Completed;
+
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Đơn thuê đã hoàn tất",
-            Message = depositToRefund > 0
-                ? $"Đơn #{booking.BookingId} đã kiểm tra xong. Cọc còn lại {depositToRefund:N0} đồng đang chờ hoàn."
+            Title = hasPendingRefund ? "Đã kiểm tra xe - chờ hoàn tiền" : "Đơn thuê đã hoàn tất",
+            Message = hasPendingRefund
+                ? totalDepositDeducted > 0
+                    ? $"Đơn #{booking.BookingId} đã kiểm tra xong. Đã khấu trừ {totalDepositDeducted:N0} đồng từ cọc; còn {depositToRefund:N0} đồng đang chờ hoàn."
+                    : $"Đơn #{booking.BookingId} đã kiểm tra xong. Cọc còn lại {depositToRefund:N0} đồng đang chờ hoàn."
                 : $"Đơn #{booking.BookingId} đã hoàn tất. Bạn có thể đánh giá chuyến thuê."
         });
 
@@ -450,6 +506,7 @@ internal sealed class ReturnService : IReturnService
 
         var pendingPayment = booking.Payments.FirstOrDefault(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
+            payment.Method != PaymentMethods.DepositDeduction &&
             payment.Status == PaymentStatus.Pending);
 
         if (booking.AdditionalAmount > 0)
@@ -480,6 +537,7 @@ internal sealed class ReturnService : IReturnService
     private static bool HasPaidAdditionalCharge(Booking booking) =>
         booking.Payments.Any(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
+            payment.Method != PaymentMethods.DepositDeduction &&
             payment.Status == PaymentStatus.Paid);
 
     private static bool HasMissingAccessories(string? notes) =>
