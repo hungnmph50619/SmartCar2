@@ -34,6 +34,9 @@ public sealed class InspectionSnapshotViewModel
     public DateTime RecordedAt { get; init; }
     public int Mileage { get; init; }
     public string FuelLevel { get; init; } = string.Empty;
+    public string? ExteriorCondition { get; init; }
+    public string? InteriorCondition { get; init; }
+    public string? Accessories { get; init; }
     public bool? HasDamage { get; init; }
     public string? Notes { get; init; }
     public IReadOnlyList<string> ImagePaths { get; init; }
