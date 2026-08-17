@@ -28,7 +28,45 @@ public sealed record ExtensionDto(
     string? EvidenceNote,
     bool HasScheduleConflict,
     int? ConflictingBookingId,
-    DateTime? ConflictingPickupDate);
+    DateTime? ConflictingPickupDate)
+{
+    // Constructor tương thích với các call site cũ chưa truyền thông tin bất khả kháng/xung đột.
+    public ExtensionDto(
+        int bookingExtensionId,
+        int bookingId,
+        string customerId,
+        string customerName,
+        string vehicleName,
+        DateTime originalReturnDate,
+        DateTime requestedReturnDate,
+        int additionalDays,
+        decimal additionalAmount,
+        BookingExtensionStatus status,
+        string? customerNote,
+        string? adminNote,
+        DateTime requestedAt)
+        : this(
+            bookingExtensionId,
+            bookingId,
+            customerId,
+            customerName,
+            vehicleName,
+            originalReturnDate,
+            requestedReturnDate,
+            additionalDays,
+            additionalAmount,
+            status,
+            customerNote,
+            adminNote,
+            requestedAt,
+            false,
+            null,
+            false,
+            null,
+            null)
+    {
+    }
+}
 
 public interface IExtensionService
 {
@@ -44,11 +82,17 @@ public interface IExtensionService
         RequestExtensionRequest request,
         CancellationToken cancellationToken = default);
 
+    // Giữ chữ ký cũ để những call site/test cũ vẫn biên dịch.
     Task<OperationResult> ApproveAsync(
         int extensionId,
         string adminId,
-        bool confirmConflictHandled = false,
-        string? adminNote = null,
+        CancellationToken cancellationToken = default);
+
+    Task<OperationResult> ApproveAsync(
+        int extensionId,
+        string adminId,
+        bool confirmConflictHandled,
+        string? adminNote,
         CancellationToken cancellationToken = default);
 
     Task<OperationResult> RequestMoreEvidenceAsync(
