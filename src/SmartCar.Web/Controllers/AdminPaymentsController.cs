@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,8 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminPaymentsController : Controller
 {
+    private const string CompensationMarker = "[NEXT_BOOKING_COMPENSATION]";
+
     private readonly IPaymentService _paymentService;
     private readonly IExtensionService _extensionService;
     private readonly ApplicationDbContext _dbContext;
@@ -179,6 +182,16 @@ public sealed class AdminPaymentsController : Controller
         string? section,
         CancellationToken cancellationToken)
     {
+        var compensationDeduction = await ApplyExtensionCompensationDeductionAsync(
+            paymentId,
+            cancellationToken);
+
+        if (!compensationDeduction.Succeeded)
+        {
+            TempData["ErrorMessage"] = compensationDeduction.Error;
+            return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var result = await _paymentService.ConfirmRefundAsync(
             paymentId,
@@ -209,14 +222,18 @@ public sealed class AdminPaymentsController : Controller
             {
                 UserId = payment.Booking.CustomerId,
                 Title = "Đơn thuê đã hoàn tất",
-                Message = $"Đơn #{payment.BookingId} đã hoàn tất. SmartCar đã hoàn {payment.Amount:N0} đồng."
+                Message = compensationDeduction.DeductedAmount > 0
+                    ? $"Đơn #{payment.BookingId} đã hoàn tất. SmartCar đã hoàn {payment.Amount:N0} đồng sau khi khấu trừ {compensationDeduction.DeductedAmount:N0} đồng bồi thường đơn thuê kế tiếp theo biên bản/chính sách đã xác nhận."
+                    : $"Đơn #{payment.BookingId} đã hoàn tất. SmartCar đã hoàn {payment.Amount:N0} đồng."
             });
 
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
         TempData["SuccessMessage"] = completedAfterRefund
-            ? "Đã hoàn cọc. Chuyến thuê đã hoàn tất."
+            ? compensationDeduction.DeductedAmount > 0
+                ? $"Đã hoàn cọc sau khi khấu trừ {compensationDeduction.DeductedAmount:N0} đ bồi thường. Chuyến thuê đã hoàn tất."
+                : "Đã hoàn cọc. Chuyến thuê đã hoàn tất."
             : "Đã xác nhận hoàn tiền.";
 
         if (completedAfterRefund && payment is not null)
@@ -226,6 +243,132 @@ public sealed class AdminPaymentsController : Controller
 
         return RedirectToAction(nameof(Index), new { section = section ?? "refund" });
     }
+
+    private async Task<(bool Succeeded, decimal DeductedAmount, string? Error)> ApplyExtensionCompensationDeductionAsync(
+        int paymentId,
+        CancellationToken cancellationToken)
+    {
+        var payment = await _dbContext.Payments
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.Payments)
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.Extensions)
+            .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
+
+        if (payment is null)
+        {
+            return (false, 0m, "Không tìm thấy khoản hoàn tiền.");
+        }
+
+        if (payment.Type != PaymentType.Refund ||
+            payment.Status != PaymentStatus.AwaitingRefund ||
+            payment.Booking.Status != BookingStatus.AwaitingRefund)
+        {
+            return (true, 0m, null);
+        }
+
+        var alreadyApplied = payment.Booking.Payments.Any(item =>
+            item.Type == PaymentType.AdditionalCharge &&
+            item.Status == PaymentStatus.Paid &&
+            item.Method == PaymentMethods.DepositDeduction &&
+            !string.IsNullOrWhiteSpace(item.TransactionCode) &&
+            item.TransactionCode.StartsWith("EXT-COMP-", StringComparison.Ordinal));
+
+        if (alreadyApplied)
+        {
+            return (true, 0m, null);
+        }
+
+        var compensationAmount = payment.Booking.Extensions
+            .Sum(extension => ExtractCompensationAmount(extension.CustomerNote));
+
+        if (compensationAmount <= 0)
+        {
+            return (true, 0m, null);
+        }
+
+        var deduction = Math.Min(payment.Amount, compensationAmount);
+        if (deduction <= 0)
+        {
+            return (true, 0m, null);
+        }
+
+        payment.Amount -= deduction;
+        payment.Booking.RefundAmount = Math.Max(0m, payment.Booking.RefundAmount - deduction);
+        payment.Booking.AdditionalAmount += deduction;
+        payment.Booking.TotalAmount += deduction;
+        payment.Booking.RefundReason = AppendText(
+            payment.Booking.RefundReason,
+            $"Khấu trừ {deduction:N0} đồng từ tiền cọc để bồi thường đơn thuê kế tiếp bị ảnh hưởng bởi gia hạn bất khả kháng.");
+
+        payment.Booking.Payments.Add(new Payment
+        {
+            Type = PaymentType.AdditionalCharge,
+            Amount = deduction,
+            Method = PaymentMethods.DepositDeduction,
+            Status = PaymentStatus.Paid,
+            PaidAt = DateTime.UtcNow,
+            TransactionCode = $"EXT-COMP-{payment.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+        });
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = payment.Booking.CustomerId,
+            Title = "Đối soát tiền cọc",
+            Message = $"Đơn #{payment.BookingId}: SmartCar khấu trừ {deduction:N0} đồng từ tiền cọc để bồi thường đơn thuê kế tiếp bị ảnh hưởng theo phương án xử lý gia hạn bất khả kháng. Số tiền cọc còn hoàn: {payment.Amount:N0} đồng."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return (true, deduction, null);
+    }
+
+    private static decimal ExtractCompensationAmount(string? customerNote)
+    {
+        if (string.IsNullOrWhiteSpace(customerNote))
+        {
+            return 0m;
+        }
+
+        var total = 0m;
+        var searchIndex = 0;
+        while (searchIndex < customerNote.Length)
+        {
+            var markerIndex = customerNote.IndexOf(
+                CompensationMarker,
+                searchIndex,
+                StringComparison.Ordinal);
+
+            if (markerIndex < 0)
+            {
+                break;
+            }
+
+            var valueStart = markerIndex + CompensationMarker.Length;
+            var valueEnd = customerNote.IndexOfAny(new[] { '|', '\r', '\n' }, valueStart);
+            var rawValue = valueEnd < 0
+                ? customerNote[valueStart..]
+                : customerNote[valueStart..valueEnd];
+
+            if (decimal.TryParse(
+                    rawValue.Trim(),
+                    NumberStyles.Number,
+                    CultureInfo.InvariantCulture,
+                    out var parsed) &&
+                parsed > 0)
+            {
+                total += parsed;
+            }
+
+            searchIndex = valueEnd < 0 ? customerNote.Length : valueEnd + 1;
+        }
+
+        return total;
+    }
+
+    private static string AppendText(string? current, string addition) =>
+        string.IsNullOrWhiteSpace(current)
+            ? addition
+            : $"{current.Trim()} {addition}";
 
     private static string ResolveSection(string? section, PaymentType? type)
     {
