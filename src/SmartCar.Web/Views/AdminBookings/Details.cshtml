@@ -50,7 +50,7 @@
         ? Math.Max(0, (int)Math.Floor((now - Model.PickupDate).TotalMinutes))
         : 0;
     var noShowFeePreview = Math.Round(
-        (rentalPayment?.Amount ?? 0m) * RentalPolicy.NoShowFeeRate,
+        Model.InitialRentalAmount * RentalPolicy.NoShowFeeRate,
         0,
         MidpointRounding.AwayFromZero);
 
@@ -78,8 +78,8 @@
         PaymentMethods.DepositRefund => "Hoàn cọc",
         PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
         PaymentMethods.CompensationRefund => "Hỗ trợ / bồi thường",
-        PaymentMethods.BankTransferRefund => "Hoàn tiền thuê",
-        _ => "Hoàn tiền thuê"
+        PaymentMethods.BankTransferRefund => "Hoàn tiền thuê / phí giao",
+        _ => "Hoàn tiền"
     };
 
     string ExtensionText(BookingExtensionStatus status) => status switch
@@ -101,7 +101,7 @@
         BookingStatus.ReadyForPickup => ("Giao xe", "success"),
         BookingStatus.Rented => ("Đang thuê", "primary"),
         BookingStatus.PendingInspection => ("Đối chiếu giao - trả", "warning"),
-        BookingStatus.AwaitingRefund => ("Hoàn cọc", "warning"),
+        BookingStatus.AwaitingRefund => ("Chờ hoàn tiền", "warning"),
         BookingStatus.Completed => ("Đã hoàn tất", "success"),
         BookingStatus.NoShow => ("Không đến nhận", "danger"),
         BookingStatus.Cancelled or BookingStatus.Rejected => ("Đã kết thúc", "danger"),
@@ -240,7 +240,7 @@
                             {
                                 <span>Chưa đến giờ nhận xe.</span>
                             }
-                            <br />Xử lý từ <strong>@noShowAvailableAt.ToString("dd/MM/yyyy HH:mm")</strong> · phí 70%, hoàn thuê 30% + cọc.
+                            <br />Xử lý từ <strong>@noShowAvailableAt.ToString("dd/MM/yyyy HH:mm")</strong> · phí 70% tiền thuê, hoàn 30% tiền thuê + cọc@(isDelivery ? " + phí giao chưa thực hiện" : string.Empty).
                         </div>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
@@ -257,11 +257,11 @@
         {
             <div class="card card-body shadow-sm mb-4 border-warning">
                 <h2 class="h6 mb-1">Khách chưa đến nhận xe</h2>
-                <div class="small text-muted mb-3">Phí 70% tiền thuê · hoàn 30% tiền thuê · hoàn 100% cọc còn lại.</div>
+                <div class="small text-muted mb-3">Phí 70% tiền thuê · hoàn 30% tiền thuê · hoàn 100% cọc@(isDelivery ? " · hoàn 100% phí giao chưa thực hiện" : string.Empty).</div>
                 <form asp-controller="AdminBookingOperations"
                       asp-action="MarkNoShow"
                       method="post"
-                      data-confirm="Xác nhận khách không đến? Hệ thống giữ 70% tiền thuê, hoàn 30% tiền thuê và hoàn cọc còn lại.">
+                      data-confirm="Xác nhận khách không đến? Hệ thống giữ 70% tiền thuê, hoàn 30% tiền thuê, hoàn cọc và phí giao chưa thực hiện (nếu có).">
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" name="customerContacted" value="true" id="customer-contacted" required />
@@ -281,7 +281,7 @@
                         <span class="badge @(handoverSigned ? "bg-success" : "bg-danger")">@(handoverSigned ? "Đã có chữ ký" : "Thiếu bản ký")</span>
                     </div>
                     <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
-                       asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In biên bản</a>
+                       asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
                 </div>
                 @if (!handoverSigned && Model.Status != BookingStatus.Completed)
                 {
@@ -331,7 +331,7 @@
                     </div>
                     <div class="d-flex gap-2">
                         <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
-                           asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In biên bản</a>
+                           asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
                         <a class="btn btn-sm btn-primary" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@Model.BookingId">Đối chiếu</a>
                     </div>
                 </div>
@@ -381,10 +381,10 @@
         @if (Model.Status == BookingStatus.AwaitingRefund)
         {
             <div class="card card-body shadow-sm mb-4 border-warning">
-                <h2 class="h5">Chờ hoàn cọc</h2>
-                <p class="text-muted">Đơn chỉ hoàn tất sau khi xác nhận đã chuyển khoản hoàn cho khách.</p>
+                <h2 class="h5">Chờ hoàn tiền</h2>
+                <p class="text-muted">Đơn chỉ hoàn tất sau khi xác nhận đã chuyển đủ tổng tiền hoàn cho khách.</p>
                 <div class="d-flex gap-2 flex-wrap">
-                    <a class="btn btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Hoàn cọc</a>
+                    <a class="btn btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Xử lý hoàn tiền</a>
                     <a class="btn btn-outline-primary" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Xem hồ sơ</a>
                 </div>
             </div>
@@ -441,11 +441,18 @@
             }
             @if (Model.AdditionalAmount > 0)
             {
-                <div class="money-row"><span>Phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+                <div class="money-row"><span>Phụ phí thực thu</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+            }
+            @if (Model.DepositDeductionAmount > 0)
+            {
+                <div class="money-row">
+                    <span>Khấu trừ từ cọc<br /><span class="badge bg-info text-dark">Đã khấu trừ</span></span>
+                    <strong>@Model.DepositDeductionAmount.ToString("N0") đ</strong>
+                </div>
             }
             @if (Model.Status == BookingStatus.NoShow && noShowFeePreview > 0)
             {
-                <div class="money-row"><span>Phí không đến nhận (70%)</span><strong>@noShowFeePreview.ToString("N0") đ</strong></div>
+                <div class="money-row"><span>Phí không đến nhận (70% tiền thuê)</span><strong>@noShowFeePreview.ToString("N0") đ</strong></div>
             }
             @foreach (var refund in refundPayments)
             {
@@ -456,7 +463,7 @@
             }
 
             <hr />
-            <div class="d-flex justify-content-between"><span>Đã thu</span><strong class="text-success">@totalCollected.ToString("N0") đ</strong></div>
+            <div class="d-flex justify-content-between"><span>Đã thu từ khách</span><strong class="text-success">@totalCollected.ToString("N0") đ</strong></div>
             @if (remainingToCollect > 0 && Model.Status is not BookingStatus.Cancelled and not BookingStatus.Rejected and not BookingStatus.NoShow)
             {
                 <div class="d-flex justify-content-between mt-1"><span>Còn thu</span><strong class="text-danger">@remainingToCollect.ToString("N0") đ</strong></div>
