@@ -11,6 +11,8 @@ namespace SmartCar.Infrastructure.Services;
 internal sealed class ReturnService : IReturnService
 {
     private const int MaximumReasonableKilometersPerDay = 2500;
+    private const string AccessoriesComplete = "Đủ";
+    private const string AccessoriesMissingPrefix = "Thiếu/mất:";
 
     private readonly ApplicationDbContext _dbContext;
 
@@ -65,6 +67,20 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Biên bản trả xe phải có ảnh đối chiếu tình trạng xe.");
         }
 
+        var accessoryStatus = Normalize(request.InteriorCondition);
+        if (accessoryStatus is null ||
+            (accessoryStatus != AccessoriesComplete &&
+             !accessoryStatus.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            return OperationResult.Failure("Vui lòng xác nhận phụ kiện khi trả là Đủ hoặc ghi rõ đồ thiếu/mất.");
+        }
+
+        if (accessoryStatus.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrWhiteSpace(accessoryStatus[AccessoriesMissingPrefix.Length..]))
+        {
+            return OperationResult.Failure("Vui lòng ghi rõ phụ kiện bị thiếu hoặc mất.");
+        }
+
         var drivenKilometers = request.Mileage - booking.Handover.Mileage;
         var elapsedDays = Math.Max(
             1,
@@ -94,13 +110,17 @@ internal sealed class ReturnService : IReturnService
             : RentalPolicy.LateReturnFeeMultiplier;
         var lateFee = lateDays * booking.DailyPrice * lateReturnMultiplier;
 
+        var effectiveIncludedKilometers = Math.Max(
+            booking.Handover.IncludedKilometers,
+            elapsedDays * RentalPolicy.IncludedKilometersPerDay);
+
         var vehicleReturn = new VehicleReturn
         {
             ReturnedAt = request.ReturnedAt,
             Mileage = request.Mileage,
             FuelLevel = $"{fuelPercent}%",
-            ExteriorCondition = Normalize(request.ExteriorCondition),
-            InteriorCondition = Normalize(request.InteriorCondition),
+            ExteriorCondition = null,
+            InteriorCondition = accessoryStatus,
             HasDamage = request.HasDamage,
             IsLateReturn = lateMinutes > 0,
             LateMinutes = lateMinutes,
@@ -111,7 +131,7 @@ internal sealed class ReturnService : IReturnService
 
         var excessKilometers = Math.Max(
             0,
-            drivenKilometers - booking.Handover.IncludedKilometers);
+            drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
 
         if (lateFee > 0)
@@ -133,7 +153,7 @@ internal sealed class ReturnService : IReturnService
                 ChargeType = AdditionalChargeType.ExcessMileage,
                 Description =
                     $"Phí vượt {excessKilometers:N0} km so với định mức " +
-                    $"{booking.Handover.IncludedKilometers:N0} km x {booking.Handover.ExcessKmFeePerKm:N0} đ/km.",
+                    $"{effectiveIncludedKilometers:N0} km x {booking.Handover.ExcessKmFeePerKm:N0} đ/km.",
                 Amount = excessMileageFee
             });
         }
@@ -218,10 +238,19 @@ internal sealed class ReturnService : IReturnService
             }
         }
 
-        if (request.ChargeType == AdditionalChargeType.MissingAccessory &&
-            string.IsNullOrWhiteSpace(booking.Handover?.Accessories))
+        if (request.ChargeType == AdditionalChargeType.MissingAccessory)
         {
-            return OperationResult.Failure("Biên bản giao xe chưa ghi phụ kiện ban đầu nên chưa đủ căn cứ tạo phí thiếu phụ kiện.");
+            if (string.IsNullOrWhiteSpace(booking.Handover?.Accessories))
+            {
+                return OperationResult.Failure("Biên bản giao xe chưa ghi phụ kiện ban đầu nên chưa đủ căn cứ tạo phí thiếu phụ kiện.");
+            }
+
+            var returnedAccessories = Normalize(booking.VehicleReturn.InteriorCondition);
+            if (returnedAccessories is null ||
+                !returnedAccessories.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return OperationResult.Failure("Biên bản trả xe chưa ghi nhận phụ kiện thiếu/mất nên chưa thể tạo phí này.");
+            }
         }
 
         booking.VehicleReturn.AdditionalCharges.Add(new AdditionalCharge
