@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using SmartCar.Application.Features.Brands;
 using SmartCar.Application.Features.Vehicles;
+using SmartCar.Application.Features.VehicleDocuments;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Web.Services;
@@ -18,21 +19,29 @@ public sealed class AdminVehiclesController : Controller
 
     private readonly IVehicleService _vehicleService;
     private readonly IBrandService _brandService;
+    private readonly IVehicleDocumentService _vehicleDocumentService;
     private readonly IWebHostEnvironment _environment;
 
     public AdminVehiclesController(
         IVehicleService vehicleService,
         IBrandService brandService,
+        IVehicleDocumentService vehicleDocumentService,
         IWebHostEnvironment environment)
     {
         _vehicleService = vehicleService;
         _brandService = brandService;
+        _vehicleDocumentService = vehicleDocumentService;
         _environment = environment;
     }
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
-        return View(await _vehicleService.GetAllAsync(cancellationToken));
+        var vehicles = await _vehicleService.GetAllAsync(cancellationToken);
+        ViewBag.VehicleDocumentOverviews = await _vehicleDocumentService
+            .GetOverviewsByVehicleIdsAsync(
+                vehicles.Select(vehicle => vehicle.VehicleId).ToArray(),
+                cancellationToken);
+        return View(vehicles);
     }
 
     [HttpGet]
@@ -85,12 +94,16 @@ public sealed class AdminVehiclesController : Controller
         }
 
         await SaveImagesAsync(result.VehicleId.Value, createImages, cancellationToken);
-        TempData["SuccessMessage"] = "Đã thêm xe mới. Vui lòng bổ sung Đăng ký xe, Đăng kiểm và Bảo hiểm để xe đủ điều kiện xuất hiện cho khách thuê.";
+        TempData["SuccessMessage"] = "Đã thêm xe mới với trạng thái Ngừng hoạt động. Vui lòng bổ sung đủ Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ, sau đó chuyển xe sang Sẵn sàng.";
         return RedirectToAction(nameof(Edit), new { id = result.VehicleId.Value });
     }
 
     [HttpGet]
-    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(
+        int id,
+        DateTime? pickupDate,
+        DateTime? returnDate,
+        CancellationToken cancellationToken)
     {
         var vehicle = await _vehicleService.GetByIdAsync(id, cancellationToken);
         if (vehicle is null)
@@ -100,6 +113,20 @@ public sealed class AdminVehiclesController : Controller
 
         await LoadBrandsAsync(vehicle.BrandId, cancellationToken, includeInactiveSelectedBrand: true);
         ViewBag.Vehicle = vehicle;
+        ViewBag.VehicleDocumentOverview = await _vehicleDocumentService
+            .GetOverviewByVehicleAsync(vehicle.VehicleId, cancellationToken);
+
+        ViewBag.RentalPickupDate = pickupDate;
+        ViewBag.RentalReturnDate = returnDate;
+        if (pickupDate.HasValue && returnDate.HasValue)
+        {
+            ViewBag.RentalLegalStatus = await _vehicleDocumentService
+                .GetRentalLegalStatusAsync(
+                    vehicle.VehicleId,
+                    pickupDate.Value,
+                    returnDate.Value,
+                    cancellationToken);
+        }
 
         return View(new VehicleFormViewModel
         {
@@ -322,6 +349,8 @@ public sealed class AdminVehiclesController : Controller
     {
         await LoadBrandsAsync(viewModel.BrandId, cancellationToken, includeInactiveSelectedBrand: true);
         ViewBag.Vehicle = await _vehicleService.GetByIdAsync(viewModel.VehicleId, cancellationToken);
+        ViewBag.VehicleDocumentOverview = await _vehicleDocumentService
+            .GetOverviewByVehicleAsync(viewModel.VehicleId, cancellationToken);
     }
 
     private async Task LoadBrandsAsync(

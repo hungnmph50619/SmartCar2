@@ -6,6 +6,8 @@ namespace SmartCar.Web.ViewModels;
 
 public sealed class VehicleDocumentViewModel
 {
+    public int? VehicleDocumentId { get; set; }
+
     [Required]
     public int VehicleId { get; set; }
 
@@ -23,6 +25,8 @@ public sealed class VehicleDocumentViewModel
 
     [Display(Name = "Ảnh giấy tờ")]
     public IFormFile? ImageFile { get; set; }
+
+    public string? ExistingImagePath { get; set; }
 
     [StringLength(500)]
     public string? Notes { get; set; }

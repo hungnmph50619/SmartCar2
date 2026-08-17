@@ -110,11 +110,18 @@ internal sealed class BookingService : IBookingService
             request.ReturnDate,
             allowNoExpiry: false,
             cancellationToken);
+        var hasValidRoadFee = await HasValidVehicleDocumentAsync(
+            request.VehicleId,
+            VehicleDocumentType.RoadFee,
+            request.PickupDate,
+            request.ReturnDate,
+            allowNoExpiry: false,
+            cancellationToken);
 
-        if (!hasValidRegistration || !hasValidInspection || !hasValidInsurance)
+        if (!hasValidRegistration || !hasValidInspection || !hasValidInsurance || !hasValidRoadFee)
         {
             return BookingMutationResult.Failure(
-                "Xe chưa có đủ đăng ký, đăng kiểm và bảo hiểm còn hiệu lực đến ngày trả.");
+                "Xe chưa có đủ Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ còn hiệu lực đến ngày trả.");
         }
 
         var hasConflict = await HasConflictAsync(

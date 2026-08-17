@@ -1,78 +1,192 @@
 @model IReadOnlyList<SmartCar.Application.Features.VehicleDocuments.VehicleDocumentDto>
+@using SmartCar.Domain.Enums
+@using SmartCar.Application.Features.Vehicles
+@using SmartCar.Application.Features.VehicleDocuments
 @{
-    ViewData["Title"] = "Giấy tờ pháp lý xe";
+    ViewData["Title"] = "Giấy tờ xe";
+    var vehicle = ViewBag.Vehicle as VehicleDto;
+    var documentOverview = ViewBag.DocumentOverview as VehicleDocumentOverviewDto;
+    var legalStatus = documentOverview?.LegalStatus;
+    var requiredTypes = new[] { VehicleDocumentType.Registration, VehicleDocumentType.Inspection, VehicleDocumentType.Insurance, VehicleDocumentType.RoadFee };
+    VehicleDocumentDto? Latest(VehicleDocumentType type) => Model.Where(x => x.DocumentType == type).OrderByDescending(x => x.IssuedDate).FirstOrDefault();
+    string StateClass(VehicleDocumentDto? doc) => doc is null ? "missing" : doc.IsExpired ? "expired" : doc.DaysUntilExpiry.HasValue && doc.DaysUntilExpiry.Value <= 30 ? "warning" : "valid";
+    string StateLabel(VehicleDocumentDto? doc) => doc is null ? "Chưa có" : doc.IsExpired ? "Đã hết hạn" : doc.DaysUntilExpiry.HasValue && doc.DaysUntilExpiry.Value <= 30 ? "Sắp hết hạn" : "Còn hạn";
+    var registration = Latest(VehicleDocumentType.Registration);
+    var inspection = Latest(VehicleDocumentType.Inspection);
+    var insurance = Latest(VehicleDocumentType.Insurance);
+    var roadFee = Latest(VehicleDocumentType.RoadFee);
+    var other = Latest(VehicleDocumentType.Other);
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h1 class="h3 mb-1">Giấy tờ pháp lý xe</h1>
-        <p class="text-muted mb-0">Theo dõi đăng ký, đăng kiểm, bảo hiểm và phí đường bộ.</p>
+@section Styles {
+    <link rel="stylesheet" href="~/css/vehicle-documents.css" asp-append-version="true" />
+}
+
+<div class="doc-page">
+    <div class="doc-heading">
+        <div>
+            <div class="doc-breadcrumb"><a asp-controller="AdminVehicles" asp-action="Index">Quản lý xe</a><span>/</span> Giấy tờ xe</div>
+            <h1>Giấy tờ xe</h1>
+            <p>Theo dõi tình trạng pháp lý và hồ sơ bắt buộc của xe.</p>
+        </div>
+        <a class="doc-primary-btn" asp-action="Create" asp-route-vehicleId="@ViewBag.VehicleId">＋ Thêm giấy tờ</a>
     </div>
-    <a class="btn btn-primary" asp-action="Create" asp-route-vehicleId="@ViewBag.VehicleId">Thêm giấy tờ</a>
-</div>
 
-<div class="alert alert-info">
-    Xe chỉ xuất hiện cho khách đặt khi có đăng ký, đăng kiểm và bảo hiểm còn hiệu lực đến ngày trả xe.
-</div>
-
-<div class="card shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Xe</th>
-                    <th>Loại</th>
-                    <th>Số giấy tờ</th>
-                    <th>Ngày cấp</th>
-                    <th>Hết hạn</th>
-                    <th>Trạng thái</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-            @if (Model.Count == 0)
-            {
-                <tr><td colspan="7" class="text-center text-muted py-4">Chưa có giấy tờ xe.</td></tr>
-            }
-            else
-            {
-                @foreach (var item in Model)
+    @if (vehicle is not null)
+    {
+        <section class="doc-vehicle-summary">
+            <div class="doc-vehicle-card">
+                @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
                 {
-                    var warning = item.DaysUntilExpiry.HasValue && item.DaysUntilExpiry.Value <= 30;
-                    <tr>
-                        <td>
-                            <strong>@item.VehicleName</strong>
-                            <div class="text-muted small">@item.LicensePlate</div>
-                        </td>
-                        <td>@item.DocumentType.ToVietnamese()</td>
-                        <td>@item.DocumentNumber</td>
-                        <td>@item.IssuedDate.ToString("dd/MM/yyyy")</td>
-                        <td>@(item.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Không thời hạn")</td>
-                        <td>
-                            @if (item.IsExpired)
-                            {
-                                <span class="badge bg-danger">Đã hết hạn</span>
-                            }
-                            else if (warning)
-                            {
-                                <span class="badge bg-warning text-dark">Còn @item.DaysUntilExpiry ngày</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-success">Còn hiệu lực</span>
-                            }
-                        </td>
-                        <td class="text-end">
-                            <form asp-action="Delete" method="post" onsubmit="return confirm('Xóa giấy tờ này?');">
-                                <input type="hidden" name="id" value="@item.VehicleDocumentId" />
-                                <input type="hidden" name="vehicleId" value="@ViewBag.VehicleId" />
-                                <button class="btn btn-sm btn-outline-danger" type="submit">Xóa</button>
-                            </form>
-                        </td>
-                    </tr>
+                    <img src="@vehicle.PrimaryImagePath" alt="@vehicle.VehicleName" />
                 }
+                else { <div class="doc-car-placeholder">🚘</div> }
+                <div>
+                    <h2>@vehicle.VehicleName</h2>
+                    <strong>@vehicle.LicensePlate</strong>
+                    <span>@vehicle.BrandName · @(string.IsNullOrWhiteSpace(vehicle.Model) ? "Không ghi dòng xe" : vehicle.Model)</span>
+                    <small>Năm sản xuất @vehicle.ManufactureYear · @vehicle.Seats chỗ</small>
+                </div>
+            </div>
+            @if (legalStatus is not null)
+            {
+                <div class="doc-legal-card @(legalStatus.IsEligible ? "legal-ok" : "legal-warning")">
+                    <div class="doc-legal-icon">@(legalStatus.IsEligible ? "✓" : "!")</div>
+                    <div>
+                        <span>TÌNH TRẠNG PHÁP LÝ CỦA XE</span>
+                        <h2>@(legalStatus.IsEligible ? "ĐỦ ĐIỀU KIỆN PHÁP LÝ CHO THUÊ" : "CHƯA ĐỦ ĐIỀU KIỆN PHÁP LÝ CHO THUÊ")</h2>
+                        @if (legalStatus.IsEligible)
+                        {
+                            <p>Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ đều đáp ứng điều kiện hiện tại.</p>
+                        }
+                        else
+                        {
+                            <p>Xe cần xử lý các vấn đề sau:</p>
+                            <ul class="mb-0 ps-3">
+                                @foreach (var reason in legalStatus.Reasons)
+                                {
+                                    <li>@reason</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
             }
-            </tbody>
-        </table>
+        </section>
+    }
+
+    <section class="doc-status-grid">
+        @foreach (var tuple in new[] {
+            (VehicleDocumentType.Registration, "Đăng ký xe", "Bắt buộc", registration),
+            (VehicleDocumentType.Inspection, "Đăng kiểm", "Bắt buộc", inspection),
+            (VehicleDocumentType.Insurance, "Bảo hiểm", "Bắt buộc", insurance),
+            (VehicleDocumentType.RoadFee, "Phí đường bộ", "Theo dõi", roadFee),
+            (VehicleDocumentType.Other, "Giấy tờ khác", "Tùy chọn", other)
+        })
+        {
+            var cls = StateClass(tuple.Item4);
+            <article class="doc-status-card @cls">
+                <div class="doc-status-title"><span class="doc-type-icon">▤</span><div><h3>@tuple.Item2</h3><small>@tuple.Item3</small></div></div>
+                <span class="doc-state-pill @cls">@StateLabel(tuple.Item4)</span>
+                @if (tuple.Item4 is null)
+                {
+                    <p>Chưa có giấy tờ này.</p>
+                }
+                else
+                {
+                    <p>Hết hạn: <strong>@(tuple.Item4.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Không thời hạn")</strong></p>
+                    @if (tuple.Item4.DaysUntilExpiry.HasValue)
+                    {
+                        <strong class="doc-days @cls">@(tuple.Item4.DaysUntilExpiry.Value >= 0 ? $"Còn {tuple.Item4.DaysUntilExpiry.Value} ngày" : $"Quá {Math.Abs(tuple.Item4.DaysUntilExpiry.Value)} ngày")</strong>
+                    }
+                }
+            </article>
+        }
+    </section>
+
+    <section class="doc-list-card">
+        <div class="doc-list-header"><div><h2>Danh sách giấy tờ</h2><span>@Model.Count hồ sơ</span></div><p>Ảnh giấy tờ chỉ là tệp đính kèm; tình trạng pháp lý dựa trên thông tin hồ sơ đã nhập.</p></div>
+        <div class="table-responsive">
+            <table class="doc-table">
+                <thead><tr><th>Loại giấy tờ</th><th>Số giấy tờ</th><th>Ngày cấp</th><th>Ngày hết hạn</th><th>Còn lại</th><th>Trạng thái</th><th>Tệp đính kèm</th><th>Ghi chú</th><th></th></tr></thead>
+                <tbody>
+                @if (Model.Count == 0)
+                {
+                    <tr><td colspan="9"><div class="doc-empty"><span>▤</span><strong>Chưa có giấy tờ xe</strong><p>Hãy thêm Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ để hoàn thiện hồ sơ.</p></div></td></tr>
+                }
+                else
+                {
+                    @foreach (var item in Model)
+                    {
+                        var cls = StateClass(item);
+                        <tr>
+                            <td><strong>@item.DocumentType.ToVietnamese()</strong><small>@(requiredTypes.Contains(item.DocumentType) ? "Bắt buộc" : "Bổ sung")</small></td>
+                            <td>@item.DocumentNumber</td>
+                            <td>@item.IssuedDate.ToString("dd/MM/yyyy")</td>
+                            <td>@(item.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Không thời hạn")</td>
+                            <td>@(item.DaysUntilExpiry.HasValue ? (item.DaysUntilExpiry.Value >= 0 ? $"{item.DaysUntilExpiry.Value} ngày" : $"-{Math.Abs(item.DaysUntilExpiry.Value)} ngày") : "—")</td>
+                            <td><span class="doc-state-pill @cls">@StateLabel(item)</span></td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(item.ImagePath))
+                                {
+                                    <button type="button"
+                                            class="doc-thumb-link doc-preview-trigger"
+                                            data-preview-src="@item.ImagePath"
+                                            data-preview-title="@item.DocumentType.ToVietnamese() - @item.DocumentNumber">
+                                        <img src="@item.ImagePath" alt="Ảnh @item.DocumentType.ToVietnamese()" />
+                                        <span>Xem ảnh</span>
+                                    </button>
+                                }
+                                else { <span class="doc-no-file">Chưa có tệp</span> }
+                            </td>
+                            <td class="doc-note">@(string.IsNullOrWhiteSpace(item.Notes) ? "—" : item.Notes)</td>
+                            <td>
+                                <div class="doc-row-actions">
+                                    @if (!string.IsNullOrWhiteSpace(item.ImagePath))
+                                    {
+                                        <button type="button"
+                                                class="doc-icon-btn doc-preview-trigger"
+                                                data-preview-src="@item.ImagePath"
+                                                data-preview-title="@item.DocumentType.ToVietnamese() - @item.DocumentNumber"
+                                                title="Xem tệp">👁</button>
+                                    }
+                                    <a class="doc-icon-btn doc-edit-btn"
+                                       asp-action="Edit"
+                                       asp-route-id="@item.VehicleDocumentId"
+                                       title="Sửa giấy tờ">✎</a>
+                                    <form asp-action="Delete" method="post" onsubmit="return confirm('Bạn có chắc muốn xóa giấy tờ này?');">
+                                        <input type="hidden" name="id" value="@item.VehicleDocumentId" />
+                                        <input type="hidden" name="vehicleId" value="@ViewBag.VehicleId" />
+                                        <button class="doc-delete-btn" type="submit" title="Xóa giấy tờ">🗑</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+
+<div class="doc-preview-modal" id="documentPreviewModal" hidden aria-hidden="true">
+    <div class="doc-preview-backdrop" data-preview-close></div>
+    <div class="doc-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="documentPreviewTitle">
+        <div class="doc-preview-header">
+            <div>
+                <small>Xem giấy tờ</small>
+                <h2 id="documentPreviewTitle">Ảnh giấy tờ</h2>
+            </div>
+            <button type="button" class="doc-preview-close" data-preview-close aria-label="Đóng">×</button>
+        </div>
+        <div class="doc-preview-body">
+            <img id="documentPreviewImage" alt="Ảnh giấy tờ" />
+        </div>
     </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/vehicle-documents-list.js" asp-append-version="true"></script>
+}

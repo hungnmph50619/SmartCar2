@@ -1,0 +1,261 @@
+@model SmartCar.Web.ViewModels.VehicleDocumentViewModel
+@using SmartCar.Domain.Enums
+@using SmartCar.Application.Features.Vehicles
+@{
+    var vehicle = ViewBag.Vehicle as VehicleDto;
+    var isEdit = ViewData["IsEdit"] is bool editMode && editMode;
+    var formAction = isEdit ? "Edit" : "Create";
+    var submitText = isEdit ? "Lưu thay đổi" : "Lưu giấy tờ";
+    var introIcon = isEdit ? "✎" : "2";
+    var introTitle = isEdit ? "Cập nhật thông tin giấy tờ" : "Thông tin giấy tờ";
+    var introText = isEdit
+        ? "Các trường có dấu * là bắt buộc. Không chọn ảnh mới nếu bạn muốn giữ ảnh hiện tại."
+        : "Các trường có dấu * là bắt buộc. Nhập đúng thông tin in trên giấy tờ.";
+    var issuedDateDisplay = Model.IssuedDate.ToString("dd/MM/yyyy");
+    var expiryDateDisplay = Model.ExpiryDate?.ToString("dd/MM/yyyy") ?? string.Empty;
+}
+
+<div class="doc-form-layout">
+    <section class="doc-form-card">
+        <div class="doc-form-intro">
+            <span class="doc-step">@introIcon</span>
+            <div>
+                <h2>@introTitle</h2>
+                <p>@introText</p>
+            </div>
+        </div>
+
+        <form asp-action="@formAction"
+              method="post"
+              enctype="multipart/form-data"
+              class="doc-form"
+              id="vehicleDocumentForm"
+              novalidate>
+
+            @if (isEdit)
+            {
+                <input asp-for="VehicleDocumentId" type="hidden" />
+                <input asp-for="ExistingImagePath" type="hidden" />
+            }
+
+            <div asp-validation-summary="ModelOnly" class="doc-validation-summary"></div>
+
+            <div class="doc-form-grid">
+                <label>
+                    <span>Xe <b>*</b></span>
+                    @if (isEdit)
+                    {
+                        <input asp-for="VehicleId" type="hidden" />
+                        <select class="form-select" disabled aria-label="Xe của giấy tờ">
+                            <option selected>@(vehicle?.VehicleName ?? $"Xe #{Model.VehicleId}")</option>
+                        </select>
+                        <small>Giấy tờ đang thuộc xe này và không thể chuyển sang xe khác trong màn hình Sửa.</small>
+                    }
+                    else
+                    {
+                        <select asp-for="VehicleId" asp-items="ViewBag.Vehicles" class="form-select"></select>
+                        <small>Chọn đúng xe được ghi trên giấy tờ.</small>
+                    }
+                    <span asp-validation-for="VehicleId" class="text-danger"></span>
+                </label>
+
+                <label>
+                    <span>Loại giấy tờ <b>*</b></span>
+                    <select asp-for="DocumentType" class="form-select" id="DocumentType">
+                        @foreach (var type in Enum.GetValues<VehicleDocumentType>())
+                        {
+                            <option value="@type">@type.ToVietnamese()</option>
+                        }
+                    </select>
+                    <small>Đăng ký, Đăng kiểm, Bảo hiểm và Phí đường bộ được theo dõi riêng cho từng xe.</small>
+                    <span asp-validation-for="DocumentType" class="text-danger"></span>
+                </label>
+
+                <label>
+                    <span>Số giấy tờ <b>*</b></span>
+                    <input asp-for="DocumentNumber"
+                           class="form-control"
+                           id="DocumentNumber"
+                           placeholder="Ví dụ: DK-30A-12345"
+                           autocomplete="off" />
+                    <small>Nhập số/seri đúng như trên giấy tờ gốc.</small>
+                    <span asp-validation-for="DocumentNumber" class="text-danger"></span>
+                </label>
+
+                <label>
+                    <span>Ngày cấp <b>*</b></span>
+                    <input asp-for="IssuedDate"
+                           type="hidden"
+                           id="IssuedDate"
+                           value="@Model.IssuedDate.ToString("yyyy-MM-dd")" />
+                    <input type="text"
+                           id="IssuedDateDisplay"
+                           class="form-control doc-date-input"
+                           inputmode="numeric"
+                           autocomplete="off"
+                           maxlength="10"
+                           placeholder="Ví dụ: 16/08/2026"
+                           value="@issuedDateDisplay"
+                           data-date-target="IssuedDate"
+                           aria-describedby="IssuedDateHelp IssuedDateClientError" />
+                    <small id="IssuedDateHelp">Định dạng dd/mm/yyyy. Ngày cấp không được ở tương lai.</small>
+                    <span asp-validation-for="IssuedDate" class="text-danger"></span>
+                    <span id="IssuedDateClientError" class="text-danger doc-client-error" hidden></span>
+                </label>
+
+                <label>
+                    <span>Ngày hết hạn <b id="ExpiryRequiredMark" hidden>*</b></span>
+                    <input asp-for="ExpiryDate"
+                           type="hidden"
+                           id="ExpiryDate"
+                           value="@(Model.ExpiryDate?.ToString("yyyy-MM-dd") ?? string.Empty)" />
+                    <input type="text"
+                           id="ExpiryDateDisplay"
+                           class="form-control doc-date-input"
+                           inputmode="numeric"
+                           autocomplete="off"
+                           maxlength="10"
+                           placeholder="Ví dụ: 16/08/2027"
+                           value="@expiryDateDisplay"
+                           data-date-target="ExpiryDate"
+                           aria-describedby="ExpiryDateHelp ExpiryDateClientError" />
+                    <small id="ExpiryDateHelp">Nếu giấy tờ có thời hạn, ngày hết hạn phải sau ngày cấp.</small>
+                    <span asp-validation-for="ExpiryDate" class="text-danger"></span>
+                    <span id="ExpiryDateClientError" class="text-danger doc-client-error" hidden></span>
+                </label>
+            </div>
+
+            <div class="doc-upload-section">
+                <div>
+                    <h3>@(isEdit ? "Ảnh giấy tờ" : "Tệp đính kèm")</h3>
+                    <p>
+                        @(isEdit
+                            ? "Không bắt buộc tải lại ảnh khi chỉ sửa thông tin."
+                            : "Ảnh giúp Admin đối chiếu hồ sơ; hệ thống không tự xác minh thật/giả từ ảnh.")
+                    </p>
+                </div>
+
+                @if (isEdit && !string.IsNullOrWhiteSpace(Model.ExistingImagePath))
+                {
+                    <div class="doc-current-file">
+                        <img src="@Model.ExistingImagePath" alt="Ảnh giấy tờ hiện tại" />
+                        <div>
+                            <strong>Ảnh hiện tại</strong>
+                            <small>Ảnh này sẽ được giữ nếu bạn không chọn ảnh mới.</small>
+                            <button type="button"
+                                    class="doc-secondary-btn doc-inline-preview"
+                                    data-preview-src="@Model.ExistingImagePath">
+                                Xem ảnh lớn
+                            </button>
+                        </div>
+                    </div>
+                }
+                else if (isEdit)
+                {
+                    <div class="doc-no-current-file">Giấy tờ này chưa có ảnh đính kèm.</div>
+                }
+
+                <label class="doc-dropzone" for="ImageFile">
+                    <input asp-for="ImageFile"
+                           id="ImageFile"
+                           type="file"
+                           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" />
+                    <div id="docUploadPrompt">
+                        <span>☁</span>
+                        <strong>@(isEdit ? "Chọn ảnh mới nếu muốn thay thế" : "Kéo thả hoặc bấm để chọn file")</strong>
+                        <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                    </div>
+                    <div id="docPreview" class="doc-preview" hidden>
+                        <img id="docPreviewImage" alt="Xem trước giấy tờ" />
+                        <div>
+                            <strong id="docPreviewName"></strong>
+                            <small id="docPreviewSize"></small>
+                            <button type="button" id="docRemoveFile">@(isEdit ? "Bỏ ảnh mới" : "Xóa tệp")</button>
+                        </div>
+                    </div>
+                </label>
+                <span asp-validation-for="ImageFile" class="text-danger"></span>
+            </div>
+
+            <label class="doc-note-field">
+                <span>Ghi chú</span>
+                <textarea asp-for="Notes"
+                          class="form-control"
+                          rows="3"
+                          placeholder="Ví dụ: Bản đăng kiểm gần nhất, cần gia hạn trước tháng 10..."></textarea>
+                <small>Không bắt buộc. Chỉ ghi thông tin giúp Admin dễ đối chiếu hoặc xử lý sau này.</small>
+                <span asp-validation-for="Notes" class="text-danger"></span>
+            </label>
+
+            <div class="doc-form-actions">
+                <a class="doc-secondary-btn"
+                   asp-action="Index"
+                   asp-route-vehicleId="@Model.VehicleId">
+                    Hủy
+                </a>
+                <button class="doc-primary-btn" type="submit">@submitText</button>
+            </div>
+        </form>
+    </section>
+
+    <aside class="doc-form-sidebar">
+        @if (vehicle is not null)
+        {
+            <div class="doc-sidebar-card">
+                <div class="doc-sidebar-title">
+                    <h3>Thông tin xe</h3>
+                    @if (!isEdit)
+                    {
+                        <a asp-controller="AdminVehicles" asp-action="Edit" asp-route-id="@vehicle.VehicleId">Sửa</a>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
+                {
+                    <img class="doc-sidebar-car" src="@vehicle.PrimaryImagePath" alt="@vehicle.VehicleName" />
+                }
+                else
+                {
+                    <div class="doc-sidebar-car placeholder">🚘</div>
+                }
+                <dl>
+                    <div><dt>Biển số</dt><dd>@vehicle.LicensePlate</dd></div>
+                    <div><dt>Hãng xe</dt><dd>@vehicle.BrandName</dd></div>
+                    <div><dt>Dòng xe</dt><dd>@(vehicle.Model ?? "—")</dd></div>
+                    <div><dt>Năm sản xuất</dt><dd>@vehicle.ManufactureYear</dd></div>
+                    <div><dt>Màu sắc</dt><dd>@(vehicle.Color ?? "—")</dd></div>
+                    <div><dt>Số chỗ</dt><dd>@vehicle.Seats chỗ</dd></div>
+                </dl>
+            </div>
+        }
+
+        <div class="doc-sidebar-card">
+            <h3>Hướng dẫn nhập</h3>
+            <ul class="doc-help-list">
+                <li>Ngày nhập theo định dạng <strong>dd/mm/yyyy</strong>.</li>
+                <li>Ngày hết hạn phải sau ngày cấp nếu giấy tờ có thời hạn.</li>
+                <li>Ảnh nên rõ nét, không bị mờ hoặc mất góc.</li>
+                <li>Dung lượng tối đa 5 MB; chấp nhận JPG, PNG và WEBP.</li>
+                @if (isEdit)
+                {
+                    <li>Không chọn ảnh mới nếu muốn giữ ảnh hiện tại.</li>
+                }
+            </ul>
+        </div>
+    </aside>
+</div>
+
+@if (isEdit)
+{
+    <div class="doc-preview-modal" id="documentPreviewModal" hidden aria-hidden="true">
+        <div class="doc-preview-backdrop" data-preview-close></div>
+        <div class="doc-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="documentPreviewTitle">
+            <div class="doc-preview-header">
+                <h2 id="documentPreviewTitle">Ảnh giấy tờ hiện tại</h2>
+                <button type="button" class="doc-preview-close" data-preview-close aria-label="Đóng">×</button>
+            </div>
+            <div class="doc-preview-body">
+                <img id="documentPreviewImage" alt="Ảnh giấy tờ" />
+            </div>
+        </div>
+    </div>
+}

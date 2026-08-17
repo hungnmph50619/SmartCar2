@@ -55,7 +55,7 @@ public sealed class VehicleFormViewModel
     [Display(Name = "Màu xe")]
     public string? Color { get; set; }
 
-    [Range(1, double.MaxValue)]
+    [Range(1, 999_999_999_999, ErrorMessage = "Giá thuê/ngày phải từ 1 đến 999.999.999.999 đồng.")]
     [Display(Name = "Giá thuê/ngày")]
     public decimal DailyPrice { get; set; }
 

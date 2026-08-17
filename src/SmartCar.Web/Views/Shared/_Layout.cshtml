@@ -40,6 +40,7 @@
     <link rel="stylesheet" href="~/css/home-ux.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux-final.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/profile-ux.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
     <header>
