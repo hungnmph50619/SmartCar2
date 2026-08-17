@@ -542,6 +542,25 @@ internal sealed class BookingService : IBookingService
             .ToList()
             ?? new List<ChargeSummaryDto>();
 
+        var depositDeduction = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method == PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+        var actualAdditionalAmount = booking.VehicleReturn is null
+            ? booking.AdditionalAmount
+            : charges.Sum(charge => charge.Amount);
+        var legacyMisclassifiedDeduction = Math.Min(
+            depositDeduction,
+            Math.Max(0m, booking.AdditionalAmount - actualAdditionalAmount));
+        var normalizedAdditionalAmount = Math.Max(
+            0m,
+            booking.AdditionalAmount - legacyMisclassifiedDeduction);
+        var normalizedTotalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - legacyMisclassifiedDeduction);
+
         var paidDeposit = booking.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Deposit &&
@@ -554,6 +573,13 @@ internal sealed class BookingService : IBookingService
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
         var effectiveDeposit = Math.Max(0m, paidDeposit - depositRefundPlanned);
+
+        var cashAdditionalPaid = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
 
         return new BookingDetailsDto
         {
@@ -579,8 +605,8 @@ internal sealed class BookingService : IBookingService
             NumberOfDays = booking.NumberOfDays,
             RentalAmount = booking.RentalAmount,
             DepositAmount = booking.DepositAmount,
-            AdditionalAmount = booking.AdditionalAmount,
-            TotalAmount = booking.TotalAmount,
+            AdditionalAmount = normalizedAdditionalAmount,
+            TotalAmount = normalizedTotalAmount,
             Status = booking.Status,
             CreatedAt = booking.CreatedAt,
             CancelReason = booking.CancelReason,
@@ -596,14 +622,12 @@ internal sealed class BookingService : IBookingService
                 payment.Type == PaymentType.Rental &&
                 payment.Status == PaymentStatus.Paid),
             DepositPaid = booking.DepositAmount <= 0 || effectiveDeposit >= booking.DepositAmount,
-            AdditionalChargePaid = booking.AdditionalAmount == 0 ||
-                booking.Payments.Any(payment =>
-                    payment.Type == PaymentType.AdditionalCharge &&
-                    payment.Status == PaymentStatus.Paid &&
-                    payment.Amount >= booking.AdditionalAmount),
+            AdditionalChargePaid = normalizedAdditionalAmount == 0 ||
+                cashAdditionalPaid >= normalizedAdditionalAmount,
             ExtensionPaid = booking.Extensions.All(extension =>
                 extension.Status != BookingExtensionStatus.Approved),
             Payments = booking.Payments
+                .Where(payment => payment.Method != PaymentMethods.DepositDeduction)
                 .OrderBy(payment => payment.PaymentId)
                 .Select(payment => new PaymentSummaryDto(
                     payment.PaymentId,
