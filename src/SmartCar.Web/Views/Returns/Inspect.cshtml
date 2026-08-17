@@ -23,6 +23,12 @@
         .Where(path => !path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
         .ToList();
     var hasSignedDocuments = handoverSignedPath is not null && returnSignedPath is not null;
+    var returnAccessoryStatus = !string.IsNullOrWhiteSpace(Model.Return.InteriorCondition) &&
+        (Model.Return.InteriorCondition.Equals("Đủ", StringComparison.OrdinalIgnoreCase) ||
+         Model.Return.InteriorCondition.StartsWith("Thiếu/mất:", StringComparison.OrdinalIgnoreCase))
+            ? Model.Return.InteriorCondition
+            : null;
+    var missingAccessories = returnAccessoryStatus?.StartsWith("Thiếu/mất:", StringComparison.OrdinalIgnoreCase) == true;
 
     string EvidenceLabel(string path)
     {
@@ -102,19 +108,15 @@ else
                     <div class="col-3"><div class="small text-muted">Nhiên liệu</div><strong>@Model.Handover.FuelDisplay</strong></div>
                 </div>
 
-                @if (!string.IsNullOrWhiteSpace(Model.Handover.ExteriorCondition) ||
-                     !string.IsNullOrWhiteSpace(Model.Handover.InteriorCondition) ||
-                     !string.IsNullOrWhiteSpace(Model.Handover.Accessories))
+                @if (!string.IsNullOrWhiteSpace(Model.Handover.Accessories))
                 {
                     <div class="small border rounded p-2 mb-3">
-                        @if (!string.IsNullOrWhiteSpace(Model.Handover.ExteriorCondition)) { <div><strong>Ngoại thất:</strong> @Model.Handover.ExteriorCondition</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Handover.InteriorCondition)) { <div><strong>Nội thất:</strong> @Model.Handover.InteriorCondition</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Handover.Accessories)) { <div><strong>Phụ kiện:</strong> @Model.Handover.Accessories</div> }
+                        <strong>Phụ kiện lúc giao:</strong> @Model.Handover.Accessories
                     </div>
                 }
 
                 <div class="d-flex gap-2 flex-wrap mb-3">
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In</a>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
                     @if (handoverSignedPath is not null)
                     {
                         <a class="btn btn-sm btn-outline-success" href="@handoverSignedPath" target="_blank" rel="noopener">Xem bản ký</a>
@@ -126,7 +128,7 @@ else
                     <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
                         <input type="hidden" name="bookingId" value="@Model.BookingId" />
                         <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
-                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
+                        <button class="btn btn-outline-success" type="submit">Tải bản đã ký</button>
                     </form>
                 }
 
@@ -163,17 +165,14 @@ else
                     <div class="col-3"><div class="small text-muted">Nhiên liệu</div><strong>@Model.Return.FuelDisplay</strong></div>
                 </div>
 
-                @if (!string.IsNullOrWhiteSpace(Model.Return.ExteriorCondition) || !string.IsNullOrWhiteSpace(Model.Return.InteriorCondition))
-                {
-                    <div class="small border rounded p-2 mb-2">
-                        @if (!string.IsNullOrWhiteSpace(Model.Return.ExteriorCondition)) { <div><strong>Ngoại thất:</strong> @Model.Return.ExteriorCondition</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Return.InteriorCondition)) { <div><strong>Nội thất:</strong> @Model.Return.InteriorCondition</div> }
-                    </div>
-                }
+                <div class="small border rounded p-2 mb-2 @(missingAccessories ? "border-danger" : string.Empty)">
+                    <strong>Phụ kiện khi trả:</strong>
+                    <span class="@(missingAccessories ? "text-danger fw-semibold" : "text-success")">@(returnAccessoryStatus ?? "Chưa ghi nhận cấu trúc")</span>
+                </div>
                 <div class="mb-2">Hư hỏng mới: <strong class="@(Model.Return.HasDamage == true ? "text-danger" : "text-success")">@(Model.Return.HasDamage == true ? "Có" : "Không")</strong></div>
 
                 <div class="d-flex gap-2 flex-wrap mb-3">
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In</a>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
                     @if (returnSignedPath is not null)
                     {
                         <a class="btn btn-sm btn-outline-success" href="@returnSignedPath" target="_blank" rel="noopener">Xem bản ký</a>
@@ -185,7 +184,7 @@ else
                     <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
                         <input type="hidden" name="bookingId" value="@Model.BookingId" />
                         <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
-                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
+                        <button class="btn btn-outline-success" type="submit">Tải bản đã ký</button>
                     </form>
                 }
 
