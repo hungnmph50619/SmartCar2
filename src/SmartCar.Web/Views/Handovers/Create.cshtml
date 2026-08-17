@@ -1,9 +1,11 @@
 ﻿@model SmartCar.Web.ViewModels.HandoverViewModel
+@using SmartCar.Domain.Constants
 
 @{
     ViewData["Title"] = "Biên bản giao xe";
     var handoverDate = Model.HandoverAt.ToString("yyyy-MM-dd");
     var handoverTime = Model.HandoverAt.ToString("HH:mm");
+    var includedDays = Math.Max(1, Model.IncludedKilometers / RentalPolicy.IncludedKilometersPerDay);
     const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 }
 
@@ -61,17 +63,10 @@
             <span asp-validation-for="FuelLevel" class="text-danger small"></span>
         </div>
 
-        <div class="col-md-4">
-            <label asp-for="ExteriorCondition" class="form-label fw-semibold">Ngoại thất</label>
-            <input asp-for="ExteriorCondition" class="form-control" maxlength="1500" placeholder="VD: Không trầy xước" />
-        </div>
-        <div class="col-md-4">
-            <label asp-for="InteriorCondition" class="form-label fw-semibold">Nội thất</label>
-            <input asp-for="InteriorCondition" class="form-control" maxlength="1500" placeholder="VD: Sạch, nguyên vẹn" />
-        </div>
-        <div class="col-md-4">
+        <div class="col-12">
             <label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện</label>
             <input asp-for="Accessories" class="form-control" maxlength="1000" placeholder="VD: 2 chìa khóa, kích, lốp dự phòng" />
+            <div class="form-text">Ghi các phụ kiện bàn giao để đối chiếu khi trả xe.</div>
         </div>
     </div>
 
@@ -137,7 +132,13 @@
 
     <h2 class="h5 mb-3">3. Chính sách đã thông báo</h2>
     <div class="row g-2 mb-3">
-        <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Định mức</div><strong>@Model.IncludedKilometers.ToString("N0") km/chuyến</strong></div></div>
+        <div class="col-md-4">
+            <div class="border rounded p-3 h-100">
+                <div class="small text-muted">Định mức</div>
+                <strong>@RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày</strong>
+                <div class="small text-muted mt-1">Chuyến này: @Model.IncludedKilometers.ToString("N0") km / @includedDays ngày</div>
+            </div>
+        </div>
         <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Vượt km</div><strong>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</strong></div></div>
         <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Trả muộn</div><strong>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</strong></div></div>
     </div>
@@ -158,7 +159,7 @@
     </div>
 
     <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
-    <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Chỉ ghi khi cần"></textarea>
+    <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Chỉ ghi khi cần, ví dụ vết xước sẵn có"></textarea>
     <span asp-validation-for="Notes" class="text-danger small"></span>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
