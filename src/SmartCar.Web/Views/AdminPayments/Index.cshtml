@@ -10,8 +10,8 @@
 
     string StatusText(PaymentStatus status) => status switch
     {
-        PaymentStatus.Pending => "Chưa thanh toán",
-        PaymentStatus.AwaitingConfirmation => "Chờ xác nhận",
+        PaymentStatus.Pending => "Chờ khách thanh toán",
+        PaymentStatus.AwaitingConfirmation => "Chờ đối soát",
         PaymentStatus.Paid => "Đã thu",
         PaymentStatus.AwaitingRefund => "Chờ hoàn",
         PaymentStatus.Refunded => "Đã hoàn",
@@ -29,11 +29,11 @@
 
     string TypeText(PaymentType type) => type switch
     {
-        PaymentType.Rental => "Tiền thuê / giao",
+        PaymentType.Rental => "Tiền thuê / giao + cọc",
         PaymentType.Deposit => "Tiền cọc",
-        PaymentType.Extension => "Gia hạn",
+        PaymentType.Extension => "Tiền gia hạn",
         PaymentType.AdditionalCharge => "Phụ phí",
-        PaymentType.Refund => "Hoàn tiền",
+        PaymentType.Refund => "Hoàn tiền / cọc",
         _ => type.ToString()
     };
 }
@@ -42,7 +42,9 @@
     <div>
         <h1 class="h3 mb-1">Quản lý tài chính</h1>
         <p class="text-muted mb-0">
-            @(currentSection == "review" ? "Các giao dịch đang cần đối soát." : "Tiền vào, khoản phát sinh và tiền hoàn được tách riêng.")
+            @(currentSection == "review"
+                ? "Đối soát giao dịch khách đã báo chuyển khoản. Nếu chưa thể xác nhận, hãy nêu rõ lý do để khách gửi lại."
+                : "Tách tiền thu, gia hạn/phụ phí và hoàn tiền để dễ kiểm soát từng nghiệp vụ.")
         </p>
     </div>
 </div>
@@ -53,13 +55,13 @@
         <a class="nav-link active" asp-action="Index" asp-route-status="@PaymentStatus.AwaitingConfirmation">Cần đối soát</a>
     }
     <a class="nav-link @(currentSection == "collection" ? "active" : "")" asp-action="Index" asp-route-section="collection">Tiền thu</a>
-    <a class="nav-link @(currentSection == "adjustment" ? "active" : "")" asp-action="Index" asp-route-section="adjustment">Phát sinh</a>
+    <a class="nav-link @(currentSection == "adjustment" ? "active" : "")" asp-action="Index" asp-route-section="adjustment">Gia hạn & phụ phí</a>
     <a class="nav-link @(currentSection == "refund" ? "active" : "")" asp-action="Index" asp-route-section="refund">Hoàn tiền</a>
 </div>
 
 <form method="get" class="d-flex gap-2 mb-3 flex-wrap">
     <input type="hidden" name="section" value="@currentSection" />
-    <select name="status" class="form-select" style="max-width:220px">
+    <select name="status" class="form-select" style="max-width:240px">
         <option value="">Tất cả trạng thái</option>
         @foreach (var status in Enum.GetValues<PaymentStatus>())
         {
@@ -79,100 +81,110 @@
 
 @if (Model.Count == 0)
 {
-    <div class="alert alert-light border">Không có giao dịch.</div>
+    <div class="alert alert-light border">Không có giao dịch phù hợp.</div>
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>Đơn</th>
-                    <th>Khách / xe</th>
-                    <th>Khoản</th>
-                    <th class="text-end">Số tiền</th>
-                    <th>Trạng thái</th>
-                    <th>Mã GD</th>
-                    <th style="min-width:230px">Xử lý</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var payment in Model)
-                {
-                    UserBankAccountDto? bank = null;
-                    if (payment.Type == PaymentType.Refund && payment.Status == PaymentStatus.AwaitingRefund)
-                    {
-                        bank = await BankAccountService.GetDefaultAsync(payment.CustomerId);
-                    }
-
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
                     <tr>
-                        <td><a class="fw-semibold text-decoration-none" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">#@payment.BookingId</a></td>
-                        <td>
-                            <strong>@payment.CustomerName</strong><br />
-                            <small class="text-muted">@payment.VehicleName · @payment.LicensePlate</small>
-                        </td>
-                        <td>@TypeText(payment.Type)</td>
-                        <td class="text-end fw-semibold">@payment.Amount.ToString("N0") đ</td>
-                        <td><span class="badge @StatusBadge(payment.Status)">@StatusText(payment.Status)</span></td>
-                        <td>@(string.IsNullOrWhiteSpace(payment.TransactionCode) ? "-" : payment.TransactionCode)</td>
-                        <td>
-                            @if (payment.Status == PaymentStatus.AwaitingConfirmation)
-                            {
-                                <div class="d-flex gap-2 flex-wrap">
-                                    <form asp-action="ConfirmQr" method="post" data-confirm="Đã kiểm tra ngân hàng và nhận được tiền?">
-                                        <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                        <input type="hidden" name="section" value="@currentSection" />
-                                        <button class="btn btn-sm btn-success" type="submit">Đã nhận</button>
-                                    </form>
-                                    <form asp-action="RejectQr" method="post" data-confirm="Chưa nhận được giao dịch này?">
-                                        <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                        <input type="hidden" name="section" value="@currentSection" />
-                                        <button class="btn btn-sm btn-outline-danger" type="submit">Chưa nhận</button>
-                                    </form>
-                                </div>
-                            }
-                            else if (payment.Type == PaymentType.Refund && payment.Status == PaymentStatus.AwaitingRefund)
-                            {
-                                @if (bank is null)
+                        <th>Đơn</th>
+                        <th>Khách / xe</th>
+                        <th>Khoản</th>
+                        <th class="text-end">Số tiền</th>
+                        <th>Trạng thái</th>
+                        <th>Mã GD</th>
+                        <th style="min-width:280px">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var payment in Model)
+                    {
+                        UserBankAccountDto? bank = null;
+                        if (payment.Type == PaymentType.Refund && payment.Status == PaymentStatus.AwaitingRefund)
+                        {
+                            bank = await BankAccountService.GetDefaultAsync(payment.CustomerId);
+                        }
+
+                        <tr>
+                            <td>
+                                <a class="fw-semibold text-decoration-none" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">#@payment.BookingId</a>
+                            </td>
+                            <td>
+                                <strong>@payment.CustomerName</strong><br />
+                                <small class="text-muted">@payment.VehicleName · @payment.LicensePlate</small>
+                            </td>
+                            <td>@TypeText(payment.Type)</td>
+                            <td class="text-end fw-semibold">@payment.Amount.ToString("N0") đ</td>
+                            <td><span class="badge @StatusBadge(payment.Status)">@StatusText(payment.Status)</span></td>
+                            <td class="small">@(string.IsNullOrWhiteSpace(payment.TransactionCode) ? "-" : payment.TransactionCode)</td>
+                            <td>
+                                @if (payment.Status == PaymentStatus.AwaitingConfirmation)
                                 {
-                                    <span class="text-danger small">Khách chưa có tài khoản nhận hoàn.</span>
+                                    <div class="d-flex gap-2 flex-wrap align-items-start">
+                                        <form asp-action="ConfirmQr" method="post" data-confirm="Bạn đã kiểm tra tài khoản ngân hàng và chắc chắn đã nhận đúng số tiền?">
+                                            <input type="hidden" name="paymentId" value="@payment.PaymentId" />
+                                            <input type="hidden" name="section" value="@currentSection" />
+                                            <button class="btn btn-sm btn-success" type="submit">Xác nhận đã nhận</button>
+                                        </form>
+                                        <details style="min-width:150px">
+                                            <summary class="btn btn-sm btn-outline-danger">Yêu cầu gửi lại</summary>
+                                            <form asp-action="RejectQr" method="post" class="border rounded p-2 mt-2 bg-light" style="min-width:260px">
+                                                <input type="hidden" name="paymentId" value="@payment.PaymentId" />
+                                                <input type="hidden" name="section" value="@currentSection" />
+                                                <label class="form-label small fw-semibold mb-1">Lý do cho khách</label>
+                                                <textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="3" required placeholder="Ví dụ: Chưa thấy tiền về / số tiền chưa khớp / vui lòng kiểm tra lại giao dịch..."></textarea>
+                                                <button class="btn btn-sm btn-danger w-100" type="submit">Gửi lý do & trả về khách</button>
+                                            </form>
+                                        </details>
+                                        <a class="btn btn-sm btn-link text-decoration-none" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">Xem đơn</a>
+                                    </div>
+                                }
+                                else if (payment.Type == PaymentType.Refund && payment.Status == PaymentStatus.AwaitingRefund)
+                                {
+                                    @if (bank is null)
+                                    {
+                                        <span class="text-danger small">Khách chưa có tài khoản nhận hoàn.</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="small mb-2">
+                                            <strong>@bank.BankName</strong> · <span class="user-select-all">@bank.AccountNumber</span><br />
+                                            @bank.AccountHolderName
+                                        </div>
+                                        <form asp-action="ConfirmRefund" method="post" data-confirm="Bạn đã thực sự chuyển khoản hoàn tiền cho khách?">
+                                            <input type="hidden" name="paymentId" value="@payment.PaymentId" />
+                                            <input type="hidden" name="section" value="refund" />
+                                            <div class="input-group input-group-sm">
+                                                <input name="transactionCode" class="form-control" maxlength="100" placeholder="Mã giao dịch hoàn" required />
+                                                <button class="btn btn-success" type="submit">Xác nhận đã hoàn</button>
+                                            </div>
+                                        </form>
+                                    }
+                                }
+                                else if (payment.Status == PaymentStatus.Pending)
+                                {
+                                    <div class="small text-muted">Chờ khách thực hiện thanh toán / gửi lại xác nhận.</div>
+                                }
+                                else if (payment.Status == PaymentStatus.Paid)
+                                {
+                                    <span class="text-success small">✓ Đã đối soát và thu tiền</span>
+                                }
+                                else if (payment.Status == PaymentStatus.Refunded)
+                                {
+                                    <span class="text-success small">✓ Đã hoàn tiền</span>
                                 }
                                 else
                                 {
-                                    <div class="small mb-2">
-                                        <strong>@bank.BankName</strong> · <span class="user-select-all">@bank.AccountNumber</span><br />
-                                        @bank.AccountHolderName
-                                    </div>
-                                    <form asp-action="ConfirmRefund" method="post" data-confirm="Đã thực sự chuyển khoản hoàn tiền cho khách?">
-                                        <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                        <input type="hidden" name="section" value="refund" />
-                                        <div class="input-group input-group-sm">
-                                            <input name="transactionCode" class="form-control" maxlength="100" placeholder="Mã giao dịch" required />
-                                            <button class="btn btn-success" type="submit">Đã hoàn</button>
-                                        </div>
-                                    </form>
+                                    <span class="text-muted">-</span>
                                 }
-                            }
-                            else if (payment.Status == PaymentStatus.Pending)
-                            {
-                                <span class="text-muted small">Chờ khách</span>
-                            }
-                            else if (payment.Status == PaymentStatus.Paid)
-                            {
-                                <span class="text-success small">✓ Đã thu</span>
-                            }
-                            else if (payment.Status == PaymentStatus.Refunded)
-                            {
-                                <span class="text-success small">✓ Đã hoàn</span>
-                            }
-                            else
-                            {
-                                <span class="text-muted">-</span>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
 }
