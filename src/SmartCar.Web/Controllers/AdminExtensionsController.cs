@@ -7,6 +7,7 @@ using SmartCar.Application.Features.Extensions;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -14,18 +15,23 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminExtensionsController : Controller
 {
+    private const long MaximumEvidenceImageBytes = 5 * 1024 * 1024;
+
     private readonly IExtensionService _extensionService;
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
+    private readonly IWebHostEnvironment _environment;
 
     public AdminExtensionsController(
         IExtensionService extensionService,
         IBookingService bookingService,
-        IAuditService auditService)
+        IAuditService auditService,
+        IWebHostEnvironment environment)
     {
         _extensionService = extensionService;
         _bookingService = bookingService;
         _auditService = auditService;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -42,6 +48,7 @@ public sealed class AdminExtensionsController : Controller
         string? note,
         bool isForceMajeure,
         string? evidenceNote,
+        IFormFile? evidenceImage,
         CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
@@ -62,6 +69,17 @@ public sealed class AdminExtensionsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
+        var (imagePath, imageError) = await SaveEvidenceImageAsync(
+            bookingId,
+            evidenceImage,
+            cancellationToken);
+
+        if (imageError is not null)
+        {
+            TempData["ErrorMessage"] = imageError;
+            return RedirectToAction(nameof(Index));
+        }
+
         var phoneNote = string.IsNullOrWhiteSpace(note)
             ? "SmartCar ghi nhận yêu cầu qua điện thoại."
             : $"SmartCar ghi nhận yêu cầu qua điện thoại. {note.Trim()}";
@@ -73,8 +91,13 @@ public sealed class AdminExtensionsController : Controller
                 requestedReturnDate,
                 phoneNote,
                 isForceMajeure,
-                evidenceNote),
+                ComposeEvidence(evidenceNote, imagePath)),
             cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            DeleteSavedEvidenceImage(imagePath);
+        }
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? isForceMajeure
@@ -159,5 +182,80 @@ public sealed class AdminExtensionsController : Controller
             ? "Đã từ chối yêu cầu gia hạn và gửi lý do cho khách."
             : string.Join("; ", result.Errors);
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task<(string? Path, string? Error)> SaveEvidenceImageAsync(
+        int bookingId,
+        IFormFile? image,
+        CancellationToken cancellationToken)
+    {
+        if (image is null || image.Length == 0)
+        {
+            return (null, null);
+        }
+
+        var validationError = await ImageFileValidator.ValidateAsync(
+            image,
+            MaximumEvidenceImageBytes,
+            cancellationToken);
+
+        if (validationError is not null)
+        {
+            return (null, $"Ảnh minh chứng: {validationError}");
+        }
+
+        var relativeFolder = $"uploads/extensions/{bookingId}";
+        var physicalFolder = Path.Combine(_environment.WebRootPath, relativeFolder);
+        Directory.CreateDirectory(physicalFolder);
+
+        var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+        var fileName = $"{Guid.NewGuid():N}{extension}";
+        var physicalPath = Path.Combine(physicalFolder, fileName);
+
+        await using var stream = new FileStream(
+            physicalPath,
+            FileMode.CreateNew,
+            FileAccess.Write,
+            FileShare.None);
+        await image.CopyToAsync(stream, cancellationToken);
+
+        return ($"/{relativeFolder}/{fileName}", null);
+    }
+
+    private void DeleteSavedEvidenceImage(string? imagePath)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath) ||
+            !imagePath.StartsWith("/uploads/extensions/", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var relative = imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        var physicalPath = Path.Combine(_environment.WebRootPath, relative);
+        if (System.IO.File.Exists(physicalPath))
+        {
+            System.IO.File.Delete(physicalPath);
+        }
+    }
+
+    private static string ComposeEvidence(string? evidenceNote, string? imagePath)
+    {
+        var text = string.IsNullOrWhiteSpace(evidenceNote)
+            ? string.Empty
+            : string.Join(
+                " | ",
+                evidenceNote
+                    .Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(line => line.Trim())
+                    .Where(line => line.Length > 0));
+
+        if (!string.IsNullOrWhiteSpace(imagePath))
+        {
+            text = string.IsNullOrWhiteSpace(text)
+                ? $"Ảnh minh chứng: {imagePath}"
+                : $"{text} | Ảnh minh chứng: {imagePath}";
+        }
+
+        return text;
     }
 }
