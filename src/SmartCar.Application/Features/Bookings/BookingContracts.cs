@@ -72,6 +72,10 @@ public sealed class BookingDetailsDto : BookingListItemDto
         + DepositAmount;
 
     public decimal AdditionalAmount { get; init; }
+
+    // Khoản đã đối soát từ tiền cọc đã nộp trước đó; không phải tiền khách chuyển thêm.
+    public decimal DepositDeductionAmount { get; init; }
+
     public decimal? DeliveryLatitude { get; init; }
     public decimal? DeliveryLongitude { get; init; }
     public string? CancelReason { get; init; }
