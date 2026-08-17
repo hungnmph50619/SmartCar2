@@ -1,4 +1,4 @@
-﻿using SmartCar.Application.Common;
+using SmartCar.Application.Common;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Application.Features.Bookings;
@@ -15,77 +15,49 @@ public sealed record CreateBookingRequest(
 public class BookingListItemDto
 {
     public int BookingId { get; init; }
-
-    public string CustomerId { get; init; }
-        = string.Empty;
-
-    public string CustomerName { get; init; }
-        = string.Empty;
-
+    public string CustomerId { get; init; } = string.Empty;
+    public string CustomerName { get; init; } = string.Empty;
     public string? CustomerPhone { get; init; }
-
     public int VehicleId { get; init; }
-
-    public string VehicleName { get; init; }
-        = string.Empty;
-
-    public string LicensePlate { get; init; }
-        = string.Empty;
-
+    public string VehicleName { get; init; } = string.Empty;
+    public string LicensePlate { get; init; } = string.Empty;
     public string? PrimaryImagePath { get; init; }
-
     public DateTime PickupDate { get; init; }
-
     public DateTime ReturnDate { get; init; }
 
-    // Tiền thuê + phí giao + phụ phí.
-    // KHÔNG bao gồm tiền cọc.
+    // Tiền thuê + phí giao + phụ phí. KHÔNG bao gồm tiền cọc.
     public decimal TotalAmount { get; init; }
 
     // Tiền cọc tách riêng.
     public decimal DepositAmount { get; init; }
 
     // Số tiền tổng cộng nếu tính cả tiền cọc.
-    public decimal GrandTotalAmount =>
-        TotalAmount + DepositAmount;
+    public decimal GrandTotalAmount => TotalAmount + DepositAmount;
 
     public BookingStatus Status { get; init; }
-
     public DateTime CreatedAt { get; init; }
-
     public VehiclePickupMethod PickupMethod { get; init; }
-
     public string? DeliveryAddress { get; init; }
 }
 
-public sealed class BookingDetailsDto
-    : BookingListItemDto
+public sealed class BookingDetailsDto : BookingListItemDto
 {
     public decimal DailyPrice { get; init; }
-
     public int NumberOfDays { get; init; }
 
-    // RentalAmount bao gồm tiền thuê ban đầu
-    // + các lần gia hạn đã được duyệt.
+    // RentalAmount chỉ bao gồm tiền thuê ban đầu + các lần gia hạn đã thanh toán/áp dụng.
     public decimal RentalAmount { get; init; }
 
-    // Tiền thuê ban đầu.
-    // Không lấy từ Payment.Rental.Amount vì payment đó
-    // còn có thể chứa cả phí giao xe.
+    // Tiền thuê ban đầu. Gia hạn mới được duyệt nhưng chưa thanh toán chưa làm thay đổi RentalAmount.
     public decimal InitialRentalAmount =>
         Math.Max(
             0,
             RentalAmount -
             Extensions
-                .Where(extension =>
-                    extension.Status is
-                        BookingExtensionStatus.Approved
-                        or BookingExtensionStatus.Paid)
-                .Sum(extension =>
-                    extension.AdditionalAmount));
+                .Where(extension => extension.Status == BookingExtensionStatus.Paid)
+                .Sum(extension => extension.AdditionalAmount));
 
-    // TotalAmount =
-    // RentalAmount + DeliveryFee + AdditionalAmount.
+    // TotalAmount = RentalAmount + DeliveryFee + AdditionalAmount.
     public decimal DeliveryFee =>
         Math.Max(
             0,
@@ -100,41 +72,22 @@ public sealed class BookingDetailsDto
         + DepositAmount;
 
     public decimal AdditionalAmount { get; init; }
-
     public decimal? DeliveryLatitude { get; init; }
-
     public decimal? DeliveryLongitude { get; init; }
-
     public string? CancelReason { get; init; }
-
     public string? CancelledBy { get; init; }
-
     public DateTime? CancelledAt { get; init; }
-
     public decimal RefundAmount { get; init; }
-
     public string? RefundReason { get; init; }
-
     public DateTime? NoShowMarkedAt { get; init; }
-
     public bool HasHandover { get; init; }
-
     public bool HasReturn { get; init; }
-
     public bool HasReview { get; init; }
-
     public bool RentalPaid { get; init; }
-
     public bool DepositPaid { get; init; }
-
-    public bool UpfrontPaid =>
-        RentalPaid &&
-        DepositPaid;
-
+    public bool UpfrontPaid => RentalPaid && DepositPaid;
     public HandoverDetailsDto? Handover { get; init; }
-
     public bool AdditionalChargePaid { get; init; }
-
     public bool ExtensionPaid { get; init; }
 
     public IReadOnlyList<PaymentSummaryDto> Payments { get; init; }
@@ -171,6 +124,7 @@ public sealed record PaymentSummaryDto(
     PaymentStatus Status,
     DateTime? PaidAt,
     string? TransactionCode);
+
 public sealed record ChargeSummaryDto(
     int AdditionalChargeId,
     AdditionalChargeType ChargeType,
@@ -200,26 +154,18 @@ public sealed class BookingMutationResult
     }
 
     public bool Succeeded { get; }
-
     public int? BookingId { get; }
-
     public IReadOnlyCollection<string> Errors { get; }
 
-    public static BookingMutationResult Success(
-        int bookingId) =>
-        new(
-            true,
-            bookingId,
-            Array.Empty<string>());
+    public static BookingMutationResult Success(int bookingId) =>
+        new(true, bookingId, Array.Empty<string>());
 
-    public static BookingMutationResult Failure(
-        params string[] errors) =>
+    public static BookingMutationResult Failure(params string[] errors) =>
         new(
             false,
             null,
             errors
-                .Where(error =>
-                    !string.IsNullOrWhiteSpace(error))
+                .Where(error => !string.IsNullOrWhiteSpace(error))
                 .ToArray());
 }
 
@@ -230,20 +176,18 @@ public interface IBookingService
         CreateBookingRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<BookingListItemDto>>
-        GetCustomerBookingsAsync(
-            string customerId,
-            CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<BookingListItemDto>> GetCustomerBookingsAsync(
+        string customerId,
+        CancellationToken cancellationToken = default);
 
     Task<BookingDetailsDto?> GetCustomerBookingAsync(
         int bookingId,
         string customerId,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<BookingListItemDto>>
-        GetAdminBookingsAsync(
-            BookingStatus? status = null,
-            CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<BookingListItemDto>> GetAdminBookingsAsync(
+        BookingStatus? status = null,
+        CancellationToken cancellationToken = default);
 
     Task<BookingDetailsDto?> GetAdminBookingAsync(
         int bookingId,
