@@ -1,4 +1,5 @@
 @model SmartCar.Web.ViewModels.HandoverDocumentViewModel
+@using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 @{
     Layout = null;
@@ -7,6 +8,7 @@
         ? $"Giao tận nơi - {booking.DeliveryAddress}"
         : "Nhận tại cửa hàng";
     var awaitingSignature = booking.Status == BookingStatus.ReadyForPickup && string.IsNullOrWhiteSpace(Model.SignedDocumentPath);
+    var includedDays = Math.Max(1, booking.NumberOfDays);
 }
 <!DOCTYPE html>
 <html lang="vi">
@@ -78,10 +80,14 @@
     <table>
         <tr><th>Số km khi giao</th><td>@Model.Mileage.ToString("N0") km</td></tr>
         <tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr>
-        <tr><th>Ngoại thất</th><td>@(Model.ExteriorCondition ?? "Không ghi nhận bất thường")</td></tr>
-        <tr><th>Nội thất</th><td>@(Model.InteriorCondition ?? "Không ghi nhận bất thường")</td></tr>
         <tr><th>Phụ kiện</th><td>@(Model.Accessories ?? "Theo trang bị xe")</td></tr>
-        <tr><th>Định mức sử dụng</th><td>@Model.IncludedKilometers.ToString("N0") km/chuyến</td></tr>
+        <tr>
+            <th>Định mức sử dụng</th>
+            <td>
+                @RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày<br />
+                Chuyến này: @Model.IncludedKilometers.ToString("N0") km / @includedDays ngày
+            </td>
+        </tr>
         <tr><th>Vượt km</th><td>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</td></tr>
         <tr><th>Trả muộn</th><td>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</td></tr>
         <tr><th>Vi phạm / phạt nguội</th><td>@Model.TrafficFineTerms</td></tr>
