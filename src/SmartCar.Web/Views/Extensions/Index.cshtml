@@ -111,7 +111,7 @@ else
                     @if (item.HasScheduleConflict && item.IsForceMajeure && item.Status == BookingExtensionStatus.Pending)
                     {
                         <div class="alert alert-warning py-2 mt-3 mb-0">
-                            Xe có lịch thuê tiếp theo trong khoảng bạn đề nghị. SmartCar đang xem xét phương án cho khách kế tiếp trước khi quyết định.
+                            Xe có lịch thuê tiếp theo trong khoảng bạn đề nghị. SmartCar đang xử lý phương án đổi xe hoặc hoàn/hủy cho khách kế tiếp trước khi quyết định.
                         </div>
                     }
 
@@ -127,18 +127,19 @@ else
                         <form asp-action="SupplementEvidence" method="post" enctype="multipart/form-data" class="border rounded p-3 mt-3 bg-light">
                             <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
                             <input type="hidden" name="bookingId" value="@item.BookingId" />
-                            <div class="fw-semibold mb-2">Bổ sung và gửi lại minh chứng</div>
+                            <div class="fw-semibold mb-1">Bổ sung và gửi lại minh chứng</div>
+                            <div class="small text-muted mb-3">SmartCar cần cả ảnh minh chứng và vị trí trực tiếp để xem xét lại trường hợp bất khả kháng.</div>
                             <div class="row g-2">
                                 <div class="col-md-6">
                                     <label class="form-label small">Tình trạng / vị trí / mô tả minh chứng</label>
-                                    <textarea id="@evidenceInputId" name="evidenceNote" class="form-control" rows="3" maxlength="1000" placeholder="Mô tả tình trạng xe/sự cố và vị trí hiện tại. Có thể bấm nút lấy vị trí bên dưới."></textarea>
+                                    <textarea id="@evidenceInputId" name="evidenceNote" class="form-control" rows="3" maxlength="1000" required placeholder="Mô tả tình trạng xe/sự cố. Sau đó bấm Lấy vị trí hiện tại."></textarea>
                                     <button type="button" class="btn btn-sm btn-outline-secondary mt-2 js-extension-location" data-target="@evidenceInputId">Lấy vị trí hiện tại</button>
                                     <span class="small text-muted ms-2 js-location-status"></span>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label small">Ảnh minh chứng</label>
-                                    <input name="evidenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" />
-                                    <div class="form-text">Tối đa 5 MB.</div>
+                                    <input name="evidenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" required />
+                                    <div class="form-text">Bắt buộc · tối đa 5 MB.</div>
                                     <input name="customerNote" class="form-control mt-2" maxlength="500" placeholder="Ghi chú thêm" />
                                 </div>
                                 <div class="col-md-3 d-grid align-items-end">
@@ -184,7 +185,7 @@ else
                 button.disabled = false;
             },
             function () {
-                if (status) status.textContent = "Không lấy được vị trí; bạn có thể nhập thủ công.";
+                if (status) status.textContent = "Không lấy được vị trí; hãy cấp quyền vị trí rồi thử lại.";
                 button.disabled = false;
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
