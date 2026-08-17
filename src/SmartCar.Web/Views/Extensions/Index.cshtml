@@ -46,9 +46,15 @@
 <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
     <div>
         <h1 class="h3 mb-1">Lịch sử gia hạn</h1>
-        <p class="text-muted mb-0">Theo dõi yêu cầu, phản hồi của SmartCar, minh chứng và bước thanh toán.</p>
+        <p class="text-muted mb-0">Theo dõi yêu cầu, minh chứng, phản hồi và khoản tiền cần thanh toán.</p>
     </div>
     <a class="btn btn-outline-primary" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a>
+</div>
+
+<div class="alert alert-light border small">
+    Nếu xe đã có đơn kế tiếp, gia hạn thông thường sẽ bị từ chối. Trường hợp bất khả kháng phải có minh chứng và vị trí.
+    SmartCar ưu tiên đổi xe cho khách kế tiếp; nếu phải hủy đơn đó và có <strong>thiệt hại thực tế có căn cứ</strong>, khoản bồi thường sẽ được thông báo rõ và khấu trừ từ tiền cọc trước khi gia hạn được thanh toán.
+    Khoản này không tự động bằng giá hợp đồng của khách kế tiếp và không phải khoản bạn chuyển thêm lần nữa.
 </div>
 
 @if (Model.Count == 0)
@@ -71,9 +77,7 @@ else
                                 <a class="text-decoration-none" asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">Đơn #@item.BookingId</a>
                                 · @item.VehicleName
                             </h2>
-                            <span class="badge @(item.IsForceMajeure ? "bg-danger" : "bg-light text-dark border")">
-                                @(item.IsForceMajeure ? "Bất khả kháng" : "Gia hạn thông thường")
-                            </span>
+                            <span class="badge @(item.IsForceMajeure ? "bg-danger" : "bg-light text-dark border")">@(item.IsForceMajeure ? "Bất khả kháng" : "Gia hạn thông thường")</span>
                         </div>
                         <span class="badge @BadgeClass(item.Status)">@StatusText(item.Status)</span>
                     </div>
@@ -85,17 +89,11 @@ else
                         <div class="col-md-3"><span class="text-muted">Gửi lúc</span><div class="fw-semibold">@item.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div></div>
                     </div>
 
-                    @if (item.IsForceMajeure)
-                    {
-                        <div class="small text-muted mt-2">
-                            Bất khả kháng có minh chứng không tự động phát sinh khoản bồi thường hoặc khấu trừ tiền cọc chỉ vì trùng lịch với đơn kế tiếp.
-                        </div>
-                    }
-
                     @if (!string.IsNullOrWhiteSpace(item.CustomerNote))
                     {
                         <div class="mt-3"><strong>Lý do/ghi chú:</strong> @item.CustomerNote</div>
                     }
+
                     @if (item.IsForceMajeure && !string.IsNullOrWhiteSpace(item.EvidenceNote))
                     {
                         <div class="mt-2">
@@ -118,7 +116,8 @@ else
                     @if (item.HasScheduleConflict && item.IsForceMajeure && item.Status == BookingExtensionStatus.Pending)
                     {
                         <div class="alert alert-warning py-2 mt-3 mb-0">
-                            Xe có lịch thuê tiếp theo trong khoảng bạn đề nghị. SmartCar đang ưu tiên phương án đổi xe cho khách kế tiếp; nếu không thể xử lý, SmartCar sẽ hủy và hoàn các khoản khách đó đã thanh toán. Việc này không tự động làm giảm tiền cọc của bạn.
+                            Xe có lịch thuê tiếp theo trong khoảng bạn đề nghị. SmartCar đang liên hệ khách kế tiếp và ưu tiên phương án đổi xe.
+                            Nếu phải hủy đơn kế tiếp, SmartCar sẽ xác định riêng thiệt hại thực tế (nếu có) và thông báo số tiền khấu trừ từ cọc trước khi duyệt gia hạn.
                         </div>
                     }
 
@@ -135,7 +134,7 @@ else
                             <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
                             <input type="hidden" name="bookingId" value="@item.BookingId" />
                             <div class="fw-semibold mb-1">Bổ sung và gửi lại minh chứng</div>
-                            <div class="small text-muted mb-3">SmartCar cần cả ảnh minh chứng và vị trí trực tiếp để xem xét lại trường hợp bất khả kháng.</div>
+                            <div class="small text-muted mb-3">Cần cả ảnh minh chứng và vị trí trực tiếp để SmartCar xem xét trường hợp bất khả kháng.</div>
                             <div class="row g-2">
                                 <div class="col-md-6">
                                     <label class="form-label small">Tình trạng / vị trí / mô tả minh chứng</label>
@@ -158,7 +157,10 @@ else
                     else if (item.Status == BookingExtensionStatus.Approved)
                     {
                         <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mt-3 border-top pt-3">
-                            <div class="small text-muted">Yêu cầu đã được duyệt nhưng ngày trả mới chỉ có hiệu lực khi khoản gia hạn được SmartCar xác nhận đã thu.</div>
+                            <div class="small text-muted">
+                                Yêu cầu đã được duyệt. Chỉ chuyển <strong>phí gia hạn hiển thị trên đơn</strong>;
+                                khoản bồi thường từ cọc (nếu có) đã được SmartCar đối soát riêng và không chuyển lại lần nữa.
+                            </div>
                             <a class="btn btn-primary" asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">Mở đơn để thanh toán</a>
                         </div>
                     }
