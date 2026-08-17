@@ -57,6 +57,7 @@
         <div class="card card-body shadow-sm h-100">
             <span class="text-muted">Chi phí vận hành</span>
             <strong class="fs-4 text-danger">@Model.TotalOperatingCost.ToString("N0") đ</strong>
+            <small class="text-muted">Bảo trì, sự cố và hỗ trợ.</small>
         </div>
     </div>
     <div class="col-md-3">
@@ -92,7 +93,7 @@
                 <div class="border rounded p-3 h-100">
                     <div class="text-muted">Cần thu / chờ đối soát</div>
                     <div class="fs-4 fw-bold text-warning">@Model.OutstandingReceivables.ToString("N0") đ</div>
-                    <small class="text-muted">Chưa thanh toán hoặc khách đã báo chuyển nhưng chưa xác nhận.</small>
+                    <small class="text-muted">Chưa thanh toán hoặc đã báo chuyển nhưng chưa xác nhận.</small>
                 </div>
             </div>
             <div class="col-md-4">
@@ -120,9 +121,7 @@
                 <div><strong>Khai thác toàn kỳ</strong><div class="small text-muted">Ngày thuê / tổng ngày.</div></div>
                 <span>@Model.AverageFleetUtilizationRate.ToString("0.##")%</span>
             </div>
-            <div class="progress" style="height:18px">
-                <div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageFleetUtilizationRate):0.##}%")"></div>
-            </div>
+            <div class="progress" style="height:18px"><div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageFleetUtilizationRate):0.##}%")"></div></div>
         </div>
     </div>
     <div class="col-md-6">
@@ -131,9 +130,7 @@
                 <div><strong>Khai thác khi xe khả dụng</strong><div class="small text-muted">Không tính ngày bảo trì.</div></div>
                 <span>@Model.AverageAvailableUtilizationRate.ToString("0.##")%</span>
             </div>
-            <div class="progress" style="height:18px">
-                <div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageAvailableUtilizationRate):0.##}%")"></div>
-            </div>
+            <div class="progress" style="height:18px"><div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100m, Model.AverageAvailableUtilizationRate):0.##}%")"></div></div>
         </div>
     </div>
 </div>
@@ -190,13 +187,14 @@
                         <td>
                             <div>Bảo trì: @item.MaintenanceCost.ToString("N0") đ</div>
                             <div>Sự cố/phạt: @item.IncidentCost.ToString("N0") đ</div>
+                            @if (item.CompensationCost > 0)
+                            {
+                                <div>Hỗ trợ: @item.CompensationCost.ToString("N0") đ</div>
+                            }
                         </td>
                         <td class="fw-bold @(item.NetOperatingProfit >= 0 ? "text-success" : "text-danger")">@item.NetOperatingProfit.ToString("N0") đ</td>
                         <td>
-                            <div class="d-flex justify-content-between small">
-                                <span>@item.RentalDays / @item.AvailableDays ngày</span>
-                                <span>@item.FleetUtilizationRate.ToString("0.##")%</span>
-                            </div>
+                            <div class="d-flex justify-content-between small"><span>@item.RentalDays / @item.AvailableDays ngày</span><span>@item.FleetUtilizationRate.ToString("0.##")%</span></div>
                             <div class="progress mb-1" style="height:9px"><div class="progress-bar" style="width:@($"{Math.Min(100m, item.FleetUtilizationRate):0.##}%")"></div></div>
                             <div class="small text-muted">Khả dụng: @item.AvailableUtilizationRate.ToString("0.##")%</div>
                         </td>
@@ -211,26 +209,22 @@
                                     }
                                     else
                                     {
-                                        <table class="table table-sm mb-0">
-                                            <tbody>
-                                            @foreach (var transaction in item.Transactions)
-                                            {
-                                                <tr>
-                                                    <td class="small text-nowrap">@transaction.OccurredAt.ToString("dd/MM/yyyy")</td>
-                                                    <td class="small">
-                                                        <div class="fw-semibold">@transaction.Category</div>
-                                                        @if (transaction.BookingId.HasValue)
-                                                        {
-                                                            <a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@transaction.BookingId.Value" class="text-decoration-none">Đơn #@transaction.BookingId.Value</a>
-                                                        }
-                                                    </td>
-                                                    <td class="small text-end text-nowrap @(transaction.IsOutflow ? "text-danger" : "text-success")">
-                                                        @(transaction.IsOutflow ? "-" : "+")@transaction.Amount.ToString("N0") đ
-                                                    </td>
-                                                </tr>
-                                            }
-                                            </tbody>
-                                        </table>
+                                        <table class="table table-sm mb-0"><tbody>
+                                        @foreach (var transaction in item.Transactions)
+                                        {
+                                            <tr>
+                                                <td class="small text-nowrap">@transaction.OccurredAt.ToString("dd/MM/yyyy")</td>
+                                                <td class="small">
+                                                    <div class="fw-semibold">@transaction.Category</div>
+                                                    @if (transaction.BookingId.HasValue)
+                                                    {
+                                                        <a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@transaction.BookingId.Value" class="text-decoration-none">Đơn #@transaction.BookingId.Value</a>
+                                                    }
+                                                </td>
+                                                <td class="small text-end text-nowrap @(transaction.IsOutflow ? "text-danger" : "text-success")">@(transaction.IsOutflow ? "-" : "+")@transaction.Amount.ToString("N0") đ</td>
+                                            </tr>
+                                        }
+                                        </tbody></table>
                                     }
                                 </div>
                             </details>
