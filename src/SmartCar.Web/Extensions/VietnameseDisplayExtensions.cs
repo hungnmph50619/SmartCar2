@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Web.Extensions;
@@ -47,25 +47,19 @@ public static class VietnameseDisplayExtensions
         },
         PaymentType type => type switch
         {
-            PaymentType.Deposit =>"Tiền cọc",
+            PaymentType.Deposit => "Tiền cọc",
             PaymentType.Rental => "Tiền thuê xe",
             PaymentType.AdditionalCharge => "Phụ phí",
             PaymentType.Refund => "Hoàn tiền",
             PaymentType.Extension => "Tiền gia hạn",
             _ => type.ToString()
         },
-        VehiclePickupMethod method =>
-    method switch
-    {
-        VehiclePickupMethod.StorePickup =>
-            "Nhận tại cửa hàng",
-
-        VehiclePickupMethod.Delivery =>
-            "Giao xe tận nơi",
-
-        _ =>
-            method.ToString()
-    },
+        VehiclePickupMethod method => method switch
+        {
+            VehiclePickupMethod.StorePickup => "Nhận tại cửa hàng",
+            VehiclePickupMethod.Delivery => "Giao xe tận nơi",
+            _ => method.ToString()
+        },
         AdditionalChargeType type => type switch
         {
             AdditionalChargeType.LateReturn => "Trả xe muộn",
@@ -80,7 +74,8 @@ public static class VietnameseDisplayExtensions
         BookingExtensionStatus status => status switch
         {
             BookingExtensionStatus.Pending => "Chờ duyệt",
-            BookingExtensionStatus.Approved => "Đã duyệt",
+            BookingExtensionStatus.NeedsEvidence => "Cần bổ sung minh chứng",
+            BookingExtensionStatus.Approved => "Đã duyệt - chờ thanh toán",
             BookingExtensionStatus.Rejected => "Đã từ chối",
             BookingExtensionStatus.Paid => "Đã thanh toán",
             BookingExtensionStatus.Cancelled => "Đã hủy",
@@ -172,6 +167,7 @@ public static class VietnameseDisplayExtensions
         "ChangePassword" => "Đổi mật khẩu",
         "UpdateBankAccount" => "Cập nhật tài khoản ngân hàng",
         "ViewKycDocumentImage" => "Xem ảnh giấy tờ xác minh",
+        "CreateExtensionForCustomer" => "Ghi nhận gia hạn qua điện thoại",
         null or "" => "Không xác định",
         _ => value
     };
@@ -179,6 +175,7 @@ public static class VietnameseDisplayExtensions
     public static string ToVietnameseEntity(this string? value) => value switch
     {
         "Booking" => "Đơn thuê",
+        "BookingExtension" => "Yêu cầu gia hạn",
         "Payment" => "Thanh toán",
         "CustomerDocument" => "Giấy tờ khách hàng",
         "VehicleDocument" => "Giấy tờ xe",
