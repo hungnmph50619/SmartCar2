@@ -211,8 +211,7 @@ internal sealed class ReportService : IReportService
                 .ToList();
 
             var rentalRevenue = vehiclePayments
-                .Where(item => item.Type == PaymentType.Rental && !item.HasVehicleReturn ||
-                               item.Type == PaymentType.Rental && item.HasVehicleReturn)
+                .Where(item => item.Type == PaymentType.Rental)
                 .Sum(item => item.Amount);
 
             var extensionRevenue = vehiclePayments
@@ -225,6 +224,8 @@ internal sealed class ReportService : IReportService
 
             var revenue = rentalRevenue + extensionRevenue + additionalChargeRevenue;
 
+            // ReturnService tạo PaymentType.Refund sau khi đã có VehicleReturn để hoàn cọc.
+            // Khoản Refund không gắn với quy trình trả xe được coi là hoàn doanh thu.
             var revenueRefunds = vehiclePayments
                 .Where(item => item.Type == PaymentType.Refund && !item.HasVehicleReturn)
                 .Sum(item => item.Amount);
