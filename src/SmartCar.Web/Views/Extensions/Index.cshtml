@@ -1,12 +1,33 @@
 @model IReadOnlyList<SmartCar.Application.Features.Extensions.ExtensionDto>
+@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Lịch sử gia hạn";
+
+    string StatusText(BookingExtensionStatus status) => status switch
+    {
+        BookingExtensionStatus.Pending => "Chờ quản trị viên duyệt",
+        BookingExtensionStatus.NeedsEvidence => "Cần bổ sung minh chứng",
+        BookingExtensionStatus.Approved => "Đã duyệt - chờ thanh toán",
+        BookingExtensionStatus.Paid => "Đã thanh toán - gia hạn có hiệu lực",
+        BookingExtensionStatus.Rejected => "Đã từ chối",
+        BookingExtensionStatus.Cancelled => "Đã hủy",
+        _ => status.ToString()
+    };
+
+    string BadgeClass(BookingExtensionStatus status) => status switch
+    {
+        BookingExtensionStatus.Paid => "bg-success",
+        BookingExtensionStatus.Approved => "bg-primary",
+        BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence => "bg-warning text-dark",
+        BookingExtensionStatus.Rejected or BookingExtensionStatus.Cancelled => "bg-danger",
+        _ => "bg-secondary"
+    };
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
     <div>
         <h1 class="h3 mb-1">Lịch sử gia hạn</h1>
-        <p class="text-muted mb-0">Theo dõi yêu cầu, kết quả duyệt và số tiền gia hạn.</p>
+        <p class="text-muted mb-0">Theo dõi yêu cầu, phản hồi của SmartCar, minh chứng và bước thanh toán.</p>
     </div>
     <a class="btn btn-outline-primary" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a>
 </div>
@@ -17,26 +38,82 @@
 }
 else
 {
-    <div class="table-responsive">
-        <table class="table table-bordered align-middle">
-            <thead><tr><th>Đơn</th><th>Xe</th><th>Thời gian cũ</th><th>Thời gian mới</th><th>Phí</th><th>Trạng thái</th></tr></thead>
-            <tbody>
-            @foreach (var item in Model)
-            {
-                <tr>
-                    <td><a asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">#@item.BookingId</a></td>
-                    <td>@item.VehicleName</td>
-                    <td>@item.OriginalReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
-                    <td>@item.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</td>
-                    <td>@item.AdditionalAmount.ToString("N0") đ</td>
-                    <td><span class="badge bg-secondary">@item.Status.ToVietnamese()</span></td>
-                </tr>
-                @if (!string.IsNullOrWhiteSpace(item.AdminNote))
-                {
-                    <tr><td colspan="6"><strong>Phản hồi của quản trị viên:</strong> @item.AdminNote</td></tr>
-                }
-            }
-            </tbody>
-        </table>
+    <div class="d-grid gap-3">
+        @foreach (var item in Model)
+        {
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                        <div>
+                            <h2 class="h5 mb-1">
+                                <a class="text-decoration-none" asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">Đơn #@item.BookingId</a>
+                                · @item.VehicleName
+                            </h2>
+                            <span class="badge @(item.IsForceMajeure ? "bg-danger" : "bg-light text-dark border")">
+                                @(item.IsForceMajeure ? "Bất khả kháng" : "Gia hạn thông thường")
+                            </span>
+                        </div>
+                        <span class="badge @BadgeClass(item.Status)">@StatusText(item.Status)</span>
+                    </div>
+
+                    <div class="row g-3 small">
+                        <div class="col-md-3"><span class="text-muted">Trả cũ</span><div class="fw-semibold">@item.OriginalReturnDate.ToString("dd/MM/yyyy HH:mm")</div></div>
+                        <div class="col-md-3"><span class="text-muted">Đề nghị trả mới</span><div class="fw-semibold">@item.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")</div></div>
+                        <div class="col-md-3"><span class="text-muted">Phí gia hạn</span><div class="fw-semibold">@item.AdditionalAmount.ToString("N0") đ</div></div>
+                        <div class="col-md-3"><span class="text-muted">Gửi lúc</span><div class="fw-semibold">@item.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div></div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(item.CustomerNote))
+                    {
+                        <div class="mt-3"><strong>Lý do/ghi chú:</strong> @item.CustomerNote</div>
+                    }
+                    @if (item.IsForceMajeure && !string.IsNullOrWhiteSpace(item.EvidenceNote))
+                    {
+                        <div class="mt-2"><strong>Minh chứng đã gửi:</strong> @item.EvidenceNote</div>
+                    }
+
+                    @if (item.HasScheduleConflict && item.IsForceMajeure && item.Status == BookingExtensionStatus.Pending)
+                    {
+                        <div class="alert alert-warning py-2 mt-3 mb-0">
+                            Xe có lịch thuê tiếp theo trong khoảng bạn đề nghị. SmartCar đang xem xét phương án cho khách kế tiếp trước khi quyết định.
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(item.AdminNote))
+                    {
+                        <div class="alert @(item.Status == BookingExtensionStatus.Rejected ? "alert-danger" : "alert-info") py-2 mt-3 mb-0">
+                            <strong>Phản hồi của SmartCar:</strong> @item.AdminNote
+                        </div>
+                    }
+
+                    @if (item.Status == BookingExtensionStatus.NeedsEvidence)
+                    {
+                        <form asp-action="SupplementEvidence" method="post" class="border rounded p-3 mt-3 bg-light">
+                            <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
+                            <input type="hidden" name="bookingId" value="@item.BookingId" />
+                            <div class="fw-semibold mb-2">Bổ sung và gửi lại minh chứng</div>
+                            <div class="row g-2">
+                                <div class="col-md-7">
+                                    <textarea name="evidenceNote" class="form-control" rows="3" maxlength="1000" required placeholder="Mô tả tình trạng xe/sự cố, vị trí hiện tại và bằng chứng bạn có. Nếu có ảnh/video, liên hệ hotline để cung cấp theo hướng dẫn."></textarea>
+                                </div>
+                                <div class="col-md-3">
+                                    <input name="customerNote" class="form-control" maxlength="500" placeholder="Ghi chú thêm (nếu có)" />
+                                </div>
+                                <div class="col-md-2 d-grid">
+                                    <button class="btn btn-primary" type="submit">Gửi lại</button>
+                                </div>
+                            </div>
+                        </form>
+                    }
+                    else if (item.Status == BookingExtensionStatus.Approved)
+                    {
+                        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mt-3 border-top pt-3">
+                            <div class="small text-muted">Yêu cầu đã được duyệt nhưng ngày trả mới chỉ có hiệu lực khi khoản gia hạn được SmartCar xác nhận đã thu.</div>
+                            <a class="btn btn-primary" asp-controller="Bookings" asp-action="Details" asp-route-id="@item.BookingId">Mở đơn để thanh toán</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
     </div>
 }
