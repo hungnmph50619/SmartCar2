@@ -23,11 +23,27 @@
         .Where(path => !path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
         .ToList();
     var hasSignedDocuments = handoverSignedPath is not null && returnSignedPath is not null;
-    var returnAccessoryStatus = !string.IsNullOrWhiteSpace(Model.Return.InteriorCondition) &&
-        (Model.Return.InteriorCondition.Equals("Đủ", StringComparison.OrdinalIgnoreCase) ||
-         Model.Return.InteriorCondition.StartsWith("Thiếu/mất:", StringComparison.OrdinalIgnoreCase))
-            ? Model.Return.InteriorCondition
-            : null;
+
+    const string accessoryLabel = "Phụ kiện khi trả:";
+    const string noteSeparator = " | Ghi chú: ";
+    var rawReturnNotes = Model.Return.Notes?.Trim();
+    string? returnAccessoryStatus = null;
+    string? returnNote = rawReturnNotes;
+    if (!string.IsNullOrWhiteSpace(rawReturnNotes) && rawReturnNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
+    {
+        var body = rawReturnNotes[accessoryLabel.Length..].Trim();
+        var separatorIndex = body.IndexOf(noteSeparator, StringComparison.Ordinal);
+        if (separatorIndex >= 0)
+        {
+            returnAccessoryStatus = body[..separatorIndex].Trim();
+            returnNote = body[(separatorIndex + noteSeparator.Length)..].Trim();
+        }
+        else
+        {
+            returnAccessoryStatus = body;
+            returnNote = null;
+        }
+    }
     var missingAccessories = returnAccessoryStatus?.StartsWith("Thiếu/mất:", StringComparison.OrdinalIgnoreCase) == true;
 
     string EvidenceLabel(string path)
@@ -188,9 +204,9 @@ else
                     </form>
                 }
 
-                @if (!string.IsNullOrWhiteSpace(Model.Return.Notes))
+                @if (!string.IsNullOrWhiteSpace(returnNote))
                 {
-                    <div class="mb-3"><div class="small text-muted">Ghi chú</div><div>@Model.Return.Notes</div></div>
+                    <div class="mb-3"><div class="small text-muted">Ghi chú</div><div>@returnNote</div></div>
                 }
 
                 <div class="small text-muted mb-2">Ảnh lúc trả (@returnPhotos.Count)</div>
