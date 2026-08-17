@@ -49,15 +49,13 @@
     <table>
         <tr><th>Số km khi trả</th><td>@Model.Mileage.ToString("N0") km</td></tr>
         <tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr>
-        <tr><th>Ngoại thất</th><td>@(Model.ExteriorCondition ?? "Không ghi nhận bất thường")</td></tr>
-        <tr><th>Nội thất</th><td>@(Model.InteriorCondition ?? "Không ghi nhận bất thường")</td></tr>
         <tr><th>Hư hỏng mới</th><td>@(Model.HasDamage ? "Có" : "Không")</td></tr>
         <tr><th>Trả muộn</th><td>@(Model.IsLateReturn ? $"Có - {Model.LateMinutes} phút" : "Không")</td></tr>
         <tr><th>Ghi chú</th><td>@(Model.Notes ?? "Không có")</td></tr>
     </table>
 
     <div class="confirm">
-        Hai bên xác nhận đã đối chiếu tình trạng xe khi trả với biên bản giao và ảnh lưu trên SmartCar. Khoản phát sinh chỉ được xử lý khi có căn cứ đối chiếu.
+        Hai bên xác nhận đã đối chiếu xe khi trả với ảnh và biên bản giao lưu trên SmartCar. Khoản phát sinh chỉ được xử lý khi có căn cứ đối chiếu.
     </div>
 
     <div class="signatures">
