@@ -1,4 +1,5 @@
 @model SmartCar.Application.Features.Dashboard.DashboardDto
+@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Tổng quan quản trị";
 }
@@ -137,6 +138,22 @@
                     <tbody>
                     @foreach (var booking in Model.RecentBookings)
                     {
+                        var action = booking.Status switch
+                        {
+                            BookingStatus.PendingConfirmation => ("Duyệt đơn", "btn-outline-primary"),
+                            BookingStatus.PendingPayment => ("Theo dõi thanh toán", "btn-outline-warning"),
+                            BookingStatus.Paid => ("Chuẩn bị xe", "btn-outline-primary"),
+                            BookingStatus.ReadyForPickup => ("Giao xe", "btn-primary"),
+                            BookingStatus.Rented => ("Theo dõi chuyến thuê", "btn-outline-primary"),
+                            BookingStatus.PendingInspection => ("Kiểm tra xe", "btn-outline-warning"),
+                            BookingStatus.AwaitingRefund => ("Xử lý hoàn cọc", "btn-outline-warning"),
+                            BookingStatus.Completed => ("Xem chi tiết", "btn-outline-secondary"),
+                            BookingStatus.Cancelled => ("Xem chi tiết", "btn-outline-secondary"),
+                            BookingStatus.Rejected => ("Xem chi tiết", "btn-outline-secondary"),
+                            BookingStatus.NoShow => ("Xem chi tiết", "btn-outline-secondary"),
+                            _ => ("Xem chi tiết", "btn-outline-secondary")
+                        };
+
                         <tr>
                             <td class="fw-semibold">#@booking.BookingId</td>
                             <td>@booking.CustomerName</td>
@@ -150,9 +167,9 @@
                             </td>
                             <td><span class="badge bg-secondary">@booking.Status.ToVietnamese()</span></td>
                             <td class="text-end">
-                                <a class="btn btn-sm btn-outline-primary"
+                                <a class="btn btn-sm @action.Item2"
                                    asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.BookingId">
-                                    Xử lý
+                                    @action.Item1
                                 </a>
                             </td>
                         </tr>

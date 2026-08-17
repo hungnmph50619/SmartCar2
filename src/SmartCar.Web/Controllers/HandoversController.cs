@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Audits;
@@ -15,20 +15,13 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class HandoversController : Controller
 {
-    private const int MaximumImages = 10;
-
-    private const long MaximumImageBytes =
-        5 * 1024 * 1024;
-
+    private const int MaximumImages = 14;
+    private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IHandoverService _handoverService;
-
     private readonly IBookingService _bookingService;
-
     private readonly IAuditService _auditService;
-
     private readonly IWebHostEnvironment _environment;
-
 
     public HandoversController(
         IHandoverService handoverService,
@@ -36,118 +29,60 @@ public sealed class HandoversController : Controller
         IAuditService auditService,
         IWebHostEnvironment environment)
     {
-        _handoverService =
-            handoverService;
-
-        _bookingService =
-            bookingService;
-
-        _auditService =
-            auditService;
-
-        _environment =
-            environment;
+        _handoverService = handoverService;
+        _bookingService = bookingService;
+        _auditService = auditService;
+        _environment = environment;
     }
-
-
-    // ================================================================
-    // GET: LẬP BIÊN BẢN GIAO XE
-    // ================================================================
 
     [HttpGet]
     public async Task<IActionResult> Create(
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var booking =
-            await _bookingService
-                .GetAdminBookingAsync(
-                    bookingId,
-                    cancellationToken);
-
+        var booking = await _bookingService.GetAdminBookingAsync(
+            bookingId,
+            cancellationToken);
 
         if (booking is null)
         {
             return NotFound();
         }
 
-
-        // Chỉ được lập biên bản khi xe đã được
-        // admin đánh dấu ReadyForPickup.
-        if (booking.Status !=
-            BookingStatus.ReadyForPickup)
+        if (booking.Status != BookingStatus.ReadyForPickup)
         {
             TempData["ErrorMessage"] =
-                "Chỉ đơn đang sẵn sàng giao xe mới được lập biên bản bàn giao.";
-
-            return RedirectToAction(
-                "Details",
-                "AdminBookings",
-                new
-                {
-                    id = bookingId
-                });
+                "Chỉ đơn sẵn sàng giao xe mới được lập biên bản giao.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
-
-        // Không thể giao xe sau thời điểm phải trả.
-        if (DateTime.Now >=
-            booking.ReturnDate)
+        if (booking.HasHandover)
         {
             TempData["ErrorMessage"] =
-                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao xe.";
-
-            return RedirectToAction(
-                "Details",
-                "AdminBookings",
-                new
-                {
-                    id = bookingId
-                });
+                "Biên bản điện tử đã được lập. Hãy in, ký và tải bản ký.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
+        if (DateTime.Now >= booking.ReturnDate)
+        {
+            TempData["ErrorMessage"] =
+                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
 
-        var model =
-            new HandoverViewModel
-            {
-                BookingId =
-                    bookingId,
-
-                HandoverAt =
-                    DateTime.Now >
-                    booking.PickupDate
-
-                        ? DateTime.Now
-
-                        : booking.PickupDate,
-
-                IncludedKilometers =
-                    booking.NumberOfDays
-                    *
-                    RentalPolicy.IncludedKilometersPerDay,
-
-                ExcessKmFeePerKm =
-                    RentalPolicy.ExcessKilometerFee,
-
-                LateReturnFeeMultiplier =
-                    RentalPolicy.LateReturnFeeMultiplier,
-
-                TrafficFineTerms =
-                    RentalPolicy.TrafficFineTerms,
-
-                DamageCompensationTerms =
-                    RentalPolicy.DamageCompensationTerms
-            };
-
-
-        return View(
-            model);
+        return View(new HandoverViewModel
+        {
+            BookingId = bookingId,
+            HandoverAt = DateTime.Now > booking.PickupDate
+                ? DateTime.Now
+                : booking.PickupDate,
+            IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay,
+            ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
+            LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
+            TrafficFineTerms = RentalPolicy.TrafficFineTerms,
+            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms
+        });
     }
-
-
-    // ================================================================
-    // POST: XÁC NHẬN GIAO XE
-    // ================================================================
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -155,487 +90,249 @@ public sealed class HandoversController : Controller
         HandoverViewModel model,
         CancellationToken cancellationToken)
     {
-        // ============================================================
-        // 1. LẤY LẠI BOOKING TỪ DATABASE
-        // ============================================================
-
-        var booking =
-            await _bookingService
-                .GetAdminBookingAsync(
-                    model.BookingId,
-                    cancellationToken);
-
+        var booking = await _bookingService.GetAdminBookingAsync(
+            model.BookingId,
+            cancellationToken);
 
         if (booking is null)
         {
             return NotFound();
         }
 
-
-        // ============================================================
-        // 2. KIỂM TRA TRẠNG THÁI ĐƠN
-        // ============================================================
-
-        if (booking.Status !=
-            BookingStatus.ReadyForPickup)
+        if (booking.Status != BookingStatus.ReadyForPickup || booking.HasHandover)
         {
             TempData["ErrorMessage"] =
-                "Đơn không còn ở trạng thái sẵn sàng giao xe.";
-
-            return RedirectToAction(
-                "Details",
-                "AdminBookings",
-                new
-                {
-                    id = model.BookingId
-                });
+                booking.HasHandover
+                    ? "Biên bản điện tử đã tồn tại. Hãy tiếp tục bước ký."
+                    : "Đơn không còn ở trạng thái sẵn sàng giao xe.";
+            return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
         }
 
-
-        if (DateTime.Now >=
-            booking.ReturnDate)
+        if (DateTime.Now >= booking.ReturnDate)
         {
             TempData["ErrorMessage"] =
-                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao xe.";
-
-            return RedirectToAction(
-                "Details",
-                "AdminBookings",
-                new
-                {
-                    id = model.BookingId
-                });
+                "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao.";
+            return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
         }
 
+        // Các mức phí luôn lấy từ server, không nhận giá trị chính sách do browser gửi lên.
+        ModelState.Remove(nameof(HandoverViewModel.IncludedKilometers));
+        ModelState.Remove(nameof(HandoverViewModel.ExcessKmFeePerKm));
+        ModelState.Remove(nameof(HandoverViewModel.LateReturnFeeMultiplier));
+        ModelState.Remove(nameof(HandoverViewModel.TrafficFineTerms));
+        ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
 
-        // ============================================================
-        // 3. XÓA VALIDATION CHO CÁC FIELD CHÍNH SÁCH
-        //
-        // Các field này KHÔNG được lấy từ browser.
-        //
-        // Nếu để ModelState cũ:
-        // "5000,00" và "1,50" có thể bị ASP.NET/jQuery
-        // coi là decimal không hợp lệ.
-        // ============================================================
+        model.IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay;
+        model.ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee;
+        model.LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier;
+        model.TrafficFineTerms = RentalPolicy.TrafficFineTerms;
+        model.DamageCompensationTerms = RentalPolicy.DamageCompensationTerms;
 
-        ModelState.Remove(
-            nameof(
-                HandoverViewModel.IncludedKilometers));
-
-        ModelState.Remove(
-            nameof(
-                HandoverViewModel.ExcessKmFeePerKm));
-
-        ModelState.Remove(
-            nameof(
-                HandoverViewModel.LateReturnFeeMultiplier));
-
-        ModelState.Remove(
-            nameof(
-                HandoverViewModel.TrafficFineTerms));
-
-        ModelState.Remove(
-            nameof(
-                HandoverViewModel.DamageCompensationTerms));
-
-
-        // ============================================================
-        // 4. TÍNH LẠI CHÍNH SÁCH TỪ SERVER
-        //
-        // Không tin dữ liệu tiền/phí từ client.
-        // ============================================================
-
-        model.IncludedKilometers =
-            booking.NumberOfDays
-            *
-            RentalPolicy.IncludedKilometersPerDay;
-
-
-        model.ExcessKmFeePerKm =
-            RentalPolicy.ExcessKilometerFee;
-
-
-        model.LateReturnFeeMultiplier =
-            RentalPolicy.LateReturnFeeMultiplier;
-
-
-        model.TrafficFineTerms =
-            RentalPolicy.TrafficFineTerms;
-
-
-        model.DamageCompensationTerms =
-            RentalPolicy.DamageCompensationTerms;
-
-
-        // ============================================================
-        // 5. VALIDATE ẢNH
-        // ============================================================
-
-        await ValidateImagesAsync(
-            model.Images,
-            cancellationToken);
-
-
-        // ============================================================
-        // 6. NẾU CÒN LỖI -> TRẢ LẠI FORM
-        // ============================================================
-
+        var evidenceFiles = BuildEvidenceFiles(model);
+        await ValidateImagesAsync(evidenceFiles, model.Images, cancellationToken);
         if (!ModelState.IsValid)
         {
-            return View(
-                model);
+            return View(model);
         }
 
-
-        // ============================================================
-        // 7. LƯU ẢNH
-        // ============================================================
-
         IReadOnlyList<string> imagePaths;
-
-
         try
         {
-            imagePaths =
-                await SaveImagesAsync(
-                    model.BookingId,
-                    model.Images,
-                    cancellationToken);
+            imagePaths = await SaveImagesAsync(
+                model.BookingId,
+                evidenceFiles,
+                model.Images,
+                cancellationToken);
         }
         catch
         {
             ModelState.AddModelError(
                 nameof(HandoverViewModel.Images),
-                "Không thể lưu ảnh bàn giao. Vui lòng kiểm tra lại file ảnh và thử lại.");
-
-            return View(
-                model);
+                "Không thể lưu ảnh bàn giao. Vui lòng thử lại.");
+            return View(model);
         }
 
-
-        // ============================================================
-        // 8. GỌI SERVICE TẠO BIÊN BẢN
-        // ============================================================
-
-        var result =
-            await _handoverService
-                .CreateAsync(
-                    new CreateHandoverRequest(
-                        model.BookingId,
-
-                        model.HandoverAt,
-
-                        model.Mileage,
-
-                        model.FuelLevel,
-
-                        model.ExteriorCondition,
-
-                        model.InteriorCondition,
-
-                        model.Accessories,
-
-                        string.Join(
-                            ';',
-                            imagePaths),
-
-                        // Các giá trị này đã được lấy lại
-                        // từ RentalPolicy ở phía server.
-                        model.IncludedKilometers,
-
-                        model.ExcessKmFeePerKm,
-
-                        model.LateReturnFeeMultiplier,
-
-                        model.TrafficFineTerms,
-
-                        model.DamageCompensationTerms,
-
-                        model.PenaltyPolicyAccepted,
-
-                        model.Notes),
-
-                    cancellationToken);
-
-
-        // ============================================================
-        // 9. SERVICE TỪ CHỐI
-        // ============================================================
+        var result = await _handoverService.CreateAsync(
+            new CreateHandoverRequest(
+                model.BookingId,
+                model.HandoverAt,
+                model.Mileage,
+                model.FuelLevel,
+                model.ExteriorCondition,
+                model.InteriorCondition,
+                model.Accessories,
+                string.Join(';', imagePaths),
+                model.IncludedKilometers,
+                model.ExcessKmFeePerKm,
+                model.LateReturnFeeMultiplier,
+                model.TrafficFineTerms,
+                model.DamageCompensationTerms,
+                model.PenaltyPolicyAccepted,
+                model.Notes),
+            cancellationToken);
 
         if (!result.Succeeded)
         {
-            DeleteSavedImages(
-                imagePaths);
-
-
+            DeleteSavedImages(imagePaths);
             foreach (var error in result.Errors)
             {
-                ModelState.AddModelError(
-                    string.Empty,
-                    error);
+                ModelState.AddModelError(string.Empty, error);
             }
-
-
-            return View(
-                model);
+            return View(model);
         }
 
-
-        // ============================================================
-        // 10. AUDIT LOG
-        // ============================================================
-
-        var adminId =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier);
-
-
-        await _auditService
-            .WriteAsync(
-                adminId,
-
-                "CreateHandover",
-
-                nameof(VehicleHandover),
-
-                model.BookingId.ToString(),
-
-                $"Lập biên bản giao xe cho đơn " +
-                $"#{model.BookingId}, " +
-                $"số km {model.Mileage}, " +
-                $"{imagePaths.Count} ảnh.",
-
-                ipAddress:
-                    HttpContext.Connection
-                        .RemoteIpAddress?
-                        .ToString(),
-
-                cancellationToken:
-                    cancellationToken);
-
-
-        // ============================================================
-        // 11. THÀNH CÔNG
-        // ============================================================
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await _auditService.WriteAsync(
+            adminId,
+            "CreateHandover",
+            nameof(VehicleHandover),
+            model.BookingId.ToString(),
+            $"Lập biên bản giao điện tử đơn #{model.BookingId}, {model.Mileage:N0} km, {imagePaths.Count} ảnh chứng cứ.",
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã lập biên bản giao xe. " +
-            "Đơn đã chuyển sang trạng thái Đang thuê.";
+            "Đã lưu biên bản điện tử. Hãy in, ký và tải bản ký để bắt đầu chuyến thuê.";
 
-
-        return RedirectToAction(
-            "Details",
-            "AdminBookings",
-            new
-            {
-                id = model.BookingId
-            });
+        return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
     }
 
-
-    // ================================================================
-    // IN BIÊN BẢN
-    // ================================================================
-
+    // Giữ URL cũ để các liên kết cũ vẫn hoạt động.
     [HttpGet]
-    public async Task<IActionResult> Print(
-        int bookingId,
-        CancellationToken cancellationToken)
-    {
-        var booking =
-            await _bookingService
-                .GetAdminBookingAsync(
-                    bookingId,
-                    cancellationToken);
+    public IActionResult Print(int bookingId) =>
+        RedirectToAction(
+            "HandoverPrint",
+            "AdminRentalDocuments",
+            new { bookingId });
 
-
-        if (booking is null)
+    private static IReadOnlyList<(string Label, string FieldName, IFormFile? File)> BuildEvidenceFiles(
+        HandoverViewModel model) =>
+        new (string, string, IFormFile?)[]
         {
-            return NotFound();
-        }
-
-
-        if (booking.Handover is null)
-        {
-            TempData["ErrorMessage"] =
-                "Đơn chưa có biên bản giao xe để in.";
-
-
-            return RedirectToAction(
-                "Details",
-                "AdminBookings",
-                new
-                {
-                    id = bookingId
-                });
-        }
-
-
-        return View(
-            "Print",
-            booking);
-    }
-
-
-    // ================================================================
-    // VALIDATE ẢNH
-    // ================================================================
+            ("front", nameof(HandoverViewModel.FrontImage), model.FrontImage),
+            ("rear", nameof(HandoverViewModel.RearImage), model.RearImage),
+            ("left", nameof(HandoverViewModel.LeftImage), model.LeftImage),
+            ("right", nameof(HandoverViewModel.RightImage), model.RightImage),
+            ("interior", nameof(HandoverViewModel.InteriorImage), model.InteriorImage),
+            ("odometer", nameof(HandoverViewModel.OdometerImage), model.OdometerImage),
+            ("fuel", nameof(HandoverViewModel.FuelImage), model.FuelImage)
+        };
 
     private async Task ValidateImagesAsync(
-        IReadOnlyCollection<IFormFile> images,
+        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
+        IReadOnlyCollection<IFormFile> otherImages,
         CancellationToken cancellationToken)
     {
-        var selectedImages =
-            images
-                .Where(file =>
-                    file.Length > 0)
-                .ToList();
-
-
-        if (selectedImages.Count == 0)
+        foreach (var evidence in evidenceFiles)
         {
-            ModelState.AddModelError(
-                nameof(HandoverViewModel.Images),
-                "Vui lòng tải ít nhất một ảnh tình trạng xe khi bàn giao.");
-
-            return;
-        }
-
-
-        if (selectedImages.Count >
-            MaximumImages)
-        {
-            ModelState.AddModelError(
-                nameof(HandoverViewModel.Images),
-                $"Chỉ được tải tối đa {MaximumImages} ảnh bàn giao.");
-        }
-
-
-        foreach (var image in selectedImages)
-        {
-            var error =
-                await ImageFileValidator
-                    .ValidateAsync(
-                        image,
-                        MaximumImageBytes,
-                        cancellationToken);
-
-
-            if (error is not null)
+            if (evidence.File is null || evidence.File.Length == 0)
             {
-                ModelState.AddModelError(
-                    nameof(HandoverViewModel.Images),
-                    $"{image.FileName}: {error}");
+                ModelState.AddModelError(evidence.FieldName, "Cần ảnh này để đối chiếu khi trả xe.");
+                continue;
             }
+
+            await ValidateImageAsync(evidence.File, evidence.FieldName, cancellationToken);
+        }
+
+        var selectedOtherImages = otherImages.Where(file => file.Length > 0).ToList();
+        if (evidenceFiles.Count + selectedOtherImages.Count > MaximumImages)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.Images),
+                $"Tổng số ảnh tối đa là {MaximumImages}.");
+        }
+
+        foreach (var image in selectedOtherImages)
+        {
+            await ValidateImageAsync(image, nameof(HandoverViewModel.Images), cancellationToken);
         }
     }
 
-
-    // ================================================================
-    // LƯU ẢNH
-    // ================================================================
-
-    private async Task<IReadOnlyList<string>>
-        SaveImagesAsync(
-            int bookingId,
-            IEnumerable<IFormFile> images,
-            CancellationToken cancellationToken)
+    private async Task ValidateImageAsync(
+        IFormFile image,
+        string fieldName,
+        CancellationToken cancellationToken)
     {
-        var relativeFolder =
-            $"uploads/handovers/{bookingId}";
+        var error = await ImageFileValidator.ValidateAsync(
+            image,
+            MaximumImageBytes,
+            cancellationToken);
 
+        if (error is not null)
+        {
+            ModelState.AddModelError(fieldName, $"{image.FileName}: {error}");
+        }
+    }
 
-        var folder =
-            Path.Combine(
-                _environment.WebRootPath,
-                relativeFolder);
+    private async Task<IReadOnlyList<string>> SaveImagesAsync(
+        int bookingId,
+        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
+        IEnumerable<IFormFile> otherImages,
+        CancellationToken cancellationToken)
+    {
+        var relativeFolder = $"uploads/handovers/{bookingId}";
+        var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
+        Directory.CreateDirectory(folder);
 
-
-        Directory.CreateDirectory(
-            folder);
-
-
-        var paths =
-            new List<string>();
-
-
+        var paths = new List<string>();
         try
         {
-            foreach (
-                var image
-                in images.Where(file =>
-                    file.Length > 0))
+            foreach (var evidence in evidenceFiles.Where(item => item.File is { Length: > 0 }))
             {
-                var extension =
-                    Path.GetExtension(
-                            image.FileName)
-                        .ToLowerInvariant();
-
-
-                var fileName =
-                    $"{Guid.NewGuid():N}{extension}";
-
-
-                var fullPath =
-                    Path.Combine(
-                        folder,
-                        fileName);
-
-
-                await using var stream =
-                    System.IO.File.Create(
-                        fullPath);
-
-
-                await image.CopyToAsync(
-                    stream,
-                    cancellationToken);
-
-
-                paths.Add(
-                    $"/{relativeFolder}/{fileName}");
+                paths.Add(await SaveOneImageAsync(
+                    folder,
+                    relativeFolder,
+                    evidence.Label,
+                    evidence.File!,
+                    cancellationToken));
             }
 
+            foreach (var image in otherImages.Where(file => file.Length > 0))
+            {
+                paths.Add(await SaveOneImageAsync(
+                    folder,
+                    relativeFolder,
+                    "other",
+                    image,
+                    cancellationToken));
+            }
 
             return paths;
         }
         catch
         {
-            // Nếu lưu 4 ảnh mà ảnh thứ 5 lỗi,
-            // xóa các ảnh đã lưu trước đó.
-            DeleteSavedImages(
-                paths);
-
+            DeleteSavedImages(paths);
             throw;
         }
     }
 
+    private static async Task<string> SaveOneImageAsync(
+        string folder,
+        string relativeFolder,
+        string label,
+        IFormFile image,
+        CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+        var fileName = $"{label}-{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(folder, fileName);
 
-    // ================================================================
-    // XÓA ẢNH ĐÃ LƯU KHI GIAO DỊCH KHÔNG THÀNH CÔNG
-    // ================================================================
+        await using var stream = System.IO.File.Create(fullPath);
+        await image.CopyToAsync(stream, cancellationToken);
+        return $"/{relativeFolder}/{fileName}";
+    }
 
-    private void DeleteSavedImages(
-        IEnumerable<string> imagePaths)
+    private void DeleteSavedImages(IEnumerable<string> imagePaths)
     {
         foreach (var imagePath in imagePaths)
         {
-            var fullPath =
-                Path.Combine(
-                    _environment.WebRootPath,
+            var fullPath = Path.Combine(
+                _environment.WebRootPath,
+                imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
 
-                    imagePath
-                        .TrimStart('/')
-                        .Replace(
-                            '/',
-                            Path.DirectorySeparatorChar));
-
-
-            if (System.IO.File.Exists(
-                    fullPath))
+            if (System.IO.File.Exists(fullPath))
             {
-                System.IO.File.Delete(
-                    fullPath);
+                System.IO.File.Delete(fullPath);
             }
         }
     }

@@ -71,6 +71,18 @@ internal sealed class DashboardService : IDashboardService
             .Where(group => group.Select(document => document.DocumentType).Distinct().Count() == requiredKycTypes.Length)
             .CountAsync(cancellationToken);
 
+        var monthlyRevenue = await _dbContext.Payments
+            .Where(payment =>
+                payment.Status == PaymentStatus.Paid &&
+                (payment.Type == PaymentType.Rental ||
+                 payment.Type == PaymentType.Extension ||
+                 payment.Type == PaymentType.AdditionalCharge ||
+                 payment.Type == PaymentType.VehicleSwapAdjustment) &&
+                payment.PaidAt >= firstDayOfMonth &&
+                payment.PaidAt < firstDayOfNextMonth)
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken)
+            ?? 0m;
+
         return new DashboardDto
         {
             TotalVehicles = await _dbContext.Vehicles.CountAsync(
@@ -108,34 +120,7 @@ internal sealed class DashboardService : IDashboardService
             ActiveRentals = await _dbContext.Bookings.CountAsync(
                 booking => booking.Status == BookingStatus.Rented,
                 cancellationToken),
-            MonthlyRevenue =
-    await _dbContext.Payments
-        .Where(payment =>
-            payment.Status ==
-                PaymentStatus.Paid &&
-
-            (
-                payment.Type ==
-                    PaymentType.Rental ||
-
-                payment.Type ==
-                    PaymentType.Extension ||
-
-                payment.Type ==
-                    PaymentType.AdditionalCharge
-            ) &&
-
-            payment.PaidAt >=
-                firstDayOfMonth &&
-
-            payment.PaidAt <
-                firstDayOfNextMonth)
-
-        .SumAsync(
-            payment =>
-                (decimal?)payment.Amount,
-            cancellationToken)
-        ?? 0,
+            MonthlyRevenue = monthlyRevenue,
             RecentBookings = recentBookings
         };
     }

@@ -6,5 +6,6 @@ public enum BookingExtensionStatus
     Approved = 2,
     Rejected = 3,
     Paid = 4,
-    Cancelled = 5
+    Cancelled = 5,
+    NeedsEvidence = 6
 }

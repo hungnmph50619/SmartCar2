@@ -2,14 +2,19 @@
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Sự cố và vi phạm";
+
+    IReadOnlyList<string> EvidencePaths(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? Array.Empty<string>()
+            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 gap-3 flex-wrap">
     <div>
         <h1 class="h3 mb-1">Sự cố và vi phạm</h1>
-        <p class="text-muted mb-0">Theo dõi tai nạn, hư hỏng, cứu hộ và biên bản phạt.</p>
+        <p class="text-muted mb-0">Đối chiếu theo xe, đơn thuê và bằng chứng.</p>
     </div>
-    <a class="btn btn-primary" asp-action="Create">Ghi nhận sự cố</a>
+    <a class="btn btn-primary" asp-action="Create">Ghi nhận</a>
 </div>
 
 <div class="mb-3 d-flex flex-wrap gap-2">
@@ -29,23 +34,54 @@ else
 {
     @foreach (var item in Model)
     {
+        var isTrafficFine = item.IncidentType == IncidentType.TrafficFine;
+        var evidence = EvidencePaths(item.EvidencePaths);
         <div class="col-12">
             <div class="card card-body shadow-sm">
-                <div class="d-flex justify-content-between align-items-start gap-3">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                     <div>
                         <h2 class="h5 mb-1">#@item.VehicleIncidentId · @item.IncidentType.ToVietnamese()</h2>
                         <div><strong>@item.VehicleName</strong> · @item.LicensePlate</div>
-                        <div class="text-muted small">@item.OccurredAt.ToString("dd/MM/yyyy HH:mm") · @(item.Location ?? "Không ghi địa điểm")</div>
+                        <div class="text-muted small">
+                            @item.OccurredAt.ToString("dd/MM/yyyy HH:mm")
+                            @if (item.BookingId.HasValue) { <span> · Đơn #@item.BookingId</span> }
+                            <span> · @(item.Location ?? "Không ghi địa điểm")</span>
+                        </div>
                     </div>
                     <span class="badge bg-secondary">@item.Status.ToVietnamese()</span>
                 </div>
+
                 <p class="mt-3 mb-2">@item.Description</p>
-                <div class="row small mb-3">
-                    <div class="col-md-3">Ước tính: <strong>@item.EstimatedCost.ToString("N0") đ</strong></div>
-                    <div class="col-md-3">Thực tế: <strong>@item.ActualCost.ToString("N0") đ</strong></div>
-                    <div class="col-md-3">Tiền phạt: <strong>@item.FineAmount.ToString("N0") đ</strong></div>
-                    <div class="col-md-3">Khách chịu: <strong>@item.CustomerLiabilityAmount.ToString("N0") đ</strong></div>
-                </div>
+
+                @if (isTrafficFine)
+                {
+                    <div class="alert alert-info py-2 small mb-3">
+                        <strong>Khách tự xử lý với cơ quan có thẩm quyền.</strong> SmartCar theo dõi hồ sơ và cung cấp thông tin thuê xe khi cần; không tạo khoản phải thu từ mục phạt nguội này.
+                    </div>
+                }
+                else
+                {
+                    <div class="row small mb-3">
+                        <div class="col-md-4">Ước tính: <strong>@item.EstimatedCost.ToString("N0") đ</strong></div>
+                        <div class="col-md-4">Thực tế: <strong>@item.ActualCost.ToString("N0") đ</strong></div>
+                        <div class="col-md-4">Khách chịu: <strong>@item.CustomerLiabilityAmount.ToString("N0") đ</strong></div>
+                    </div>
+                }
+
+                @if (evidence.Count > 0)
+                {
+                    <div class="d-flex gap-2 flex-wrap mb-3">
+                        @for (var index = 0; index < evidence.Count; index++)
+                        {
+                            <a class="btn btn-sm btn-outline-primary" href="@evidence[index]" target="_blank" rel="noopener">Bằng chứng @(index + 1)</a>
+                        }
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(item.Notes))
+                {
+                    <div class="small text-muted mb-3"><strong>Ghi chú:</strong> @item.Notes</div>
+                }
 
                 @if (item.Status == IncidentStatus.Open)
                 {
@@ -58,20 +94,33 @@ else
                 @if (item.Status is IncidentStatus.Open or IncidentStatus.Investigating)
                 {
                     <details>
-                        <summary class="fw-semibold">Hoàn tất sự cố</summary>
+                        <summary class="fw-semibold">Hoàn tất</summary>
                         <form asp-action="Resolve" method="post" class="row g-2 mt-2">
                             <input type="hidden" name="IncidentId" value="@item.VehicleIncidentId" />
-                            <div class="col-md-3"><input name="ActualCost" type="number" min="0" value="@item.ActualCost" class="form-control" placeholder="Chi phí thực tế" /></div>
-                            <div class="col-md-3"><input name="FineAmount" type="number" min="0" value="@item.FineAmount" class="form-control" placeholder="Tiền phạt" /></div>
-                            <div class="col-md-3"><input name="CustomerLiabilityAmount" type="number" min="0" value="@item.CustomerLiabilityAmount" class="form-control" placeholder="Khách chịu" /></div>
-                            <div class="col-md-3 d-flex align-items-center">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="maintenance-@item.VehicleIncidentId" />
-                                    <label class="form-check-label" for="maintenance-@item.VehicleIncidentId">Cần bảo trì</label>
+                            @if (isTrafficFine)
+                            {
+                                <input type="hidden" name="ActualCost" value="0" />
+                                <input type="hidden" name="FineAmount" value="0" />
+                                <input type="hidden" name="CustomerLiabilityAmount" value="0" />
+                                <div class="col-md-9">
+                                    <input name="Notes" class="form-control" placeholder="VD: Khách đã làm việc với CSGT / đã hoàn tất" />
                                 </div>
-                            </div>
-                            <div class="col-md-9"><input name="Notes" class="form-control" placeholder="Kết luận xử lý" /></div>
-                            <div class="col-md-3"><button class="btn btn-success w-100" type="submit">Hoàn tất</button></div>
+                                <div class="col-md-3"><button class="btn btn-success w-100" type="submit">Đã xử lý xong</button></div>
+                            }
+                            else
+                            {
+                                <div class="col-md-3"><input name="ActualCost" type="number" min="0" value="@item.ActualCost" class="form-control" placeholder="Chi phí thực tế" /></div>
+                                <div class="col-md-3"><input name="FineAmount" type="number" min="0" value="@item.FineAmount" class="form-control" placeholder="Khoản phạt/chi phí" /></div>
+                                <div class="col-md-3"><input name="CustomerLiabilityAmount" type="number" min="0" value="@item.CustomerLiabilityAmount" class="form-control" placeholder="Khách chịu" /></div>
+                                <div class="col-md-3 d-flex align-items-center">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="maintenance-@item.VehicleIncidentId" />
+                                        <label class="form-check-label" for="maintenance-@item.VehicleIncidentId">Cần bảo trì</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-9"><input name="Notes" class="form-control" placeholder="Kết luận xử lý" /></div>
+                                <div class="col-md-3"><button class="btn btn-success w-100" type="submit">Hoàn tất</button></div>
+                            }
                         </form>
                     </details>
                 }

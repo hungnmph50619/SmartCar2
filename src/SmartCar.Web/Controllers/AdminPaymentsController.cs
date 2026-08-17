@@ -1,19 +1,35 @@
-﻿using System.Security.Claims;
+using System.Data;
+using System.Globalization;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SmartCar.Application.Features.Audits;
+using SmartCar.Application.Features.Extensions;
 using SmartCar.Application.Features.Payments;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
 
 namespace SmartCar.Web.Controllers;
 
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminPaymentsController : Controller
 {
+    private const string ForceMajeureMarker = "[FORCE_MAJEURE]";
+    private const string LegacyDepositDeductionPrefix = "EXT-COMP-";
+
     private readonly IPaymentService _paymentService;
+    private readonly IExtensionService _extensionService;
+    private readonly IAuditService _auditService;
+    private readonly ApplicationDbContext _dbContext;
 
     public AdminPaymentsController(
-        IPaymentService paymentService)
+        IPaymentService paymentService,
+        IExtensionService extensionService,
+        IAuditService auditService,
+        ApplicationDbContext dbContext)
     {
         _paymentService =
             paymentService;
@@ -23,6 +39,7 @@ public sealed class AdminPaymentsController : Controller
     public async Task<IActionResult> Index(
         PaymentStatus? status,
         PaymentType? type,
+        string? section,
         CancellationToken cancellationToken)
     {
         ViewBag.Status =

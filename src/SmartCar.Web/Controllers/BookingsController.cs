@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Identity;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 using System.Security.Claims;
@@ -21,19 +23,22 @@ public sealed class BookingsController : Controller
     private readonly IUserBankAccountService _bankAccountService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
+    private readonly ApplicationDbContext _dbContext;
 
     public BookingsController(
         IBookingService bookingService,
         IDocumentService documentService,
         IUserBankAccountService bankAccountService,
         UserManager<ApplicationUser> userManager,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ApplicationDbContext dbContext)
     {
         _bookingService = bookingService;
         _documentService = documentService;
         _bankAccountService = bankAccountService;
         _userManager = userManager;
         _configuration = configuration;
+        _dbContext = dbContext;
     }
 
     [HttpPost]
@@ -345,6 +350,16 @@ public sealed class BookingsController : Controller
         {
             return NotFound();
         }
+
+        // Hồ sơ giao/trả được tải trực tiếp theo đơn đã được kiểm tra quyền sở hữu ở trên.
+        // Bao gồm cả ảnh chứng cứ và ảnh chụp/scan bản giấy đã ký trong ImagePaths.
+        ViewBag.CustomerHandoverRecord = await _dbContext.VehicleHandovers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.BookingId == id, cancellationToken);
+
+        ViewBag.CustomerReturnRecord = await _dbContext.VehicleReturns
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.BookingId == id, cancellationToken);
 
         ViewBag.SmartCarSupportPhone =
             GetSupportPhone();

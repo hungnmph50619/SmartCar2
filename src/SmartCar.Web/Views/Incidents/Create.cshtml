@@ -2,66 +2,86 @@
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Ghi nhận sự cố";
+    var occurredDate = Model.OccurredAt.ToString("yyyy-MM-dd");
+    var occurredTime = Model.OccurredAt.ToString("HH:mm");
 }
 
 <div class="row justify-content-center">
     <div class="col-lg-9">
         <div class="card card-body shadow-sm">
-            <h1 class="h3 mb-3">Ghi nhận sự cố hoặc vi phạm</h1>
-            <form asp-action="Create" method="post" class="row g-3">
+            <h1 class="h3 mb-1">Sự cố / vi phạm</h1>
+            <p class="text-muted mb-3">Gắn đúng xe, đơn thuê và bằng chứng.</p>
+
+            <form asp-action="Create" method="post" class="row g-3" id="incident-form">
                 <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <input asp-for="OccurredAt" type="hidden" id="occurred-at-value" />
+
                 <div class="col-md-5">
                     <label class="form-label">Xe</label>
                     <select asp-for="VehicleId" asp-items="ViewBag.Vehicles" class="form-select"></select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Mã đơn liên quan</label>
-                    <input asp-for="BookingId" type="number" min="1" class="form-control" />
+                    <label class="form-label">Đơn liên quan</label>
+                    <input asp-for="BookingId" type="number" min="1" class="form-control" id="incident-booking-id" placeholder="#" />
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Loại sự cố</label>
-                    <select asp-for="IncidentType" class="form-select">
+                    <label class="form-label">Loại</label>
+                    <select asp-for="IncidentType" class="form-select" id="incident-type">
                         @foreach (var type in Enum.GetValues<IncidentType>())
                         {
                             <option value="@type">@type.ToVietnamese()</option>
                         }
                     </select>
                 </div>
+
                 <div class="col-md-4">
                     <label class="form-label">Thời điểm xảy ra</label>
-                    <input asp-for="OccurredAt" type="datetime-local" class="form-control" />
+                    <div class="row g-2">
+                        <div class="col-7"><input type="date" id="occurred-date" class="form-control" value="@occurredDate" required /></div>
+                        <div class="col-5"><input type="text" id="occurred-time" class="form-control" value="@occurredTime" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" required /></div>
+                    </div>
+                    <div class="form-text">Giờ 24h.</div>
                 </div>
                 <div class="col-md-8">
                     <label class="form-label">Địa điểm</label>
                     <input asp-for="Location" class="form-control" />
                 </div>
+
+                <div class="col-12 d-none" id="traffic-fine-note">
+                    <div class="alert alert-info py-2 mb-0 small">
+                        <strong>Phạt nguội:</strong> chọn đúng đơn thuê và lưu thông báo/bằng chứng. Khách trực tiếp làm việc với cơ quan có thẩm quyền; SmartCar không tạo khoản phải thu từ hồ sơ này.
+                    </div>
+                </div>
+
                 <div class="col-12">
                     <label class="form-label">Mô tả</label>
-                    <textarea asp-for="Description" class="form-control" rows="4"></textarea>
+                    <textarea asp-for="Description" class="form-control" rows="3" placeholder="Nội dung sự cố hoặc thông báo vi phạm"></textarea>
                     <span asp-validation-for="Description" class="text-danger"></span>
                 </div>
-                <div class="col-md-4">
+
+                <div class="col-md-4 incident-money">
                     <label class="form-label">Chi phí ước tính</label>
                     <input asp-for="EstimatedCost" type="number" min="0" class="form-control" />
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4 incident-money">
                     <label class="form-label">Tiền phạt</label>
                     <input asp-for="FineAmount" type="number" min="0" class="form-control" />
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Số tiền khách chịu</label>
+                <div class="col-md-4 incident-money">
+                    <label class="form-label">Khách chịu</label>
                     <input asp-for="CustomerLiabilityAmount" type="number" min="0" class="form-control" />
                 </div>
+
                 <div class="col-12">
-                    <label class="form-label">Đường dẫn bằng chứng</label>
-                    <input asp-for="EvidencePaths" class="form-control" placeholder="Các đường dẫn ảnh, phân cách bằng dấu ;" />
+                    <label class="form-label">Bằng chứng / thông báo</label>
+                    <input asp-for="EvidencePaths" class="form-control" placeholder="Đường dẫn ảnh/tài liệu, phân cách bằng ;" />
                 </div>
                 <div class="col-12">
                     <label class="form-label">Ghi chú</label>
                     <textarea asp-for="Notes" class="form-control" rows="2"></textarea>
                 </div>
                 <div class="col-12 d-flex gap-2">
-                    <button class="btn btn-primary" type="submit">Lưu sự cố</button>
+                    <button class="btn btn-primary" type="submit">Lưu</button>
                     <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
                 </div>
             </form>
@@ -71,4 +91,54 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const form = document.getElementById('incident-form');
+            const type = document.getElementById('incident-type');
+            const booking = document.getElementById('incident-booking-id');
+            const trafficNote = document.getElementById('traffic-fine-note');
+            const moneyGroups = document.querySelectorAll('.incident-money');
+            const moneyInputs = moneyGroups.length
+                ? Array.from(moneyGroups).flatMap(group => Array.from(group.querySelectorAll('input')))
+                : [];
+            const hidden = document.getElementById('occurred-at-value');
+            const date = document.getElementById('occurred-date');
+            const time = document.getElementById('occurred-time');
+            const pattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+            function isTrafficFine() {
+                return type?.value === 'TrafficFine';
+            }
+
+            function updateType() {
+                const traffic = isTrafficFine();
+                trafficNote?.classList.toggle('d-none', !traffic);
+                moneyGroups.forEach(group => group.classList.toggle('d-none', traffic));
+                if (booking) booking.required = traffic;
+                if (traffic) moneyInputs.forEach(input => input.value = '0');
+            }
+
+            function syncDateTime() {
+                if (!date?.value || !pattern.test(time?.value || '')) return false;
+                hidden.value = `${date.value}T${time.value}`;
+                return true;
+            }
+
+            type?.addEventListener('change', updateType);
+            date?.addEventListener('change', syncDateTime);
+            time?.addEventListener('input', syncDateTime);
+            form?.addEventListener('submit', event => {
+                if (!syncDateTime()) {
+                    event.preventDefault();
+                    time?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
+                    time?.reportValidity();
+                } else {
+                    time?.setCustomValidity('');
+                }
+            });
+
+            updateType();
+            syncDateTime();
+        })();
+    </script>
 }
