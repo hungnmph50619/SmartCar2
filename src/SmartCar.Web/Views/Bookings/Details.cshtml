@@ -12,22 +12,19 @@
         .Where(extension => extension.Status is BookingExtensionStatus.Approved or BookingExtensionStatus.Paid)
         .OrderBy(extension => extension.OriginalReturnDate)
         .ToList();
-    var appliedExtensionDays = Model.Extensions
-        .Where(extension => extension.Status == BookingExtensionStatus.Paid)
-        .Sum(extension => extension.AdditionalDays);
     var extensionAmount = invoiceExtensions.Sum(extension => extension.AdditionalAmount);
     var invoiceTotal = Model.InitialRentalAmount + Model.DeliveryFee + Model.DepositAmount + extensionAmount + Model.AdditionalAmount;
     var paidTotal = Model.Payments
         .Where(payment => payment.Status == PaymentStatus.Paid &&
-            payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment)
+            payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.Extension or PaymentType.AdditionalCharge)
         .Sum(payment => payment.Amount);
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
     var hasPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
-        payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment);
+        payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.AdditionalCharge);
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
     var hasOpenExtension = Model.Extensions.Any(extension =>
-        extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence or BookingExtensionStatus.Approved);
+        extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.Approved);
     var canCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or
         BookingStatus.Paid or BookingStatus.ReadyForPickup;
     var canReview = Model.Status == BookingStatus.Completed && !Model.HasReview;
@@ -37,55 +34,6 @@
     var accountNumber = ViewBag.PaymentAccountNumber as string ?? string.Empty;
     var accountHolder = ViewBag.PaymentAccountHolder as string ?? "SMARTCAR";
     var qrImagePath = ViewBag.PaymentQrImagePath as string ?? "/images/payment/bank-qr.jpg";
-    var handoverRecord = ViewBag.CustomerHandoverRecord as VehicleHandover;
-    var returnRecord = ViewBag.CustomerReturnRecord as VehicleReturn;
-
-    IReadOnlyList<string> SplitPaths(string? value) =>
-        string.IsNullOrWhiteSpace(value)
-            ? Array.Empty<string>()
-            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    string? SignedPath(string? paths, string marker) =>
-        SplitPaths(paths).FirstOrDefault(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
-
-    IReadOnlyList<string> EvidencePaths(string? paths, string marker) =>
-        SplitPaths(paths)
-            .Where(path => !path.Contains(marker, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-    string EvidenceLabel(string path)
-    {
-        var fileName = System.IO.Path.GetFileName(path).ToLowerInvariant();
-        if (fileName.StartsWith("front-")) return "Phía trước";
-        if (fileName.StartsWith("rear-")) return "Phía sau";
-        if (fileName.StartsWith("left-")) return "Bên trái";
-        if (fileName.StartsWith("right-")) return "Bên phải";
-        if (fileName.StartsWith("interior-")) return "Nội thất";
-        if (fileName.StartsWith("odometer-")) return "Đồng hồ km";
-        if (fileName.StartsWith("fuel-")) return "Nhiên liệu";
-        if (fileName.StartsWith("damage-")) return "Hư hỏng";
-        return "Ảnh khác";
-    }
-
-    string ExtensionStatusText(BookingExtensionStatus status) => status switch
-    {
-        BookingExtensionStatus.Pending => "Chờ duyệt",
-        BookingExtensionStatus.NeedsEvidence => "Cần bổ sung minh chứng",
-        BookingExtensionStatus.Approved => "Đã duyệt - chờ thanh toán",
-        BookingExtensionStatus.Paid => "Đã thanh toán - có hiệu lực",
-        BookingExtensionStatus.Rejected => "Đã từ chối",
-        BookingExtensionStatus.Cancelled => "Đã hủy",
-        _ => status.ToString()
-    };
-
-    string RefundLabel(string? method) => method switch
-    {
-        PaymentMethods.DepositRefund => "Hoàn cọc",
-        PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
-        PaymentMethods.CompensationRefund => "Hỗ trợ / bồi thường",
-        PaymentMethods.BankTransferRefund => "Hoàn tiền thuê",
-        _ => "Hoàn tiền thuê"
-    };
 }
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
@@ -575,59 +523,3 @@
         }
     </div>
 </div>
-
-<script>
-    (() => {
-        const form = document.getElementById('customer-extension-form');
-        if (!form) return;
-
-        const hidden = document.getElementById('requested-return-value');
-        const date = document.getElementById('requested-return-date');
-        const time = document.getElementById('requested-return-time');
-        const preview = document.getElementById('extension-price-preview');
-        const currentReturn = new Date('@Model.ReturnDate.ToString("yyyy-MM-ddTHH:mm:ss")');
-        const minimum = new Date('@Model.ReturnDate.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm:ss")');
-        const dailyPrice = Number('@Model.DailyPrice.ToString(System.Globalization.CultureInfo.InvariantCulture)');
-        const pattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
-        const money = value => new Intl.NumberFormat('vi-VN').format(value) + ' đ';
-
-        function renderPreview(selected) {
-            if (!preview || !(selected instanceof Date) || Number.isNaN(selected.getTime()) || selected < minimum) {
-                if (preview) preview.textContent = 'Chọn thời gian trả mới để xem phí gia hạn.';
-                return;
-            }
-
-            const additionalDays = Math.max(1, Math.ceil((selected - currentReturn) / 86400000));
-            const amount = additionalDays * dailyPrice;
-            preview.innerHTML = `<strong>Phí dự kiến: ${money(amount)}</strong> · ${additionalDays} ngày tính phí<br><span class="text-muted">Thời gian lẻ dưới 24 giờ tính 1 ngày.</span>`;
-        }
-
-        function sync() {
-            if (!date?.value || !pattern.test(time?.value || '')) {
-                renderPreview(null);
-                return false;
-            }
-            const value = `${date.value}T${time.value}`;
-            const selected = new Date(value);
-            if (Number.isNaN(selected.getTime()) || selected < minimum) {
-                time.setCustomValidity('Thời gian trả mới phải sau thời gian trả hiện tại.');
-                renderPreview(null);
-                return false;
-            }
-            time.setCustomValidity('');
-            hidden.value = value;
-            renderPreview(selected);
-            return true;
-        }
-
-        date?.addEventListener('change', sync);
-        time?.addEventListener('input', sync);
-        form.addEventListener('submit', event => {
-            if (!sync()) {
-                event.preventDefault();
-                time?.reportValidity();
-            }
-        });
-        sync();
-    })();
-</script>
