@@ -255,7 +255,10 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Lý do</label>
-                                <input name="CustomerNote" class="form-control" maxlength="500" placeholder="Vì sao bạn cần gia hạn?" />
+                                <input name="CustomerNote" class="form-control" maxlength="500" placeholder="Vì sao bạn cần gia hạn?" required />
+                            </div>
+                            <div class="col-12">
+                                <div class="border rounded bg-light px-3 py-2 small" id="extension-price-preview" aria-live="polite"></div>
                             </div>
                             <div class="col-12">
                                 <div class="form-check">
@@ -581,19 +584,39 @@
         const hidden = document.getElementById('requested-return-value');
         const date = document.getElementById('requested-return-date');
         const time = document.getElementById('requested-return-time');
+        const preview = document.getElementById('extension-price-preview');
+        const currentReturn = new Date('@Model.ReturnDate.ToString("yyyy-MM-ddTHH:mm:ss")');
         const minimum = new Date('@Model.ReturnDate.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm:ss")');
+        const dailyPrice = Number('@Model.DailyPrice.ToString(System.Globalization.CultureInfo.InvariantCulture)');
         const pattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+        const money = value => new Intl.NumberFormat('vi-VN').format(value) + ' đ';
+
+        function renderPreview(selected) {
+            if (!preview || !(selected instanceof Date) || Number.isNaN(selected.getTime()) || selected < minimum) {
+                if (preview) preview.textContent = 'Chọn thời gian trả mới để xem phí gia hạn.';
+                return;
+            }
+
+            const additionalDays = Math.max(1, Math.ceil((selected - currentReturn) / 86400000));
+            const amount = additionalDays * dailyPrice;
+            preview.innerHTML = `<strong>Phí dự kiến: ${money(amount)}</strong> · ${additionalDays} ngày tính phí<br><span class="text-muted">Thời gian lẻ dưới 24 giờ tính 1 ngày.</span>`;
+        }
 
         function sync() {
-            if (!date?.value || !pattern.test(time?.value || '')) return false;
+            if (!date?.value || !pattern.test(time?.value || '')) {
+                renderPreview(null);
+                return false;
+            }
             const value = `${date.value}T${time.value}`;
             const selected = new Date(value);
             if (Number.isNaN(selected.getTime()) || selected < minimum) {
                 time.setCustomValidity('Thời gian trả mới phải sau thời gian trả hiện tại.');
+                renderPreview(null);
                 return false;
             }
             time.setCustomValidity('');
             hidden.value = value;
+            renderPreview(selected);
             return true;
         }
 
