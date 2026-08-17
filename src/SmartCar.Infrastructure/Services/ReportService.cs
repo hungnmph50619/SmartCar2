@@ -150,6 +150,16 @@ internal sealed class ReportService : IReportService
             .SumAsync(item => (decimal?)item.Amount, cancellationToken)
             ?? 0m;
 
+        var outstandingDeposits = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(item =>
+                item.Type == PaymentType.Deposit &&
+                (item.Status == PaymentStatus.Pending ||
+                 item.Status == PaymentStatus.AwaitingConfirmation) &&
+                OpenReceivableStatuses.Contains(item.Booking.Status))
+            .SumAsync(item => (decimal?)item.Amount, cancellationToken)
+            ?? 0m;
+
         var pendingRefunds = await _dbContext.Payments
             .AsNoTracking()
             .Where(item =>
@@ -471,6 +481,7 @@ internal sealed class ReportService : IReportService
                 ? 0m
                 : Math.Round(rows.Average(item => item.AvailableUtilizationRate), 2),
             outstandingReceivables,
+            outstandingDeposits,
             depositsHeld,
             pendingRefunds,
             rows);
