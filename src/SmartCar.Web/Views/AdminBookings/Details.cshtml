@@ -14,7 +14,6 @@
     var rentalPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Rental);
     var depositPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Deposit);
     var extensionPayments = Model.Payments.Where(p => p.Type == PaymentType.Extension).ToList();
-    var additionalPayments = Model.Payments.Where(p => p.Type == PaymentType.AdditionalCharge).ToList();
     var refundPayment = Model.Payments.Where(p => p.Type == PaymentType.Refund).OrderByDescending(p => p.PaymentId).FirstOrDefault();
 
     var totalCollected = Model.Payments
@@ -59,6 +58,17 @@
         _ => "bg-secondary"
     };
 
+    string ExtensionText(BookingExtensionStatus status) => status switch
+    {
+        BookingExtensionStatus.Pending => "Chờ duyệt",
+        BookingExtensionStatus.NeedsEvidence => "Cần bổ sung minh chứng",
+        BookingExtensionStatus.Approved => "Đã duyệt - chờ thanh toán",
+        BookingExtensionStatus.Paid => "Đã thanh toán",
+        BookingExtensionStatus.Rejected => "Đã từ chối",
+        BookingExtensionStatus.Cancelled => "Đã hủy",
+        _ => status.ToString()
+    };
+
     var nextAction = Model.Status switch
     {
         BookingStatus.PendingConfirmation => ("Kiểm tra đơn", "warning"),
@@ -80,7 +90,7 @@
 }
 
 <style>
-    #admin-booking-delivery-map { height:220px; border-radius:12px; overflow:hidden; }
+    #admin-booking-delivery-map { height:190px; border-radius:12px; overflow:hidden; }
     .money-row { display:flex; justify-content:space-between; gap:12px; padding:.5rem 0; border-bottom:1px solid #edf0f4; }
     .money-row:last-child { border-bottom:0; }
 </style>
@@ -120,19 +130,19 @@
             </div>
 
             <hr />
-            <div class="d-flex justify-content-between gap-3 flex-wrap">
-                <div>
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div class="flex-grow-1">
                     <div class="small text-muted">Cách nhận xe</div>
                     <strong>@(isDelivery ? "Giao tận nơi" : "Nhận tại cửa hàng")</strong>
                     @if (isDelivery)
                     {
                         <div class="mt-1">@Model.DeliveryAddress</div>
+                        @if (directionsUrl is not null)
+                        {
+                            <a class="small text-decoration-none d-inline-block mt-1" href="@directionsUrl" target="_blank" rel="noopener">Mở chỉ đường ↗</a>
+                        }
                     }
                 </div>
-                @if (isDelivery && directionsUrl is not null)
-                {
-                    <a class="btn btn-sm btn-outline-primary" href="@directionsUrl" target="_blank" rel="noopener">Chỉ đường</a>
-                }
             </div>
             @if (hasDeliveryMap)
             {
@@ -168,7 +178,7 @@
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Thanh toán</h2>
                 <p class="text-muted mb-3">Khách cần hoàn tất tiền thuê / giao và tiền cọc trước khi chuẩn bị xe.</p>
-                <a class="btn btn-primary" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Mở tiền thu</a>
+                <a class="btn btn-primary" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Mở đối soát tiền thu</a>
             </div>
         }
         else if (Model.Status == BookingStatus.Paid)
@@ -217,29 +227,21 @@
             <div class="card card-body shadow-sm mb-4">
                 <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
                     <h2 class="h5 mb-0">Đang thuê</h2>
-                    <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản trả</a>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a class="btn btn-outline-primary" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a>
+                        <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản trả</a>
+                    </div>
                 </div>
-
-                <details class="border rounded p-3">
-                    <summary class="fw-semibold">+ Ghi nhận gia hạn qua điện thoại</summary>
-                    <form asp-controller="AdminExtensions" asp-action="CreateForCustomer" method="post" class="row g-2 mt-3" data-loading-form>
-                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                        <div class="col-md-5">
-                            <input type="datetime-local" name="requestedReturnDate" class="form-control" value="@Model.ReturnDate.AddDays(1).ToString("yyyy-MM-ddTHH:mm")" required />
-                        </div>
-                        <div class="col-md-5"><input type="text" name="note" maxlength="300" class="form-control" placeholder="Ghi chú (nếu có)" /></div>
-                        <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">Tạo</button></div>
-                    </form>
-                </details>
+                <p class="small text-muted mb-2">Yêu cầu gia hạn qua điện thoại được ghi nhận tại màn “Yêu cầu gia hạn”, nơi quản trị viên có thể chọn trường hợp thông thường/bất khả kháng và nhập minh chứng.</p>
 
                 @if (Model.Extensions.Count > 0)
                 {
-                    <div class="mt-3">
-                        @foreach (var extension in Model.Extensions)
+                    <div class="mt-2">
+                        @foreach (var extension in Model.Extensions.OrderByDescending(x => x.BookingExtensionId))
                         {
-                            <div class="d-flex justify-content-between border-top py-2 gap-2">
+                            <div class="d-flex justify-content-between border-top py-2 gap-2 flex-wrap">
                                 <span>Đến @extension.RequestedReturnDate.ToString("dd/MM HH:mm")</span>
-                                <span>@extension.AdditionalAmount.ToString("N0") đ · <strong>@extension.Status.ToVietnamese()</strong></span>
+                                <span>@extension.AdditionalAmount.ToString("N0") đ · <strong>@ExtensionText(extension.Status)</strong></span>
                             </div>
                         }
                     </div>
@@ -272,7 +274,10 @@
                     <input type="hidden" name="BookingId" value="@Model.BookingId" />
                     <div class="col-md-3">
                         <select name="ChargeType" class="form-select">
-                            @foreach (var type in Enum.GetValues<AdditionalChargeType>()) { <option value="@type">@type.ToVietnamese()</option> }
+                            @foreach (var type in Enum.GetValues<AdditionalChargeType>())
+                            {
+                                <option value="@type">@type.ToVietnamese()</option>
+                            }
                         </select>
                     </div>
                     <div class="col-md-5"><input name="Description" maxlength="250" class="form-control" placeholder="Căn cứ phụ phí" required /></div>
@@ -350,7 +355,10 @@
     <div class="col-lg-4">
         <div class="card card-body shadow-sm sticky-top" style="top:1rem">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h2 class="h5 mb-0">Tài chính</h2>
+                <div>
+                    <h2 class="h5 mb-0">Tài chính đơn thuê</h2>
+                    <div class="small text-muted">Theo trạng thái hiện tại của đơn</div>
+                </div>
                 <a class="small" asp-controller="AdminPayments" asp-action="Index">Mở sổ</a>
             </div>
 
@@ -386,10 +394,35 @@
                 <div class="d-flex justify-content-between mt-1"><span>Đã hoàn</span><strong>@totalRefunded.ToString("N0") đ</strong></div>
             }
 
-            <div class="d-grid gap-2 mt-3">
-                <a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Tiền thu</a>
-                <a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index" asp-route-section="adjustment">Phát sinh</a>
-                <a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund">Hoàn tiền</a>
+            <div class="mt-3">
+                @if (Model.Status == BookingStatus.PendingPayment || rentalPayment?.Status == PaymentStatus.AwaitingConfirmation)
+                {
+                    <a class="btn btn-primary w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Đối soát tiền thu</a>
+                    <div class="small text-muted mt-1">Kiểm tra giao dịch khách báo chuyển; nếu chưa khớp, gửi lý do để khách xác nhận lại.</div>
+                }
+                else if (Model.Status == BookingStatus.Rented)
+                {
+                    <a class="btn btn-primary w-100" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a>
+                    <div class="small text-muted mt-1">Theo dõi yêu cầu gia hạn và khoản thanh toán gia hạn.</div>
+                }
+                else if (Model.Status == BookingStatus.PendingInspection)
+                {
+                    <a class="btn btn-warning w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="adjustment">Theo dõi phụ phí / phát sinh</a>
+                }
+                else if (Model.Status == BookingStatus.AwaitingRefund)
+                {
+                    <a class="btn btn-warning w-100" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund">Xử lý hoàn cọc</a>
+                }
+                else
+                {
+                    <a class="btn btn-outline-primary w-100" asp-controller="AdminPayments" asp-action="Index">Xem giao dịch của hệ thống</a>
+                }
+
+                <div class="d-flex justify-content-center gap-3 flex-wrap mt-3 small">
+                    <a class="text-decoration-none" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Tiền thu</a>
+                    <a class="text-decoration-none" asp-controller="AdminPayments" asp-action="Index" asp-route-section="adjustment">Gia hạn & phụ phí</a>
+                    <a class="text-decoration-none" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund">Hoàn tiền</a>
+                </div>
             </div>
         </div>
     </div>
