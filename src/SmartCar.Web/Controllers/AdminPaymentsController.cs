@@ -60,11 +60,12 @@ public sealed class AdminPaymentsController : Controller
                 payment.Status == PaymentStatus.AwaitingConfirmation &&
                 payment.Type != PaymentType.Refund,
             "adjustment" =>
-                payment.Type is PaymentType.Extension or PaymentType.AdditionalCharge,
-            "refund" =>
-                payment.Type == PaymentType.Refund,
-            _ =>
-                payment.Type is PaymentType.Rental or PaymentType.Deposit
+                payment.Type is
+                    PaymentType.Extension or
+                    PaymentType.AdditionalCharge or
+                    PaymentType.VehicleSwapAdjustment,
+            "refund" => payment.Type == PaymentType.Refund,
+            _ => payment.Type is PaymentType.Rental or PaymentType.Deposit
         }).ToList();
 
         return View(filtered);
@@ -159,7 +160,7 @@ public sealed class AdminPaymentsController : Controller
                 {
                     notification.Message =
                         $"SmartCar chưa thể xác nhận giao dịch của đơn #{payment.BookingId}. " +
-                        $"Lý do: {reason}. Vui lòng kiểm tra lại và bấm gửi xác nhận chuyển khoản lần nữa sau khi đã xử lý.";
+                        $"Lý do: {reason}. Vui lòng kiểm tra lại và gửi xác nhận lần nữa.";
                     notification.IsRead = false;
                     notification.ReadAt = null;
                     await _dbContext.SaveChangesAsync(cancellationToken);
@@ -168,7 +169,7 @@ public sealed class AdminPaymentsController : Controller
         }
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã yêu cầu khách kiểm tra và gửi lại xác nhận thanh toán kèm lý do."
+            ? "Đã gửi lý do để khách kiểm tra và gửi lại."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction(nameof(Index), new { section = section ?? "collection" });
@@ -207,12 +208,18 @@ public sealed class AdminPaymentsController : Controller
 
         var payment = await _dbContext.Payments
             .Include(item => item.Booking)
+                .ThenInclude(booking => booking.Payments)
             .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
+
+        var hasOtherPendingRefund = payment?.Booking.Payments.Any(item =>
+            item.Type == PaymentType.Refund &&
+            item.Status == PaymentStatus.AwaitingRefund) == true;
 
         var completedAfterRefund = payment is not null &&
             payment.Type == PaymentType.Refund &&
             payment.Status == PaymentStatus.Refunded &&
-            payment.Booking.Status == BookingStatus.AwaitingRefund;
+            payment.Booking.Status == BookingStatus.AwaitingRefund &&
+            !hasOtherPendingRefund;
 
         if (completedAfterRefund)
         {
@@ -223,18 +230,18 @@ public sealed class AdminPaymentsController : Controller
                 UserId = payment.Booking.CustomerId,
                 Title = "Đơn thuê đã hoàn tất",
                 Message = compensationDeduction.DeductedAmount > 0
-                    ? $"Đơn #{payment.BookingId} đã hoàn tất. SmartCar đã hoàn {payment.Amount:N0} đồng sau khi khấu trừ {compensationDeduction.DeductedAmount:N0} đồng bồi thường đơn thuê kế tiếp theo biên bản/chính sách đã xác nhận."
-                    : $"Đơn #{payment.BookingId} đã hoàn tất. SmartCar đã hoàn {payment.Amount:N0} đồng."
+                    ? $"Đơn #{payment.BookingId} đã hoàn tất. Đã khấu trừ {compensationDeduction.DeductedAmount:N0} đồng theo phương án bồi thường và hoàn phần cọc còn lại."
+                    : $"Đơn #{payment.BookingId} đã hoàn tất. Các khoản hoàn đã được xử lý."
             });
 
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
         TempData["SuccessMessage"] = completedAfterRefund
-            ? compensationDeduction.DeductedAmount > 0
-                ? $"Đã hoàn cọc sau khi khấu trừ {compensationDeduction.DeductedAmount:N0} đ bồi thường. Chuyến thuê đã hoàn tất."
-                : "Đã hoàn cọc. Chuyến thuê đã hoàn tất."
-            : "Đã xác nhận hoàn tiền.";
+            ? "Đã xử lý khoản hoàn cuối cùng. Chuyến thuê đã hoàn tất."
+            : hasOtherPendingRefund
+                ? "Đã xác nhận khoản hoàn này. Vẫn còn khoản hoàn khác cần xử lý."
+                : "Đã xác nhận hoàn tiền.";
 
         if (completedAfterRefund && payment is not null)
         {
@@ -260,9 +267,14 @@ public sealed class AdminPaymentsController : Controller
             return (false, 0m, "Không tìm thấy khoản hoàn tiền.");
         }
 
+        var isDepositRefund =
+            payment.Method == PaymentMethods.DepositRefund ||
+            (payment.Method == PaymentMethods.BankTransferRefund && payment.Booking.VehicleReturn is not null);
+
         if (payment.Type != PaymentType.Refund ||
             payment.Status != PaymentStatus.AwaitingRefund ||
-            payment.Booking.Status != BookingStatus.AwaitingRefund)
+            payment.Booking.Status != BookingStatus.AwaitingRefund ||
+            !isDepositRefund)
         {
             return (true, 0m, null);
         }
@@ -299,7 +311,7 @@ public sealed class AdminPaymentsController : Controller
         payment.Booking.TotalAmount += deduction;
         payment.Booking.RefundReason = AppendText(
             payment.Booking.RefundReason,
-            $"Khấu trừ {deduction:N0} đồng từ tiền cọc để bồi thường đơn thuê kế tiếp bị ảnh hưởng bởi gia hạn bất khả kháng.");
+            $"Khấu trừ {deduction:N0} đồng từ cọc để bồi thường đơn thuê kế tiếp.");
 
         payment.Booking.Payments.Add(new Payment
         {
@@ -315,7 +327,7 @@ public sealed class AdminPaymentsController : Controller
         {
             UserId = payment.Booking.CustomerId,
             Title = "Đối soát tiền cọc",
-            Message = $"Đơn #{payment.BookingId}: SmartCar khấu trừ {deduction:N0} đồng từ tiền cọc để bồi thường đơn thuê kế tiếp bị ảnh hưởng theo phương án xử lý gia hạn bất khả kháng. Số tiền cọc còn hoàn: {payment.Amount:N0} đồng."
+            Message = $"Đơn #{payment.BookingId}: khấu trừ {deduction:N0} đồng theo phương án bồi thường. Cọc còn hoàn: {payment.Amount:N0} đồng."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -379,7 +391,9 @@ public sealed class AdminPaymentsController : Controller
 
         return type switch
         {
-            PaymentType.Extension or PaymentType.AdditionalCharge => "adjustment",
+            PaymentType.Extension or
+            PaymentType.AdditionalCharge or
+            PaymentType.VehicleSwapAdjustment => "adjustment",
             PaymentType.Refund => "refund",
             _ => "collection"
         };
