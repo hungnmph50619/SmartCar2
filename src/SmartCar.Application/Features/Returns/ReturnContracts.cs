@@ -8,6 +8,8 @@ public sealed record CreateReturnRequest(
     DateTime ReturnedAt,
     int Mileage,
     string FuelLevel,
+    string AccessoriesStatus,
+    string? MissingAccessories,
     string? ExteriorCondition,
     string? InteriorCondition,
     bool HasDamage,
