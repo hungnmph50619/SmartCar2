@@ -50,6 +50,7 @@ internal sealed class BookingOperationService : IBookingOperationService
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
+            .Include(item => item.Handover)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (booking is null)
@@ -61,6 +62,12 @@ internal sealed class BookingOperationService : IBookingOperationService
         {
             return OperationResult.Failure(
                 "Chỉ đơn đã thanh toán nhưng chưa giao xe mới được ghi nhận khách không đến nhận.");
+        }
+
+        if (booking.Handover is not null)
+        {
+            return OperationResult.Failure(
+                "Đơn đã có biên bản giao xe điện tử nên không thể ghi nhận khách không đến nhận.");
         }
 
         if (DateTime.Now < booking.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes))
