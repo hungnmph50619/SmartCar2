@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -44,6 +45,8 @@ public sealed class ExtensionsController : Controller
         ExtensionRequestViewModel model,
         bool isForceMajeure,
         string? evidenceNote,
+        string? evidenceLatitude,
+        string? evidenceLongitude,
         IFormFile? evidenceImage,
         CancellationToken cancellationToken)
     {
@@ -51,6 +54,32 @@ public sealed class ExtensionsController : Controller
         if (string.IsNullOrWhiteSpace(customerId))
         {
             return Challenge();
+        }
+
+        string? liveLocationText = null;
+        if (isForceMajeure)
+        {
+            if (string.IsNullOrWhiteSpace(model.CustomerNote))
+            {
+                TempData["ErrorMessage"] = "Vui lòng nêu rõ lý do bất khả kháng.";
+                return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
+            }
+
+            if (evidenceImage is null || evidenceImage.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Trường hợp bất khả kháng bắt buộc phải có ảnh minh chứng tình trạng xe/sự cố.";
+                return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
+            }
+
+            if (!TryParseLiveLocation(evidenceLatitude, evidenceLongitude, out var latitude, out var longitude))
+            {
+                TempData["ErrorMessage"] = "Trường hợp bất khả kháng bắt buộc phải lấy vị trí trực tiếp trước khi gửi yêu cầu.";
+                return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
+            }
+
+            liveLocationText =
+                $"Vị trí trực tiếp: {latitude.ToString("0.000000", CultureInfo.InvariantCulture)}, " +
+                longitude.ToString("0.000000", CultureInfo.InvariantCulture);
         }
 
         var (imagePath, imageError) = await SaveEvidenceImageAsync(
@@ -64,7 +93,7 @@ public sealed class ExtensionsController : Controller
             return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
         }
 
-        var composedEvidence = ComposeEvidence(evidenceNote, imagePath);
+        var composedEvidence = ComposeEvidence(evidenceNote, imagePath, liveLocationText);
         var result = ModelState.IsValid
             ? await _extensionService.RequestAsync(
                 customerId,
@@ -84,7 +113,7 @@ public sealed class ExtensionsController : Controller
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? isForceMajeure
-                ? "Đã gửi yêu cầu gia hạn bất khả kháng. SmartCar sẽ kiểm tra minh chứng, vị trí và lịch xe trước khi quyết định."
+                ? "Đã gửi yêu cầu gia hạn bất khả kháng kèm ảnh và vị trí trực tiếp. SmartCar sẽ kiểm tra lịch xe và phương án cho khách kế tiếp trước khi quyết định."
                 : "Đã gửi yêu cầu gia hạn."
             : string.Join("; ", result.Errors);
 
@@ -107,6 +136,19 @@ public sealed class ExtensionsController : Controller
             return Challenge();
         }
 
+        if (evidenceImage is null || evidenceImage.Length == 0)
+        {
+            TempData["ErrorMessage"] = "Vui lòng gửi lại ảnh minh chứng theo yêu cầu của SmartCar.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (string.IsNullOrWhiteSpace(evidenceNote) ||
+            !evidenceNote.Contains("Vị trí trực tiếp:", StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["ErrorMessage"] = "Vui lòng bấm Lấy vị trí hiện tại và gửi lại vị trí trực tiếp cùng minh chứng.";
+            return RedirectToAction(nameof(Index));
+        }
+
         var (imagePath, imageError) = await SaveEvidenceImageAsync(
             bookingId,
             evidenceImage,
@@ -118,7 +160,7 @@ public sealed class ExtensionsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var composedEvidence = ComposeEvidence(evidenceNote, imagePath);
+        var composedEvidence = ComposeEvidence(evidenceNote, imagePath, null);
         var result = await _extensionService.SupplementEvidenceAsync(
             extensionId,
             customerId,
@@ -132,7 +174,7 @@ public sealed class ExtensionsController : Controller
         }
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã bổ sung minh chứng và gửi lại yêu cầu gia hạn."
+            ? "Đã bổ sung ảnh, vị trí trực tiếp và gửi lại yêu cầu gia hạn."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction(nameof(Index));
@@ -192,24 +234,62 @@ public sealed class ExtensionsController : Controller
         }
     }
 
-    private static string ComposeEvidence(string? evidenceNote, string? imagePath)
+    private static string ComposeEvidence(
+        string? evidenceNote,
+        string? imagePath,
+        string? liveLocationText)
     {
-        var text = string.IsNullOrWhiteSpace(evidenceNote)
-            ? string.Empty
-            : string.Join(
-                " | ",
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(evidenceNote))
+        {
+            parts.AddRange(
                 evidenceNote
                     .Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(line => line.Trim())
                     .Where(line => line.Length > 0));
+        }
+
+        if (!string.IsNullOrWhiteSpace(liveLocationText) &&
+            !parts.Any(part => part.Contains("Vị trí trực tiếp:", StringComparison.OrdinalIgnoreCase)))
+        {
+            parts.Add(liveLocationText);
+        }
 
         if (!string.IsNullOrWhiteSpace(imagePath))
         {
-            text = string.IsNullOrWhiteSpace(text)
-                ? $"Ảnh minh chứng: {imagePath}"
-                : $"{text} | Ảnh minh chứng: {imagePath}";
+            parts.Add($"Ảnh minh chứng: {imagePath}");
         }
 
-        return text;
+        return string.Join(" | ", parts);
+    }
+
+    private static bool TryParseLiveLocation(
+        string? latitudeText,
+        string? longitudeText,
+        out decimal latitude,
+        out decimal longitude)
+    {
+        latitude = 0;
+        longitude = 0;
+
+        var normalizedLatitude = latitudeText?.Trim().Replace(',', '.');
+        var normalizedLongitude = longitudeText?.Trim().Replace(',', '.');
+
+        var latitudeOk = decimal.TryParse(
+            normalizedLatitude,
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out latitude);
+
+        var longitudeOk = decimal.TryParse(
+            normalizedLongitude,
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out longitude);
+
+        return latitudeOk && longitudeOk &&
+               latitude is >= -90 and <= 90 &&
+               longitude is >= -180 and <= 180;
     }
 }
