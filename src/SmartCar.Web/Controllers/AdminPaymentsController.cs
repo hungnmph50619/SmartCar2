@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SmartCar.Application.Features.Extensions;
 using SmartCar.Application.Features.Payments;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
@@ -14,13 +15,16 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminPaymentsController : Controller
 {
     private readonly IPaymentService _paymentService;
+    private readonly IExtensionService _extensionService;
     private readonly ApplicationDbContext _dbContext;
 
     public AdminPaymentsController(
         IPaymentService paymentService,
+        IExtensionService extensionService,
         ApplicationDbContext dbContext)
     {
         _paymentService = paymentService;
+        _extensionService = extensionService;
         _dbContext = dbContext;
     }
 
@@ -76,6 +80,28 @@ public sealed class AdminPaymentsController : Controller
             adminId,
             cancellationToken);
 
+        if (result.Succeeded)
+        {
+            var payment = await _dbContext.Payments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
+
+            if (payment?.Type == PaymentType.Extension)
+            {
+                var extensionResult = await _extensionService.MarkPaidAsync(
+                    payment.BookingId,
+                    cancellationToken);
+
+                if (!extensionResult.Succeeded)
+                {
+                    TempData["ErrorMessage"] =
+                        "Đã xác nhận tiền gia hạn nhưng chưa cập nhật được ngày trả mới: " +
+                        string.Join("; ", extensionResult.Errors);
+                    return RedirectToAction(nameof(Index), new { section = section ?? "adjustment" });
+                }
+            }
+        }
+
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã xác nhận nhận được tiền."
             : string.Join("; ", result.Errors);
@@ -88,16 +114,58 @@ public sealed class AdminPaymentsController : Controller
     public async Task<IActionResult> RejectQr(
         int paymentId,
         string? section,
+        string reason,
         CancellationToken cancellationToken)
     {
+        reason = reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["ErrorMessage"] = "Vui lòng nhập lý do yêu cầu khách gửi lại xác nhận thanh toán.";
+            return RedirectToAction(nameof(Index), new { section = section ?? "collection" });
+        }
+
+        if (reason.Length > 500)
+        {
+            TempData["ErrorMessage"] = "Lý do tối đa 500 ký tự.";
+            return RedirectToAction(nameof(Index), new { section = section ?? "collection" });
+        }
+
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var result = await _paymentService.RejectQrPaymentAsync(
             paymentId,
             adminId,
             cancellationToken);
 
+        if (result.Succeeded)
+        {
+            var payment = await _dbContext.Payments
+                .AsNoTracking()
+                .Include(item => item.Booking)
+                .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
+
+            if (payment is not null)
+            {
+                var notification = await _dbContext.Notifications
+                    .Where(item =>
+                        item.UserId == payment.Booking.CustomerId &&
+                        item.Title == "Chưa xác nhận được chuyển khoản")
+                    .OrderByDescending(item => item.NotificationId)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (notification is not null)
+                {
+                    notification.Message =
+                        $"SmartCar chưa thể xác nhận giao dịch của đơn #{payment.BookingId}. " +
+                        $"Lý do: {reason}. Vui lòng kiểm tra lại và bấm gửi xác nhận chuyển khoản lần nữa sau khi đã xử lý.";
+                    notification.IsRead = false;
+                    notification.ReadAt = null;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+            }
+        }
+
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã trả giao dịch về trạng thái chờ thanh toán."
+            ? "Đã yêu cầu khách kiểm tra và gửi lại xác nhận thanh toán kèm lý do."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction(nameof(Index), new { section = section ?? "collection" });
