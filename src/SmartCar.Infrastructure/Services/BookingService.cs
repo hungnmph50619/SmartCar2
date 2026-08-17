@@ -199,6 +199,7 @@ internal sealed class BookingService : IBookingService
             DailyPrice = vehicle.DailyPrice,
             NumberOfDays = numberOfDays,
             RentalAmount = rentalAmount,
+            DepositAmount = depositAmount,
             AdditionalAmount = 0,
             TotalAmount = rentalAmount + deliveryFee,
             PickupMethod = request.PickupMethod,
@@ -326,7 +327,6 @@ internal sealed class BookingService : IBookingService
 
         var rentalPayment = booking.Payments
             .FirstOrDefault(payment => payment.Type == PaymentType.Rental);
-        var rentalPaymentAmount = booking.RentalAmount;
 
         if (rentalPayment is null)
         {
@@ -618,8 +618,6 @@ internal sealed class BookingService : IBookingService
             AdditionalAmount = normalizedAdditionalAmount,
             DepositDeductionAmount = depositDeduction,
             TotalAmount = normalizedTotalAmount,
-            AdditionalAmount = booking.AdditionalAmount,
-            TotalAmount = booking.TotalAmount,
             Status = booking.Status,
             CreatedAt = booking.CreatedAt,
             CancelReason = booking.CancelReason,
