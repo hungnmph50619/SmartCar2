@@ -11,7 +11,9 @@
     <style>
         body { font-family: Arial, sans-serif; color:#111; margin:18mm; font-size:13px; line-height:1.45; }
         h1 { text-align:center; font-size:21px; margin:0 0 4px; }
-        .sub { text-align:center; margin-bottom:20px; color:#555; }
+        .sub { text-align:center; margin-bottom:18px; color:#555; }
+        .parties { border:1px solid #aaa; padding:10px; margin-bottom:14px; }
+        .parties div + div { margin-top:5px; }
         .grid { display:grid; grid-template-columns:1fr 1fr; gap:7px 24px; }
         table { width:100%; border-collapse:collapse; margin-top:14px; }
         th,td { border:1px solid #aaa; padding:7px; text-align:left; vertical-align:top; }
@@ -32,35 +34,40 @@
     <h1>BIÊN BẢN TRẢ XE</h1>
     <div class="sub">SmartCar · Đơn #@booking.BookingId</div>
 
+    <div class="parties">
+        <div><strong>Bên A – Bên cho thuê:</strong> SmartCar</div>
+        <div><strong>Bên B – Bên thuê:</strong> @booking.CustomerName · @booking.CustomerPhone</div>
+    </div>
+
     <div class="grid">
-        <div><strong>Khách hàng:</strong> @booking.CustomerName</div>
-        <div><strong>SĐT:</strong> @booking.CustomerPhone</div>
         <div><strong>Xe:</strong> @booking.VehicleName</div>
         <div><strong>Biển số:</strong> @booking.LicensePlate</div>
         <div><strong>Thời gian trả:</strong> @Model.RecordedAt.ToString("dd/MM/yyyy HH:mm")</div>
-        <div><strong>Ảnh xe:</strong> @Model.ImagePaths.Count ảnh lưu trên SmartCar</div>
+        <div><strong>Ảnh đối chiếu:</strong> @Model.ImagePaths.Count ảnh lưu trên SmartCar</div>
     </div>
 
     <table>
         <tr><th>Số km khi trả</th><td>@Model.Mileage.ToString("N0") km</td></tr>
         <tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr>
+        <tr><th>Ngoại thất</th><td>@(Model.ExteriorCondition ?? "Không ghi nhận bất thường")</td></tr>
+        <tr><th>Nội thất</th><td>@(Model.InteriorCondition ?? "Không ghi nhận bất thường")</td></tr>
         <tr><th>Hư hỏng mới</th><td>@(Model.HasDamage ? "Có" : "Không")</td></tr>
         <tr><th>Trả muộn</th><td>@(Model.IsLateReturn ? $"Có - {Model.LateMinutes} phút" : "Không")</td></tr>
         <tr><th>Ghi chú</th><td>@(Model.Notes ?? "Không có")</td></tr>
     </table>
 
     <div class="confirm">
-        Hai bên xác nhận đã đối chiếu tình trạng xe khi trả với hồ sơ giao xe và các ảnh lưu trên SmartCar. Các khoản phát sinh, nếu có, được xử lý riêng trong phần quyết toán của đơn.
+        Hai bên xác nhận đã đối chiếu tình trạng xe khi trả với biên bản giao và ảnh lưu trên SmartCar. Khoản phát sinh chỉ được xử lý khi có căn cứ đối chiếu.
     </div>
 
     <div class="signatures">
         <div>
-            <strong>ĐẠI DIỆN SMARTCAR</strong>
+            <strong>ĐẠI DIỆN BÊN A</strong>
             <div class="signature-space"></div>
             <div>(Ký, ghi rõ họ tên)</div>
         </div>
         <div>
-            <strong>KHÁCH HÀNG</strong>
+            <strong>BÊN B – KHÁCH HÀNG</strong>
             <div class="signature-space"></div>
             <div>(Ký, ghi rõ họ tên)</div>
         </div>
