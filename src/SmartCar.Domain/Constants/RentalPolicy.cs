@@ -7,6 +7,11 @@ namespace SmartCar.Domain.Constants
         // Tiền cọc = 300% tiền thuê ban đầu
         public const decimal DepositRate = 3.00m;
 
+        // No-show: sau 30 phút, giữ 70% tiền thuê và hoàn 30% tiền thuê còn lại.
+        // Tiền cọc được hoàn theo số cọc còn lại thực tế của đơn.
+        public const int NoShowGraceMinutes = 30;
+        public const decimal NoShowFeeRate = 0.70m;
+
         // ============================================================
         // CHÍNH SÁCH GIAO XE THEO KHOẢNG CÁCH
         // ============================================================
@@ -39,14 +44,12 @@ namespace SmartCar.Domain.Constants
         public const decimal LateReturnFeeMultiplier = 1.50m;
 
         public const string TrafficFineTerms =
-            "Khách hàng chịu toàn bộ tiền phạt giao thông và chi phí phát sinh theo chứng từ/quyết định của cơ quan có thẩm quyền đối với vi phạm xảy ra trong thời gian thuê.";
+            "Vi phạm giao thông/phạt nguội phát sinh trong thời gian thuê do Bên B chịu trách nhiệm. Khi SmartCar thông báo, Bên B trực tiếp làm việc với cơ quan có thẩm quyền; Bên A cung cấp hồ sơ thuê xe cần thiết để xác định người điều khiển. Bên B có trách nhiệm phối hợp xử lý.";
 
         public const string DamageCompensationTerms =
-            "Hư hỏng, mất mát do khách hàng gây ra được bồi thường theo chi phí sửa chữa/thay thế thực tế có chứng từ hoặc báo giá hợp lệ. " +
-            "Nếu yêu cầu gia hạn bị SmartCar từ chối, khách hàng phải trả xe đúng thời hạn đã cam kết. " +
-            "Trường hợp khách hàng cố tình không trả xe đúng hạn và việc này làm SmartCar không thể thực hiện đơn thuê kế tiếp, ngoài phí trả muộn khách hàng phải bồi thường khoản tương ứng giá trị tiền thuê và phí giao của đơn thuê kế tiếp bị ảnh hưởng; khoản bồi thường được đối soát theo đơn thực tế và có thể khấu trừ từ tiền cọc. " +
-            "Nếu gia hạn do bất khả kháng làm ảnh hưởng đơn kế tiếp, SmartCar sẽ xử lý phương án đổi xe hoặc hủy/hoàn tiền cho khách kế tiếp trước khi duyệt gia hạn; khoản bồi thường phát sinh (nếu có) được ghi nhận riêng và đối soát với tiền cọc của khách đang thuê. " +
-            "Các khoản bồi thường được xác định riêng, không tự động gộp với phạt giao thông hoặc phí vượt kilomet.";
+            "Hư hỏng, mất mát hoặc thiếu phụ kiện do Bên B gây ra được bồi thường theo thiệt hại thực tế, hợp lý, có ảnh đối chiếu và chứng từ/báo giá hợp lệ. " +
+            "Nếu gia hạn bị từ chối, Bên B phải trả xe đúng hạn; trường hợp cố tình trả muộn làm ảnh hưởng đơn kế tiếp, Bên B chịu phí trả muộn và thiệt hại thực tế có căn cứ. " +
+            "Trường hợp bất khả kháng, SmartCar xử lý đơn kế tiếp trước khi duyệt gia hạn. Các khoản phát sinh được thông báo và đối soát riêng trước khi khấu trừ tiền cọc.";
 
         // ============================================================
         // TÍNH KHOẢNG CÁCH
