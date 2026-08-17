@@ -63,9 +63,7 @@ public sealed class ReturnsController : Controller
 
         var handover = await _dbContext.VehicleHandovers
             .AsNoTracking()
-            .FirstOrDefaultAsync(
-                item => item.BookingId == bookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (handover is null)
         {
@@ -78,9 +76,7 @@ public sealed class ReturnsController : Controller
         return View(new ReturnViewModel
         {
             BookingId = bookingId,
-            ReturnedAt = DateTime.Now > booking.ReturnDate
-                ? DateTime.Now
-                : booking.ReturnDate,
+            ReturnedAt = DateTime.Now > booking.ReturnDate ? DateTime.Now : booking.ReturnDate,
             Mileage = handover.Mileage
         });
     }
@@ -98,10 +94,7 @@ public sealed class ReturnsController : Controller
             return View(model);
         }
 
-        var imagePaths = await SaveImagesAsync(
-            model.BookingId,
-            model.Images,
-            cancellationToken);
+        var imagePaths = await SaveImagesAsync(model.BookingId, model.Images, cancellationToken);
 
         var result = await _returnService.CreateAsync(
             new CreateReturnRequest(
@@ -142,10 +135,7 @@ public sealed class ReturnsController : Controller
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var booking = await _bookingService.GetAdminBookingAsync(
-            bookingId,
-            cancellationToken);
-
+        var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
         if (booking is null)
         {
             return NotFound();
@@ -155,9 +145,7 @@ public sealed class ReturnsController : Controller
             .AsNoTracking()
             .Include(item => item.Handover)
             .Include(item => item.VehicleReturn)
-            .FirstOrDefaultAsync(
-                item => item.BookingId == bookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (records?.Handover is null || records.VehicleReturn is null)
         {
@@ -316,9 +304,7 @@ public sealed class ReturnsController : Controller
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
-            .FirstOrDefaultAsync(
-                item => item.BookingId == model.BookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == model.BookingId, cancellationToken);
 
         var awaitingRefund = booking?.Payments
             .Where(payment =>
@@ -343,14 +329,11 @@ public sealed class ReturnsController : Controller
             {
                 completionNotification.Title = "Đã kiểm tra xe - chờ hoàn cọc";
                 completionNotification.Message =
-                    $"Đơn #{booking.BookingId} đã kiểm tra xong. " +
-                    $"Đang chờ hoàn cọc {awaitingRefund.Amount:N0} đồng.";
+                    $"Đơn #{booking.BookingId} đã kiểm tra xong. Đang chờ hoàn cọc {awaitingRefund.Amount:N0} đồng.";
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
-
-            TempData["SuccessMessage"] =
-                $"Đã đối chiếu hồ sơ. Chờ hoàn cọc {awaitingRefund.Amount:N0} đ.";
+            TempData["SuccessMessage"] = $"Đã đối chiếu hồ sơ. Chờ hoàn cọc {awaitingRefund.Amount:N0} đ.";
         }
         else
         {
@@ -388,9 +371,7 @@ public sealed class ReturnsController : Controller
     {
         var handover = await _dbContext.VehicleHandovers
             .AsNoTracking()
-            .FirstOrDefaultAsync(
-                item => item.BookingId == bookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (handover is not null)
         {
@@ -403,6 +384,8 @@ public sealed class ReturnsController : Controller
         ViewBag.HandoverMileage = handover.Mileage;
         ViewBag.HandoverFuelLevel = handover.FuelLevel;
         ViewBag.HandoverAt = handover.HandoverAt;
+        ViewBag.HandoverIncludedKilometers = handover.IncludedKilometers;
+        ViewBag.HandoverExcessKmFeePerKm = handover.ExcessKmFeePerKm;
     }
 
     private async Task ValidateImagesAsync(
