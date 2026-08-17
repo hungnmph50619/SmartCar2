@@ -10,6 +10,8 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class ReturnService : IReturnService
 {
+    private const int MaximumReasonableKilometersPerDay = 2500;
+
     private readonly ApplicationDbContext _dbContext;
 
     public ReturnService(ApplicationDbContext dbContext)
@@ -36,66 +38,61 @@ internal sealed class ReturnService : IReturnService
 
         if (booking is null)
         {
-            return OperationResult.Failure(
-                "Không tìm thấy đơn thuê.");
+            return OperationResult.Failure("Không tìm thấy đơn thuê.");
         }
 
-        if (booking.Status != BookingStatus.Rented ||
-            booking.Handover is null)
+        if (booking.Status != BookingStatus.Rented || booking.Handover is null)
         {
-            return OperationResult.Failure(
-                "Chỉ đơn đang thuê và đã bàn giao xe mới được trả xe.");
+            return OperationResult.Failure("Chỉ đơn đang thuê và đã bàn giao xe mới được trả xe.");
         }
 
         if (booking.VehicleReturn is not null)
         {
-            return OperationResult.Failure(
-                "Đơn đã có biên bản trả xe.");
+            return OperationResult.Failure("Đơn đã có biên bản trả xe.");
         }
 
         if (request.Mileage < booking.Handover.Mileage)
         {
             return OperationResult.Failure(
-                $"Số km trả xe không được nhỏ hơn lúc giao " +
-                $"({booking.Handover.Mileage:N0} km).");
+                $"Số km trả xe không được nhỏ hơn lúc giao ({booking.Handover.Mileage:N0} km).");
         }
 
         if (request.ReturnedAt < booking.Handover.HandoverAt)
         {
+            return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
+        }
+
+        var drivenKilometers = request.Mileage - booking.Handover.Mileage;
+        var elapsedDays = Math.Max(
+            1,
+            (int)Math.Ceiling((request.ReturnedAt - booking.Handover.HandoverAt).TotalHours / 24d));
+        var maximumReasonableKilometers = elapsedDays * MaximumReasonableKilometersPerDay;
+
+        if (drivenKilometers > maximumReasonableKilometers)
+        {
             return OperationResult.Failure(
-                "Thời gian trả xe không được trước thời gian giao xe.");
+                $"Số km tăng {drivenKilometers:N0} km trong {elapsedDays} ngày là bất thường. " +
+                $"Vui lòng kiểm tra lại công-tơ-mét lúc giao ({booking.Handover.Mileage:N0} km) và lúc trả ({request.Mileage:N0} km) trước khi tiếp tục.");
         }
 
         if (!TryParseFuelPercent(request.FuelLevel, out var fuelPercent))
         {
-            return OperationResult.Failure(
-                "Mức nhiên liệu khi trả phải là số từ 0 đến 100%.");
+            return OperationResult.Failure("Mức nhiên liệu khi trả phải là số từ 0 đến 100%.");
         }
 
-        var lateMinutes =
-            request.ReturnedAt > booking.ReturnDate
-                ? (int)Math.Ceiling(
-                    (request.ReturnedAt - booking.ReturnDate)
-                    .TotalMinutes)
-                : 0;
+        var lateMinutes = request.ReturnedAt > booking.ReturnDate
+            ? (int)Math.Ceiling((request.ReturnedAt - booking.ReturnDate).TotalMinutes)
+            : 0;
 
-        var lateDays =
-            lateMinutes > 0
-                ? Math.Max(
-                    1,
-                    (int)Math.Ceiling(
-                        lateMinutes / 1440d))
-                : 0;
+        var lateDays = lateMinutes > 0
+            ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
+            : 0;
 
-        var lateReturnMultiplier =
-            booking.Handover.LateReturnFeeMultiplier >= 1
-                ? booking.Handover.LateReturnFeeMultiplier
-                : RentalPolicy.LateReturnFeeMultiplier;
+        var lateReturnMultiplier = booking.Handover.LateReturnFeeMultiplier >= 1
+            ? booking.Handover.LateReturnFeeMultiplier
+            : RentalPolicy.LateReturnFeeMultiplier;
 
-        var lateFee =
-            lateDays *
-            booking.DailyPrice *
-            lateReturnMultiplier;
+        var lateFee = lateDays * booking.DailyPrice * lateReturnMultiplier;
 
         var vehicleReturn = new VehicleReturn
         {
@@ -112,46 +109,32 @@ internal sealed class ReturnService : IReturnService
             Notes = Normalize(request.Notes)
         };
 
-        var drivenKilometers =
-            request.Mileage -
-            booking.Handover.Mileage;
+        var excessKilometers = Math.Max(
+            0,
+            drivenKilometers - booking.Handover.IncludedKilometers);
 
-        var excessKilometers =
-            Math.Max(
-                0,
-                drivenKilometers -
-                booking.Handover.IncludedKilometers);
-
-        var excessMileageFee =
-            excessKilometers *
-            booking.Handover.ExcessKmFeePerKm;
+        var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
 
         if (lateFee > 0)
         {
-            vehicleReturn.AdditionalCharges.Add(
-                new AdditionalCharge
-                {
-                    ChargeType = AdditionalChargeType.LateReturn,
-                    Description =
-                        $"Phí trả xe muộn {lateMinutes} phút " +
-                        $"({lateDays} ngày tính phí x 150%).",
-                    Amount = lateFee
-                });
+            vehicleReturn.AdditionalCharges.Add(new AdditionalCharge
+            {
+                ChargeType = AdditionalChargeType.LateReturn,
+                Description = $"Phí trả xe muộn {lateMinutes} phút ({lateDays} ngày tính phí x 150%).",
+                Amount = lateFee
+            });
         }
 
         if (excessMileageFee > 0)
         {
-            vehicleReturn.AdditionalCharges.Add(
-                new AdditionalCharge
-                {
-                    ChargeType = AdditionalChargeType.ExcessMileage,
-                    Description =
-                        $"Phí vượt {excessKilometers:N0} km " +
-                        $"so với định mức " +
-                        $"{booking.Handover.IncludedKilometers:N0} km " +
-                        $"x {booking.Handover.ExcessKmFeePerKm:N0} đ/km.",
-                    Amount = excessMileageFee
-                });
+            vehicleReturn.AdditionalCharges.Add(new AdditionalCharge
+            {
+                ChargeType = AdditionalChargeType.ExcessMileage,
+                Description =
+                    $"Phí vượt {excessKilometers:N0} km so với định mức " +
+                    $"{booking.Handover.IncludedKilometers:N0} km x {booking.Handover.ExcessKmFeePerKm:N0} đ/km.",
+                Amount = excessMileageFee
+            });
         }
 
         booking.VehicleReturn = vehicleReturn;
@@ -161,16 +144,14 @@ internal sealed class ReturnService : IReturnService
 
         if (lateFee > 0)
         {
-            _dbContext.Notifications.Add(
-                new Notification
-                {
-                    UserId = booking.CustomerId,
-                    Title = "Xe được ghi nhận trả muộn",
-                    Message =
-                        $"Đơn #{booking.BookingId} trả muộn " +
-                        $"{lateMinutes} phút. " +
-                        $"Phí trả muộn tạm tính: {lateFee:N0} đồng."
-                });
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = booking.CustomerId,
+                Title = "Xe được ghi nhận trả muộn",
+                Message =
+                    $"Đơn #{booking.BookingId} trả muộn {lateMinutes} phút. " +
+                    $"Phí trả muộn tạm tính: {lateFee:N0} đồng."
+            });
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -184,48 +165,38 @@ internal sealed class ReturnService : IReturnService
         AddChargeRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (request.Amount <= 0 ||
-            string.IsNullOrWhiteSpace(request.Description))
+        if (request.Amount <= 0 || string.IsNullOrWhiteSpace(request.Description))
         {
-            return OperationResult.Failure(
-                "Mô tả và số tiền phụ phí không hợp lệ.");
+            return OperationResult.Failure("Mô tả và số tiền phụ phí không hợp lệ.");
         }
 
         var booking = await ChargeQuery()
-            .FirstOrDefaultAsync(
-                item => item.BookingId == request.BookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == request.BookingId, cancellationToken);
 
-        if (booking is null ||
-            booking.VehicleReturn is null)
+        if (booking is null || booking.VehicleReturn is null)
         {
-            return OperationResult.Failure(
-                "Không tìm thấy biên bản trả xe.");
+            return OperationResult.Failure("Không tìm thấy biên bản trả xe.");
         }
 
         if (booking.Status != BookingStatus.PendingInspection)
         {
-            return OperationResult.Failure(
-                "Chỉ đơn đang chờ kiểm tra mới được thêm phụ phí.");
+            return OperationResult.Failure("Chỉ đơn đang chờ kiểm tra mới được thêm phụ phí.");
         }
 
         if (HasPaidAdditionalCharge(booking))
         {
-            return OperationResult.Failure(
-                "Không thể sửa phụ phí sau khi khách đã thanh toán.");
+            return OperationResult.Failure("Không thể sửa phụ phí sau khi khách đã thanh toán.");
         }
 
-        booking.VehicleReturn.AdditionalCharges.Add(
-            new AdditionalCharge
-            {
-                ChargeType = request.ChargeType,
-                Description = request.Description.Trim(),
-                Amount = request.Amount
-            });
+        booking.VehicleReturn.AdditionalCharges.Add(new AdditionalCharge
+        {
+            ChargeType = request.ChargeType,
+            Description = request.Description.Trim(),
+            Amount = request.Amount
+        });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
-
         return OperationResult.Success();
     }
 
@@ -235,45 +206,34 @@ internal sealed class ReturnService : IReturnService
         CancellationToken cancellationToken = default)
     {
         var booking = await ChargeQuery()
-            .FirstOrDefaultAsync(
-                item => item.BookingId == bookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
-        if (booking is null ||
-            booking.VehicleReturn is null)
+        if (booking is null || booking.VehicleReturn is null)
         {
-            return OperationResult.Failure(
-                "Không tìm thấy biên bản trả xe.");
+            return OperationResult.Failure("Không tìm thấy biên bản trả xe.");
         }
 
         if (booking.Status != BookingStatus.PendingInspection)
         {
-            return OperationResult.Failure(
-                "Chỉ đơn đang chờ kiểm tra mới được xóa phụ phí.");
+            return OperationResult.Failure("Chỉ đơn đang chờ kiểm tra mới được xóa phụ phí.");
         }
 
         if (HasPaidAdditionalCharge(booking))
         {
-            return OperationResult.Failure(
-                "Không thể sửa phụ phí sau khi khách đã thanh toán.");
+            return OperationResult.Failure("Không thể sửa phụ phí sau khi khách đã thanh toán.");
         }
 
-        var charge =
-            booking.VehicleReturn
-                .AdditionalCharges
-                .FirstOrDefault(
-                    item => item.AdditionalChargeId == additionalChargeId);
+        var charge = booking.VehicleReturn.AdditionalCharges
+            .FirstOrDefault(item => item.AdditionalChargeId == additionalChargeId);
 
         if (charge is null)
         {
-            return OperationResult.Failure(
-                "Không tìm thấy phụ phí.");
+            return OperationResult.Failure("Không tìm thấy phụ phí.");
         }
 
         _dbContext.AdditionalCharges.Remove(charge);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
-
         return OperationResult.Success();
     }
 
@@ -284,186 +244,142 @@ internal sealed class ReturnService : IReturnService
         CancellationToken cancellationToken = default)
     {
         await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync(
-                cancellationToken);
+            await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.VehicleReturn)
             .Include(item => item.Payments)
             .Include(item => item.Extensions)
-            .FirstOrDefaultAsync(
-                item => item.BookingId == bookingId,
-                cancellationToken);
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
-        if (booking is null ||
-            booking.VehicleReturn is null)
+        if (booking is null || booking.VehicleReturn is null)
         {
-            return OperationResult.Failure(
-                "Không tìm thấy đơn hoặc biên bản trả xe.");
+            return OperationResult.Failure("Không tìm thấy đơn hoặc biên bản trả xe.");
         }
 
         if (booking.Status != BookingStatus.PendingInspection)
         {
-            return OperationResult.Failure(
-                "Đơn chưa ở trạng thái chờ hoàn tất kiểm tra.");
+            return OperationResult.Failure("Đơn chưa ở trạng thái chờ hoàn tất kiểm tra.");
         }
 
-        var rentalPaid =
-            booking.Payments.Any(
-                payment =>
-                    payment.Type == PaymentType.Rental &&
-                    payment.Status == PaymentStatus.Paid);
+        var rentalPaid = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
 
-        var depositPaid =
-            booking.Payments
-                .Where(payment =>
-                    payment.Type == PaymentType.Deposit &&
-                    payment.Status == PaymentStatus.Paid)
-                .Sum(payment => payment.Amount);
+        var depositPaid = booking.Payments
+            .Where(payment => payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
 
-        var depositSatisfied =
-            booking.DepositAmount <= 0 ||
-            depositPaid >= booking.DepositAmount;
+        var depositSatisfied = booking.DepositAmount <= 0 || depositPaid >= booking.DepositAmount;
 
-        var extensionPaid =
-            booking.Extensions.All(
-                extension =>
-                    extension.Status != BookingExtensionStatus.Approved);
+        var extensionPaid = booking.Extensions.All(extension =>
+            extension.Status != BookingExtensionStatus.Approved);
 
-        var additionalPaid =
-            booking.AdditionalAmount <= 0 ||
-            booking.Payments.Any(
-                payment =>
-                    payment.Type == PaymentType.AdditionalCharge &&
-                    payment.Status == PaymentStatus.Paid &&
-                    payment.Amount >= booking.AdditionalAmount);
+        var additionalPaid = booking.AdditionalAmount <= 0 ||
+            booking.Payments.Any(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Status == PaymentStatus.Paid &&
+                payment.Amount >= booking.AdditionalAmount);
 
-        if (!rentalPaid ||
-            !depositSatisfied ||
-            !extensionPaid ||
-            !additionalPaid)
+        if (!rentalPaid || !depositSatisfied || !extensionPaid || !additionalPaid)
         {
             return OperationResult.Failure(
-                "Đơn vẫn còn khoản tiền chưa được thanh toán " +
-                "hoặc chưa ghi nhận đủ tiền cọc.");
+                "Đơn vẫn còn khoản tiền chưa được thanh toán hoặc chưa ghi nhận đủ tiền cọc.");
         }
 
         booking.Status = BookingStatus.Completed;
+        booking.Vehicle.Status = requiresMaintenance
+            ? VehicleStatus.Maintenance
+            : VehicleStatus.Available;
 
-        booking.Vehicle.Status =
-            requiresMaintenance
-                ? VehicleStatus.Maintenance
-                : VehicleStatus.Available;
+        var hasDepositRefund = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.Refund &&
+            payment.Method == PaymentMethods.DepositRefund &&
+            payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded);
 
-        if (depositPaid > 0 &&
-            !booking.Payments.Any(
-                payment => payment.Type == PaymentType.Refund))
+        if (depositPaid > 0 && !hasDepositRefund)
         {
-            booking.Payments.Add(
-                new Payment
-                {
-                    Type = PaymentType.Refund,
-                    Amount = depositPaid,
-                    Method = PaymentMethods.BankTransferRefund,
-                    Status = PaymentStatus.AwaitingRefund
-                });
+            booking.Payments.Add(new Payment
+            {
+                Type = PaymentType.Refund,
+                Amount = depositPaid,
+                Method = PaymentMethods.DepositRefund,
+                Status = PaymentStatus.AwaitingRefund
+            });
 
-            booking.RefundAmount = depositPaid;
-            booking.RefundReason =
-                "Hoàn toàn bộ tiền cọc sau khi xe đã được " +
-                "kiểm tra và các phụ phí đã thanh toán.";
+            booking.RefundAmount += depositPaid;
+            booking.RefundReason = AppendText(
+                booking.RefundReason,
+                $"Hoàn cọc sau khi kiểm tra xe: {depositPaid:N0} đồng.");
         }
 
         if (requiresMaintenance)
         {
-            _dbContext.MaintenanceRecords.Add(
-                new MaintenanceRecord
-                {
-                    VehicleId = booking.VehicleId,
-                    StartDate = DateTime.UtcNow,
-                    Content =
-                        string.IsNullOrWhiteSpace(maintenanceNote)
-                            ? "Kiểm tra hoặc sửa chữa sau lượt thuê"
-                            : maintenanceNote.Trim(),
-                    Cost = 0,
-                    Mileage = booking.Vehicle.CurrentMileage,
-                    Status = MaintenanceStatus.InProgress
-                });
+            _dbContext.MaintenanceRecords.Add(new MaintenanceRecord
+            {
+                VehicleId = booking.VehicleId,
+                StartDate = DateTime.UtcNow,
+                Content = string.IsNullOrWhiteSpace(maintenanceNote)
+                    ? "Kiểm tra hoặc sửa chữa sau lượt thuê"
+                    : maintenanceNote.Trim(),
+                Cost = 0,
+                Mileage = booking.Vehicle.CurrentMileage,
+                Status = MaintenanceStatus.InProgress
+            });
         }
 
-        _dbContext.Notifications.Add(
-            new Notification
-                {
-                    UserId = booking.CustomerId,
-                    Title = "Đơn thuê đã hoàn tất",
-                    Message =
-                        depositPaid > 0
-                            ? $"Đơn #{booking.BookingId} đã hoàn tất. " +
-                              $"Tiền cọc {depositPaid:N0} đồng đang chờ " +
-                              "được hoàn về tài khoản của bạn."
-                            : $"Đơn #{booking.BookingId} đã hoàn tất. " +
-                              "Bạn có thể đánh giá trải nghiệm thuê xe."
-                });
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Đơn thuê đã hoàn tất",
+            Message = depositPaid > 0
+                ? $"Đơn #{booking.BookingId} đã kiểm tra xong. Cọc {depositPaid:N0} đồng đang chờ hoàn."
+                : $"Đơn #{booking.BookingId} đã hoàn tất. Bạn có thể đánh giá chuyến thuê."
+        });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-
         return OperationResult.Success();
     }
 
     private IQueryable<Booking> ChargeQuery() =>
         _dbContext.Bookings
             .Include(booking => booking.VehicleReturn)
-            .ThenInclude(vehicleReturn =>
-                vehicleReturn!.AdditionalCharges)
+            .ThenInclude(vehicleReturn => vehicleReturn!.AdditionalCharges)
             .Include(booking => booking.Payments);
 
     private async Task RecalculateChargesAsync(
         Booking booking,
         CancellationToken cancellationToken)
     {
-        var storedDeliveryFee =
-            Math.Max(
-                0m,
-                booking.TotalAmount
-                - booking.RentalAmount
-                - booking.AdditionalAmount);
+        var storedDeliveryFee = Math.Max(
+            0m,
+            booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
 
-        booking.AdditionalAmount =
-            await _dbContext.AdditionalCharges
-                .Where(charge =>
-                    charge.VehicleReturn.BookingId == booking.BookingId)
-                .SumAsync(
-                    charge => (decimal?)charge.Amount,
-                    cancellationToken)
+        booking.AdditionalAmount = await _dbContext.AdditionalCharges
+            .Where(charge => charge.VehicleReturn.BookingId == booking.BookingId)
+            .SumAsync(charge => (decimal?)charge.Amount, cancellationToken)
             ?? 0;
 
-        booking.TotalAmount =
-            Math.Max(
-                0,
-                booking.RentalAmount
-                + storedDeliveryFee
-                + booking.AdditionalAmount);
+        booking.TotalAmount = Math.Max(
+            0,
+            booking.RentalAmount + storedDeliveryFee + booking.AdditionalAmount);
 
-        var pendingPayment =
-            booking.Payments.FirstOrDefault(
-                payment =>
-                    payment.Type == PaymentType.AdditionalCharge &&
-                    payment.Status == PaymentStatus.Pending);
+        var pendingPayment = booking.Payments.FirstOrDefault(payment =>
+            payment.Type == PaymentType.AdditionalCharge &&
+            payment.Status == PaymentStatus.Pending);
 
         if (booking.AdditionalAmount > 0)
         {
             if (pendingPayment is null)
             {
-                booking.Payments.Add(
-                    new Payment
-                    {
-                        Type = PaymentType.AdditionalCharge,
-                        Amount = booking.AdditionalAmount,
-                        Method = PaymentMethods.NotSelected,
-                        Status = PaymentStatus.Pending
-                    });
+                booking.Payments.Add(new Payment
+                {
+                    Type = PaymentType.AdditionalCharge,
+                    Amount = booking.AdditionalAmount,
+                    Method = PaymentMethods.NotSelected,
+                    Status = PaymentStatus.Pending
+                });
             }
             else
             {
@@ -478,16 +394,12 @@ internal sealed class ReturnService : IReturnService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private static bool HasPaidAdditionalCharge(
-        Booking booking) =>
-        booking.Payments.Any(
-            payment =>
-                payment.Type == PaymentType.AdditionalCharge &&
-                payment.Status == PaymentStatus.Paid);
+    private static bool HasPaidAdditionalCharge(Booking booking) =>
+        booking.Payments.Any(payment =>
+            payment.Type == PaymentType.AdditionalCharge &&
+            payment.Status == PaymentStatus.Paid);
 
-    private static bool TryParseFuelPercent(
-        string? value,
-        out int percent)
+    private static bool TryParseFuelPercent(string? value, out int percent)
     {
         percent = 0;
         if (string.IsNullOrWhiteSpace(value))
@@ -501,14 +413,14 @@ internal sealed class ReturnService : IReturnService
             normalized = normalized[..^1].Trim();
         }
 
-        return int.TryParse(normalized, out percent) &&
-               percent >= 0 &&
-               percent <= 100;
+        return int.TryParse(normalized, out percent) && percent >= 0 && percent <= 100;
     }
 
-    private static string? Normalize(
-        string? value) =>
-        string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string AppendText(string? current, string addition) =>
+        string.IsNullOrWhiteSpace(current)
+            ? addition
+            : $"{current.Trim()} {addition}";
 }
