@@ -157,6 +157,7 @@ public static class VietnameseDisplayExtensions
         "RejectQrPayment" => "Yêu cầu gửi lại xác nhận thanh toán",
         "Refund" => "Hoàn tiền",
         "RefundBatch" => "Hoàn tiền theo đơn",
+        "RepairForceMajeureCompensation" => "Điều chỉnh quyết toán bất khả kháng cũ",
         "CustomerCancel" => "Khách hàng hủy đơn",
         "AdminCancel" => "Quản trị viên hủy đơn",
         "MarkNoShow" => "Ghi nhận không đến nhận xe",
