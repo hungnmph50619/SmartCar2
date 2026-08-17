@@ -334,7 +334,7 @@ internal sealed class ReportService : IReportService
             {
                 if (payment.Type == PaymentType.Refund)
                 {
-                    var category = payment.Method switch
+                    var refundCategory = payment.Method switch
                     {
                         PaymentMethods.CompensationRefund => "Hỗ trợ/bồi thường",
                         PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
@@ -346,8 +346,8 @@ internal sealed class ReportService : IReportService
                     transactions.Add(new ReportTransactionDto(
                         payment.OccurredAt,
                         payment.BookingId,
-                        category,
-                        category,
+                        refundCategory,
+                        refundCategory,
                         payment.Amount,
                         true));
                     continue;
