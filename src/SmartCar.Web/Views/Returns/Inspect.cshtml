@@ -23,6 +23,20 @@
         .Where(path => !path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
         .ToList();
     var hasSignedDocuments = handoverSignedPath is not null && returnSignedPath is not null;
+
+    string EvidenceLabel(string path)
+    {
+        var file = System.IO.Path.GetFileName(path).ToLowerInvariant();
+        if (file.StartsWith("front-")) return "Phía trước";
+        if (file.StartsWith("rear-")) return "Phía sau";
+        if (file.StartsWith("left-")) return "Bên trái";
+        if (file.StartsWith("right-")) return "Bên phải";
+        if (file.StartsWith("interior-")) return "Nội thất";
+        if (file.StartsWith("odometer-")) return "Đồng hồ km";
+        if (file.StartsWith("fuel-")) return "Nhiên liệu";
+        if (file.StartsWith("damage-")) return "Hư hỏng";
+        return "Ảnh khác";
+    }
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
@@ -34,15 +48,9 @@
     <div class="d-flex gap-2 flex-wrap">
         @if (Model.Status is BookingStatus.AwaitingRefund or BookingStatus.Completed)
         {
-            <a class="btn btn-outline-primary"
-               asp-controller="AdminTripRecords"
-               asp-action="Details"
-               asp-route-id="@Model.BookingId">Hồ sơ chuyến</a>
+            <a class="btn btn-outline-primary" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Hồ sơ chuyến</a>
         }
-        <a class="btn btn-outline-secondary"
-           asp-controller="AdminBookings"
-           asp-action="Details"
-           asp-route-id="@Model.BookingId">Quay lại đơn</a>
+        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại đơn</a>
     </div>
 </div>
 
@@ -50,14 +58,12 @@
 {
     <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
         <span><strong>Đã kiểm tra xong.</strong> Chờ hoàn cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong>.</span>
-        <a class="btn btn-sm btn-warning"
-           asp-controller="AdminPayments" asp-action="Index"
-           asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Hoàn cọc</a>
+        <a class="btn btn-sm btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Hoàn cọc</a>
     </div>
 }
 else
 {
-    <div class="alert alert-info">So sánh km, nhiên liệu, ảnh và bản ký trước khi kết thúc chuyến.</div>
+    <div class="alert alert-info">So sánh đúng vị trí ảnh giao ↔ trả trước khi ghi nhận phát sinh.</div>
 }
 
 <div class="card card-body shadow-sm mb-4">
@@ -83,13 +89,11 @@ else
     </div>
 
     <div class="row g-3">
-        <div class="col-lg-6">
+        <div class="col-lg-6" id="evidence-handover">
             <div class="border rounded p-3 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                     <h2 class="h5 mb-0">Biên bản giao</h2>
-                    <span class="badge @(handoverSignedPath is null ? "bg-danger" : "bg-success")">
-                        @(handoverSignedPath is null ? "Thiếu bản ký" : "Đã có chữ ký")
-                    </span>
+                    <span class="badge @(handoverSignedPath is null ? "bg-danger" : "bg-success")">@(handoverSignedPath is null ? "Thiếu bản ký" : "Đã có chữ ký")</span>
                 </div>
 
                 <div class="row g-2 mb-3">
@@ -98,9 +102,19 @@ else
                     <div class="col-3"><div class="small text-muted">Nhiên liệu</div><strong>@Model.Handover.FuelDisplay</strong></div>
                 </div>
 
+                @if (!string.IsNullOrWhiteSpace(Model.Handover.ExteriorCondition) ||
+                     !string.IsNullOrWhiteSpace(Model.Handover.InteriorCondition) ||
+                     !string.IsNullOrWhiteSpace(Model.Handover.Accessories))
+                {
+                    <div class="small border rounded p-2 mb-3">
+                        @if (!string.IsNullOrWhiteSpace(Model.Handover.ExteriorCondition)) { <div><strong>Ngoại thất:</strong> @Model.Handover.ExteriorCondition</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Handover.InteriorCondition)) { <div><strong>Nội thất:</strong> @Model.Handover.InteriorCondition</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Handover.Accessories)) { <div><strong>Phụ kiện:</strong> @Model.Handover.Accessories</div> }
+                    </div>
+                }
+
                 <div class="d-flex gap-2 flex-wrap mb-3">
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
-                       asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In</a>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In</a>
                     @if (handoverSignedPath is not null)
                     {
                         <a class="btn btn-sm btn-outline-success" href="@handoverSignedPath" target="_blank" rel="noopener">Xem bản ký</a>
@@ -109,8 +123,7 @@ else
 
                 @if (handoverSignedPath is null && Model.Status != BookingStatus.Completed)
                 {
-                    <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned"
-                          method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
                         <input type="hidden" name="bookingId" value="@Model.BookingId" />
                         <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
                         <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
@@ -127,8 +140,9 @@ else
                     @foreach (var image in handoverPhotos)
                     {
                         <div class="col-6 col-md-4">
+                            <div class="small fw-semibold mb-1">@EvidenceLabel(image)</div>
                             <a href="@image" target="_blank" rel="noopener">
-                                <img src="@image" alt="Ảnh xe lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
+                                <img src="@image" alt="@EvidenceLabel(image) lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
                             </a>
                         </div>
                     }
@@ -136,13 +150,11 @@ else
             </div>
         </div>
 
-        <div class="col-lg-6">
+        <div class="col-lg-6" id="evidence-return">
             <div class="border rounded p-3 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                     <h2 class="h5 mb-0">Biên bản trả</h2>
-                    <span class="badge @(returnSignedPath is null ? "bg-danger" : "bg-success")">
-                        @(returnSignedPath is null ? "Thiếu bản ký" : "Đã có chữ ký")
-                    </span>
+                    <span class="badge @(returnSignedPath is null ? "bg-danger" : "bg-success")">@(returnSignedPath is null ? "Thiếu bản ký" : "Đã có chữ ký")</span>
                 </div>
 
                 <div class="row g-2 mb-3">
@@ -151,11 +163,17 @@ else
                     <div class="col-3"><div class="small text-muted">Nhiên liệu</div><strong>@Model.Return.FuelDisplay</strong></div>
                 </div>
 
+                @if (!string.IsNullOrWhiteSpace(Model.Return.ExteriorCondition) || !string.IsNullOrWhiteSpace(Model.Return.InteriorCondition))
+                {
+                    <div class="small border rounded p-2 mb-2">
+                        @if (!string.IsNullOrWhiteSpace(Model.Return.ExteriorCondition)) { <div><strong>Ngoại thất:</strong> @Model.Return.ExteriorCondition</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Return.InteriorCondition)) { <div><strong>Nội thất:</strong> @Model.Return.InteriorCondition</div> }
+                    </div>
+                }
                 <div class="mb-2">Hư hỏng mới: <strong class="@(Model.Return.HasDamage == true ? "text-danger" : "text-success")">@(Model.Return.HasDamage == true ? "Có" : "Không")</strong></div>
 
                 <div class="d-flex gap-2 flex-wrap mb-3">
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
-                       asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In</a>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In</a>
                     @if (returnSignedPath is not null)
                     {
                         <a class="btn btn-sm btn-outline-success" href="@returnSignedPath" target="_blank" rel="noopener">Xem bản ký</a>
@@ -164,8 +182,7 @@ else
 
                 @if (returnSignedPath is null && Model.Status != BookingStatus.Completed)
                 {
-                    <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned"
-                          method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3">
                         <input type="hidden" name="bookingId" value="@Model.BookingId" />
                         <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required />
                         <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
@@ -182,8 +199,9 @@ else
                     @foreach (var image in returnPhotos)
                     {
                         <div class="col-6 col-md-4">
+                            <div class="small fw-semibold mb-1 @(EvidenceLabel(image) == "Hư hỏng" ? "text-danger" : "")">@EvidenceLabel(image)</div>
                             <a href="@image" target="_blank" rel="noopener">
-                                <img src="@image" alt="Ảnh xe lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
+                                <img src="@image" alt="@EvidenceLabel(image) lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
                             </a>
                         </div>
                     }
@@ -197,7 +215,7 @@ else
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div>
             <h2 class="h5 mb-1">Phụ phí</h2>
-            <p class="text-muted small mb-0">Chỉ thêm khi có căn cứ sau đối chiếu.</p>
+            <p class="text-muted small mb-0">Mỗi khoản phải có mô tả và ảnh/căn cứ đối chiếu.</p>
         </div>
         <a class="btn btn-sm btn-outline-primary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Xử lý phụ phí</a>
     </div>
@@ -210,11 +228,16 @@ else
     {
         <div class="table-responsive">
             <table class="table align-middle mb-2">
-                <thead><tr><th>Loại</th><th>Nội dung</th><th class="text-end">Số tiền</th></tr></thead>
+                <thead><tr><th>Loại</th><th>Nội dung</th><th>Bằng chứng</th><th class="text-end">Số tiền</th></tr></thead>
                 <tbody>
                     @foreach (var charge in Model.AdditionalCharges)
                     {
-                        <tr><td>@charge.ChargeType.ToVietnamese()</td><td>@charge.Description</td><td class="text-end fw-semibold">@charge.Amount.ToString("N0") đ</td></tr>
+                        <tr>
+                            <td>@charge.ChargeType.ToVietnamese()</td>
+                            <td>@charge.Description</td>
+                            <td><a href="#evidence-return" class="btn btn-sm btn-link p-0">Xem ảnh</a></td>
+                            <td class="text-end fw-semibold">@charge.Amount.ToString("N0") đ</td>
+                        </tr>
                     }
                 </tbody>
             </table>
@@ -240,8 +263,7 @@ else
         else
         {
             <p class="text-muted">Đủ hồ sơ. Có tiền cọc thì đơn chuyển sang <strong>Chờ hoàn cọc</strong>; chưa được tính là hoàn tất.</p>
-            <form asp-controller="Returns" asp-action="Complete" method="post"
-                  data-loading-form data-confirm="Xác nhận đã đối chiếu đủ hồ sơ giao - trả?">
+            <form asp-controller="Returns" asp-action="Complete" method="post" data-loading-form data-confirm="Xác nhận đã đối chiếu đủ hồ sơ giao - trả?">
                 <input type="hidden" name="BookingId" value="@Model.BookingId" />
                 <input type="hidden" name="reviewConfirmed" value="true" />
                 <div class="form-check mb-2">
@@ -249,9 +271,7 @@ else
                     <label class="form-check-label" for="inspectionRequiresMaintenance">Xe cần bảo trì hoặc sửa chữa</label>
                 </div>
                 <textarea name="MaintenanceNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Nội dung bảo trì nếu có"></textarea>
-                <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">
-                    @(Model.DepositAmount > 0 ? "Xác nhận → Hoàn cọc" : "Xác nhận → Hoàn tất")
-                </button>
+                <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">@(Model.DepositAmount > 0 ? "Xác nhận → Hoàn cọc" : "Xác nhận → Hoàn tất")</button>
             </form>
         }
     </div>
