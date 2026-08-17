@@ -55,8 +55,9 @@ internal sealed class ExtensionService : IExtensionService
             .Include(extension => extension.Booking)
                 .ThenInclude(booking => booking.Vehicle)
             .Where(extension =>
-                extension.Status == BookingExtensionStatus.Pending ||
-                extension.Status == BookingExtensionStatus.NeedsEvidence)
+                extension.Booking.Status == BookingStatus.Rented &&
+                (extension.Status == BookingExtensionStatus.Pending ||
+                 extension.Status == BookingExtensionStatus.NeedsEvidence))
             .OrderBy(extension => extension.RequestedAt)
             .ToListAsync(cancellationToken);
 
@@ -94,6 +95,11 @@ internal sealed class ExtensionService : IExtensionService
         if (request.RequestedReturnDate <= booking.ReturnDate)
         {
             return OperationResult.Failure("Thời gian trả mới phải sau thời gian trả hiện tại.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.CustomerNote))
+        {
+            return OperationResult.Failure("Vui lòng nêu rõ lý do cần gia hạn.");
         }
 
         if (booking.Extensions.Any(extension =>
@@ -259,9 +265,11 @@ internal sealed class ExtensionService : IExtensionService
             .Include(item => item.Booking)
             .FirstOrDefaultAsync(item => item.BookingExtensionId == extensionId, cancellationToken);
 
-        if (extension is null || extension.Status != BookingExtensionStatus.Pending)
+        if (extension is null ||
+            extension.Status != BookingExtensionStatus.Pending ||
+            extension.Booking.Status != BookingStatus.Rented)
         {
-            return OperationResult.Failure("Yêu cầu gia hạn không tồn tại hoặc không còn ở trạng thái chờ duyệt.");
+            return OperationResult.Failure("Yêu cầu gia hạn không tồn tại hoặc không còn hợp lệ để yêu cầu bổ sung.");
         }
 
         extension.Status = BookingExtensionStatus.NeedsEvidence;
@@ -304,16 +312,24 @@ internal sealed class ExtensionService : IExtensionService
             return OperationResult.Failure("Không tìm thấy yêu cầu gia hạn của bạn.");
         }
 
-        if (extension.Status != BookingExtensionStatus.NeedsEvidence)
+        if (extension.Status != BookingExtensionStatus.NeedsEvidence ||
+            extension.Booking.Status != BookingStatus.Rented)
         {
-            return OperationResult.Failure("Yêu cầu này hiện không chờ bổ sung minh chứng.");
+            return OperationResult.Failure("Yêu cầu gia hạn không còn hợp lệ để bổ sung minh chứng.");
+        }
+
+        var resolvedCustomerNote = string.IsNullOrWhiteSpace(customerNote)
+            ? ExtractCustomerNote(extension.CustomerNote)
+            : customerNote.Trim();
+
+        if (string.IsNullOrWhiteSpace(resolvedCustomerNote))
+        {
+            return OperationResult.Failure("Vui lòng nêu rõ lý do cần gia hạn.");
         }
 
         extension.CustomerNote = BuildStoredCustomerNote(
             true,
-            string.IsNullOrWhiteSpace(customerNote)
-                ? ExtractCustomerNote(extension.CustomerNote)
-                : customerNote,
+            resolvedCustomerNote,
             evidenceNote);
         extension.Status = BookingExtensionStatus.Pending;
         extension.AdminNote = null;
@@ -385,6 +401,11 @@ internal sealed class ExtensionService : IExtensionService
         }
 
         var booking = extension.Booking;
+        if (booking.Status != BookingStatus.Rented)
+        {
+            return OperationResult.Failure("Đơn không còn ở trạng thái đang thuê để áp dụng gia hạn.");
+        }
+
         if (booking.ReturnDate < extension.RequestedReturnDate)
         {
             booking.ReturnDate = extension.RequestedReturnDate;
