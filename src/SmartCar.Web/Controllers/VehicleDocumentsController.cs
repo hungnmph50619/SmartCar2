@@ -35,6 +35,13 @@ public sealed class VehicleDocumentsController : Controller
         CancellationToken cancellationToken)
     {
         ViewBag.VehicleId = vehicleId;
+        if (vehicleId.HasValue)
+        {
+            ViewBag.Vehicle = await _vehicleService.GetByIdAsync(vehicleId.Value, cancellationToken);
+            ViewBag.DocumentOverview = await _documentService
+                .GetOverviewByVehicleAsync(vehicleId.Value, cancellationToken);
+        }
+
         var documents = vehicleId.HasValue
             ? await _documentService.GetByVehicleAsync(vehicleId.Value, cancellationToken)
             : await _documentService.GetAllAsync(cancellationToken);
@@ -48,6 +55,11 @@ public sealed class VehicleDocumentsController : Controller
         CancellationToken cancellationToken)
     {
         await LoadVehiclesAsync(vehicleId, cancellationToken);
+        if (vehicleId.HasValue)
+        {
+            ViewBag.Vehicle = await _vehicleService.GetByIdAsync(vehicleId.Value, cancellationToken);
+        }
+
         return View(new VehicleDocumentViewModel
         {
             VehicleId = vehicleId ?? 0
@@ -76,6 +88,7 @@ public sealed class VehicleDocumentsController : Controller
         if (!ModelState.IsValid)
         {
             await LoadVehiclesAsync(form.VehicleId, cancellationToken);
+            ViewBag.Vehicle = await _vehicleService.GetByIdAsync(form.VehicleId, cancellationToken);
             return View(form);
         }
 
@@ -103,10 +116,134 @@ public sealed class VehicleDocumentsController : Controller
             }
 
             await LoadVehiclesAsync(form.VehicleId, cancellationToken);
+            ViewBag.Vehicle = await _vehicleService.GetByIdAsync(form.VehicleId, cancellationToken);
             return View(form);
         }
 
         TempData["SuccessMessage"] = "Đã thêm giấy tờ xe.";
+        return RedirectToAction(nameof(Index), new { vehicleId = form.VehicleId });
+    }
+
+
+    [HttpGet]
+    public async Task<IActionResult> Edit(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var document = await _documentService.GetByIdAsync(id, cancellationToken);
+        if (document is null)
+        {
+            return NotFound();
+        }
+
+        await LoadVehiclesAsync(document.VehicleId, cancellationToken);
+        ViewBag.Vehicle = await _vehicleService.GetByIdAsync(document.VehicleId, cancellationToken);
+
+        return View(new VehicleDocumentViewModel
+        {
+            VehicleDocumentId = document.VehicleDocumentId,
+            VehicleId = document.VehicleId,
+            DocumentType = document.DocumentType,
+            DocumentNumber = document.DocumentNumber,
+            IssuedDate = document.IssuedDate,
+            ExpiryDate = document.ExpiryDate,
+            ExistingImagePath = document.ImagePath,
+            Notes = document.Notes
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(
+        VehicleDocumentViewModel form,
+        CancellationToken cancellationToken)
+    {
+        if (!form.VehicleDocumentId.HasValue)
+        {
+            return BadRequest();
+        }
+
+        var currentDocument = await _documentService.GetByIdAsync(
+            form.VehicleDocumentId.Value,
+            cancellationToken);
+
+        if (currentDocument is null)
+        {
+            return NotFound();
+        }
+
+        if (currentDocument.VehicleId != form.VehicleId)
+        {
+            ModelState.AddModelError(string.Empty, "Giấy tờ không thuộc xe đã chọn.");
+        }
+
+        if (form.ImageFile is not null)
+        {
+            var imageError = await ImageFileValidator.ValidateAsync(
+                form.ImageFile,
+                MaximumDocumentImageBytes,
+                cancellationToken);
+
+            if (imageError is not null)
+            {
+                ModelState.AddModelError(nameof(form.ImageFile), imageError);
+            }
+        }
+
+        if (!ModelState.IsValid)
+        {
+            form.ExistingImagePath = currentDocument.ImagePath;
+            await LoadVehiclesAsync(form.VehicleId, cancellationToken);
+            ViewBag.Vehicle = await _vehicleService.GetByIdAsync(form.VehicleId, cancellationToken);
+            return View(form);
+        }
+
+        var newImagePath = currentDocument.ImagePath;
+        if (form.ImageFile is not null)
+        {
+            newImagePath = await SaveDocumentImageAsync(form.ImageFile, cancellationToken);
+        }
+
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var result = await _documentService.UpdateAsync(
+            new UpdateVehicleDocumentRequest(
+                form.VehicleDocumentId.Value,
+                form.VehicleId,
+                form.DocumentType,
+                form.DocumentNumber,
+                form.IssuedDate,
+                form.ExpiryDate,
+                newImagePath,
+                form.Notes),
+            adminId,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            if (form.ImageFile is not null &&
+                !string.Equals(newImagePath, currentDocument.ImagePath, StringComparison.OrdinalIgnoreCase))
+            {
+                DeleteDocumentImageIfExists(newImagePath);
+            }
+
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error);
+            }
+
+            form.ExistingImagePath = currentDocument.ImagePath;
+            await LoadVehiclesAsync(form.VehicleId, cancellationToken);
+            ViewBag.Vehicle = await _vehicleService.GetByIdAsync(form.VehicleId, cancellationToken);
+            return View(form);
+        }
+
+        if (form.ImageFile is not null &&
+            !string.Equals(newImagePath, currentDocument.ImagePath, StringComparison.OrdinalIgnoreCase))
+        {
+            DeleteDocumentImageIfExists(currentDocument.ImagePath);
+        }
+
+        TempData["SuccessMessage"] = "Đã cập nhật giấy tờ xe.";
         return RedirectToAction(nameof(Index), new { vehicleId = form.VehicleId });
     }
 
@@ -152,8 +289,13 @@ public sealed class VehicleDocumentsController : Controller
             return null;
         }
 
-        const string relativeFolder = "uploads/documents";
-        var folder = Path.Combine(_environment.WebRootPath, "uploads", "documents");
+        // Lưu ý: KHÔNG dùng thư mục "uploads/documents" — thư mục đó đang bị middleware
+        // trong Program.cs chặn truy cập trực tiếp (dành riêng cho ảnh CCCD/GPLX nhạy cảm
+        // của khách hàng, chỉ phục vụ qua AdminCustomers/ViewDocumentImage có kiểm tra quyền).
+        // Ảnh giấy tờ xe (Đăng ký/Đăng kiểm/Bảo hiểm/Phí đường bộ) là hồ sơ phương tiện,
+        // không phải giấy tờ tùy thân cá nhân, nên dùng thư mục riêng để phục vụ tĩnh bình thường.
+        const string relativeFolder = "uploads/vehicle-documents";
+        var folder = Path.Combine(_environment.WebRootPath, "uploads", "vehicle-documents");
         Directory.CreateDirectory(folder);
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();

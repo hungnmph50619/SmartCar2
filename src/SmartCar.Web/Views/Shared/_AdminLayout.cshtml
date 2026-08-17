@@ -129,6 +129,7 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+
     <meta charset="utf-8" />
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0" />
@@ -155,6 +156,8 @@
     <link rel="stylesheet"
           href="~/css/admin-layout.css"
           asp-append-version="true" />
+
+    @await RenderSectionAsync("Styles", required: false)
 </head>
 
 <body class="admin-body">
@@ -262,7 +265,7 @@
                         Quản lý xe
                     </div>
 
-                    <a class="admin-nav-link @(currentController == "AdminVehicles" ? "active" : string.Empty)"
+                    <a class="admin-nav-link @(vehicleActive ? "active" : string.Empty)"
                        asp-controller="AdminVehicles"
                        asp-action="Index">
 
@@ -270,55 +273,7 @@
                             ◆
                         </span>
                         <span>
-                            Danh sách xe
-                        </span>
-                    </a>
-
-                    <a class="admin-nav-link @(currentController == "Brands" ? "active" : string.Empty)"
-                       asp-controller="Brands"
-                       asp-action="Index">
-
-                        <span class="admin-nav-icon">
-                            B
-                        </span>
-                        <span>
-                            Hãng xe
-                        </span>
-                    </a>
-
-                    <a class="admin-nav-link @(currentController == "VehicleDocuments" ? "active" : string.Empty)"
-                       asp-controller="VehicleDocuments"
-                       asp-action="Index">
-
-                        <span class="admin-nav-icon">
-                            ▧
-                        </span>
-                        <span>
-                            Giấy tờ pháp lý xe
-                        </span>
-                    </a>
-
-                    <a class="admin-nav-link @(currentController == "Maintenance" ? "active" : string.Empty)"
-                       asp-controller="Maintenance"
-                       asp-action="Index">
-
-                        <span class="admin-nav-icon">
-                            ⚙
-                        </span>
-                        <span>
-                            Bảo trì xe
-                        </span>
-                    </a>
-
-                    <a class="admin-nav-link @(currentController == "Incidents" ? "active" : string.Empty)"
-                       asp-controller="Incidents"
-                       asp-action="Index">
-
-                        <span class="admin-nav-icon">
-                            !
-                        </span>
-                        <span>
-                            Sự cố và vi phạm
+                            Quản lý xe
                         </span>
                     </a>
                 </div>
@@ -392,7 +347,7 @@
                         </small>
                         <strong>
                             @(ViewData["Title"] ??
-                              "SmartCar")
+                                                        "SmartCar")
                         </strong>
                     </div>
                 </div>
@@ -415,10 +370,10 @@
                         {
                             <span class="admin-notification-count bg-warning text-dark">
                                 @(pendingWorkNotificationCount > 99
-                                    ? "99+"
-                                    : pendingWorkNotificationCount)
-                            </span>
-                        }
+                                                            ? "99+"
+                                                            : pendingWorkNotificationCount)
+                        </span>
+                                                }
                     </a>
 
                     <a class="admin-topbar-link"
@@ -438,10 +393,10 @@
                         {
                             <span class="admin-notification-count">
                                 @(unreadRegularNotificationCount > 99
-                                    ? "99+"
-                                    : unreadRegularNotificationCount)
-                            </span>
-                        }
+                                                            ? "99+"
+                                                            : unreadRegularNotificationCount)
+                        </span>
+                                                }
                     </a>
 
                     <div class="dropdown">
@@ -506,7 +461,7 @@
                   role="main">
 
                 @if (TempData["SuccessMessage"]
-                     is string successMessage)
+                                is string successMessage)
                 {
                     <div class="alert alert-success alert-dismissible fade show"
                          role="alert">
@@ -522,7 +477,7 @@
                 }
 
                 @if (TempData["ErrorMessage"]
-                     is string errorMessage)
+                                is string errorMessage)
                 {
                     <div class="alert alert-danger alert-dismissible fade show"
                          role="alert">
@@ -606,7 +561,7 @@
     </script>
 
     @await RenderSectionAsync(
-        "Scripts",
+    "Scripts",
         required: false)
 </body>
 </html>

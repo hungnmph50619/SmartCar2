@@ -1,61 +1,322 @@
-@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
+﻿@model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
 @using SmartCar.Domain.Enums
+@using SmartCar.Application.Features.VehicleDocuments
+@using System.Text.Json
 @{
     ViewData["Title"] = "Quản lý xe";
+    var total = Model.Count;
+    var available = Model.Count(x => x.Status == VehicleStatus.Available);
+    var rented = Model.Count(x => x.Status == VehicleStatus.Rented);
+    var inspection = Model.Count(x => x.Status == VehicleStatus.Inspection);
+    var maintenance = Model.Count(x => x.Status == VehicleStatus.Maintenance);
+    var inactive = Model.Count(x => x.Status == VehicleStatus.Inactive);
+    var brands = Model.Select(x => x.BrandName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x).ToList();
+    var transmissions = Model.Select(x => x.Transmission).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x).ToList();
+    var years = Model.Select(x => x.ManufactureYear).Distinct().OrderByDescending(x => x).ToList();
+    var documentOverviews = ViewBag.VehicleDocumentOverviews as IReadOnlyDictionary<int, VehicleDocumentOverviewDto>
+        ?? new Dictionary<int, VehicleDocumentOverviewDto>();
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h1 class="h3 mb-1">Quản lý xe</h1>
-        <p class="text-muted mb-0">Theo dõi toàn bộ đội xe SmartCar.</p>
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-vehicles.css" asp-append-version="true" />
+}
+
+<div class="vehicle-admin-page">
+    <div class="vehicle-page-heading">
+        <div>
+            <div class="vehicle-breadcrumb">Trang chủ <span>/</span> Quản lý xe</div>
+            <h1>Quản lý xe</h1>
+            <p>Theo dõi tình trạng, thông tin và hồ sơ của toàn bộ đội xe SmartCar.</p>
+        </div>
+        <a class="vehicle-primary-btn" asp-action="Create">
+            <span aria-hidden="true">＋</span> Thêm xe mới
+        </a>
     </div>
-    <a class="btn btn-primary" asp-action="Create">Thêm xe</a>
+
+    <section class="vehicle-stat-grid" aria-label="Thống kê đội xe">
+        <article class="vehicle-stat-card">
+            <div class="vehicle-stat-icon stat-total">🚘</div>
+            <div><span>Tổng số xe</span><strong>@total</strong><small>Toàn bộ xe trong hệ thống</small></div>
+        </article>
+        <article class="vehicle-stat-card">
+            <div class="vehicle-stat-icon stat-available">✓</div>
+            <div><span>Sẵn sàng</span><strong>@available</strong><small>Có thể khai thác</small></div>
+        </article>
+        <article class="vehicle-stat-card">
+            <div class="vehicle-stat-icon stat-rented">↗</div>
+            <div><span>Đang cho thuê</span><strong>@rented</strong><small>Đang trong chuyến thuê</small></div>
+        </article>
+        <article class="vehicle-stat-card">
+            <div class="vehicle-stat-icon stat-inspection">⌕</div>
+            <div><span>Đang kiểm tra</span><strong>@inspection</strong><small>Chờ/đang kiểm tra xe</small></div>
+        </article>
+        <article class="vehicle-stat-card">
+            <div class="vehicle-stat-icon stat-maintenance">⚙</div>
+            <div><span>Bảo dưỡng</span><strong>@maintenance</strong><small>Tạm ngừng để bảo dưỡng</small></div>
+        </article>
+        <article class="vehicle-stat-card">
+            <div class="vehicle-stat-icon stat-inactive">⊘</div>
+            <div><span>Ngừng hoạt động</span><strong>@inactive</strong><small>Không đưa vào khai thác</small></div>
+        </article>
+    </section>
+
+    <section class="vehicle-filter-card">
+        <div class="vehicle-search-box">
+            <span aria-hidden="true">⌕</span>
+            <input id="vehicleSearch" type="search" placeholder="Tìm tên xe hoặc biển số..." autocomplete="off" />
+        </div>
+        <label>
+            <span>Hãng xe</span>
+            <select id="brandFilter">
+                <option value="">Tất cả hãng</option>
+                @foreach (var brand in brands) { <option value="@brand">@brand</option> }
+            </select>
+        </label>
+        <label>
+            <span>Trạng thái</span>
+            <select id="statusFilter">
+                <option value="">Tất cả trạng thái</option>
+                @foreach (var status in Enum.GetValues<VehicleStatus>()) { <option value="@status">@status.ToVietnamese()</option> }
+            </select>
+        </label>
+        <label>
+            <span>Hộp số</span>
+            <select id="transmissionFilter">
+                <option value="">Tất cả</option>
+                @foreach (var transmission in transmissions) { <option value="@transmission">@transmission</option> }
+            </select>
+        </label>
+        <label>
+            <span>Năm sản xuất</span>
+            <select id="yearFilter">
+                <option value="">Tất cả</option>
+                @foreach (var year in years) { <option value="@year">@year</option> }
+            </select>
+        </label>
+        <button type="button" id="clearVehicleFilters" class="vehicle-secondary-btn">↻ Xóa bộ lọc</button>
+    </section>
+
+    <div class="vehicle-workspace">
+        <section class="vehicle-list-card">
+            <div class="vehicle-card-header">
+                <div>
+                    <h2>Danh sách xe</h2>
+                    <span id="vehicleResultCount">@total xe</span>
+                </div>
+                <span class="vehicle-table-hint">Nhấn vào một xe để xem chi tiết</span>
+            </div>
+
+            <div class="vehicle-table-wrap">
+                <table class="vehicle-table">
+                    <thead>
+                        <tr>
+                            <th>Xe</th>
+                            <th>Biển số</th>
+                            <th>Hãng</th>
+                            <th>Dòng xe</th>
+                            <th>Năm SX</th>
+                            <th>Màu</th>
+                            <th>Trạng thái</th>
+                            <th>Pháp lý</th>
+                            <th>Giá/ngày</th>
+                            <th aria-label="Thao tác"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="vehicleTableBody">
+                    @foreach (var vehicle in Model)
+                    {
+                        var modelName = string.IsNullOrWhiteSpace(vehicle.Model) ? "—" : vehicle.Model;
+                        var colorName = string.IsNullOrWhiteSpace(vehicle.Color) ? "—" : vehicle.Color;
+                        documentOverviews.TryGetValue(vehicle.VehicleId, out var documentOverview);
+                        var registrationExists = documentOverview?.Registration is not null;
+                        var inspectionExists = documentOverview?.Inspection is not null;
+                        var insuranceExists = documentOverview?.Insurance is not null;
+                        var roadFeeExists = documentOverview?.RoadFee is not null;
+                        var documentCount = documentOverview?.ExistingRequiredDocumentCount ?? 0;
+                        var legalStatus = documentOverview?.LegalStatus
+                            ?? new VehicleLegalStatusDto(
+                                false,
+                                new[] { "Chưa tải được tình trạng pháp lý của xe." });
+                        <tr class="vehicle-row"
+                            tabindex="0"
+                            data-id="@vehicle.VehicleId"
+                            data-name="@vehicle.VehicleName"
+                            data-model="@modelName"
+                            data-license="@vehicle.LicensePlate"
+                            data-brand="@vehicle.BrandName"
+                            data-year="@vehicle.ManufactureYear"
+                            data-seats="@vehicle.Seats"
+                            data-transmission="@vehicle.Transmission"
+                            data-fuel="@vehicle.FuelType"
+                            data-color="@colorName"
+                            data-price="@vehicle.DailyPrice.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                            data-mileage="@vehicle.CurrentMileage"
+                            data-status="@vehicle.Status"
+                            data-status-label="@vehicle.Status.ToVietnamese()"
+                            data-image="@(vehicle.PrimaryImagePath ?? string.Empty)"
+                            data-description="@(vehicle.Description ?? string.Empty)"
+                            data-doc-registration="@registrationExists.ToString().ToLowerInvariant()"
+                            data-doc-inspection="@inspectionExists.ToString().ToLowerInvariant()"
+                            data-doc-insurance="@insuranceExists.ToString().ToLowerInvariant()"
+                            data-doc-roadfee="@roadFeeExists.ToString().ToLowerInvariant()"
+                            data-legal-eligible="@legalStatus.IsEligible.ToString().ToLowerInvariant()"
+                            data-legal-reasons='@JsonSerializer.Serialize(legalStatus.Reasons)'>
+                            <td>
+                                <div class="vehicle-name-cell">
+                                    @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
+                                    {
+                                        <img src="@vehicle.PrimaryImagePath" alt="@vehicle.VehicleName" />
+                                    }
+                                    else
+                                    {
+                                        <div class="vehicle-thumb-placeholder">🚘</div>
+                                    }
+                                    <strong>@vehicle.VehicleName</strong>
+                                </div>
+                            </td>
+                            <td><span class="vehicle-license">@vehicle.LicensePlate</span></td>
+                            <td>@vehicle.BrandName</td>
+                            <td>@modelName</td>
+                            <td>@vehicle.ManufactureYear</td>
+                            <td>@colorName</td>
+                            <td><span class="vehicle-status status-@vehicle.Status.ToString().ToLowerInvariant()">@vehicle.Status.ToVietnamese()</span></td>
+                            <td>
+                                <div class="vehicle-legal-cell">
+                                    <span class="vehicle-legal-badge @(legalStatus.IsEligible ? "eligible" : "ineligible")">
+                                        @(legalStatus.IsEligible ? "Đủ điều kiện" : "Chưa đủ điều kiện")
+                                    </span>
+                                    <small>@documentCount/4 giấy tờ</small>
+                                </div>
+                            </td>
+                            <td class="vehicle-price">@vehicle.DailyPrice.ToString("N0") đ</td>
+                            <td class="vehicle-actions-cell" onclick="event.stopPropagation()">
+                                <div class="dropdown">
+                                    <button class="vehicle-more-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mở thao tác">•••</button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                        <li><a class="dropdown-item" asp-action="Edit" asp-route-id="@vehicle.VehicleId">Chỉnh sửa xe</a></li>
+                                        <li><a class="dropdown-item" asp-controller="VehicleDocuments" asp-action="Index" asp-route-vehicleId="@vehicle.VehicleId">Giấy tờ xe</a></li>
+                                        @if (vehicle.Status != VehicleStatus.Rented)
+                                        {
+                                            <li><hr class="dropdown-divider" /></li>
+                                            <li>
+                                                @if (vehicle.Status == VehicleStatus.Inactive && !legalStatus.IsEligible)
+                                                {
+                                                    <button class="dropdown-item text-muted"
+                                                            type="button"
+                                                            disabled
+                                                            title="Cần hoàn tất giấy tờ pháp lý trước khi mở lại hoạt động.">
+                                                        Mở lại hoạt động
+                                                    </button>
+                                                    <small class="d-block px-3 pb-2 text-danger">
+                                                        Chưa thể mở lại: hồ sơ pháp lý chưa đủ.
+                                                    </small>
+                                                }
+                                                else
+                                                {
+                                                    <form asp-action="ChangeStatus" method="post">
+                                                        <input type="hidden" name="id" value="@vehicle.VehicleId" />
+                                                        <input type="hidden" name="status" value="@(vehicle.Status == VehicleStatus.Inactive ? VehicleStatus.Available : VehicleStatus.Inactive)" />
+                                                        <button class="dropdown-item @(vehicle.Status == VehicleStatus.Inactive ? "text-success" : "text-danger")" type="submit">
+                                                            @(vehicle.Status == VehicleStatus.Inactive ? "Mở lại hoạt động" : "Ngừng hoạt động")
+                                                        </button>
+                                                    </form>
+                                                }
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <div id="vehicleEmptyState" class="vehicle-empty-state" hidden>
+                    <div>⌕</div>
+                    <strong>Không tìm thấy xe phù hợp</strong>
+                    <span>Hãy thử thay đổi từ khóa hoặc xóa bớt bộ lọc.</span>
+                </div>
+            </div>
+
+            <div class="vehicle-pagination-bar">
+                <div>Hiển thị <select id="vehiclePageSize"><option>8</option><option>10</option><option>15</option></select> xe/trang</div>
+                <div id="vehiclePagination" class="vehicle-pagination"></div>
+            </div>
+        </section>
+
+        <aside class="vehicle-detail-panel" id="vehicleDetailPanel">
+            <div class="vehicle-detail-empty" id="vehicleDetailEmpty">
+                <div>🚘</div>
+                <h2>Chọn một xe</h2>
+                <p>Nhấn vào một dòng trong danh sách để xem thông tin trực quan.</p>
+            </div>
+            <div id="vehicleDetailContent" hidden>
+                <div class="vehicle-detail-topline">
+                    <span id="detailStatus" class="vehicle-status">—</span>
+                    <button type="button" class="vehicle-panel-close" id="closeVehicleDetail" aria-label="Đóng">×</button>
+                </div>
+                <div class="vehicle-hero-image" id="detailImageWrap">
+                    <img id="detailImage" alt="Ảnh xe" />
+                    <div id="detailImagePlaceholder">🚘</div>
+                </div>
+                <div class="vehicle-detail-title">
+                    <div>
+                        <h2 id="detailName">—</h2>
+                        <span id="detailModel">—</span>
+                    </div>
+                    <span id="detailLicense" class="vehicle-license large">—</span>
+                </div>
+
+                <div class="vehicle-detail-tabs" role="tablist">
+                    <button class="active" type="button" data-detail-tab="general">Thông tin chung</button>
+                    <button type="button" data-detail-tab="documents">Giấy tờ xe</button>
+                </div>
+
+                <div class="vehicle-tab-pane active" id="detail-general">
+                    <dl class="vehicle-detail-list">
+                        <div><dt>Hãng xe</dt><dd id="detailBrand">—</dd></div>
+                        <div><dt>Năm sản xuất</dt><dd id="detailYear">—</dd></div>
+                        <div><dt>Màu sắc</dt><dd id="detailColor">—</dd></div>
+                        <div><dt>Hộp số</dt><dd id="detailTransmission">—</dd></div>
+                        <div><dt>Nhiên liệu</dt><dd id="detailFuel">—</dd></div>
+                        <div><dt>Số chỗ ngồi</dt><dd id="detailSeats">—</dd></div>
+                        <div><dt>Số km hiện tại</dt><dd id="detailMileage">—</dd></div>
+                        <div><dt>Giá thuê/ngày</dt><dd id="detailPrice">—</dd></div>
+                    </dl>
+                    <div class="vehicle-description" id="detailDescriptionWrap" hidden>
+                        <strong>Mô tả</strong>
+                        <p id="detailDescription"></p>
+                    </div>
+                </div>
+
+                <div class="vehicle-tab-pane" id="detail-documents">
+                    <div class="vehicle-document-overview">
+                        <div class="document-overview-icon">▤</div>
+                        <h3>Hồ sơ pháp lý của xe</h3>
+                        <p>Quản lý Đăng ký xe, Đăng kiểm, Bảo hiểm, Phí đường bộ và giấy tờ bổ sung.</p>
+                        <div id="detailLegalSummary" class="vehicle-legal-summary">
+                            <strong id="detailLegalTitle">—</strong>
+                            <ul id="detailLegalReasons"></ul>
+                        </div>
+                        <div class="document-mini-grid">
+                            <span id="detailDocRegistration">— Đăng ký xe</span>
+                            <span id="detailDocInspection">— Đăng kiểm</span>
+                            <span id="detailDocInsurance">— Bảo hiểm</span>
+                            <span id="detailDocRoadFee">— Phí đường bộ</span>
+                        </div>
+                        <a id="detailDocumentsLink" class="vehicle-primary-btn w-100 justify-content-center" href="#">Mở quản lý giấy tờ</a>
+                        <small>Trạng thái pháp lý chi tiết được kiểm tra tại màn hình giấy tờ xe.</small>
+                    </div>
+                </div>
+
+                <div class="vehicle-detail-actions">
+                    <a id="detailEditLink" class="vehicle-secondary-btn flex-fill justify-content-center" href="#">✎ Chỉnh sửa</a>
+                    <a id="detailDocumentAction" class="vehicle-primary-btn flex-fill justify-content-center" href="#">▤ Giấy tờ xe</a>
+                </div>
+            </div>
+        </aside>
+    </div>
 </div>
 
-<div class="table-responsive">
-<table class="table table-bordered align-middle">
-    <thead>
-        <tr>
-            <th>Xe</th>
-            <th>Biển số</th>
-            <th>Giá/ngày</th>
-            <th>Số km</th>
-            <th>Trạng thái</th>
-            <th class="text-end">Thao tác</th>
-        </tr>
-    </thead>
-    <tbody>
-    @foreach (var vehicle in Model)
-    {
-        <tr>
-            <td>
-                <div class="d-flex align-items-center gap-2">
-                    @if (!string.IsNullOrWhiteSpace(vehicle.PrimaryImagePath))
-                    {
-                        <img src="@vehicle.PrimaryImagePath" alt="@vehicle.VehicleName" style="width:72px;height:48px;object-fit:cover" class="rounded" />
-                    }
-                    <div><strong>@vehicle.VehicleName</strong><br /><small>@vehicle.BrandName - @vehicle.Seats chỗ</small></div>
-                </div>
-            </td>
-            <td>@vehicle.LicensePlate</td>
-            <td>@vehicle.DailyPrice.ToString("N0") đ</td>
-            <td>@vehicle.CurrentMileage.ToString("N0") km</td>
-            <td><span class="badge bg-secondary">@vehicle.Status.ToVietnamese()</span></td>
-            <td class="text-end">
-                <a class="btn btn-sm btn-outline-primary" asp-action="Edit" asp-route-id="@vehicle.VehicleId">Sửa và quản lý ảnh</a>
-                @if (vehicle.Status != VehicleStatus.Rented)
-                {
-                    <form class="d-inline" asp-action="ChangeStatus" method="post">
-                        <input type="hidden" name="id" value="@vehicle.VehicleId" />
-                        <input type="hidden" name="status" value="@(vehicle.Status == VehicleStatus.Inactive ? VehicleStatus.Available : VehicleStatus.Inactive)" />
-                        <button class="btn btn-sm @(vehicle.Status == VehicleStatus.Inactive ? "btn-outline-success" : "btn-outline-danger")" type="submit">
-                            @(vehicle.Status == VehicleStatus.Inactive ? "Mở lại" : "Ngừng cho thuê")
-                        </button>
-                    </form>
-                }
-            </td>
-        </tr>
-    }
-    </tbody>
-</table>
-</div>
+@section Scripts {
+    <script src="~/js/admin-vehicles.js" asp-append-version="true"></script>
+}

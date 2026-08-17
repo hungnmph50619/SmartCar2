@@ -1,6 +1,6 @@
 @model SmartCar.Web.ViewModels.VehicleDocumentViewModel
 @{
-    ViewData["Title"] = "Thêm giấy tờ xe";
+    ViewData["Title"] = "Sửa giấy tờ xe";
 }
 
 @section Styles {
@@ -15,19 +15,20 @@
                 <span>/</span>
                 <a asp-action="Index" asp-route-vehicleId="@Model.VehicleId">Giấy tờ xe</a>
                 <span>/</span>
-                Thêm mới
+                Sửa
             </div>
-            <h1>Thêm giấy tờ xe</h1>
-            <p>Nhập thông tin theo giấy tờ gốc. Ngày tháng sử dụng định dạng dd/mm/yyyy.</p>
+            <h1>Sửa giấy tờ xe</h1>
+            <p>Cập nhật thông tin đã nhập. Không cần tải lại ảnh nếu chỉ sửa nội dung.</p>
         </div>
         <a class="doc-secondary-btn" asp-action="Index" asp-route-vehicleId="@Model.VehicleId">← Quay lại danh sách</a>
     </div>
 
-    @{ ViewData["IsEdit"] = false; }
+    @{ ViewData["IsEdit"] = true; }
     @await Html.PartialAsync("_VehicleDocumentForm", Model)
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script src="~/js/vehicle-documents-ui.js" asp-append-version="true"></script>
+    <script src="~/js/vehicle-documents-list.js" asp-append-version="true"></script>
 }

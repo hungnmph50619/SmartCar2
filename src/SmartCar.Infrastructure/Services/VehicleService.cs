@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Vehicles;
+using SmartCar.Application.Features.VehicleDocuments;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -19,10 +20,20 @@ internal sealed class VehicleService : IVehicleService
         BookingStatus.PendingInspection
     };
 
-    private readonly ApplicationDbContext _dbContext;
-
-    public VehicleService(ApplicationDbContext dbContext)
+    private static readonly VehicleStatus[] StatusesRequiringLegalEligibility =
     {
+        VehicleStatus.Available,
+        VehicleStatus.Rented
+    };
+
+    private readonly ApplicationDbContext _dbContext;
+    private readonly IVehicleDocumentService _vehicleDocumentService;
+
+    public VehicleService(
+        ApplicationDbContext dbContext,
+        IVehicleDocumentService vehicleDocumentService)
+    {
+        _vehicleDocumentService = vehicleDocumentService;
         _dbContext = dbContext;
     }
 
@@ -78,6 +89,11 @@ internal sealed class VehicleService : IVehicleService
                 document.ExpiryDate.Value.Date >= request.ReturnDate.Date))
             .Where(vehicle => vehicle.Documents.Any(document =>
                 document.DocumentType == VehicleDocumentType.Insurance &&
+                document.IssuedDate.Date <= request.PickupDate.Date &&
+                document.ExpiryDate.HasValue &&
+                document.ExpiryDate.Value.Date >= request.ReturnDate.Date))
+            .Where(vehicle => vehicle.Documents.Any(document =>
+                document.DocumentType == VehicleDocumentType.RoadFee &&
                 document.IssuedDate.Date <= request.PickupDate.Date &&
                 document.ExpiryDate.HasValue &&
                 document.ExpiryDate.Value.Date >= request.ReturnDate.Date));
@@ -157,7 +173,10 @@ internal sealed class VehicleService : IVehicleService
             Color = NormalizeOptional(request.Color),
             DailyPrice = request.DailyPrice,
             CurrentMileage = request.CurrentMileage,
-            Status = VehicleStatus.Available,
+            // Xe mới tạo chưa có giấy tờ pháp lý nào (Đăng ký/Đăng kiểm/Bảo hiểm/Phí đường bộ),
+            // nên không thể ở trạng thái Sẵn sàng/Cho thuê ngay. Admin cần bổ sung đủ giấy tờ
+            // rồi chuyển trạng thái thủ công qua ChangeStatusAsync (đã có kiểm tra pháp lý).
+            Status = VehicleStatus.Inactive,
             Description = NormalizeOptional(request.Description),
             CreatedAt = DateTime.UtcNow
         };
@@ -251,6 +270,53 @@ internal sealed class VehicleService : IVehicleService
         {
             return OperationResult.Failure(
                 "Không thể tùy ý đổi trạng thái xe khi đang có đơn thuê chưa hoàn tất.");
+        }
+
+        // BUG FIX: Admin không được mở lại xe (Available) nếu hồ sơ pháp lý chưa đủ.
+        // Kiểm tra này nằm ở service/server, không phụ thuộc vào việc UI có disable nút hay không.
+        if (status == VehicleStatus.Available)
+        {
+            var legalStatus = (await _vehicleDocumentService
+                .GetOverviewByVehicleAsync(vehicleId, cancellationToken))
+                .LegalStatus;
+
+            if (!legalStatus.IsEligible)
+            {
+                var reasonText = legalStatus.Reasons.Count > 0
+                    ? string.Join(" ", legalStatus.Reasons)
+                    : "Giấy tờ pháp lý của xe chưa đầy đủ hoặc đã hết hạn.";
+
+                return OperationResult.Failure(
+                    $"Không thể mở lại hoạt động cho xe vì xe chưa đủ điều kiện pháp lý cho thuê. {reasonText}");
+            }
+
+            var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(incident =>
+                incident.VehicleId == vehicleId &&
+                incident.Status != IncidentStatus.Resolved &&
+                incident.Status != IncidentStatus.Cancelled,
+                cancellationToken);
+
+            if (hasOpenIncident)
+            {
+                return OperationResult.Failure(
+                    "Không thể mở lại hoạt động cho xe vì xe vẫn còn sự cố chưa được xử lý.");
+            }
+        }
+        else if (StatusesRequiringLegalEligibility.Contains(status))
+        {
+            var legalStatus = (await _vehicleDocumentService
+                .GetOverviewByVehicleAsync(vehicleId, cancellationToken))
+                .LegalStatus;
+
+            if (!legalStatus.IsEligible)
+            {
+                var reasonText = legalStatus.Reasons.Count > 0
+                    ? string.Join(" ", legalStatus.Reasons)
+                    : "Giấy tờ pháp lý của xe chưa đầy đủ hoặc đã hết hạn.";
+
+                return OperationResult.Failure(
+                    $"Không thể chuyển xe sang trạng thái này vì xe chưa đủ điều kiện pháp lý cho thuê. {reasonText}");
+            }
         }
 
         vehicle.Status = status;
