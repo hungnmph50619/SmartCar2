@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Reports;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 
@@ -12,16 +13,6 @@ internal sealed class ReportService : IReportService
         BookingStatus.Rented,
         BookingStatus.PendingInspection,
         BookingStatus.Completed
-    };
-
-    private static readonly BookingStatus[] ActiveDepositStatuses =
-    {
-        BookingStatus.Paid,
-        BookingStatus.ReadyForPickup,
-        BookingStatus.Rented,
-        BookingStatus.PendingInspection,
-        BookingStatus.Completed,
-        BookingStatus.AwaitingRefund
     };
 
     private static readonly BookingStatus[] OpenReceivableStatuses =
@@ -99,11 +90,14 @@ internal sealed class ReportService : IReportService
                  (item.Status == PaymentStatus.Refunded && item.Type == PaymentType.Refund)))
             .Select(item => new
             {
+                item.PaymentId,
                 item.BookingId,
                 item.Booking.VehicleId,
                 HasVehicleReturn = item.Booking.VehicleReturn != null,
+                item.Booking.Status,
                 item.Type,
                 item.Amount,
+                item.Method,
                 OccurredAt = item.PaidAt!.Value
             })
             .ToListAsync(cancellationToken);
@@ -167,39 +161,58 @@ internal sealed class ReportService : IReportService
             .AsNoTracking()
             .Where(item =>
                 item.Type == PaymentType.Deposit &&
-                item.Status == PaymentStatus.Paid &&
-                ActiveDepositStatuses.Contains(item.Booking.Status))
+                item.Status == PaymentStatus.Paid)
             .Select(item => new
             {
                 item.BookingId,
+                item.Booking.Status,
                 item.Amount
             })
             .ToListAsync(cancellationToken);
 
-        var confirmedDepositRefunds = await _dbContext.Payments
+        var confirmedRefunds = await _dbContext.Payments
             .AsNoTracking()
             .Where(item =>
                 item.Type == PaymentType.Refund &&
-                item.Status == PaymentStatus.Refunded &&
-                item.Booking.VehicleReturn != null)
+                item.Status == PaymentStatus.Refunded)
             .Select(item => new
             {
                 item.BookingId,
+                item.Booking.Status,
+                HasVehicleReturn = item.Booking.VehicleReturn != null,
+                item.Method,
                 item.Amount
             })
             .ToListAsync(cancellationToken);
 
-        var refundedDepositByBooking = confirmedDepositRefunds
+        var refundsByBooking = confirmedRefunds
             .GroupBy(item => item.BookingId)
-            .ToDictionary(group => group.Key, group => group.Sum(item => item.Amount));
+            .ToDictionary(group => group.Key, group => group.ToList());
 
         var depositsHeld = paidDeposits
             .GroupBy(item => item.BookingId)
             .Sum(group =>
             {
                 var paid = group.Sum(item => item.Amount);
-                var refunded = refundedDepositByBooking.GetValueOrDefault(group.Key);
-                return Math.Max(0m, paid - refunded);
+                if (!refundsByBooking.TryGetValue(group.Key, out var refunds))
+                {
+                    return paid;
+                }
+
+                var explicitDepositRefund = refunds
+                    .Where(item =>
+                        item.Method == PaymentMethods.DepositRefund ||
+                        item.HasVehicleReturn)
+                    .Sum(item => item.Amount);
+
+                var bookingStatus = group.Select(item => item.Status).FirstOrDefault();
+                var legacyCancelledRefund = explicitDepositRefund > 0 ||
+                    bookingStatus is not (BookingStatus.Cancelled or BookingStatus.NoShow or BookingStatus.Rejected)
+                    ? 0m
+                    : Math.Min(paid, refunds.Sum(item => item.Amount));
+
+                var refundedDeposit = Math.Min(paid, explicitDepositRefund + legacyCancelledRefund);
+                return Math.Max(0m, paid - refundedDeposit);
             });
 
         var rows = new List<VehiclePerformanceDto>(vehicles.Count);
@@ -224,14 +237,17 @@ internal sealed class ReportService : IReportService
 
             var revenue = rentalRevenue + extensionRevenue + additionalChargeRevenue;
 
-            // ReturnService tạo PaymentType.Refund sau khi đã có VehicleReturn để hoàn cọc.
-            // Khoản Refund không gắn với quy trình trả xe được coi là hoàn doanh thu.
             var revenueRefunds = vehiclePayments
-                .Where(item => item.Type == PaymentType.Refund && !item.HasVehicleReturn)
+                .Where(item =>
+                    item.Type == PaymentType.Refund &&
+                    item.Method != PaymentMethods.DepositRefund &&
+                    !item.HasVehicleReturn)
                 .Sum(item => item.Amount);
 
             var depositRefunds = vehiclePayments
-                .Where(item => item.Type == PaymentType.Refund && item.HasVehicleReturn)
+                .Where(item =>
+                    item.Type == PaymentType.Refund &&
+                    (item.Method == PaymentMethods.DepositRefund || item.HasVehicleReturn))
                 .Sum(item => item.Amount);
 
             var vehicleBookings = bookings
@@ -294,14 +310,23 @@ internal sealed class ReportService : IReportService
             {
                 if (payment.Type == PaymentType.Refund)
                 {
-                    var isDepositRefund = payment.HasVehicleReturn;
+                    var isDepositRefund =
+                        payment.Method == PaymentMethods.DepositRefund ||
+                        payment.HasVehicleReturn;
+
+                    var category = isDepositRefund
+                        ? "Hoàn cọc"
+                        : payment.Method == PaymentMethods.VehicleSwapRefund
+                            ? "Hoàn chênh lệch đổi xe"
+                            : payment.Method == PaymentMethods.CompensationRefund
+                                ? "Hỗ trợ/bồi thường"
+                                : "Hoàn doanh thu";
+
                     transactions.Add(new ReportTransactionDto(
                         payment.OccurredAt,
                         payment.BookingId,
-                        isDepositRefund ? "Hoàn cọc" : "Hoàn doanh thu",
-                        isDepositRefund
-                            ? "Hoàn tiền cọc sau chuyến thuê"
-                            : "Hoàn khoản đã thu cho khách",
+                        category,
+                        category,
                         payment.Amount,
                         true));
                     continue;
@@ -317,9 +342,9 @@ internal sealed class ReportService : IReportService
 
                 var description = payment.Type switch
                 {
-                    PaymentType.Rental => "Tiền thuê và phí giao xe đã xác nhận",
-                    PaymentType.Extension => "Tiền gia hạn đã xác nhận",
-                    PaymentType.AdditionalCharge => "Phụ phí sau chuyến thuê đã xác nhận",
+                    PaymentType.Rental => "Tiền thuê và phí giao xe",
+                    PaymentType.Extension => "Tiền gia hạn",
+                    PaymentType.AdditionalCharge => "Khoản phát sinh đã thu",
                     _ => "Khoản thu đã xác nhận"
                 };
 
@@ -335,9 +360,7 @@ internal sealed class ReportService : IReportService
             foreach (var maintenance in vehicleMaintenance)
             {
                 var recognizedAt = maintenance.CompletedDate ?? maintenance.StartDate;
-                if (maintenance.Cost <= 0 ||
-                    recognizedAt < from ||
-                    recognizedAt >= endExclusive)
+                if (maintenance.Cost <= 0 || recognizedAt < from || recognizedAt >= endExclusive)
                 {
                     continue;
                 }
