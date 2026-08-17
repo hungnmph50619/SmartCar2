@@ -6,8 +6,6 @@
     var handoverAt = ViewBag.HandoverAt as DateTime?;
     var includedKilometers = ViewBag.HandoverIncludedKilometers as int? ?? 0;
     var excessKmFee = ViewBag.HandoverExcessKmFeePerKm as decimal? ?? 0m;
-    var handoverExterior = ViewBag.HandoverExteriorCondition as string;
-    var handoverInterior = ViewBag.HandoverInteriorCondition as string;
     var handoverAccessories = ViewBag.HandoverAccessories as string;
     var returnDate = Model.ReturnedAt.ToString("yyyy-MM-dd");
     var returnTime = Model.ReturnedAt.ToString("HH:mm");
@@ -31,13 +29,9 @@
             @if (!string.IsNullOrWhiteSpace(handoverFuelLevel)) { <span>@handoverFuelLevel nhiên liệu</span> }
             @if (handoverAt.HasValue) { <span class="text-muted">@handoverAt.Value.ToString("dd/MM/yyyy HH:mm")</span> }
         </div>
-        @if (!string.IsNullOrWhiteSpace(handoverExterior) || !string.IsNullOrWhiteSpace(handoverInterior) || !string.IsNullOrWhiteSpace(handoverAccessories))
+        @if (!string.IsNullOrWhiteSpace(handoverAccessories))
         {
-            <div class="small mt-2">
-                @if (!string.IsNullOrWhiteSpace(handoverExterior)) { <span class="me-3"><strong>Ngoại thất:</strong> @handoverExterior</span> }
-                @if (!string.IsNullOrWhiteSpace(handoverInterior)) { <span class="me-3"><strong>Nội thất:</strong> @handoverInterior</span> }
-                @if (!string.IsNullOrWhiteSpace(handoverAccessories)) { <span><strong>Phụ kiện:</strong> @handoverAccessories</span> }
-            </div>
+            <div class="small mt-2"><strong>Phụ kiện:</strong> @handoverAccessories</div>
         }
     </div>
 }
@@ -87,7 +81,7 @@
                      data-fee-per-km="@excessKmFee">
                     <div class="d-flex flex-wrap gap-4 small">
                         <div><span class="text-muted">Đã chạy</span><div class="fw-semibold" data-driven>0 km</div></div>
-                        <div><span class="text-muted">Định mức</span><div class="fw-semibold">@includedKilometers.ToString("N0") km</div></div>
+                        <div><span class="text-muted">Tổng định mức chuyến</span><div class="fw-semibold">@includedKilometers.ToString("N0") km</div></div>
                         <div><span class="text-muted">Vượt</span><div class="fw-semibold" data-excess>0 km</div></div>
                         <div><span class="text-muted">Phụ phí dự kiến</span><div class="fw-bold text-danger" data-fee>0 đ</div></div>
                     </div>
@@ -96,21 +90,13 @@
             </div>
         }
 
-        <div class="col-md-4">
+        <div class="col-md-6">
             <label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label>
             <div class="input-group">
                 <input asp-for="FuelLevel" type="number" min="0" max="100" step="1" class="form-control" required />
                 <span class="input-group-text">%</span>
             </div>
             <span asp-validation-for="FuelLevel" class="text-danger small"></span>
-        </div>
-        <div class="col-md-4">
-            <label asp-for="ExteriorCondition" class="form-label fw-semibold">Ngoại thất</label>
-            <input asp-for="ExteriorCondition" class="form-control" maxlength="1500" placeholder="Tình trạng khi trả" />
-        </div>
-        <div class="col-md-4">
-            <label asp-for="InteriorCondition" class="form-label fw-semibold">Nội thất</label>
-            <input asp-for="InteriorCondition" class="form-control" maxlength="1500" placeholder="Tình trạng khi trả" />
         </div>
     </div>
 
@@ -152,7 +138,7 @@
 
     <div class="mt-3">
         <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
-        <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Thiếu phụ kiện hoặc điểm cần lưu ý"></textarea>
+        <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Thiếu phụ kiện, vết xước hoặc điểm cần lưu ý"></textarea>
     </div>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
