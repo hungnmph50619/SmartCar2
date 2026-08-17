@@ -48,8 +48,8 @@ namespace SmartCar.Domain.Constants
 
         public const string DamageCompensationTerms =
             "Hư hỏng, mất mát hoặc thiếu phụ kiện do Bên B gây ra được bồi thường theo thiệt hại thực tế, hợp lý, có ảnh đối chiếu và chứng từ/báo giá hợp lệ. " +
-            "Nếu gia hạn bị từ chối, Bên B phải trả xe đúng hạn; trường hợp cố tình trả muộn làm ảnh hưởng đơn kế tiếp, Bên B chịu phí trả muộn và thiệt hại thực tế có căn cứ. " +
-            "Trường hợp bất khả kháng có minh chứng, SmartCar ưu tiên xử lý xe/đơn kế tiếp và không tự động khấu trừ tiền cọc của Bên B chỉ vì phát sinh xung đột lịch. Nếu SmartCar hỗ trợ khách kế tiếp thêm ngoài khoản hoàn tiền đã thu thì đó là chính sách hỗ trợ riêng của SmartCar.";
+            "Nếu yêu cầu gia hạn thông thường bị từ chối vì xe đã có đơn kế tiếp, Bên B phải trả xe đúng hạn; trường hợp đã được thông báo từ chối nhưng vẫn cố tình không giao/trả xe đúng hạn làm ảnh hưởng đơn kế tiếp, Bên B chịu phí trả muộn và khoản bồi thường bằng giá hợp đồng của đơn thuê bị ảnh hưởng. " +
+            "Trường hợp bất khả kháng phải có minh chứng và vị trí hiện tại; SmartCar ưu tiên xử lý đổi xe cho khách kế tiếp. Nếu khách kế tiếp không chấp nhận phương án đổi xe và phải hủy đơn, các khoản khách đó đã thanh toán được hoàn theo chính sách; khoản bồi thường (nếu có) được xác định theo thiệt hại thực tế có căn cứ và khấu trừ từ tiền cọc của khách đang thuê. Khoản bồi thường này được thông báo rõ trước khi duyệt/thanh toán gia hạn và không tự động lấy bằng giá hợp đồng của đơn kế tiếp.";
 
         // ============================================================
         // TÍNH KHOẢNG CÁCH
