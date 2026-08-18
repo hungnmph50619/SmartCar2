@@ -48,8 +48,70 @@
         const colorValue = document.getElementById('Color');
         const colorPreset = document.querySelector('[data-color-preset]');
         const colorCustom = document.querySelector('[data-color-custom]');
+        const manufactureYearInput = document.getElementById('ManufactureYear');
+        const seatsInput = document.getElementById('Seats');
+        const mileageInput = document.getElementById('CurrentMileage');
+        const currentYear = new Date().getFullYear();
+        const allowedSeats = [2, 4, 5, 7, 8, 9, 16];
+        const maxMileage = 2000000;
+        const maxDailyPrice = Number(priceDisplay?.dataset.maxPrice || 100000000);
         let dirty = false;
         let submitting = false;
+
+        const validationMessageFor = (fieldName) =>
+            vehicleForm.querySelector(`[data-valmsg-for="${fieldName}"]`);
+
+        const setFieldError = (input, fieldName, message = '') => {
+            const target = validationMessageFor(fieldName);
+            if (input) input.classList.toggle('is-invalid', Boolean(message));
+            if (target) {
+                target.textContent = message;
+                target.classList.toggle('field-validation-error', Boolean(message));
+                target.classList.toggle('field-validation-valid', !message);
+            }
+            return !message;
+        };
+
+        const validateManufactureYear = () => {
+            if (!manufactureYearInput) return true;
+            const value = Number(manufactureYearInput.value);
+            const valid = Number.isInteger(value) && value >= 1980 && value <= currentYear;
+            return setFieldError(
+                manufactureYearInput,
+                'ManufactureYear',
+                valid ? '' : `Năm sản xuất phải từ 1980 đến ${currentYear}.`);
+        };
+
+        const validateSeats = () => {
+            if (!seatsInput) return true;
+            const value = Number(seatsInput.value);
+            const valid = Number.isInteger(value) && allowedSeats.includes(value);
+            return setFieldError(
+                seatsInput,
+                'Seats',
+                valid ? '' : 'Vui lòng chọn số chỗ trong danh sách cho phép.');
+        };
+
+        const validatePrice = () => {
+            syncPrice();
+            if (!priceValue) return true;
+            const value = Number(priceValue.value);
+            const valid = Number.isFinite(value) && value >= 1 && value <= maxDailyPrice;
+            return setFieldError(
+                priceDisplay,
+                'DailyPrice',
+                valid ? '' : 'Giá thuê/ngày phải từ 1 đến 100.000.000 đồng.');
+        };
+
+        const validateMileage = () => {
+            if (!mileageInput) return true;
+            const value = Number(mileageInput.value);
+            const valid = Number.isInteger(value) && value >= 0 && value <= maxMileage;
+            return setFieldError(
+                mileageInput,
+                'CurrentMileage',
+                valid ? '' : 'Số km hiện tại phải từ 0 đến 2.000.000 km.');
+        };
 
         const setPriceFromHidden = () => {
             if (!priceDisplay || !priceValue) return;
@@ -66,7 +128,18 @@
             priceDisplay.value = digits ? Number(digits).toLocaleString('vi-VN') : '';
         };
         setPriceFromHidden();
-        priceDisplay?.addEventListener('input', () => { syncPrice(); dirty = true; });
+        priceDisplay?.addEventListener('input', () => {
+            syncPrice();
+            validatePrice();
+            dirty = true;
+        });
+        priceDisplay?.addEventListener('blur', validatePrice);
+        manufactureYearInput?.addEventListener('input', validateManufactureYear);
+        manufactureYearInput?.addEventListener('blur', validateManufactureYear);
+        seatsInput?.addEventListener('input', validateSeats);
+        seatsInput?.addEventListener('blur', validateSeats);
+        mileageInput?.addEventListener('input', validateMileage);
+        mileageInput?.addEventListener('blur', validateMileage);
 
         const populateModels = (preserveCurrent = true) => {
             if (!modelPreset || !modelValue) return;
@@ -183,27 +256,35 @@
         });
 
         vehicleForm.addEventListener('submit', (event) => {
-            syncPrice();
-            if (modelPreset?.value === '__other__' && modelCustom && !modelCustom.value.trim()) {
-                event.preventDefault();
-                modelCustom.focus();
-                alert('Vui lòng nhập dòng xe thực tế hoặc chọn một dòng xe trong danh sách.');
-                return;
-            }
-            if (colorPreset?.value === '__other__' && colorCustom && !colorCustom.value.trim()) {
-                event.preventDefault();
-                colorCustom.focus();
-                alert('Vui lòng nhập màu xe thực tế hoặc chọn một màu phổ biến.');
-                return;
-            }
             if (modelValue) modelValue.value = modelValue.value.trim();
             if (colorValue) colorValue.value = colorValue.value.trim();
-            if (priceValue && Number(priceValue.value) <= 0) {
+
+            const modelValid = !(modelPreset?.value === '__other__' && modelCustom && !modelCustom.value.trim());
+            setFieldError(
+                modelCustom || modelValue,
+                'VehicleModel',
+                modelValid ? '' : 'Vui lòng nhập dòng xe thực tế hoặc chọn một dòng xe trong danh sách.');
+
+            const colorValid = !(colorPreset?.value === '__other__' && colorCustom && !colorCustom.value.trim());
+            setFieldError(
+                colorCustom || colorValue,
+                'Color',
+                colorValid ? '' : 'Vui lòng nhập màu xe thực tế hoặc chọn một màu phổ biến.');
+
+            const numericValid = [
+                validateManufactureYear(),
+                validateSeats(),
+                validatePrice(),
+                validateMileage()
+            ].every(Boolean);
+
+            if (!modelValid || !colorValid || !numericValid) {
                 event.preventDefault();
-                priceDisplay?.focus();
-                alert('Giá thuê/ngày phải lớn hơn 0.');
+                const firstInvalid = vehicleForm.querySelector('.is-invalid');
+                firstInvalid?.focus();
                 return;
             }
+
             submitting = true;
         });
 

@@ -19,12 +19,12 @@ public sealed class VehicleFormViewModel
 {
     public int VehicleId { get; set; }
 
-    [Required]
+    [Required(ErrorMessage = "Vui lòng chọn hãng xe.")]
     [Display(Name = "Hãng xe")]
     public int BrandId { get; set; }
 
-    [Required]
-    [StringLength(150)]
+    [Required(ErrorMessage = "Vui lòng nhập tên xe.")]
+    [StringLength(150, ErrorMessage = "Tên xe không được vượt quá 150 ký tự.")]
     [Display(Name = "Tên xe")]
     public string VehicleName { get; set; } = string.Empty;
 
@@ -32,35 +32,35 @@ public sealed class VehicleFormViewModel
     [Display(Name = "Dòng xe")]
     public string? VehicleModel { get; set; }
 
-    [Required]
-    [StringLength(20)]
+    [Required(ErrorMessage = "Vui lòng nhập biển số xe.")]
+    [StringLength(20, ErrorMessage = "Biển số xe không được vượt quá 20 ký tự.")]
     [Display(Name = "Biển số")]
     public string LicensePlate { get; set; } = string.Empty;
 
-    [Range(1980, 2100)]
+    [Range(1980, 2100, ErrorMessage = "Năm sản xuất phải từ 1980 đến năm hiện tại.")]
     [Display(Name = "Năm sản xuất")]
     public int ManufactureYear { get; set; } = DateTime.Now.Year;
 
-    [Range(1, 100)]
+    [Range(2, 16, ErrorMessage = "Vui lòng chọn số chỗ trong danh sách cho phép.")]
     [Display(Name = "Số chỗ")]
     public int Seats { get; set; } = 5;
 
-    [Required]
+    [Required(ErrorMessage = "Vui lòng chọn loại hộp số.")]
     [Display(Name = "Hộp số")]
     public string Transmission { get; set; } = "Tự động";
 
-    [Required]
+    [Required(ErrorMessage = "Vui lòng chọn loại nhiên liệu.")]
     [Display(Name = "Nhiên liệu")]
     public string FuelType { get; set; } = "Xăng";
 
     [Display(Name = "Màu xe")]
     public string? Color { get; set; }
 
-    [Range(1, 999_999_999_999, ErrorMessage = "Giá thuê/ngày phải từ 1 đến 999.999.999.999 đồng.")]
+    [Range(1, 100_000_000, ErrorMessage = "Giá thuê/ngày phải từ 1 đến 100.000.000 đồng.")]
     [Display(Name = "Giá thuê/ngày")]
     public decimal DailyPrice { get; set; }
 
-    [Range(0, int.MaxValue)]
+    [Range(0, 2_000_000, ErrorMessage = "Số km hiện tại phải từ 0 đến 2.000.000 km.")]
     [Display(Name = "Số km hiện tại")]
     public int CurrentMileage { get; set; }
 
