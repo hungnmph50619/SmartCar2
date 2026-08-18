@@ -37,12 +37,21 @@
     </div>
     <div class="col-md-4">
         <label asp-for="ManufactureYear" class="form-label fw-semibold">Năm sản xuất <span class="text-danger">*</span></label>
-        <input asp-for="ManufactureYear" type="number" min="1980" max="2100" class="form-control" />
+        <input asp-for="ManufactureYear" id="ManufactureYear" type="number" min="1980" max="@DateTime.Now.Year" class="form-control" />
         <span asp-validation-for="ManufactureYear" class="text-danger small"></span>
     </div>
     <div class="col-md-4">
         <label asp-for="Seats" class="form-label fw-semibold">Số chỗ <span class="text-danger">*</span></label>
-        <input asp-for="Seats" type="number" min="1" max="100" class="form-control" />
+        <select asp-for="Seats" id="Seats" class="form-select">
+            <option value="2">2 chỗ</option>
+            <option value="4">4 chỗ</option>
+            <option value="5">5 chỗ</option>
+            <option value="7">7 chỗ</option>
+            <option value="8">8 chỗ</option>
+            <option value="9">9 chỗ</option>
+            <option value="16">16 chỗ</option>
+        </select>
+        <div class="form-text">Chỉ chọn số chỗ thực tế của xe trong danh sách.</div>
         <span asp-validation-for="Seats" class="text-danger small"></span>
     </div>
     <div class="col-md-4">
@@ -98,17 +107,18 @@
                    autocomplete="off"
                    class="form-control"
                    placeholder="Ví dụ: 750.000"
+                   data-max-price="100000000"
                    aria-describedby="dailyPriceHelp" />
             <input asp-for="DailyPrice" id="DailyPrice" type="hidden" />
             <span class="input-group-text">đ/ngày</span>
         </div>
-        <div id="dailyPriceHelp" class="form-text">Nhập số tiền bằng đồng, hệ thống sẽ tự thêm dấu phân cách hàng nghìn.</div>
+        <div id="dailyPriceHelp" class="form-text">Nhập số tiền bằng đồng, tối đa 100.000.000 đ/ngày. Hệ thống sẽ tự thêm dấu phân cách hàng nghìn.</div>
         <span asp-validation-for="DailyPrice" class="text-danger small"></span>
     </div>
     <div class="col-md-6">
         <label asp-for="CurrentMileage" class="form-label fw-semibold">Số km hiện tại <span class="text-danger">*</span></label>
         <div class="input-group">
-            <input asp-for="CurrentMileage" type="number" min="0" class="form-control" />
+            <input asp-for="CurrentMileage" id="CurrentMileage" type="number" min="0" max="2000000" class="form-control" />
             <span class="input-group-text">km</span>
         </div>
         <span asp-validation-for="CurrentMileage" class="text-danger small"></span>

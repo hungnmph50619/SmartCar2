@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
@@ -33,6 +33,29 @@ internal sealed class VehicleDocumentService : IVehicleDocumentService
         VehicleDocumentType.Other => "Giấy tờ khác",
         _ => documentType.ToString()
     };
+
+    private static bool RequiresSingleActiveDocument(VehicleDocumentType documentType) =>
+        documentType is VehicleDocumentType.Registration
+            or VehicleDocumentType.Inspection
+            or VehicleDocumentType.Insurance
+            or VehicleDocumentType.RoadFee;
+
+    private async Task<VehicleDocument?> FindDuplicateNumberAsync(
+        string documentNumber,
+        int? excludeDocumentId,
+        CancellationToken cancellationToken)
+    {
+        var normalizedNumber = documentNumber.Trim().ToUpper();
+
+        return await _dbContext.VehicleDocuments
+            .AsNoTracking()
+            .Include(document => document.Vehicle)
+            .FirstOrDefaultAsync(
+                document =>
+                    (!excludeDocumentId.HasValue || document.VehicleDocumentId != excludeDocumentId.Value) &&
+                    document.DocumentNumber.ToUpper() == normalizedNumber,
+                cancellationToken);
+    }
 
     public async Task<IReadOnlyList<VehicleDocumentDto>> GetAllAsync(
         CancellationToken cancellationToken = default)
@@ -226,24 +249,46 @@ internal sealed class VehicleDocumentService : IVehicleDocumentService
             return OperationResult.Failure("Không tìm thấy xe.");
         }
 
-        var duplicateActiveDocument = await _dbContext.VehicleDocuments.AnyAsync(
-            document =>
-                document.VehicleId == request.VehicleId &&
-                document.DocumentType == request.DocumentType &&
-                (!document.ExpiryDate.HasValue || document.ExpiryDate.Value.Date >= DateTime.Today),
+        var normalizedDocumentNumber = request.DocumentNumber.Trim();
+        var duplicateNumber = await FindDuplicateNumberAsync(
+            normalizedDocumentNumber,
+            excludeDocumentId: null,
             cancellationToken);
 
-        if (duplicateActiveDocument)
+        if (duplicateNumber is not null)
         {
             return OperationResult.Failure(
-                $"Xe đã có giấy tờ {ToVietnameseName(request.DocumentType)} đang còn hiệu lực. Vui lòng sửa hoặc xóa giấy tờ cũ trước khi thêm giấy tờ mới cùng loại.");
+    $"Số giấy tờ '{normalizedDocumentNumber}' đã tồn tại trong hệ thống và đang thuộc xe {duplicateNumber.Vehicle.LicensePlate}. Vui lòng kiểm tra lại số giấy tờ.");
+        }
+
+        if (RequiresSingleActiveDocument(request.DocumentType))
+        {
+            var duplicateActiveDocument = await _dbContext.VehicleDocuments
+                .AsNoTracking()
+                .Where(document =>
+                    document.VehicleId == request.VehicleId &&
+                    document.DocumentType == request.DocumentType &&
+                    (!document.ExpiryDate.HasValue || document.ExpiryDate.Value.Date >= DateTime.Today))
+                .OrderByDescending(document => document.ExpiryDate ?? DateTime.MaxValue)
+                .ThenByDescending(document => document.IssuedDate)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (duplicateActiveDocument is not null)
+            {
+                var expiryText = duplicateActiveDocument.ExpiryDate.HasValue
+                    ? $" Hết hạn: {duplicateActiveDocument.ExpiryDate.Value:dd/MM/yyyy}."
+                    : " Không có ngày hết hạn.";
+
+                return OperationResult.Failure(
+                    $"Xe đã có {ToVietnameseName(request.DocumentType)} đang còn hiệu lực (số {duplicateActiveDocument.DocumentNumber}).{expiryText} Vui lòng sửa giấy tờ hiện tại thay vì thêm bản ghi trùng loại.");
+            }
         }
 
         var document = new VehicleDocument
         {
             VehicleId = request.VehicleId,
             DocumentType = request.DocumentType,
-            DocumentNumber = request.DocumentNumber.Trim(),
+            DocumentNumber = normalizedDocumentNumber,
             IssuedDate = request.IssuedDate,
             ExpiryDate = request.ExpiryDate,
             ImagePath = Normalize(request.ImagePath),
@@ -310,18 +355,40 @@ internal sealed class VehicleDocumentService : IVehicleDocumentService
             return OperationResult.Failure("Giấy tờ không thuộc xe đã chọn.");
         }
 
-        var duplicateActiveDocument = await _dbContext.VehicleDocuments.AnyAsync(
-            item =>
-                item.VehicleDocumentId != request.VehicleDocumentId &&
-                item.VehicleId == request.VehicleId &&
-                item.DocumentType == request.DocumentType &&
-                (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today),
+        var normalizedDocumentNumber = request.DocumentNumber.Trim();
+        var duplicateNumber = await FindDuplicateNumberAsync(
+            normalizedDocumentNumber,
+            request.VehicleDocumentId,
             cancellationToken);
 
-        if (duplicateActiveDocument)
+        if (duplicateNumber is not null)
         {
             return OperationResult.Failure(
-                $"Xe đã có giấy tờ {ToVietnameseName(request.DocumentType)} khác đang còn hiệu lực. Vui lòng sửa hoặc xóa giấy tờ đang hiệu lực đó trước khi cập nhật giấy tờ này.");
+    $"Số giấy tờ '{normalizedDocumentNumber}' đã tồn tại trong hệ thống và đang thuộc xe {duplicateNumber.Vehicle.LicensePlate}. Vui lòng kiểm tra lại số giấy tờ.");
+        }
+
+        if (RequiresSingleActiveDocument(request.DocumentType))
+        {
+            var duplicateActiveDocument = await _dbContext.VehicleDocuments
+                .AsNoTracking()
+                .Where(item =>
+                    item.VehicleDocumentId != request.VehicleDocumentId &&
+                    item.VehicleId == request.VehicleId &&
+                    item.DocumentType == request.DocumentType &&
+                    (!item.ExpiryDate.HasValue || item.ExpiryDate.Value.Date >= DateTime.Today))
+                .OrderByDescending(item => item.ExpiryDate ?? DateTime.MaxValue)
+                .ThenByDescending(item => item.IssuedDate)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (duplicateActiveDocument is not null)
+            {
+                var expiryText = duplicateActiveDocument.ExpiryDate.HasValue
+                    ? $" Hết hạn: {duplicateActiveDocument.ExpiryDate.Value:dd/MM/yyyy}."
+                    : " Không có ngày hết hạn.";
+
+                return OperationResult.Failure(
+                    $"Xe đã có {ToVietnameseName(request.DocumentType)} khác đang còn hiệu lực (số {duplicateActiveDocument.DocumentNumber}).{expiryText} Vui lòng sửa giấy tờ đang hiệu lực đó trước khi cập nhật.");
+            }
         }
 
         var oldValues = JsonSerializer.Serialize(new
@@ -336,7 +403,7 @@ internal sealed class VehicleDocumentService : IVehicleDocumentService
         });
 
         document.DocumentType = request.DocumentType;
-        document.DocumentNumber = request.DocumentNumber.Trim();
+        document.DocumentNumber = normalizedDocumentNumber;
         document.IssuedDate = request.IssuedDate;
         document.ExpiryDate = request.ExpiryDate;
         document.ImagePath = Normalize(request.ImagePath);

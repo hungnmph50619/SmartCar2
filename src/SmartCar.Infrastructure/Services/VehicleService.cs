@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Application.Features.VehicleDocuments;
@@ -451,12 +451,25 @@ internal sealed class VehicleService : IVehicleService
 
         if (manufactureYear < 1980 || manufactureYear > DateTime.UtcNow.Year)
         {
-            return "Năm sản xuất không hợp lệ.";
+            return $"Năm sản xuất phải từ 1980 đến {DateTime.UtcNow.Year}.";
         }
 
-        if (seats <= 0 || dailyPrice <= 0 || currentMileage < 0)
+        int[] allowedSeats = [2, 4, 5, 7, 8, 9, 16];
+        if (!allowedSeats.Contains(seats))
         {
-            return "Số chỗ, giá thuê hoặc số km không hợp lệ.";
+            return "Số chỗ không hợp lệ. Vui lòng chọn 2, 4, 5, 7, 8, 9 hoặc 16 chỗ.";
+        }
+
+        const decimal maxDailyPrice = 100_000_000m;
+        if (dailyPrice < 1 || dailyPrice > maxDailyPrice)
+        {
+            return "Giá thuê/ngày phải từ 1 đến 100.000.000 đồng.";
+        }
+
+        const int maxCurrentMileage = 2_000_000;
+        if (currentMileage < 0 || currentMileage > maxCurrentMileage)
+        {
+            return "Số km hiện tại phải từ 0 đến 2.000.000 km.";
         }
 
         var brand = await _dbContext.Brands
