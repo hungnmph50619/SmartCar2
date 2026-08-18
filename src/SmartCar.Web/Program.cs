@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
@@ -6,6 +7,10 @@ using SmartCar.Infrastructure;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Filters;
 using SmartCar.Web.Services;
+
+// Giữ tiếng Việt hiển thị đúng trong Developer PowerShell/Terminal khi chạy app.
+Console.InputEncoding = Encoding.UTF8;
+Console.OutputEncoding = Encoding.UTF8;
 
 var builder = WebApplication.CreateBuilder(args);
 
