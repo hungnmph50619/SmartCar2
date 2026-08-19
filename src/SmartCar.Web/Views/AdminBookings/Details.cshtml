@@ -11,6 +11,8 @@
     var licenseVerified = ViewBag.DrivingLicenseVerified is bool license && license;
     var handoverSigned = ViewBag.HandoverSigned is bool hs && hs;
     var returnSigned = ViewBag.ReturnSigned is bool rs && rs;
+    var handoverSignedPath = Model.Handover?.ImagePaths
+        .FirstOrDefault(path => path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase));
 
     var rentalPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Rental);
     var depositPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Deposit);
@@ -280,8 +282,14 @@
                         <h2 class="h5 mb-1">Biên bản giao</h2>
                         <span class="badge @(handoverSigned ? "bg-success" : "bg-danger")">@(handoverSigned ? "Đã có chữ ký" : "Thiếu bản ký")</span>
                     </div>
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
-                       asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
+                    <div class="d-flex gap-2 flex-wrap">
+                        @if (!string.IsNullOrWhiteSpace(handoverSignedPath))
+                        {
+                            <a class="btn btn-sm btn-primary" href="@handoverSignedPath" target="_blank" rel="noopener">Xem bản ký</a>
+                        }
+                        <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
+                           asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
+                    </div>
                 </div>
                 @if (!handoverSigned && Model.Status != BookingStatus.Completed)
                 {
@@ -481,8 +489,7 @@
                 }
                 else if (Model.Status == BookingStatus.Rented)
                 {
-                    <a class="btn btn-primary w-100" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a>
-                    <div class="small text-muted mt-1">Theo dõi yêu cầu gia hạn và khoản thanh toán gia hạn.</div>
+                    <div class="small text-muted">Gia hạn được xử lý tại khối “Đang thuê” bên trái để tránh lặp thao tác.</div>
                 }
                 else if (Model.Status == BookingStatus.PendingInspection)
                 {
