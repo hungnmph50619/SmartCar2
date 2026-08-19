@@ -21,19 +21,22 @@ public sealed class VehiclesController : Controller
     private readonly IReviewService _reviewService;
     private readonly IDocumentService _documentService;
     private readonly IUserBankAccountService _bankAccountService;
+    private readonly IConfiguration _configuration;
 
     public VehiclesController(
         IVehicleService vehicleService,
         IBrandService brandService,
         IReviewService reviewService,
         IDocumentService documentService,
-        IUserBankAccountService bankAccountService)
+        IUserBankAccountService bankAccountService,
+        IConfiguration configuration)
     {
         _vehicleService = vehicleService;
         _brandService = brandService;
         _reviewService = reviewService;
         _documentService = documentService;
         _bankAccountService = bankAccountService;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -123,6 +126,23 @@ public sealed class VehiclesController : Controller
         ViewBag.AverageRating = reviews.Count == 0 ? 0 : reviews.Average(review => review.Rating);
         ViewBag.PickupDate = selectedPickupDate;
         ViewBag.ReturnDate = selectedReturnDate;
+
+        // Thông tin cửa hàng dùng cho lựa chọn nhận xe trực tiếp.
+        ViewBag.StoreAddress =
+            _configuration["SmartCar:StoreAddress"]
+            ?? "SmartCar - Tòa FPT Polytechnic, Nam Từ Liêm, Hà Nội";
+
+        // Kiểm tra lại đúng khoảng thời gian ngay tại trang chi tiết để tránh
+        // khách mở URL cũ rồi gửi đơn khi xe đã phát sinh lịch thuê khác.
+        var periodVehicles = await _vehicleService.SearchAvailableAsync(
+            new VehicleSearchRequest(
+                selectedPickupDate,
+                selectedReturnDate),
+            cancellationToken);
+
+        ViewBag.AvailableForSelectedPeriod =
+            periodVehicles.Any(item => item.VehicleId == id);
+
         ViewBag.KycVerified = false;
         ViewBag.KycVerifiedCount = 0;
         ViewBag.KycTotal = 2;
