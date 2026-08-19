@@ -186,6 +186,61 @@
         });
     }
 
+    function initializeIncrementalEvidenceImagePickers() {
+        const supportedIds = new Set(["handover-images", "return-image-picker"]);
+        const previousFilesByInput = new WeakMap();
+
+        const isSupportedInput = (target) =>
+            target instanceof HTMLInputElement &&
+            target.type === "file" &&
+            target.multiple &&
+            supportedIds.has(target.id);
+
+        const fileKey = (file) =>
+            `${file.name}|${file.size}|${file.lastModified}|${file.type}`;
+
+        document.addEventListener("click", (event) => {
+            const input = event.target;
+            if (!isSupportedInput(input)) {
+                return;
+            }
+
+            previousFilesByInput.set(input, Array.from(input.files ?? []));
+        }, true);
+
+        document.addEventListener("change", (event) => {
+            const input = event.target;
+            if (!isSupportedInput(input)) {
+                return;
+            }
+
+            const previousFiles = previousFilesByInput.get(input) ?? [];
+            const newlyChosenFiles = Array.from(input.files ?? []);
+            previousFilesByInput.delete(input);
+
+            if (newlyChosenFiles.length === 0 || typeof DataTransfer === "undefined") {
+                return;
+            }
+
+            const uniqueFiles = [];
+            const seen = new Set();
+
+            for (const file of [...previousFiles, ...newlyChosenFiles]) {
+                const key = fileKey(file);
+                if (seen.has(key)) {
+                    continue;
+                }
+
+                seen.add(key);
+                uniqueFiles.push(file);
+            }
+
+            const transfer = new DataTransfer();
+            uniqueFiles.forEach((file) => transfer.items.add(file));
+            input.files = transfer.files;
+        }, true);
+    }
+
     function initializeTerminology() {
         if (!document.body) {
             return;
@@ -197,6 +252,7 @@
         // Chạy sau site.js để trạng thái menu Admin không bị script cũ ghi đè.
         syncAdminCustomerSidebar();
         clarifyAdminBookingRefundLabels();
+        initializeIncrementalEvidenceImagePickers();
         window.setTimeout(syncAdminCustomerSidebar, 0);
         window.setTimeout(clarifyAdminBookingRefundLabels, 0);
 
