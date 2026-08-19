@@ -11,8 +11,6 @@
     var licenseVerified = ViewBag.DrivingLicenseVerified is bool license && license;
     var handoverSigned = ViewBag.HandoverSigned is bool hs && hs;
     var returnSigned = ViewBag.ReturnSigned is bool rs && rs;
-    var handoverSignedPath = Model.Handover?.ImagePaths
-        .FirstOrDefault(path => path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase));
 
     var rentalPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Rental);
     var depositPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Deposit);
@@ -283,9 +281,10 @@
                         <span class="badge @(handoverSigned ? "bg-success" : "bg-danger")">@(handoverSigned ? "Đã có chữ ký" : "Thiếu bản ký")</span>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        @if (!string.IsNullOrWhiteSpace(handoverSignedPath))
+                        @if (handoverSigned)
                         {
-                            <a class="btn btn-sm btn-primary" href="@handoverSignedPath" target="_blank" rel="noopener">Xem bản ký</a>
+                            <a class="btn btn-sm btn-primary" target="_blank" rel="noopener"
+                               asp-controller="AdminSignedDocuments" asp-action="Handover" asp-route-bookingId="@Model.BookingId">Xem bản ký</a>
                         }
                         <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener"
                            asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
