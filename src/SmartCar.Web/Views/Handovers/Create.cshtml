@@ -142,8 +142,13 @@
             const imageInput = document.getElementById('handover-images');
             const imagePreview = document.getElementById('handover-image-preview');
             const imageCount = document.getElementById('handover-image-count');
+            const imageValidation = form?.querySelector('[data-valmsg-for="Images"]');
             const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+            const maximumImageBytes = 5 * 1024 * 1024;
+            const allowedImageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+            const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
             let previewUrls = [];
+            let selectedImageFiles = Array.from(imageInput?.files || []);
 
             function syncDateTime() {
                 if (!date?.value || !timePattern.test(time?.value || '')) return false;
@@ -202,16 +207,55 @@
                 return message === '';
             }
 
-            function validateImages() {
+            function setImageValidationMessage(message, showInline) {
+                if (!imageValidation) return;
+
+                if (showInline && message) {
+                    imageValidation.textContent = message;
+                    imageValidation.classList.remove('field-validation-valid');
+                    imageValidation.classList.add('field-validation-error');
+                    return;
+                }
+
+                if (!message) {
+                    imageValidation.textContent = '';
+                    imageValidation.classList.remove('field-validation-error');
+                    imageValidation.classList.add('field-validation-valid');
+                }
+            }
+
+            function validateImages(showInline = false) {
                 if (!imageInput) return true;
-                const imageTotal = imageInput.files?.length || 0;
+
                 let message = '';
+                const imageTotal = selectedImageFiles.length;
+
                 if (imageTotal < 7) {
                     message = 'Vui lòng chọn ít nhất 7 ảnh bàn giao.';
                 } else if (imageTotal > 25) {
                     message = 'Vui lòng chọn tối đa 25 ảnh bàn giao.';
+                } else {
+                    const oversized = selectedImageFiles.find(file => file.size > maximumImageBytes);
+                    if (oversized) {
+                        message = `Ảnh "${oversized.name}" vượt quá 5 MB.`;
+                    }
                 }
+
+                if (!message) {
+                    const invalidFormat = selectedImageFiles.find(file => {
+                        const lowerName = file.name.toLowerCase();
+                        const extensionValid = allowedImageExtensions.some(extension => lowerName.endsWith(extension));
+                        const typeValid = !file.type || allowedImageTypes.includes(file.type.toLowerCase());
+                        return !extensionValid || !typeValid;
+                    });
+
+                    if (invalidFormat) {
+                        message = `Ảnh "${invalidFormat.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`;
+                    }
+                }
+
                 imageInput.setCustomValidity(message);
+                setImageValidationMessage(message, showInline);
                 return message === '';
             }
 
@@ -220,22 +264,52 @@
                 previewUrls = [];
             }
 
+            function syncImageInputFiles() {
+                if (!imageInput) return;
+                const transfer = new DataTransfer();
+                selectedImageFiles.forEach(file => transfer.items.add(file));
+                imageInput.files = transfer.files;
+            }
+
+            function removeImage(index) {
+                selectedImageFiles.splice(index, 1);
+                syncImageInputFiles();
+                renderImagePreview();
+                validateImages(true);
+            }
+
             function renderImagePreview() {
                 if (!imageInput || !imagePreview || !imageCount) return;
 
                 clearPreviewUrls();
                 imagePreview.innerHTML = '';
-                const files = Array.from(imageInput.files || []);
-                imageCount.textContent = files.length > 0 ? `Đã chọn ${files.length} ảnh` : 'Chưa chọn ảnh';
-                imageCount.className = `badge ${files.length >= 7 && files.length <= 25 ? 'text-bg-success' : 'text-bg-secondary'}`;
+                imageCount.textContent = selectedImageFiles.length > 0
+                    ? `Đã chọn ${selectedImageFiles.length} ảnh`
+                    : 'Chưa chọn ảnh';
+                imageCount.className = `badge ${selectedImageFiles.length >= 7 && selectedImageFiles.length <= 25 ? 'text-bg-success' : 'text-bg-secondary'}`;
 
-                files.forEach((file, index) => {
+                selectedImageFiles.forEach((file, index) => {
                     const url = URL.createObjectURL(file);
                     previewUrls.push(url);
 
                     const wrapper = document.createElement('div');
-                    wrapper.className = 'border rounded bg-white p-1';
+                    wrapper.className = 'border rounded bg-white p-1 position-relative';
                     wrapper.style.width = '116px';
+
+                    const removeButton = document.createElement('button');
+                    removeButton.type = 'button';
+                    removeButton.className = 'btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center';
+                    removeButton.style.width = '24px';
+                    removeButton.style.height = '24px';
+                    removeButton.style.padding = '0';
+                    removeButton.style.top = '-7px';
+                    removeButton.style.right = '-7px';
+                    removeButton.style.zIndex = '2';
+                    removeButton.style.lineHeight = '1';
+                    removeButton.innerHTML = '&times;';
+                    removeButton.title = 'Xóa ảnh này';
+                    removeButton.setAttribute('aria-label', `Xóa ảnh ${index + 1}`);
+                    removeButton.addEventListener('click', () => removeImage(index));
 
                     const image = document.createElement('img');
                     image.src = url;
@@ -252,11 +326,9 @@
                     caption.textContent = `${index + 1}. ${file.name}`;
                     caption.title = file.name;
 
-                    wrapper.append(image, caption);
+                    wrapper.append(removeButton, image, caption);
                     imagePreview.appendChild(wrapper);
                 });
-
-                validateImages();
             }
 
             date?.addEventListener('change', () => {
@@ -277,15 +349,19 @@
             fuel?.addEventListener('input', validateFuel);
             fuel?.addEventListener('invalid', validateFuel);
 
-            imageInput?.addEventListener('change', renderImagePreview);
-            imageInput?.addEventListener('invalid', validateImages);
+            imageInput?.addEventListener('change', () => {
+                selectedImageFiles = Array.from(imageInput.files || []);
+                renderImagePreview();
+                validateImages(true);
+            });
+            imageInput?.addEventListener('invalid', () => validateImages(true));
 
             form?.addEventListener('submit', event => {
                 const validDate = validateDate();
                 const validTime = validateTime();
                 const validMileage = validateMileage();
                 const validFuel = validateFuel();
-                const validImages = validateImages();
+                const validImages = validateImages(true);
 
                 if (!validDate || !validTime || !validMileage || !validFuel || !validImages || !syncDateTime()) {
                     event.preventDefault();
@@ -296,6 +372,7 @@
 
             syncDateTime();
             renderImagePreview();
+            validateImages(false);
             document.getElementById('handover-validation-summary')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         })();
     </script>
