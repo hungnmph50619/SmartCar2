@@ -16,7 +16,7 @@ namespace SmartCar.Web.Controllers;
 public sealed class HandoversController : Controller
 {
     private const int MinimumImages = 7;
-    private const int MaximumImages = 14;
+    private const int MaximumImages = 25;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
 
     private readonly IHandoverService _handoverService;
@@ -155,11 +155,12 @@ public sealed class HandoversController : Controller
             return View(model);
         }
 
+        var mileage = model.Mileage!.Value;
         var result = await _handoverService.CreateAsync(
             new CreateHandoverRequest(
                 model.BookingId,
                 model.HandoverAt,
-                model.Mileage,
+                mileage,
                 model.FuelLevel,
                 model.ExteriorCondition,
                 model.InteriorCondition,
@@ -190,7 +191,7 @@ public sealed class HandoversController : Controller
             "CreateHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập biên bản giao điện tử đơn #{model.BookingId}, {model.Mileage:N0} km, {imagePaths.Count} ảnh chứng cứ.",
+            $"Lập biên bản giao điện tử đơn #{model.BookingId}, {mileage:N0} km, {imagePaths.Count} ảnh chứng cứ.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
@@ -227,7 +228,7 @@ public sealed class HandoversController : Controller
         {
             ModelState.AddModelError(
                 nameof(HandoverViewModel.Images),
-                $"Tổng số ảnh tối đa là {MaximumImages}.");
+                $"Vui lòng chọn tối đa {MaximumImages} ảnh bàn giao.");
         }
 
         foreach (var image in selectedImages)
