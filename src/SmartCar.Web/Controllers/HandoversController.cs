@@ -15,6 +15,7 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class HandoversController : Controller
 {
+    private const int MinimumImages = 7;
     private const int MaximumImages = 14;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
 
@@ -80,7 +81,8 @@ public sealed class HandoversController : Controller
             ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
             LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
             TrafficFineTerms = RentalPolicy.TrafficFineTerms,
-            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms
+            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
+            PenaltyPolicyAccepted = true
         });
     }
 
@@ -121,15 +123,17 @@ public sealed class HandoversController : Controller
         ModelState.Remove(nameof(HandoverViewModel.LateReturnFeeMultiplier));
         ModelState.Remove(nameof(HandoverViewModel.TrafficFineTerms));
         ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
+        ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
 
         model.IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay;
         model.ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee;
         model.LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier;
         model.TrafficFineTerms = RentalPolicy.TrafficFineTerms;
         model.DamageCompensationTerms = RentalPolicy.DamageCompensationTerms;
+        // Việc lưu biên bản là hành động xác nhận chính sách đã được thông báo trong quy trình giao xe.
+        model.PenaltyPolicyAccepted = true;
 
-        var evidenceFiles = BuildEvidenceFiles(model);
-        await ValidateImagesAsync(evidenceFiles, model.Images, cancellationToken);
+        await ValidateImagesAsync(model.Images, cancellationToken);
         if (!ModelState.IsValid)
         {
             return View(model);
@@ -140,7 +144,6 @@ public sealed class HandoversController : Controller
         {
             imagePaths = await SaveImagesAsync(
                 model.BookingId,
-                evidenceFiles,
                 model.Images,
                 cancellationToken);
         }
@@ -205,46 +208,34 @@ public sealed class HandoversController : Controller
             "AdminRentalDocuments",
             new { bookingId });
 
-    private static IReadOnlyList<(string Label, string FieldName, IFormFile? File)> BuildEvidenceFiles(
-        HandoverViewModel model) =>
-        new (string, string, IFormFile?)[]
-        {
-            ("front", nameof(HandoverViewModel.FrontImage), model.FrontImage),
-            ("rear", nameof(HandoverViewModel.RearImage), model.RearImage),
-            ("left", nameof(HandoverViewModel.LeftImage), model.LeftImage),
-            ("right", nameof(HandoverViewModel.RightImage), model.RightImage),
-            ("interior", nameof(HandoverViewModel.InteriorImage), model.InteriorImage),
-            ("odometer", nameof(HandoverViewModel.OdometerImage), model.OdometerImage),
-            ("fuel", nameof(HandoverViewModel.FuelImage), model.FuelImage)
-        };
-
     private async Task ValidateImagesAsync(
-        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
-        IReadOnlyCollection<IFormFile> otherImages,
+        IReadOnlyCollection<IFormFile> images,
         CancellationToken cancellationToken)
     {
-        foreach (var evidence in evidenceFiles)
-        {
-            if (evidence.File is null || evidence.File.Length == 0)
-            {
-                ModelState.AddModelError(evidence.FieldName, "Cần ảnh này để đối chiếu khi trả xe.");
-                continue;
-            }
+        var selectedImages = images
+            .Where(file => file.Length > 0)
+            .ToList();
 
-            await ValidateImageAsync(evidence.File, evidence.FieldName, cancellationToken);
+        if (selectedImages.Count < MinimumImages)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.Images),
+                $"Vui lòng chọn ít nhất {MinimumImages} ảnh bàn giao.");
         }
 
-        var selectedOtherImages = otherImages.Where(file => file.Length > 0).ToList();
-        if (evidenceFiles.Count + selectedOtherImages.Count > MaximumImages)
+        if (selectedImages.Count > MaximumImages)
         {
             ModelState.AddModelError(
                 nameof(HandoverViewModel.Images),
                 $"Tổng số ảnh tối đa là {MaximumImages}.");
         }
 
-        foreach (var image in selectedOtherImages)
+        foreach (var image in selectedImages)
         {
-            await ValidateImageAsync(image, nameof(HandoverViewModel.Images), cancellationToken);
+            await ValidateImageAsync(
+                image,
+                nameof(HandoverViewModel.Images),
+                cancellationToken);
         }
     }
 
@@ -266,34 +257,27 @@ public sealed class HandoversController : Controller
 
     private async Task<IReadOnlyList<string>> SaveImagesAsync(
         int bookingId,
-        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
-        IEnumerable<IFormFile> otherImages,
+        IEnumerable<IFormFile> images,
         CancellationToken cancellationToken)
     {
         var relativeFolder = $"uploads/handovers/{bookingId}";
         var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
         Directory.CreateDirectory(folder);
 
+        var selectedImages = images
+            .Where(file => file.Length > 0)
+            .ToList();
+
         var paths = new List<string>();
         try
         {
-            foreach (var evidence in evidenceFiles.Where(item => item.File is { Length: > 0 }))
+            for (var index = 0; index < selectedImages.Count; index++)
             {
                 paths.Add(await SaveOneImageAsync(
                     folder,
                     relativeFolder,
-                    evidence.Label,
-                    evidence.File!,
-                    cancellationToken));
-            }
-
-            foreach (var image in otherImages.Where(file => file.Length > 0))
-            {
-                paths.Add(await SaveOneImageAsync(
-                    folder,
-                    relativeFolder,
-                    "other",
-                    image,
+                    $"evidence-{index + 1:00}",
+                    selectedImages[index],
                     cancellationToken));
             }
 
