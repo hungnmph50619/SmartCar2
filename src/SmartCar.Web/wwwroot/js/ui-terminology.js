@@ -125,6 +125,67 @@
         verificationLink?.classList.toggle("active", isVerificationMode);
     }
 
+    function clarifyAdminBookingRefundLabels() {
+        const pathname = window.location.pathname.toLowerCase();
+        if (!pathname.startsWith("/adminbookings/details/")) {
+            return;
+        }
+
+        const rows = Array.from(document.querySelectorAll(".money-row"));
+        if (rows.length === 0) {
+            return;
+        }
+
+        const labelElement = (row) => row.querySelector(":scope > span");
+        const labelText = (row) => {
+            const element = labelElement(row);
+            if (!element) return "";
+            const firstTextNode = Array.from(element.childNodes)
+                .find((node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim());
+            return firstTextNode?.nodeValue?.trim() ?? "";
+        };
+        const setLabel = (row, value) => {
+            const element = labelElement(row);
+            if (!element) return;
+            const firstTextNode = Array.from(element.childNodes)
+                .find((node) => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim());
+            if (firstTextNode) {
+                firstTextNode.nodeValue = value;
+            }
+        };
+        const amountValue = (row) => {
+            const raw = row.querySelector(":scope > strong")?.textContent ?? "";
+            const digits = raw.replace(/[^0-9]/g, "");
+            return digits ? Number(digits) : 0;
+        };
+
+        const depositRows = rows.filter((row) => labelText(row) === "Hoàn cọc");
+        const completed = document.body.textContent?.includes("Hồ sơ đã hoàn tất") === true;
+
+        rows.forEach((row, index) => {
+            if (labelText(row) !== "Hoàn chênh lệch đổi xe") {
+                return;
+            }
+
+            const rentalDifference = amountValue(row);
+            setLabel(row, "Hoàn chênh lệch tiền thuê do đổi xe");
+
+            const previousRow = index > 0 ? rows[index - 1] : null;
+            if (!previousRow || labelText(previousRow) !== "Hoàn cọc") {
+                return;
+            }
+
+            const depositDifference = amountValue(previousRow);
+            const matchesCurrentDepositPolicy =
+                rentalDifference > 0 && depositDifference === rentalDifference * 3;
+            const canDistinguishFromFinalDeposit = !completed || depositRows.length > 1;
+
+            if (matchesCurrentDepositPolicy && canDistinguishFromFinalDeposit) {
+                setLabel(previousRow, "Hoàn chênh lệch cọc do đổi xe");
+            }
+        });
+    }
+
     function initializeTerminology() {
         if (!document.body) {
             return;
@@ -135,7 +196,9 @@
 
         // Chạy sau site.js để trạng thái menu Admin không bị script cũ ghi đè.
         syncAdminCustomerSidebar();
+        clarifyAdminBookingRefundLabels();
         window.setTimeout(syncAdminCustomerSidebar, 0);
+        window.setTimeout(clarifyAdminBookingRefundLabels, 0);
 
         const observer = new MutationObserver((mutations) => {
             for (const mutation of mutations) {
