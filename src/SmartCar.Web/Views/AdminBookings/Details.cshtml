@@ -202,8 +202,7 @@
         {
             <div class="card card-body shadow-sm mb-4">
                 <h2 class="h5">Thanh toán</h2>
-                <p class="text-muted mb-3">Khách cần hoàn tất tiền thuê / giao và tiền cọc trước khi chuẩn bị xe.</p>
-                <a class="btn btn-primary" asp-controller="AdminPayments" asp-action="Index" asp-route-section="collection">Mở đối soát tiền thu</a>
+                <p class="text-muted mb-0">Khách cần hoàn tất tiền thuê / giao và tiền cọc trước khi chuẩn bị xe. Thao tác đối soát thực hiện tại khối “Tài chính đơn thuê” bên phải.</p>
             </div>
         }
         else if (Model.Status == BookingStatus.Paid)
