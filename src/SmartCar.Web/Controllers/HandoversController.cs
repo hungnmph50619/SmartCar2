@@ -124,6 +124,9 @@ public sealed class HandoversController : Controller
         ModelState.Remove(nameof(HandoverViewModel.TrafficFineTerms));
         ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
         ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
+        // Danh sách file là non-nullable nên MVC có thể sinh lỗi Required mặc định bằng tiếng Anh.
+        // Bỏ lỗi mặc định và dùng toàn bộ validation ảnh tiếng Việt ở ValidateImagesAsync bên dưới.
+        ModelState.Remove(nameof(HandoverViewModel.Images));
 
         model.IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay;
         model.ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee;
