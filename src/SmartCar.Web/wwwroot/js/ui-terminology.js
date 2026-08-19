@@ -187,7 +187,7 @@
     }
 
     function initializeIncrementalEvidenceImagePickers() {
-        const supportedIds = new Set(["handover-images", "return-image-picker"]);
+        const supportedIds = new Set(["handover-images", "return-image-picker", "damage-images"]);
         const previousFilesByInput = new WeakMap();
 
         const isSupportedInput = (target) =>
@@ -241,6 +241,75 @@
         }, true);
     }
 
+    function initializeReturnEvidenceImageRemoval() {
+        const pairs = [
+            ["return-image-picker", "return-image-preview"],
+            ["damage-images", "damage-image-preview"]
+        ];
+
+        for (const [inputId, previewId] of pairs) {
+            const input = document.getElementById(inputId);
+            const preview = document.getElementById(previewId);
+            if (!(input instanceof HTMLInputElement) || !(preview instanceof HTMLElement)) {
+                continue;
+            }
+
+            const addRemoveButtons = () => {
+                Array.from(preview.children).forEach((wrapper, index) => {
+                    if (!(wrapper instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    wrapper.classList.add("position-relative");
+                    if (wrapper.querySelector("[data-remove-return-evidence]")) {
+                        return;
+                    }
+
+                    const removeButton = document.createElement("button");
+                    removeButton.type = "button";
+                    removeButton.className = "btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center";
+                    removeButton.style.width = "24px";
+                    removeButton.style.height = "24px";
+                    removeButton.style.padding = "0";
+                    removeButton.style.top = "-7px";
+                    removeButton.style.right = "-7px";
+                    removeButton.style.zIndex = "3";
+                    removeButton.style.lineHeight = "1";
+                    removeButton.innerHTML = "&times;";
+                    removeButton.title = "Xóa ảnh này";
+                    removeButton.setAttribute("aria-label", `Xóa ảnh ${index + 1}`);
+                    removeButton.setAttribute("data-remove-return-evidence", "true");
+
+                    removeButton.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        const currentFiles = Array.from(input.files ?? []);
+                        if (index < 0 || index >= currentFiles.length || typeof DataTransfer === "undefined") {
+                            return;
+                        }
+
+                        const transfer = new DataTransfer();
+                        currentFiles.forEach((file, fileIndex) => {
+                            if (fileIndex !== index) {
+                                transfer.items.add(file);
+                            }
+                        });
+
+                        input.files = transfer.files;
+                        input.dispatchEvent(new Event("change", { bubbles: true }));
+                    });
+
+                    wrapper.appendChild(removeButton);
+                });
+            };
+
+            const observer = new MutationObserver(addRemoveButtons);
+            observer.observe(preview, { childList: true });
+            addRemoveButtons();
+        }
+    }
+
     function initializeTerminology() {
         if (!document.body) {
             return;
@@ -253,6 +322,7 @@
         syncAdminCustomerSidebar();
         clarifyAdminBookingRefundLabels();
         initializeIncrementalEvidenceImagePickers();
+        initializeReturnEvidenceImageRemoval();
         window.setTimeout(syncAdminCustomerSidebar, 0);
         window.setTimeout(clarifyAdminBookingRefundLabels, 0);
 
