@@ -310,6 +310,90 @@
         }
     }
 
+    function initializeReturnImageInlineValidation() {
+        const imagePicker = document.getElementById("return-image-picker");
+        if (!(imagePicker instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const damageImages = document.getElementById("damage-images");
+        const hasDamage = document.getElementById("has-damage");
+        const maximumImageBytes = 5 * 1024 * 1024;
+        const minimumImages = 7;
+        const maximumImages = 25;
+        const allowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+        const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+        let message = document.getElementById("return-image-inline-validation");
+        if (!(message instanceof HTMLElement)) {
+            message = document.createElement("div");
+            message.id = "return-image-inline-validation";
+            message.className = "text-danger small mt-1 d-none";
+            imagePicker.insertAdjacentElement("afterend", message);
+        }
+
+        let touched = false;
+
+        const fileError = (file) => {
+            const lowerName = file.name.toLowerCase();
+            const extensionValid = allowedExtensions.some((extension) => lowerName.endsWith(extension));
+            const typeValid = !file.type || allowedTypes.includes(file.type.toLowerCase());
+
+            if (!extensionValid || !typeValid) {
+                return `Ảnh "${file.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`;
+            }
+
+            if (file.size > maximumImageBytes) {
+                return `Ảnh "${file.name}" vượt quá 5 MB.`;
+            }
+
+            return "";
+        };
+
+        const render = () => {
+            if (!touched) {
+                return;
+            }
+
+            const files = Array.from(imagePicker.files ?? []);
+            const damageFiles = hasDamage instanceof HTMLInputElement && hasDamage.checked &&
+                damageImages instanceof HTMLInputElement
+                ? Array.from(damageImages.files ?? [])
+                : [];
+
+            let validationMessage = "";
+            if (files.length < minimumImages) {
+                validationMessage = `Vui lòng chọn ít nhất ${minimumImages} ảnh trả xe.`;
+            } else if (files.length + damageFiles.length > maximumImages) {
+                validationMessage = `Tổng số ảnh trả xe và ảnh hư hỏng không được vượt quá ${maximumImages} ảnh.`;
+            } else {
+                validationMessage = [...files, ...damageFiles]
+                    .map(fileError)
+                    .find(Boolean) ?? "";
+            }
+
+            message.textContent = validationMessage;
+            message.classList.toggle("d-none", !validationMessage);
+        };
+
+        const markTouchedAndRender = () => {
+            touched = true;
+            window.setTimeout(render, 0);
+        };
+
+        imagePicker.addEventListener("change", markTouchedAndRender);
+        if (damageImages instanceof HTMLInputElement) {
+            damageImages.addEventListener("change", markTouchedAndRender);
+        }
+        if (hasDamage instanceof HTMLInputElement) {
+            hasDamage.addEventListener("change", markTouchedAndRender);
+        }
+        imagePicker.form?.addEventListener("submit", () => {
+            touched = true;
+            render();
+        }, true);
+    }
+
     function initializeTerminology() {
         if (!document.body) {
             return;
@@ -323,6 +407,7 @@
         clarifyAdminBookingRefundLabels();
         initializeIncrementalEvidenceImagePickers();
         initializeReturnEvidenceImageRemoval();
+        initializeReturnImageInlineValidation();
         window.setTimeout(syncAdminCustomerSidebar, 0);
         window.setTimeout(clarifyAdminBookingRefundLabels, 0);
 
