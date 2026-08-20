@@ -480,8 +480,19 @@ internal sealed class BookingService : IBookingService
 
         if (previousActiveBooking is not null)
         {
+            var previousStatusText = previousActiveBooking.Status switch
+            {
+                BookingStatus.Rented => "đang thuê",
+                BookingStatus.PendingInspection => "chờ kiểm tra sau khi trả",
+                BookingStatus.ReadyForPickup => "sẵn sàng bàn giao",
+                BookingStatus.Paid => "đã thanh toán",
+                BookingStatus.PendingPayment => "chờ thanh toán",
+                BookingStatus.PendingConfirmation => "chờ xác nhận",
+                _ => previousActiveBooking.Status.ToString()
+            };
+
             return OperationResult.Failure(
-                $"Chưa thể đánh dấu xe sẵn sàng. Đơn #{previousActiveBooking.BookingId} của cùng xe vẫn đang {previousActiveBooking.Status.ToVietnamese()} " +
+                $"Chưa thể đánh dấu xe sẵn sàng. Đơn #{previousActiveBooking.BookingId} của cùng xe vẫn {previousStatusText} " +
                 $"(dự kiến trả {previousActiveBooking.ReturnDate:dd/MM/yyyy HH:mm}). Xe phải được trả và hoàn tất kiểm tra trước.");
         }
 
