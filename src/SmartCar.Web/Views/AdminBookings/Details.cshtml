@@ -434,9 +434,16 @@
             </div>
 
             <div class="money-row">
-                <span>Tiền thuê / giao<br /><span class="badge @PaymentBadge(rentalPayment?.Status)">@PaymentText(rentalPayment?.Status)</span></span>
-                <strong>@((Model.InitialRentalAmount + Model.DeliveryFee).ToString("N0")) đ</strong>
+                <span>Tiền thuê xe<br /><span class="badge @PaymentBadge(rentalPayment?.Status)">@PaymentText(rentalPayment?.Status)</span></span>
+                <strong>@Model.InitialRentalAmount.ToString("N0") đ</strong>
             </div>
+            @if (Model.DeliveryFee > 0)
+            {
+                <div class="money-row">
+                    <span>Phí giao xe tận nơi<br /><span class="small text-muted">Thu cùng tiền thuê</span></span>
+                    <strong>@Model.DeliveryFee.ToString("N0") đ</strong>
+                </div>
+            }
             @if (Model.DepositAmount > 0)
             {
                 <div class="money-row"><span>Tiền cọc<br /><span class="badge @PaymentBadge(depositPayment?.Status)">@PaymentText(depositPayment?.Status)</span></span><strong>@Model.DepositAmount.ToString("N0") đ</strong></div>
