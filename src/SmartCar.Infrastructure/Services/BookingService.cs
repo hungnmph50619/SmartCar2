@@ -420,6 +420,7 @@ internal sealed class BookingService : IBookingService
         CancellationToken cancellationToken = default)
     {
         var booking = await _dbContext.Bookings
+            .Include(item => item.Vehicle)
             .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
@@ -459,6 +460,43 @@ internal sealed class BookingService : IBookingService
                 hasOpenSwapPayment
                     ? "Cần thanh toán xong chênh lệch đổi xe trước khi chuẩn bị giao xe."
                     : "Đơn phải thanh toán đủ tiền thuê và tiền cọc trước khi chuẩn bị giao xe.");
+        }
+
+        var previousActiveBooking = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item =>
+                item.VehicleId == booking.VehicleId &&
+                item.BookingId != booking.BookingId &&
+                item.PickupDate < booking.PickupDate &&
+                BlockingStatuses.Contains(item.Status))
+            .OrderByDescending(item => item.PickupDate)
+            .Select(item => new
+            {
+                item.BookingId,
+                item.Status,
+                item.ReturnDate
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (previousActiveBooking is not null)
+        {
+            return OperationResult.Failure(
+                $"Chưa thể đánh dấu xe sẵn sàng. Đơn #{previousActiveBooking.BookingId} của cùng xe vẫn đang {previousActiveBooking.Status.ToVietnamese()} " +
+                $"(dự kiến trả {previousActiveBooking.ReturnDate:dd/MM/yyyy HH:mm}). Xe phải được trả và hoàn tất kiểm tra trước.");
+        }
+
+        if (booking.Vehicle.Status != VehicleStatus.Available)
+        {
+            var vehicleStateMessage = booking.Vehicle.Status switch
+            {
+                VehicleStatus.Rented => "Xe vẫn đang được khách trước sử dụng.",
+                VehicleStatus.Inspection => "Xe đã được trả nhưng đang chờ hoàn tất kiểm tra.",
+                VehicleStatus.Maintenance => "Xe đang bảo trì.",
+                _ => "Xe hiện chưa ở trạng thái sẵn sàng."
+            };
+
+            return OperationResult.Failure(
+                $"{vehicleStateMessage} Chỉ được xác nhận sẵn sàng khi trạng thái xe là Có sẵn.");
         }
 
         booking.Status = BookingStatus.ReadyForPickup;
