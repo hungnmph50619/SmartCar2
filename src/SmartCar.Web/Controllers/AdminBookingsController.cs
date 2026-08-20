@@ -131,6 +131,78 @@ public sealed class AdminBookingsController : Controller
             .Include(item => item.VehicleReturn)
             .FirstOrDefaultAsync(item => item.BookingId == id, cancellationToken);
 
+        var vehicleStatus = await _dbContext.Vehicles
+            .AsNoTracking()
+            .Where(vehicle => vehicle.VehicleId == booking.VehicleId)
+            .Select(vehicle => (VehicleStatus?)vehicle.Status)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var priorBlockingStatuses = new[]
+        {
+            BookingStatus.PendingConfirmation,
+            BookingStatus.PendingPayment,
+            BookingStatus.Paid,
+            BookingStatus.ReadyForPickup,
+            BookingStatus.Rented,
+            BookingStatus.PendingInspection
+        };
+
+        var previousActiveBooking = booking.Status == BookingStatus.Paid
+            ? await _dbContext.Bookings
+                .AsNoTracking()
+                .Where(item =>
+                    item.VehicleId == booking.VehicleId &&
+                    item.BookingId != booking.BookingId &&
+                    item.PickupDate < booking.PickupDate &&
+                    priorBlockingStatuses.Contains(item.Status))
+                .OrderByDescending(item => item.PickupDate)
+                .Select(item => new
+                {
+                    item.BookingId,
+                    item.Status,
+                    item.ReturnDate
+                })
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        var canMarkReady = booking.Status == BookingStatus.Paid &&
+                           vehicleStatus == VehicleStatus.Available &&
+                           previousActiveBooking is null;
+
+        string? readyBlockedReason = null;
+        if (booking.Status == BookingStatus.Paid && !canMarkReady)
+        {
+            if (previousActiveBooking is not null)
+            {
+                var previousStatusText = previousActiveBooking.Status switch
+                {
+                    BookingStatus.Rented => "đang được thuê",
+                    BookingStatus.PendingInspection => "đang chờ kiểm tra sau khi trả",
+                    BookingStatus.ReadyForPickup => "đang chờ bàn giao",
+                    BookingStatus.Paid => "đã thanh toán và đang chờ chuẩn bị",
+                    BookingStatus.PendingPayment => "đang chờ thanh toán",
+                    BookingStatus.PendingConfirmation => "đang chờ xác nhận",
+                    _ => "chưa hoàn tất"
+                };
+
+                readyBlockedReason =
+                    $"Đang chờ xe từ đơn #{previousActiveBooking.BookingId}. Đơn trước {previousStatusText}, " +
+                    $"dự kiến trả {previousActiveBooking.ReturnDate:dd/MM/yyyy HH:mm}. " +
+                    "Chỉ xác nhận sẵn sàng sau khi xe được trả và hoàn tất kiểm tra.";
+            }
+            else
+            {
+                readyBlockedReason = vehicleStatus switch
+                {
+                    VehicleStatus.Rented => "Xe vẫn đang được khách trước sử dụng. Chỉ xác nhận sẵn sàng sau khi xe được trả và hoàn tất kiểm tra.",
+                    VehicleStatus.Inspection => "Xe đã được trả nhưng đang chờ hoàn tất kiểm tra. Chỉ xác nhận sẵn sàng khi xe trở lại trạng thái Có sẵn.",
+                    VehicleStatus.Maintenance => "Xe đang bảo trì nên chưa thể chuẩn bị cho đơn này.",
+                    VehicleStatus.OutOfService => "Xe đang ngừng hoạt động nên chưa thể chuẩn bị cho đơn này.",
+                    _ => "Xe hiện chưa ở trạng thái Có sẵn nên chưa thể xác nhận sẵn sàng."
+                };
+            }
+        }
+
         ViewBag.CustomerCreatedAt = customerCreatedAt;
         ViewBag.CustomerTotalBookingCount = customerBookingStatuses.Count;
         ViewBag.CustomerCompletedBookingCount = customerBookingStatuses.Count(status => status == BookingStatus.Completed);
@@ -142,6 +214,8 @@ public sealed class AdminBookingsController : Controller
         ViewBag.CustomerKycVerified = citizenVerified && drivingLicenseVerified;
         ViewBag.HandoverSigned = HasSignedCopy(tripDocuments?.Handover?.ImagePaths, HandoverSignedMarker);
         ViewBag.ReturnSigned = HasSignedCopy(tripDocuments?.VehicleReturn?.ImagePaths, ReturnSignedMarker);
+        ViewBag.CanMarkReady = canMarkReady;
+        ViewBag.ReadyBlockedReason = readyBlockedReason;
 
         return View(booking);
     }
