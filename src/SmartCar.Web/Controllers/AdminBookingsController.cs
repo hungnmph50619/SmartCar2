@@ -197,7 +197,7 @@ public sealed class AdminBookingsController : Controller
                     VehicleStatus.Rented => "Xe vẫn đang được khách trước sử dụng. Chỉ xác nhận sẵn sàng sau khi xe được trả và hoàn tất kiểm tra.",
                     VehicleStatus.Inspection => "Xe đã được trả nhưng đang chờ hoàn tất kiểm tra. Chỉ xác nhận sẵn sàng khi xe trở lại trạng thái Có sẵn.",
                     VehicleStatus.Maintenance => "Xe đang bảo trì nên chưa thể chuẩn bị cho đơn này.",
-                    VehicleStatus.OutOfService => "Xe đang ngừng hoạt động nên chưa thể chuẩn bị cho đơn này.",
+                    VehicleStatus.Inactive => "Xe đang ngừng hoạt động nên chưa thể chuẩn bị cho đơn này.",
                     _ => "Xe hiện chưa ở trạng thái Có sẵn nên chưa thể xác nhận sẵn sàng."
                 };
             }
