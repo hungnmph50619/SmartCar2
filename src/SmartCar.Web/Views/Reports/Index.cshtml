@@ -76,7 +76,7 @@
             <div><h2 class="section-title">Hiệu quả từng xe</h2><div class="tiny">Bấm “Xem chi tiết” để xem các đơn và dòng tiền của xe.</div></div>
             <input id="vehicle-search" type="search" class="form-control form-control-sm" style="max-width:280px" placeholder="Tìm tên xe hoặc biển số" />
         </div>
-        <div class="table-head"><span>Xe</span><span>Doanh thu</span><span>Lợi nhuận</span><span>Ngày xe có khách</span><span>Đơn đã hoàn tất</span><span></span></div>
+        <div class="table-head"><span>Xe</span><span>Doanh thu</span><span>Lợi nhuận</span><span>Thời gian được thuê</span><span>Số đơn hoàn tất</span><span></span></div>
         <div id="vehicle-grid">
         @foreach (var item in vehicleRows)
         {
@@ -87,8 +87,8 @@
                     <div class="vehicle-main"><div class="vehicle-name">@item.VehicleName</div><div class="tiny">@item.LicensePlate</div></div>
                     <div><div class="tiny d-lg-none">Doanh thu</div><strong class="text-primary">@item.Revenue.ToString("N0") đ</strong></div>
                     <div><div class="tiny d-lg-none">Lợi nhuận</div><strong class="@(item.NetOperatingProfit >= 0 ? "money-good" : "money-bad")">@item.NetOperatingProfit.ToString("N0") đ</strong></div>
-                    <div><div class="tiny d-lg-none">Ngày xe có khách</div><strong>@item.RentalDays ngày</strong></div>
-                    <div><div class="tiny d-lg-none">Đơn đã hoàn tất</div><strong>@item.CompletedBookings đơn</strong></div>
+                    <div><div class="tiny d-lg-none">Thời gian được thuê</div><strong>@item.RentalDays / @periodDays ngày</strong></div>
+                    <div><div class="tiny d-lg-none">Số đơn hoàn tất</div><strong>@item.CompletedBookings đơn</strong></div>
                     <div class="open-label"><span class="btn btn-sm btn-outline-primary">Xem chi tiết ↓</span></div>
                 </summary>
                 <div class="vehicle-detail">
@@ -127,7 +127,7 @@
         </div>
     </div>
 
-    <div class="note small"><strong>Ghi chú:</strong> “Ngày xe có khách” tính các ngày xe thực tế nằm trong một đơn đang thuê/đang xử lý trả/đã hoàn tất trong khoảng đang xem. “Đơn đã hoàn tất” chỉ đếm các đơn đã kết thúc hoàn toàn. Lợi nhuận ước tính chưa bao gồm khấu hao xe, bảo hiểm, thuế và chi phí chung.</div>
+    <div class="note small"><strong>Ghi chú:</strong> “Thời gian được thuê” hiển thị số ngày xe được thuê trên tổng số ngày của khoảng báo cáo. “Số đơn hoàn tất” chỉ đếm các đơn đã kết thúc hoàn toàn. Lợi nhuận ước tính chưa bao gồm khấu hao xe, bảo hiểm, thuế và chi phí chung.</div>
 </div>
 
 @section Scripts {
