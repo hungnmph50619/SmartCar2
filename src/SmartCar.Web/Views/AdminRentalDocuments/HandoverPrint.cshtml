@@ -28,6 +28,9 @@
         table { width:100%; border-collapse:collapse; margin-top:14px; }
         th,td { border:1px solid #aaa; padding:7px; text-align:left; vertical-align:top; }
         th { width:30%; }
+        .extension-terms { margin-top:14px; border:2px solid #555; padding:12px; }
+        .extension-terms-title { font-weight:700; text-transform:uppercase; margin-bottom:6px; }
+        .extension-terms p { margin:6px 0 0; }
         .confirm { margin-top:16px; padding:10px; border:1px solid #999; }
         .signatures { display:grid; grid-template-columns:1fr 1fr; gap:70px; margin-top:34px; text-align:center; }
         .signature-space { height:90px; }
@@ -94,12 +97,29 @@
         <tr><th>Vượt km</th><td>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</td></tr>
         <tr><th>Trả muộn</th><td>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</td></tr>
         <tr><th>Vi phạm / phạt nguội</th><td>@Model.TrafficFineTerms</td></tr>
-        <tr><th>Hư hỏng / thiếu / bồi thường</th><td>@Model.DamageCompensationTerms</td></tr>
+        <tr><th>Hư hỏng / thiếu</th><td>Hư hỏng, mất mát hoặc thiếu phụ kiện do Bên B gây ra được xử lý theo thiệt hại thực tế, hợp lý, có ảnh đối chiếu và chứng từ/báo giá hợp lệ.</td></tr>
         <tr><th>Ghi chú</th><td>@(Model.Notes ?? "Không có")</td></tr>
     </table>
 
+    <div class="extension-terms">
+        <div class="extension-terms-title">Điều khoản gia hạn và nghĩa vụ trả xe đúng hạn</div>
+        <p>
+            Bên B có thể gửi yêu cầu gia hạn nhưng việc gửi yêu cầu không đồng nghĩa với việc được phép giữ xe quá thời gian trả đã thỏa thuận. Gia hạn chỉ có hiệu lực khi được SmartCar chấp thuận theo quy trình của hệ thống.
+        </p>
+        <p>
+            Trường hợp yêu cầu gia hạn thông thường bị từ chối vì xe đã có đơn thuê kế tiếp, Bên B phải giao/trả xe đúng thời gian đã thỏa thuận. Nếu Bên B đã được thông báo từ chối gia hạn nhưng vẫn cố tình không giao/trả xe đúng hạn, làm ảnh hưởng đến đơn thuê kế tiếp, Bên B chịu phí trả muộn và khoản bồi thường <strong>bằng giá hợp đồng của đơn thuê bị ảnh hưởng</strong>.
+        </p>
+        <p>
+            Khoản bồi thường nêu trên được khấu trừ từ tiền cọc của Bên B. Nếu tiền cọc không đủ để thực hiện nghĩa vụ, Bên B có trách nhiệm thanh toán phần còn thiếu.
+        </p>
+        <p>
+            Trường hợp bất khả kháng phải có ảnh minh chứng và vị trí hiện tại để SmartCar xác minh; việc xử lý gia hạn, xe thay thế, hoàn tiền và bồi thường cho đơn thuê kế tiếp được thực hiện theo chính sách của SmartCar và hồ sơ thực tế của sự việc.
+        </p>
+    </div>
+
     <div class="confirm">
-        Bên B xác nhận đã kiểm tra xe, số km, nhiên liệu, phụ kiện, ảnh đối chiếu lưu trong hồ sơ SmartCar và đã được thông báo các chính sách trên trước khi nhận xe.
+        <strong>XÁC NHẬN CỦA BÊN THUÊ:</strong><br />
+        Bên B xác nhận đã kiểm tra xe, số km, nhiên liệu, phụ kiện và ảnh đối chiếu lưu trong hồ sơ SmartCar; đã đọc, hiểu và đồng ý các chính sách phí/phạt, điều khoản gia hạn, nghĩa vụ trả xe đúng hạn và cơ chế khấu trừ tiền cọc nêu trên trước khi nhận xe.
     </div>
 
     <div class="signatures">
