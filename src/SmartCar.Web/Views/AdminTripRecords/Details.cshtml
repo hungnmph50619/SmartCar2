@@ -6,7 +6,43 @@
     ViewData["Title"] = $"Hồ sơ chuyến #{Model.Booking.BookingId}";
     var booking = Model.Booking;
     var collection = booking.Payments.Where(p => p.Type is PaymentType.Rental or PaymentType.Deposit).ToList();
-    var adjustments = booking.Payments.Where(p => p.Type is PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment).ToList();
+    var rentalPayments = collection.Where(p => p.Type == PaymentType.Rental).ToList();
+    var depositPayments = collection.Where(p => p.Type == PaymentType.Deposit).ToList();
+    var rentalCollectedAmount = rentalPayments.Sum(p => p.Amount);
+    var deliveryFeeAmount = Math.Max(0m, rentalCollectedAmount - booking.RentalAmount);
+    var rentalDisplayAmount = Math.Max(0m, rentalCollectedAmount - deliveryFeeAmount);
+
+    const string overdueCompPrefix = "OVERDUE-COMP-";
+    const string overdueDebtPrefix = "OVERDUE-DEBT-";
+    bool IsOverdueImpactPayment(SmartCar.Domain.Entities.Payment payment) =>
+        payment.Type == PaymentType.AdditionalCharge &&
+        !string.IsNullOrWhiteSpace(payment.TransactionCode) &&
+        (payment.TransactionCode.StartsWith(overdueCompPrefix, StringComparison.OrdinalIgnoreCase) ||
+         payment.TransactionCode.StartsWith(overdueDebtPrefix, StringComparison.OrdinalIgnoreCase));
+
+    int? AffectedBookingId(string? transactionCode)
+    {
+        if (string.IsNullOrWhiteSpace(transactionCode)) return null;
+        var prefix = transactionCode.StartsWith(overdueCompPrefix, StringComparison.OrdinalIgnoreCase)
+            ? overdueCompPrefix
+            : transactionCode.StartsWith(overdueDebtPrefix, StringComparison.OrdinalIgnoreCase)
+                ? overdueDebtPrefix
+                : null;
+        if (prefix is null) return null;
+        var parts = transactionCode[prefix.Length..].Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 && int.TryParse(parts[1], out var affectedId) ? affectedId : null;
+    }
+
+    var overdueDeductions = booking.Payments
+        .Where(IsOverdueImpactPayment)
+        .Select(p => new { Payment = p, AffectedBookingId = AffectedBookingId(p.TransactionCode) })
+        .ToList();
+    var totalOverdueDeduction = overdueDeductions.Sum(x => x.Payment.Amount);
+
+    var adjustments = booking.Payments
+        .Where(p => p.Type is PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment)
+        .Where(p => !IsOverdueImpactPayment(p))
+        .ToList();
     var refunds = booking.Payments.Where(p => p.Type == PaymentType.Refund).ToList();
     var totalCollected = booking.Payments.Where(p => p.Status == PaymentStatus.Paid && p.Type != PaymentType.Refund).Sum(p => p.Amount);
     var totalRefunded = refunds.Where(p => p.Status == PaymentStatus.Refunded).Sum(p => p.Amount);
@@ -28,7 +64,7 @@
         PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
         PaymentMethods.DepositRefund => "Hoàn cọc / điều chỉnh cọc",
         PaymentMethods.CompensationRefund => "Bồi thường / hỗ trợ khách",
-        PaymentMethods.BankTransferRefund => "Hoàn tiền thuê / phí giao",
+        PaymentMethods.BankTransferRefund => "Hoàn tiền",
         _ => "Hoàn tiền"
     };
 }
@@ -74,17 +110,72 @@
 </div>
 
 <div class="card card-body shadow-sm">
-    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3"><div><h2 class="h5 mb-1">Quyết toán</h2><div class="small text-muted">Tách rõ tiền đã thu, khoản phát sinh, tiền hoàn và số tiền khách thực chi sau cùng.</div></div><a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index">Xem sổ giao dịch</a></div>
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3"><div><h2 class="h5 mb-1">Quyết toán</h2><div class="small text-muted">Tách rõ từng khoản tiền thuê, phí giao xe, tiền cọc, phát sinh, khấu trừ và tiền hoàn.</div></div><a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index">Xem sổ giao dịch</a></div>
     <div class="row g-4">
-        <div class="col-md-4"><div class="small text-muted fw-semibold mb-2">TIỀN THU</div>@if(collection.Count==0){<div class="text-muted">Không có</div>}@foreach(var payment in collection){<div class="d-flex justify-content-between border-bottom py-2"><span>@(payment.Type==PaymentType.Deposit?"Tiền cọc":"Tiền thuê / giao")<br/><small>@StatusText(payment.Status)</small></span><strong>@payment.Amount.ToString("N0") đ</strong></div>}</div>
-        <div class="col-md-4"><div class="small text-muted fw-semibold mb-2">PHÁT SINH</div>@if(adjustments.Count==0){<div class="text-muted">Không có</div>}@foreach(var payment in adjustments){<div class="d-flex justify-content-between border-bottom py-2"><span>@(payment.Type==PaymentType.Extension?"Gia hạn":payment.Type==PaymentType.VehicleSwapAdjustment?"Chênh lệch đổi xe":"Phụ phí")<br/><small>@StatusText(payment.Status)</small></span><strong>@payment.Amount.ToString("N0") đ</strong></div>}</div>
-        <div class="col-md-4"><div class="small text-muted fw-semibold mb-2">HOÀN TIỀN</div>@if(refunds.Count==0){<div class="text-muted">Không có</div>}@foreach(var payment in refunds){<div class="d-flex justify-content-between border-bottom py-2"><span><strong>@RefundLabel(payment.Method)</strong><br/><small>@StatusText(payment.Status)</small></span><strong>@payment.Amount.ToString("N0") đ</strong></div>@if(!string.IsNullOrWhiteSpace(payment.TransactionCode)){<div class="small text-muted mt-1 mb-2">Mã GD: @payment.TransactionCode</div>}}</div>
+        <div class="col-md-4">
+            <div class="small text-muted fw-semibold mb-2">TIỀN THU</div>
+            @if (rentalPayments.Count == 0 && depositPayments.Count == 0)
+            {
+                <div class="text-muted">Không có</div>
+            }
+            @if (rentalPayments.Count > 0)
+            {
+                <div class="d-flex justify-content-between border-bottom py-2"><span>Tiền thuê<br/><small>@StatusText(rentalPayments.First().Status)</small></span><strong>@rentalDisplayAmount.ToString("N0") đ</strong></div>
+                @if (deliveryFeeAmount > 0)
+                {
+                    <div class="d-flex justify-content-between border-bottom py-2"><span>Phí giao xe<br/><small>@StatusText(rentalPayments.First().Status)</small></span><strong>@deliveryFeeAmount.ToString("N0") đ</strong></div>
+                }
+            }
+            @foreach (var payment in depositPayments)
+            {
+                <div class="d-flex justify-content-between border-bottom py-2"><span>Tiền cọc<br/><small>@StatusText(payment.Status)</small></span><strong>@payment.Amount.ToString("N0") đ</strong></div>
+            }
+        </div>
+        <div class="col-md-4">
+            <div class="small text-muted fw-semibold mb-2">PHÁT SINH</div>
+            @if(adjustments.Count==0){<div class="text-muted">Không có</div>}
+            @foreach(var payment in adjustments){<div class="d-flex justify-content-between border-bottom py-2"><span>@(payment.Type==PaymentType.Extension?"Gia hạn":payment.Type==PaymentType.VehicleSwapAdjustment?"Chênh lệch đổi xe":"Phụ phí")<br/><small>@StatusText(payment.Status)</small></span><strong>@payment.Amount.ToString("N0") đ</strong></div>}
+        </div>
+        <div class="col-md-4">
+            <div class="small text-muted fw-semibold mb-2">HOÀN TIỀN</div>
+            @if(refunds.Count==0){<div class="text-muted">Không có</div>}
+            @foreach(var payment in refunds){<div class="d-flex justify-content-between border-bottom py-2"><span><strong>@RefundLabel(payment.Method)</strong><br/><small>@StatusText(payment.Status)</small></span><strong>@payment.Amount.ToString("N0") đ</strong></div>@if(!string.IsNullOrWhiteSpace(payment.TransactionCode)){<div class="small text-muted mt-1 mb-2">Mã GD: @payment.TransactionCode</div>}}
+        </div>
     </div>
+
+    @if (overdueDeductions.Count > 0)
+    {
+        <div class="border border-danger rounded p-3 mt-4">
+            <div class="small text-danger fw-semibold mb-2">KHẤU TRỪ TỪ CỌC DO VI PHẠM</div>
+            @foreach (var deduction in overdueDeductions)
+            {
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap py-2 border-bottom">
+                    <div>
+                        <strong>Trả xe quá hạn@(deduction.AffectedBookingId.HasValue ? $" – ảnh hưởng đơn #{deduction.AffectedBookingId.Value}" : string.Empty)</strong>
+                        <div class="small text-muted">Khoản bồi thường được khấu trừ khi quyết toán tiền cọc.</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <strong class="text-danger">-@deduction.Payment.Amount.ToString("N0") đ</strong>
+                        @if (deduction.AffectedBookingId.HasValue)
+                        {
+                            <a class="btn btn-sm btn-outline-danger" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@deduction.AffectedBookingId.Value">Xem đơn #@deduction.AffectedBookingId.Value</a>
+                        }
+                    </div>
+                </div>
+            }
+            <div class="d-flex justify-content-between pt-2"><span>Tổng khấu trừ cọc do vi phạm</span><strong class="text-danger">-@totalOverdueDeduction.ToString("N0") đ</strong></div>
+        </div>
+    }
+
     <div class="border rounded bg-light p-3 mt-4">
         <div class="small text-muted fw-semibold mb-2">KẾT QUẢ QUYẾT TOÁN CHUYẾN THUÊ</div>
-        <div class="d-flex justify-content-between py-1"><span>Tổng tiền đã thu</span><strong class="text-success">@totalCollected.ToString("N0") đ</strong></div>
+        <div class="d-flex justify-content-between py-1"><span>Tổng tiền khách đã chuyển</span><strong class="text-success">@totalCollected.ToString("N0") đ</strong></div>
         <div class="d-flex justify-content-between py-1"><span>Tổng tiền đã hoàn khách</span><strong>@totalRefunded.ToString("N0") đ</strong></div>
+        @if (totalOverdueDeduction > 0)
+        {
+            <div class="d-flex justify-content-between py-1"><span>Trong đó khấu trừ cọc do ảnh hưởng đơn khác</span><strong class="text-danger">@totalOverdueDeduction.ToString("N0") đ</strong></div>
+        }
         <hr class="my-2" />
-        <div class="d-flex justify-content-between align-items-center"><strong>Khách thực thanh toán sau quyết toán</strong><strong class="text-primary fs-5">@netPaid.ToString("N0") đ</strong></div>
+        <div class="d-flex justify-content-between align-items-center"><strong>Chi phí khách thực chịu sau quyết toán</strong><strong class="text-primary fs-5">@netPaid.ToString("N0") đ</strong></div>
     </div>
 </div>
