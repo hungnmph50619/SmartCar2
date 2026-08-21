@@ -73,19 +73,24 @@ public sealed class AdminBookingsController : Controller
             else readyBlockedReason = vehicleStatus switch { VehicleStatus.Rented => "Xe vẫn đang được khách trước sử dụng. Chỉ xác nhận sẵn sàng sau khi xe được trả và hoàn tất kiểm tra.", VehicleStatus.Inspection => "Xe đã được trả nhưng đang chờ hoàn tất kiểm tra. Chỉ xác nhận sẵn sàng khi xe trở lại trạng thái Có sẵn.", VehicleStatus.Maintenance => "Xe đang bảo trì nên chưa thể chuẩn bị cho đơn này.", VehicleStatus.Inactive => "Xe đang ngừng hoạt động nên chưa thể chuẩn bị cho đơn này.", _ => "Xe hiện chưa ở trạng thái Có sẵn nên chưa thể xác nhận sẵn sàng." };
         }
 
-        // TH1: chỉ hiện xử lý vi phạm khi gia hạn thường đã bị từ chối, đã quá giờ trả,
-        // và đơn kế tiếp thực sự đã đến giờ nhận nhưng xe vẫn còn ở đơn hiện tại.
         object? overdueConflict = null;
         if (booking.Status == BookingStatus.Rented && DateTime.Now > booking.ReturnDate)
         {
             var hasRejectedNormalExtension = await _dbContext.BookingExtensions.AsNoTracking().AnyAsync(extension => extension.BookingId == booking.BookingId && extension.Status == BookingExtensionStatus.Rejected && !extension.CustomerNote.Contains("[FORCE_MAJEURE]"), cancellationToken);
             if (hasRejectedNormalExtension)
             {
-                var nextBooking = await _dbContext.Bookings.AsNoTracking().Where(item => item.VehicleId == booking.VehicleId && item.BookingId != booking.BookingId && item.PickupDate >= booking.ReturnDate && item.PickupDate <= DateTime.Now && priorBlockingStatuses.Contains(item.Status)).OrderBy(item => item.PickupDate).Select(item => new { item.BookingId, item.PickupDate, item.TotalAmount, item.CustomerName }).FirstOrDefaultAsync(cancellationToken);
+                var nextBooking = await _dbContext.Bookings.AsNoTracking()
+                    .Where(item => item.VehicleId == booking.VehicleId && item.BookingId != booking.BookingId && item.PickupDate >= booking.ReturnDate && item.PickupDate <= DateTime.Now && priorBlockingStatuses.Contains(item.Status))
+                    .OrderBy(item => item.PickupDate)
+                    .Select(item => new { item.BookingId, item.PickupDate, item.TotalAmount })
+                    .FirstOrDefaultAsync(cancellationToken);
+
                 if (nextBooking is not null)
                 {
-                    var availableDeposit = booking.Payments.Where(payment => payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid).Sum(payment => payment.Amount) - booking.Payments.Where(payment => payment.Type == PaymentType.Refund && payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded && payment.Method == PaymentMethods.DepositRefund).Sum(payment => payment.Amount) - booking.Payments.Where(payment => payment.Type == PaymentType.AdditionalCharge && payment.Status == PaymentStatus.Paid && payment.Method == PaymentMethods.DepositDeduction).Sum(payment => payment.Amount);
-                    overdueConflict = new { nextBooking.BookingId, nextBooking.PickupDate, nextBooking.TotalAmount, nextBooking.CustomerName, AvailableDeposit = Math.Max(0m, availableDeposit) };
+                    var availableDeposit = booking.Payments.Where(payment => payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid).Sum(payment => payment.Amount)
+                        - booking.Payments.Where(payment => payment.Type == PaymentType.Refund && payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded && payment.Method == PaymentMethods.DepositRefund).Sum(payment => payment.Amount)
+                        - booking.Payments.Where(payment => payment.Type == PaymentType.AdditionalCharge && payment.Status == PaymentStatus.Paid && payment.Method == PaymentMethods.DepositDeduction).Sum(payment => payment.Amount);
+                    overdueConflict = new { nextBooking.BookingId, nextBooking.PickupDate, nextBooking.TotalAmount, AvailableDeposit = Math.Max(0m, availableDeposit) };
                 }
             }
         }
