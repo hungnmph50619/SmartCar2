@@ -34,16 +34,20 @@
     .profit-page .money-bad { color:#dc3545; }
     .profit-page .vehicle-detail { border-top:1px solid var(--line); padding:1rem; background:#fbfcfe; }
     .profit-page .booking-card { border:1px solid var(--line); border-radius:12px; background:#fff; margin-top:.75rem; overflow:hidden; }
-    .profit-page .booking-card summary { list-style:none; cursor:pointer; padding:.85rem 1rem; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+    .profit-page .booking-card summary { list-style:none; cursor:pointer; padding:1rem; }
     .profit-page .booking-card summary::-webkit-details-marker { display:none; }
     .profit-page .booking-card[open] { border-color:#b9d2ff; }
-    .profit-page .booking-money { display:flex; gap:24px; align-items:center; flex-wrap:wrap; }
-    .profit-page .booking-money-item { min-width:120px; text-align:right; }
-    .profit-page .booking-transactions { border-top:1px solid var(--line); padding:.35rem 1rem .75rem; }
+    .profit-page .booking-summary { display:grid; grid-template-columns:minmax(130px,1.2fr) repeat(4,minmax(115px,1fr)) auto; gap:14px; align-items:center; }
+    .profit-page .booking-stat { min-width:0; }
+    .profit-page .booking-stat-label { color:var(--muted); font-size:.74rem; margin-bottom:.15rem; }
+    .profit-page .booking-stat-value { font-weight:800; white-space:nowrap; }
+    .profit-page .booking-transactions { border-top:1px solid var(--line); padding:.65rem 1rem .85rem; }
     .profit-page .transaction-line { display:grid; grid-template-columns:100px 1fr auto; gap:12px; padding:.55rem 0; border-bottom:1px solid #edf1f5; font-size:.86rem; }
     .profit-page .transaction-line:last-child { border-bottom:0; }
+    .profit-page .booking-result { margin-top:.7rem; padding:.7rem .8rem; background:#f7f9fc; border:1px solid var(--line); border-radius:9px; display:flex; justify-content:space-between; gap:16px; align-items:center; }
     .profit-page .note { background:#f5f9ff; border:1px solid #cfe0ff; border-radius:12px; padding:.85rem 1rem; }
-    @@media(max-width:768px){ .profit-page .booking-card summary{align-items:flex-start;flex-direction:column}.profit-page .booking-money-item{text-align:left}.profit-page .transaction-line{grid-template-columns:80px 1fr auto} }
+    @@media(max-width:1200px){ .profit-page .booking-summary{grid-template-columns:1fr 1fr 1fr}.profit-page .booking-action{grid-column:1/-1} }
+    @@media(max-width:768px){ .profit-page .booking-summary{grid-template-columns:1fr 1fr}.profit-page .transaction-line{grid-template-columns:80px 1fr auto} }
 </style>
 
 <div class="profit-page">
@@ -74,7 +78,7 @@
 
     <div class="panel p-3 mb-3">
         <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-            <div><h2 class="section-title">Hiệu quả từng xe</h2><div class="tiny">Mỗi xe là một ô riêng. Bấm “Xem chi tiết” để xem các đơn và dòng tiền.</div></div>
+            <div><h2 class="section-title">Hiệu quả từng xe</h2><div class="tiny">Mỗi xe là một ô riêng. Bấm “Xem chi tiết” để xem kết quả từng đơn.</div></div>
             <input id="vehicle-search" type="search" class="form-control form-control-sm" style="max-width:280px" placeholder="Tìm tên xe hoặc biển số" />
         </div>
 
@@ -92,39 +96,45 @@
                         </div>
                         <div class="row g-2">
                             <div class="col-6"><div class="vehicle-metric"><div class="vehicle-metric-label">Doanh thu</div><div class="vehicle-metric-value text-primary">@item.Revenue.ToString("N0") đ</div></div></div>
-                            <div class="col-6"><div class="vehicle-metric"><div class="vehicle-metric-label">Lợi nhuận</div><div class="vehicle-metric-value @(item.NetOperatingProfit >= 0 ? "money-good" : "money-bad")">@item.NetOperatingProfit.ToString("N0") đ</div></div></div>
+                            <div class="col-6"><div class="vehicle-metric"><div class="vehicle-metric-label">Lợi nhuận ước tính</div><div class="vehicle-metric-value @(item.NetOperatingProfit >= 0 ? "money-good" : "money-bad")">@item.NetOperatingProfit.ToString("N0") đ</div></div></div>
                             <div class="col-6"><div class="vehicle-metric"><div class="vehicle-metric-label">Thời gian được thuê</div><div class="vehicle-metric-value">@item.RentalDays / @periodDays ngày</div></div></div>
                             <div class="col-6"><div class="vehicle-metric"><div class="vehicle-metric-label">Số đơn hoàn tất</div><div class="vehicle-metric-value">@item.CompletedBookings đơn</div></div></div>
                         </div>
                     </summary>
                     <div class="vehicle-detail">
-                        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap"><div><strong>Các đơn có giao dịch trong kỳ</strong><div class="tiny">Mỗi đơn được gom riêng để dễ đối chiếu tiền đã thu và tiền đã hoàn/chi.</div></div><span class="badge text-bg-light">@bookingGroups.Count đơn</span></div>
+                        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap"><div><strong>Kết quả từng đơn trong kỳ</strong><div class="tiny">Tách riêng doanh thu, tiền hoàn và lợi nhuận để không nhầm tiền cọc với doanh thu.</div></div><span class="badge text-bg-light">@bookingGroups.Count đơn</span></div>
                         @if (bookingGroups.Count == 0 && otherTransactions.Count == 0)
                         { <div class="text-muted small py-3">Không có giao dịch trong kỳ.</div> }
                         @foreach (var booking in bookingGroups)
                         {
-                            var inflow = booking.Where(t => !t.IsOutflow).Sum(t => t.Amount);
-                            var outflow = booking.Where(t => t.IsOutflow).Sum(t => t.Amount);
+                            var revenueCollected = booking.Where(t => !t.IsOutflow).Sum(t => t.Amount);
+                            var depositRefund = booking.Where(t => t.IsOutflow && t.Category == "Hoàn cọc").Sum(t => t.Amount);
+                            var revenueRefund = booking.Where(t => t.IsOutflow && (t.Category == "Hoàn doanh thu" || t.Category == "Hoàn chênh lệch đổi xe")).Sum(t => t.Amount);
+                            var operatingCost = booking.Where(t => t.IsOutflow && t.Category != "Hoàn cọc" && t.Category != "Hoàn doanh thu" && t.Category != "Hoàn chênh lệch đổi xe").Sum(t => t.Amount);
+                            var estimatedProfit = revenueCollected - revenueRefund - operatingCost;
                             var lastDate = booking.Max(t => t.OccurredAt);
                             <details class="booking-card">
                                 <summary>
-                                    <div><div class="fw-bold">Đơn #@booking.Key</div><div class="tiny">@lastDate.ToString("dd/MM/yyyy") · @booking.Count() giao dịch</div></div>
-                                    <div class="booking-money">
-                                        <div class="booking-money-item"><div class="tiny">Tiền đã thu</div><strong class="money-good">@inflow.ToString("N0") đ</strong></div>
-                                        <div class="booking-money-item"><div class="tiny">Tiền đã hoàn / chi</div><strong class="@(outflow > 0 ? "money-bad" : string.Empty)">@outflow.ToString("N0") đ</strong></div>
-                                        <span class="text-primary small">Xem giao dịch ↓</span>
+                                    <div class="booking-summary">
+                                        <div><div class="fw-bold">Đơn #@booking.Key</div><div class="tiny">@lastDate.ToString("dd/MM/yyyy") · @booking.Count() giao dịch</div></div>
+                                        <div class="booking-stat"><div class="booking-stat-label">Doanh thu ghi nhận</div><div class="booking-stat-value text-primary">@revenueCollected.ToString("N0") đ</div></div>
+                                        <div class="booking-stat"><div class="booking-stat-label">Hoàn doanh thu</div><div class="booking-stat-value @(revenueRefund > 0 ? "money-bad" : string.Empty)">@revenueRefund.ToString("N0") đ</div></div>
+                                        <div class="booking-stat"><div class="booking-stat-label">Hoàn cọc</div><div class="booking-stat-value">@depositRefund.ToString("N0") đ</div></div>
+                                        <div class="booking-stat"><div class="booking-stat-label">Lợi nhuận ước tính</div><div class="booking-stat-value @(estimatedProfit >= 0 ? "money-good" : "money-bad")">@estimatedProfit.ToString("N0") đ</div></div>
+                                        <div class="booking-action text-primary small">Xem giao dịch ↓</div>
                                     </div>
                                 </summary>
                                 <div class="booking-transactions">
                                     @foreach (var transaction in booking.OrderBy(t => t.OccurredAt))
                                     { <div class="transaction-line"><span class="muted">@transaction.OccurredAt.ToString("dd/MM/yyyy")</span><span>@transaction.Category</span><strong class="@(transaction.IsOutflow ? "money-bad" : "money-good")">@(transaction.IsOutflow ? "−" : "+")@transaction.Amount.ToString("N0") đ</strong></div> }
+                                    <div class="booking-result"><div><strong>Kết quả kinh doanh của đơn</strong><div class="tiny">Lợi nhuận = doanh thu − hoàn doanh thu − chi phí. Hoàn cọc không làm giảm lợi nhuận.</div></div><strong class="@(estimatedProfit >= 0 ? "money-good" : "money-bad")">@estimatedProfit.ToString("N0") đ</strong></div>
                                     <div class="text-end pt-2"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.Key" class="btn btn-sm btn-outline-primary">Mở đơn #@booking.Key</a></div>
                                 </div>
                             </details>
                         }
                         @if (otherTransactions.Count > 0)
                         {
-                            <details class="booking-card"><summary><div><div class="fw-bold">Giao dịch không gắn với đơn</div><div class="tiny">Ví dụ chi phí bảo trì chung của xe.</div></div><span class="text-primary small">Xem @otherTransactions.Count giao dịch ↓</span></summary><div class="booking-transactions">@foreach (var transaction in otherTransactions){<div class="transaction-line"><span class="muted">@transaction.OccurredAt.ToString("dd/MM/yyyy")</span><span>@transaction.Category</span><strong class="@(transaction.IsOutflow ? "money-bad" : "money-good")">@(transaction.IsOutflow ? "−" : "+")@transaction.Amount.ToString("N0") đ</strong></div>}</div></details>
+                            <details class="booking-card"><summary><div class="d-flex justify-content-between align-items-center"><div><div class="fw-bold">Chi phí chung của xe</div><div class="tiny">Các khoản không gắn trực tiếp với một đơn thuê.</div></div><span class="text-primary small">Xem @otherTransactions.Count giao dịch ↓</span></div></summary><div class="booking-transactions">@foreach (var transaction in otherTransactions){<div class="transaction-line"><span class="muted">@transaction.OccurredAt.ToString("dd/MM/yyyy")</span><span>@transaction.Category</span><strong class="@(transaction.IsOutflow ? "money-bad" : "money-good")">@(transaction.IsOutflow ? "−" : "+")@transaction.Amount.ToString("N0") đ</strong></div>}</div></details>
                         }
                     </div>
                 </details>
@@ -134,7 +144,7 @@
         </div>
     </div>
 
-    <div class="note small"><strong>Ghi chú:</strong> “Thời gian được thuê” hiển thị số ngày xe được thuê trên tổng số ngày của khoảng báo cáo. “Số đơn hoàn tất” chỉ đếm các đơn đã kết thúc hoàn toàn. Lợi nhuận ước tính chưa bao gồm khấu hao xe, bảo hiểm, thuế và chi phí chung.</div>
+    <div class="note small"><strong>Ghi chú:</strong> Doanh thu không bao gồm tiền cọc còn phải hoàn cho khách. Hoàn cọc được hiển thị riêng và không trừ vào lợi nhuận. “Lợi nhuận ước tính” chưa bao gồm khấu hao xe, bảo hiểm, thuế và chi phí chung.</div>
 </div>
 
 @section Scripts {
