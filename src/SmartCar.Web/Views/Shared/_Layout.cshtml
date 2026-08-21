@@ -103,9 +103,7 @@
                                         <small>@currentUser?.Email</small>
                                     </li>
                                     <li><hr class="dropdown-divider" /></li>
-                                    <li>
-                                        <a class="dropdown-item" asp-controller="Profile" asp-action="Index">Hồ sơ cá nhân</a>
-                                    </li>
+                                    <li><a class="dropdown-item" asp-controller="Profile" asp-action="Index">Hồ sơ cá nhân</a></li>
                                     @if (User.IsInRole(RoleNames.Customer))
                                     {
                                         <li><a class="dropdown-item" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a></li>
@@ -116,11 +114,7 @@
                                         <li><a class="dropdown-item" asp-controller="Dashboard" asp-action="Index">Khu vực quản trị</a></li>
                                     }
                                     <li><hr class="dropdown-divider" /></li>
-                                    <li>
-                                        <form asp-controller="Account" asp-action="Logout" method="post">
-                                            <button type="submit" class="dropdown-item text-danger">Đăng xuất</button>
-                                        </form>
-                                    </li>
+                                    <li><form asp-controller="Account" asp-action="Logout" method="post"><button type="submit" class="dropdown-item text-danger">Đăng xuất</button></form></li>
                                 </ul>
                             </li>
                         }
@@ -138,24 +132,16 @@
     <div class="container">
         @if (TempData["SuccessMessage"] is string successMessage)
         {
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                @successMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button>
-            </div>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">@successMessage<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button></div>
         }
         @if (TempData["ErrorMessage"] is string errorMessage)
         {
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                @errorMessage
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button>
-            </div>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">@errorMessage<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button></div>
         }
         <main role="main" class="pb-5">@RenderBody()</main>
     </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">&copy; 2026 - SmartCar</div>
-    </footer>
+    <footer class="border-top footer text-muted"><div class="container">&copy; 2026 - SmartCar</div></footer>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
@@ -164,6 +150,7 @@
     <script src="~/js/ui-terminology.js" asp-append-version="true"></script>
     <script src="~/js/vehicle-search.js" asp-append-version="true"></script>
     <script src="~/js/customer-booking-records.js" asp-append-version="true"></script>
+    <script src="~/js/customer-trip-records.js" asp-append-version="true"></script>
     <script src="~/js/extension-ux-labels.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
