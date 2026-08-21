@@ -47,102 +47,33 @@
         <nav class="navbar navbar-expand-xl navbar-light bg-white border-bottom box-shadow mb-4">
             <div class="container">
                 <a class="navbar-brand fw-bold" asp-controller="Home" asp-action="Index">SmartCar</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-label="Mở hoặc đóng trình đơn">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-label="Mở hoặc đóng trình đơn"><span class="navbar-toggler-icon"></span></button>
                 <div class="navbar-collapse collapse d-xl-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
                         <li class="nav-item"><a class="nav-link" asp-controller="Home" asp-action="Index">Trang chủ</a></li>
                         <li class="nav-item"><a class="nav-link" asp-controller="Vehicles" asp-action="Index">Danh sách xe</a></li>
-                        @if (User.IsInRole(RoleNames.Customer))
-                        {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Bookings" asp-action="MyBookings">Đơn của tôi</a></li>
-                        }
-                        @if (User.IsInRole(RoleNames.Admin))
-                        {
-                            <li class="nav-item">
-                                <a class="nav-link fw-semibold text-primary" asp-controller="Dashboard" asp-action="Index">Khu vực quản trị</a>
-                            </li>
-                        }
+                        @if (User.IsInRole(RoleNames.Customer)){<li class="nav-item"><a class="nav-link" asp-controller="Bookings" asp-action="MyBookings">Đơn của tôi</a></li>}
+                        @if (User.IsInRole(RoleNames.Admin)){<li class="nav-item"><a class="nav-link fw-semibold text-primary" asp-controller="Dashboard" asp-action="Index">Khu vực quản trị</a></li>}
                     </ul>
                     <ul class="navbar-nav align-items-xl-center account-navigation">
                         @if (User.Identity?.IsAuthenticated == true)
                         {
-                            <li class="nav-item">
-                                <a class="nav-link notification-navigation-link" asp-controller="Notifications" asp-action="Index" aria-label="Thông báo">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
-                                        <path d="M10 21h4"></path>
-                                    </svg>
-                                    <span>Thông báo</span>
-                                    @if (unreadNotificationCount > 0)
-                                    {
-                                        <span class="notification-count">@(unreadNotificationCount > 99 ? "99+" : unreadNotificationCount)</span>
-                                    }
-                                </a>
-                            </li>
-                            <li class="nav-item dropdown user-navigation-dropdown">
-                                <a class="nav-link dropdown-toggle user-navigation-toggle"
-                                   href="#"
-                                   role="button"
-                                   data-bs-toggle="dropdown"
-                                   aria-expanded="false">
-                                    @if (!string.IsNullOrWhiteSpace(currentUser?.AvatarPath))
-                                    {
-                                        <img src="@currentUser.AvatarPath" alt="" class="user-avatar user-avatar-photo" />
-                                    }
-                                    else
-                                    {
-                                        <span class="user-avatar" aria-hidden="true">@avatarInitial</span>
-                                    }
-                                    <span class="user-display-name">@displayName</span>
-                                </a>
-                                <ul class="dropdown-menu dropdown-menu-end user-navigation-menu">
-                                    <li class="user-menu-heading">
-                                        <strong>@displayName</strong>
-                                        <small>@currentUser?.Email</small>
-                                    </li>
-                                    <li><hr class="dropdown-divider" /></li>
-                                    <li><a class="dropdown-item" asp-controller="Profile" asp-action="Index">Hồ sơ cá nhân</a></li>
-                                    @if (User.IsInRole(RoleNames.Customer))
-                                    {
-                                        <li><a class="dropdown-item" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a></li>
-                                        <li><a class="dropdown-item" asp-controller="Extensions" asp-action="Index">Gia hạn thuê</a></li>
-                                    }
-                                    @if (User.IsInRole(RoleNames.Admin))
-                                    {
-                                        <li><a class="dropdown-item" asp-controller="Dashboard" asp-action="Index">Khu vực quản trị</a></li>
-                                    }
-                                    <li><hr class="dropdown-divider" /></li>
-                                    <li><form asp-controller="Account" asp-action="Logout" method="post"><button type="submit" class="dropdown-item text-danger">Đăng xuất</button></form></li>
-                                </ul>
-                            </li>
+                            <li class="nav-item"><a class="nav-link notification-navigation-link" asp-controller="Notifications" asp-action="Index" aria-label="Thông báo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg><span>Thông báo</span>@if (unreadNotificationCount > 0){<span class="notification-count">@(unreadNotificationCount > 99 ? "99+" : unreadNotificationCount)</span>}</a></li>
+                            <li class="nav-item dropdown user-navigation-dropdown"><a class="nav-link dropdown-toggle user-navigation-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">@if (!string.IsNullOrWhiteSpace(currentUser?.AvatarPath)){<img src="@currentUser.AvatarPath" alt="" class="user-avatar user-avatar-photo" />}else{<span class="user-avatar" aria-hidden="true">@avatarInitial</span>}<span class="user-display-name">@displayName</span></a><ul class="dropdown-menu dropdown-menu-end user-navigation-menu"><li class="user-menu-heading"><strong>@displayName</strong><small>@currentUser?.Email</small></li><li><hr class="dropdown-divider" /></li><li><a class="dropdown-item" asp-controller="Profile" asp-action="Index">Hồ sơ cá nhân</a></li>@if (User.IsInRole(RoleNames.Customer)){<li><a class="dropdown-item" asp-controller="Bookings" asp-action="MyBookings">Đơn thuê của tôi</a></li><li><a class="dropdown-item" asp-controller="Extensions" asp-action="Index">Gia hạn thuê</a></li>}@if (User.IsInRole(RoleNames.Admin)){<li><a class="dropdown-item" asp-controller="Dashboard" asp-action="Index">Khu vực quản trị</a></li>}<li><hr class="dropdown-divider" /></li><li><form asp-controller="Account" asp-action="Logout" method="post"><button type="submit" class="dropdown-item text-danger">Đăng xuất</button></form></li></ul></li>
                         }
                         else
-                        {
-                            <li class="nav-item"><a class="nav-link" asp-controller="Account" asp-action="Login">Đăng nhập</a></li>
-                            <li class="nav-item"><a class="btn btn-primary btn-sm" asp-controller="Account" asp-action="Register">Đăng ký</a></li>
-                        }
+                        {<li class="nav-item"><a class="nav-link" asp-controller="Account" asp-action="Login">Đăng nhập</a></li><li class="nav-item"><a class="btn btn-primary btn-sm" asp-controller="Account" asp-action="Register">Đăng ký</a></li>}
                     </ul>
                 </div>
             </div>
         </nav>
     </header>
-
     <div class="container">
-        @if (TempData["SuccessMessage"] is string successMessage)
-        {
-            <div class="alert alert-success alert-dismissible fade show" role="alert">@successMessage<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button></div>
-        }
-        @if (TempData["ErrorMessage"] is string errorMessage)
-        {
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">@errorMessage<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button></div>
-        }
+        @if (TempData["SuccessMessage"] is string successMessage){<div class="alert alert-success alert-dismissible fade show" role="alert">@successMessage<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button></div>}
+        @if (TempData["ErrorMessage"] is string errorMessage){<div class="alert alert-danger alert-dismissible fade show" role="alert">@errorMessage<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng thông báo"></button></div>}
         <main role="main" class="pb-5">@RenderBody()</main>
     </div>
-
     <footer class="border-top footer text-muted"><div class="container">&copy; 2026 - SmartCar</div></footer>
-
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
@@ -151,8 +82,8 @@
     <script src="~/js/vehicle-search.js" asp-append-version="true"></script>
     <script src="~/js/customer-booking-records.js" asp-append-version="true"></script>
     <script src="~/js/customer-trip-records.js" asp-append-version="true"></script>
+    <script src="~/js/customer-extension-rejection-alert.js" asp-append-version="true"></script>
     <script src="~/js/extension-ux-labels.js" asp-append-version="true"></script>
-
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
