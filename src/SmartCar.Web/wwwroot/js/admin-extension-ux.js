@@ -1,13 +1,46 @@
 (() => {
     const pathname = window.location.pathname.toLowerCase();
+    const normalize = value => (value ?? '').replace(/\s+/g, ' ').trim();
+
+    if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
+        Array.from(document.querySelectorAll('a, button')).forEach(element => {
+            const text = normalize(element.textContent);
+            if (/^Việc cần xử lý\s*\(\d+\)$/.test(text)) {
+                element.remove();
+            }
+        });
+        return;
+    }
+
+    if (pathname.startsWith('/adminbookings/details')) {
+        const pageBadge = Array.from(document.querySelectorAll('.badge'))
+            .map(element => normalize(element.textContent));
+        const completed = pageBadge.includes('Đã hoàn tất');
+
+        document.querySelectorAll('.card').forEach(card => {
+            const heading = Array.from(card.querySelectorAll('h2')).map(h => normalize(h.textContent))[0] ?? '';
+
+            if (completed && (heading === 'Biên bản giao' || heading === 'Biên bản trả')) {
+                card.remove();
+                return;
+            }
+
+            if (heading === 'Chuẩn bị xe') {
+                document.querySelectorAll('.card').forEach(candidate => {
+                    const candidateHeading = Array.from(candidate.querySelectorAll('h2')).map(h => normalize(h.textContent))[0] ?? '';
+                    if (candidateHeading === 'Khách chưa đến nhận xe' || candidateHeading === 'Khách không đến nhận') {
+                        candidate.remove();
+                    }
+                });
+            }
+        });
+        return;
+    }
+
     if (!pathname.startsWith('/adminextensions')) {
         return;
     }
 
-    const normalize = value => (value ?? '').replace(/\s+/g, ' ').trim();
-
-    // Nghiệp vụ "cố tình không trả xe sau khi bị từ chối" là xử lý vi phạm
-    // sau thời hạn trả, không phải một bước của màn hình duyệt gia hạn.
     document.querySelectorAll('details').forEach(details => {
         const summary = details.querySelector(':scope > summary');
         if (summary && normalize(summary.textContent).includes('Ghi nhận A cố tình không trả xe')) {
@@ -15,12 +48,36 @@
         }
     });
 
-    // Viết lại nguyên tắc theo vai trò nghiệp vụ, không dùng ký hiệu A/B.
     const principle = Array.from(document.querySelectorAll('.alert'))
         .find(element => normalize(element.textContent).startsWith('Nguyên tắc:'));
     if (principle) {
         principle.innerHTML = '<strong>Nguyên tắc xử lý:</strong> Nếu thời gian gia hạn trùng với đơn thuê kế tiếp, yêu cầu gia hạn thông thường sẽ không được duyệt. Với trường hợp bất khả kháng có ảnh và vị trí xác minh, SmartCar ưu tiên bố trí xe thay thế cho khách có đơn kế tiếp. Nếu không thể bố trí xe phù hợp, thực hiện hủy đơn kế tiếp, hoàn tiền và chỉ bồi thường thiệt hại thực tế có căn cứ.';
     }
+
+    document.querySelectorAll('form[data-swap-form]').forEach(form => {
+        const checkbox = form.querySelector('input[name="customerAccepted"]');
+        if (checkbox instanceof HTMLInputElement) {
+            const wrapper = checkbox.closest('.col-12');
+            const hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'customerAccepted';
+            hidden.value = 'true';
+            checkbox.removeAttribute('name');
+            checkbox.required = false;
+
+            if (wrapper) {
+                wrapper.innerHTML = '';
+                wrapper.appendChild(hidden);
+                const note = document.createElement('div');
+                note.className = 'alert alert-light border py-2 mb-0 small';
+                note.textContent = 'Chỉ bấm “Xác nhận đổi xe” sau khi đã trao đổi với khách có đơn kế tiếp và khách đồng ý xe thay thế cùng phần chênh lệch giá (nếu có).';
+                wrapper.appendChild(note);
+            } else {
+                form.appendChild(hidden);
+                checkbox.remove();
+            }
+        }
+    });
 
     const replacements = [
         ['Xem đơn B →', 'Xem đơn kế tiếp →'],
@@ -52,7 +109,6 @@
         node = walker.nextNode();
     }
 
-    // Các đoạn mô tả dài cần viết lại nguyên câu để tránh còn sót A/B.
     Array.from(document.querySelectorAll('.small.text-muted')).forEach(element => {
         const text = normalize(element.textContent);
         if (text.includes('Hủy đơn B, hoàn các khoản B đã thanh toán')) {
