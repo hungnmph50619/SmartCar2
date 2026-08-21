@@ -13,6 +13,10 @@
     var returnSigned = ViewBag.ReturnSigned is bool rs && rs;
     var canMarkReady = ViewBag.CanMarkReady is bool cmr && cmr;
     var readyBlockedReason = ViewBag.ReadyBlockedReason as string;
+    int? overdueAffectedBookingId = ViewBag.OverdueAffectedBookingId as int?;
+    DateTime? overdueAffectedPickupDate = ViewBag.OverdueAffectedPickupDate as DateTime?;
+    decimal? overdueAffectedContractAmount = ViewBag.OverdueAffectedContractAmount as decimal?;
+    decimal? overdueAvailableDeposit = ViewBag.OverdueAvailableDeposit as decimal?;
 
     var rentalPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Rental);
     var depositPayment = Model.Payments.FirstOrDefault(p => p.Type == PaymentType.Deposit);
@@ -71,6 +75,28 @@ else if(Model.Status==BookingStatus.ReadyForPickup){<div class="card card-body s
 else if(canMarkNoShow){<div class="card card-body shadow-sm mb-4 border-warning"><h2 class="h6 mb-1">Khách chưa đến nhận xe</h2><div class="small text-muted mb-3">Phí 70% tiền thuê · hoàn 30% tiền thuê · hoàn 100% cọc@(isDelivery?" · hoàn 100% phí giao chưa thực hiện":string.Empty).</div><form asp-controller="AdminBookingOperations" asp-action="MarkNoShow" method="post" data-confirm="Xác nhận khách không đến?"><input type="hidden" name="bookingId" value="@Model.BookingId"/><div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="customerContacted" value="true" id="customer-contacted" required/><label class="form-check-label fw-semibold" for="customer-contacted">Đã liên hệ khách</label></div><button class="btn btn-warning" type="submit">Khách không đến</button></form></div>}
 @if(Model.HasHandover){<div class="card card-body shadow-sm mb-4"><div class="d-flex justify-content-between"><div><h2 class="h5 mb-1">Biên bản giao</h2><span class="badge @(handoverSigned?"bg-success":"bg-danger")">@(handoverSigned?"Đã có chữ ký":"Thiếu bản ký")</span></div><div class="d-flex gap-2">@if(handoverSigned){<a class="btn btn-sm btn-primary" target="_blank" asp-controller="AdminSignedDocuments" asp-action="Handover" asp-route-bookingId="@Model.BookingId">Xem bản ký</a>}<a class="btn btn-sm btn-outline-primary" target="_blank" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In để ký</a></div></div></div>}
 @if(Model.Status==BookingStatus.Rented){<div class="card card-body shadow-sm mb-4"><h2 class="h5">Đang thuê</h2><div class="d-flex gap-2"><a class="btn btn-outline-primary" asp-controller="AdminExtensions" asp-action="Index">Xử lý gia hạn</a><a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@Model.BookingId">Lập biên bản trả</a></div></div>}
+@if(Model.Status==BookingStatus.Rented && overdueAffectedBookingId.HasValue){
+<div class="card card-body shadow-sm mb-4 border-danger">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div><h2 class="h5 text-danger mb-1">Quá hạn trả xe – đang ảnh hưởng đơn kế tiếp</h2><div class="small text-muted">Yêu cầu gia hạn thông thường đã bị từ chối nhưng xe vẫn chưa được trả.</div></div>
+        <span class="badge bg-danger">Cần xử lý</span>
+    </div>
+    <div class="row g-3 mt-1">
+        <div class="col-md-4"><div class="small text-muted">Đơn đang vi phạm</div><strong>#@Model.BookingId</strong><div class="small">Phải trả @Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div></div>
+        <div class="col-md-4"><div class="small text-muted">Đơn bị ảnh hưởng</div><strong>#@overdueAffectedBookingId.Value</strong><div class="small">Nhận xe @overdueAffectedPickupDate?.ToString("dd/MM/yyyy HH:mm")</div></div>
+        <div class="col-md-4"><div class="small text-muted">Giá hợp đồng đơn bị ảnh hưởng</div><strong class="text-danger">@((overdueAffectedContractAmount ?? 0m).ToString("N0")) đ</strong></div>
+        <div class="col-md-6"><div class="small text-muted">Cọc còn khả dụng của đơn #@Model.BookingId</div><strong>@((overdueAvailableDeposit ?? 0m).ToString("N0")) đ</strong></div>
+        <div class="col-md-6"><div class="small text-muted">Căn cứ hệ thống</div><div class="small">Gia hạn thường đã bị từ chối · đã quá giờ trả · đơn kế tiếp đã đến giờ nhận · xe chưa được trả.</div></div>
+    </div>
+    <div class="alert alert-light border mt-3 mb-3 small">Theo biên bản giao xe đã ký, nếu khách đã được thông báo từ chối gia hạn nhưng vẫn cố tình không trả xe đúng hạn làm ảnh hưởng đơn kế tiếp, khoản bồi thường bằng <strong>giá hợp đồng của đơn bị ảnh hưởng</strong> và được khấu trừ từ tiền cọc. Nếu cọc không đủ, phần còn thiếu tiếp tục là nghĩa vụ của khách.</div>
+    <form asp-controller="AdminExtensionCompensations" asp-action="RecordIntentionalConflictCompensation" method="post" data-confirm="Xác nhận khách đã được thông báo từ chối gia hạn nhưng vẫn cố tình giữ xe, làm đơn kế tiếp không nhận được xe?">
+        <input type="hidden" name="renterBookingId" value="@Model.BookingId" />
+        <input type="hidden" name="affectedBookingId" value="@overdueAffectedBookingId.Value" />
+        <input type="hidden" name="violationConfirmed" value="true" />
+        <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@overdueAffectedBookingId.Value">Xem đơn kế tiếp</a><button class="btn btn-danger" type="submit">Xác nhận vi phạm & ghi nhận bồi thường</button></div>
+    </form>
+</div>
+}
 @if(Model.HasReturn){<div class="card card-body shadow-sm mb-4"><h2 class="h5">Biên bản trả</h2><span class="badge @(returnSigned?"bg-success":"bg-danger")">@(returnSigned?"Đã có chữ ký":"Thiếu bản ký")</span><div class="mt-2"><a class="btn btn-sm btn-outline-primary" target="_blank" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In để ký</a> <a class="btn btn-sm btn-primary" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@Model.BookingId">Đối chiếu</a></div></div>}
 @if(Model.Status==BookingStatus.PendingInspection){<div class="card card-body shadow-sm mb-4"><h2 class="h5">Phụ phí</h2><a class="btn btn-primary" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@Model.BookingId">Đối chiếu & kết thúc kiểm tra</a></div>}
 @if(Model.Status==BookingStatus.AwaitingRefund){<div class="card card-body shadow-sm mb-4 border-warning"><h2 class="h5">Chờ hoàn tiền</h2><p class="text-muted">Đơn chỉ hoàn tất sau khi xác nhận đã chuyển đủ tổng tiền hoàn cho khách.</p><a class="btn btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund">Xử lý hoàn tiền</a></div>}
