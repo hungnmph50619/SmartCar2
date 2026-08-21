@@ -10,8 +10,6 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminOverdueConflictsController : Controller
 {
-    private const string ForceMajeureMarker = "[FORCE_MAJEURE]";
-
     private static readonly BookingStatus[] BlockingStatuses =
     {
         BookingStatus.PendingConfirmation,
@@ -43,22 +41,24 @@ public sealed class AdminOverdueConflictsController : Controller
         if (booking.Status != BookingStatus.Rented || DateTime.Now <= booking.ReturnDate)
             return Json(new { state = "none" });
 
-        var rejectedNormalExtension = await _dbContext.BookingExtensions
+        // Một yêu cầu gia hạn đã bị từ chối đồng nghĩa thời hạn trả hiện tại vẫn có hiệu lực,
+        // không phân biệt trước đó khách chọn gia hạn thường hay bất khả kháng.
+        var rejectedExtension = await _dbContext.BookingExtensions
             .AsNoTracking()
             .Where(extension =>
                 extension.BookingId == booking.BookingId &&
-                extension.Status == BookingExtensionStatus.Rejected &&
-                (extension.CustomerNote == null || !extension.CustomerNote.Contains(ForceMajeureMarker)))
+                extension.Status == BookingExtensionStatus.Rejected)
             .OrderByDescending(extension => extension.BookingExtensionId)
             .Select(extension => new
             {
                 extension.BookingExtensionId,
-                extension.AdminNote
+                extension.AdminNote,
+                extension.DecidedAt
             })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (rejectedNormalExtension is null)
-            return Json(new { state = "none" });
+        if (rejectedExtension is null)
+            return Json(new { state = "overdue", renterBookingId = booking.BookingId, returnDate = booking.ReturnDate, rejectedExtension = false });
 
         var nextBooking = await _dbContext.Bookings
             .AsNoTracking()
@@ -104,21 +104,31 @@ public sealed class AdminOverdueConflictsController : Controller
                 renterBookingId = booking.BookingId,
                 returnDate = booking.ReturnDate,
                 availableDeposit,
-                rejectedReason = rejectedNormalExtension.AdminNote
+                rejectedExtension = true,
+                rejectedReason = rejectedExtension.AdminNote,
+                rejectedAt = rejectedExtension.DecidedAt
             });
         }
 
+        var compensation = Math.Max(0m, nextBooking.TotalAmount);
+        var depositDeduction = Math.Min(availableDeposit, compensation);
+        var outstanding = Math.Max(0m, compensation - depositDeduction);
         var affected = DateTime.Now >= nextBooking.PickupDate;
+
         return Json(new
         {
             state = affected ? "affected" : "overdue-upcoming",
             renterBookingId = booking.BookingId,
             returnDate = booking.ReturnDate,
             availableDeposit,
-            rejectedReason = rejectedNormalExtension.AdminNote,
+            rejectedExtension = true,
+            rejectedReason = rejectedExtension.AdminNote,
+            rejectedAt = rejectedExtension.DecidedAt,
             affectedBookingId = nextBooking.BookingId,
             affectedPickupDate = nextBooking.PickupDate,
-            affectedContractAmount = nextBooking.TotalAmount
+            affectedContractAmount = compensation,
+            depositDeduction,
+            outstandingAmount = outstanding
         });
     }
 }
