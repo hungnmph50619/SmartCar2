@@ -1,5 +1,7 @@
 @model SmartCar.Web.ViewModels.ReturnInspectionViewModel
+@using Microsoft.EntityFrameworkCore
 @using SmartCar.Domain.Enums
+@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext Db
 
 @{
     ViewData["Title"] = $"Đối chiếu giao - trả #{Model.BookingId}";
@@ -11,6 +13,43 @@
         ? $"{(fuelDifference.Value > 0 ? "+" : string.Empty)}{fuelDifference.Value}%"
         : null;
     var fuelReduced = fuelDifference.HasValue && fuelDifference.Value < 0;
+
+    const string overdueCompPrefix = "OVERDUE-COMP-";
+    const string overdueDebtPrefix = "OVERDUE-DEBT-";
+    var overduePaymentRows = await Db.Payments
+        .AsNoTracking()
+        .Where(payment =>
+            payment.BookingId == Model.BookingId &&
+            payment.Type == PaymentType.AdditionalCharge &&
+            payment.TransactionCode != null &&
+            (payment.TransactionCode.StartsWith(overdueCompPrefix) ||
+             payment.TransactionCode.StartsWith(overdueDebtPrefix)))
+        .Select(payment => new { payment.Amount, payment.TransactionCode })
+        .ToListAsync();
+
+    int? ParseAffectedBookingId(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return null;
+        var prefix = code.StartsWith(overdueCompPrefix, StringComparison.OrdinalIgnoreCase)
+            ? overdueCompPrefix
+            : code.StartsWith(overdueDebtPrefix, StringComparison.OrdinalIgnoreCase)
+                ? overdueDebtPrefix
+                : null;
+        if (prefix is null) return null;
+
+        var parts = code[prefix.Length..].Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 && int.TryParse(parts[1], out var affectedId)
+            ? affectedId
+            : null;
+    }
+
+    var overdueImpacts = overduePaymentRows
+        .Select(row => new { AffectedBookingId = ParseAffectedBookingId(row.TransactionCode), row.Amount })
+        .Where(row => row.AffectedBookingId.HasValue)
+        .GroupBy(row => row.AffectedBookingId!.Value)
+        .Select(group => new { BookingId = group.Key, CompensationAmount = group.Sum(row => row.Amount) })
+        .OrderBy(item => item.BookingId)
+        .ToList();
 
     var handoverSignedPath = Model.Handover.ImagePaths
         .FirstOrDefault(path => path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase));
@@ -79,8 +118,8 @@
 @if (awaitingRefund)
 {
     <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <span><strong>Đã kiểm tra xong.</strong> Chờ hoàn cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong>.</span>
-        <a class="btn btn-sm btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Hoàn cọc</a>
+        <span><strong>Đã kiểm tra xong.</strong> Chờ quyết toán cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong>.</span>
+        <a class="btn btn-sm btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Xử lý hoàn cọc</a>
     </div>
 }
 else
@@ -226,6 +265,35 @@ else
     </div>
 </div>
 
+@if (overdueImpacts.Count > 0)
+{
+    <div class="card card-body shadow-sm border-danger mb-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+                <h2 class="h5 text-danger mb-1">Ảnh hưởng đơn thuê kế tiếp</h2>
+                <p class="text-muted small mb-0">Đơn hiện tại đã giữ xe quá hạn sau khi bị từ chối gia hạn và đã làm ảnh hưởng đơn khác.</p>
+            </div>
+            <span class="badge bg-danger">Đã xử lý vi phạm</span>
+        </div>
+
+        @foreach (var impact in overdueImpacts)
+        {
+            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap border rounded p-3 mb-2">
+                <div>
+                    <div class="fw-semibold">Ảnh hưởng đơn #@impact.BookingId</div>
+                    <div class="small text-muted">Khoản bồi thường ghi nhận cho đơn bị ảnh hưởng</div>
+                </div>
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <strong class="text-danger">@impact.CompensationAmount.ToString("N0") đ</strong>
+                    <a class="btn btn-sm btn-outline-danger" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@impact.BookingId">Xem đơn #@impact.BookingId</a>
+                </div>
+            </div>
+        }
+
+        <div class="small text-muted mt-1">Khoản bồi thường này được theo dõi riêng với phụ phí trả muộn, vượt km hoặc hư hỏng và được tính khi quyết toán tiền cọc.</div>
+    </div>
+}
+
 <div class="card card-body shadow-sm mb-4">
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div>
@@ -277,8 +345,8 @@ else
         }
         else
         {
-            <p class="text-muted">Đủ hồ sơ. Có tiền cọc thì đơn chuyển sang <strong>Chờ hoàn cọc</strong>; chưa được tính là hoàn tất.</p>
-            <form asp-controller="Returns" asp-action="Complete" method="post" data-loading-form data-confirm="Xác nhận đã đối chiếu đủ hồ sơ giao - trả?">
+            <p class="text-muted">Đủ hồ sơ. Hệ thống sẽ chuyển sang bước <strong>quyết toán tiền cọc</strong>, khấu trừ các khoản đã ghi nhận trước khi xác định số tiền hoàn thực tế.</p>
+            <form asp-controller="Returns" asp-action="Complete" method="post" data-loading-form data-confirm="Xác nhận đã đối chiếu đủ hồ sơ giao - trả và chuyển sang quyết toán cọc?">
                 <input type="hidden" name="BookingId" value="@Model.BookingId" />
                 <input type="hidden" name="reviewConfirmed" value="true" />
                 <div class="form-check mb-2">
@@ -286,7 +354,7 @@ else
                     <label class="form-check-label" for="inspectionRequiresMaintenance">Xe cần bảo trì hoặc sửa chữa</label>
                 </div>
                 <textarea name="MaintenanceNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Nội dung bảo trì nếu có"></textarea>
-                <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">@(Model.DepositAmount > 0 ? "Xác nhận → Hoàn cọc" : "Xác nhận → Hoàn tất")</button>
+                <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">@(Model.DepositAmount > 0 ? "Xác nhận & quyết toán cọc" : "Xác nhận → Hoàn tất")</button>
             </form>
         }
     </div>
