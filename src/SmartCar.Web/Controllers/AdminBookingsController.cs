@@ -73,7 +73,11 @@ public sealed class AdminBookingsController : Controller
             else readyBlockedReason = vehicleStatus switch { VehicleStatus.Rented => "Xe vẫn đang được khách trước sử dụng. Chỉ xác nhận sẵn sàng sau khi xe được trả và hoàn tất kiểm tra.", VehicleStatus.Inspection => "Xe đã được trả nhưng đang chờ hoàn tất kiểm tra. Chỉ xác nhận sẵn sàng khi xe trở lại trạng thái Có sẵn.", VehicleStatus.Maintenance => "Xe đang bảo trì nên chưa thể chuẩn bị cho đơn này.", VehicleStatus.Inactive => "Xe đang ngừng hoạt động nên chưa thể chuẩn bị cho đơn này.", _ => "Xe hiện chưa ở trạng thái Có sẵn nên chưa thể xác nhận sẵn sàng." };
         }
 
-        object? overdueConflict = null;
+        int? overdueAffectedBookingId = null;
+        DateTime? overdueAffectedPickupDate = null;
+        decimal? overdueAffectedContractAmount = null;
+        decimal? overdueAvailableDeposit = null;
+
         if (booking.Status == BookingStatus.Rented && DateTime.Now > booking.ReturnDate)
         {
             var hasRejectedNormalExtension = await _dbContext.BookingExtensions.AsNoTracking().AnyAsync(extension => extension.BookingId == booking.BookingId && extension.Status == BookingExtensionStatus.Rejected && !extension.CustomerNote.Contains("[FORCE_MAJEURE]"), cancellationToken);
@@ -90,7 +94,10 @@ public sealed class AdminBookingsController : Controller
                     var availableDeposit = booking.Payments.Where(payment => payment.Type == PaymentType.Deposit && payment.Status == PaymentStatus.Paid).Sum(payment => payment.Amount)
                         - booking.Payments.Where(payment => payment.Type == PaymentType.Refund && payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded && payment.Method == PaymentMethods.DepositRefund).Sum(payment => payment.Amount)
                         - booking.Payments.Where(payment => payment.Type == PaymentType.AdditionalCharge && payment.Status == PaymentStatus.Paid && payment.Method == PaymentMethods.DepositDeduction).Sum(payment => payment.Amount);
-                    overdueConflict = new { nextBooking.BookingId, nextBooking.PickupDate, nextBooking.TotalAmount, AvailableDeposit = Math.Max(0m, availableDeposit) };
+                    overdueAffectedBookingId = nextBooking.BookingId;
+                    overdueAffectedPickupDate = nextBooking.PickupDate;
+                    overdueAffectedContractAmount = nextBooking.TotalAmount;
+                    overdueAvailableDeposit = Math.Max(0m, availableDeposit);
                 }
             }
         }
@@ -99,7 +106,11 @@ public sealed class AdminBookingsController : Controller
         ViewBag.CustomerCancelledBookingCount = customerBookingStatuses.Count(status => status is BookingStatus.Cancelled or BookingStatus.Rejected); ViewBag.CustomerNoShowCount = customerBookingStatuses.Count(status => status == BookingStatus.NoShow);
         ViewBag.CitizenIdentityVerified = citizenVerified; ViewBag.DrivingLicenseVerified = drivingLicenseVerified; ViewBag.CustomerKycVerified = citizenVerified && drivingLicenseVerified;
         ViewBag.HandoverSigned = HasSignedCopy(tripDocuments?.Handover?.ImagePaths, HandoverSignedMarker); ViewBag.ReturnSigned = HasSignedCopy(tripDocuments?.VehicleReturn?.ImagePaths, ReturnSignedMarker);
-        ViewBag.CanMarkReady = canMarkReady; ViewBag.ReadyBlockedReason = readyBlockedReason; ViewBag.OverdueRejectedExtensionConflict = overdueConflict;
+        ViewBag.CanMarkReady = canMarkReady; ViewBag.ReadyBlockedReason = readyBlockedReason;
+        ViewBag.OverdueAffectedBookingId = overdueAffectedBookingId;
+        ViewBag.OverdueAffectedPickupDate = overdueAffectedPickupDate;
+        ViewBag.OverdueAffectedContractAmount = overdueAffectedContractAmount;
+        ViewBag.OverdueAvailableDeposit = overdueAvailableDeposit;
         return View(booking);
     }
 
