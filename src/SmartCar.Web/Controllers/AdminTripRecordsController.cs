@@ -48,6 +48,18 @@ public sealed class AdminTripRecordsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id });
         }
 
+        // Nếu xe thực tế được trả sau giờ nhận của đơn kế tiếp, lưu ID đơn bị ảnh hưởng
+        // để phần quyết toán giải thích rõ khoản cọc bị giữ lại/bồi thường.
+        ViewBag.AffectedBookingId = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.VehicleId == records.VehicleId
+                && item.BookingId != records.BookingId
+                && item.PickupDate > records.ReturnDate
+                && item.PickupDate < records.VehicleReturn.ReturnedAt)
+            .OrderBy(item => item.PickupDate)
+            .Select(item => (int?)item.BookingId)
+            .FirstOrDefaultAsync(cancellationToken);
+
         var handoverPaths = SplitPaths(records.Handover.ImagePaths);
         var returnPaths = SplitPaths(records.VehicleReturn.ImagePaths);
 
