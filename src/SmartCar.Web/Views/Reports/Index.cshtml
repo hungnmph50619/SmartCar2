@@ -8,55 +8,50 @@
     var periodDays = Math.Max(1, (Model.ToDate.Date - Model.FromDate.Date).Days + 1);
     var totalOutstanding = Model.OutstandingReceivables + Model.OutstandingDeposits;
     var totalExpense = Model.TotalOperatingCost + Model.TotalRevenueRefunds;
-    var vehicleRows = Model.Vehicles
-        .OrderByDescending(x => x.NetOperatingProfit)
-        .ThenBy(x => x.VehicleName)
-        .ToList();
+    var vehicleRows = Model.Vehicles.OrderByDescending(x => x.NetOperatingProfit).ThenBy(x => x.VehicleName).ToList();
 }
 
 <style>
-    .profit-page { --line:#e7ebf0; --muted:#6b7280; }
-    .profit-page .panel { background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 3px 12px rgba(15,35,60,.045); }
-    .profit-page .kpi-label { color:var(--muted); font-size:.82rem; font-weight:600; }
-    .profit-page .kpi-number { font-size:1.65rem; font-weight:750; line-height:1.15; margin-top:.35rem; }
-    .profit-page .section-title { font-size:1.05rem; font-weight:750; margin:0; }
-    .profit-page .muted { color:var(--muted); }
-    .profit-page .finance-line { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:.75rem 0; border-bottom:1px solid var(--line); }
-    .profit-page .finance-line:last-child { border-bottom:0; }
-    .profit-page .vehicle-card { border:1px solid var(--line); border-radius:12px; background:#fff; height:100%; }
-    .profit-page .vehicle-card summary { list-style:none; }
-    .profit-page .vehicle-card summary::-webkit-details-marker { display:none; }
-    .profit-page .vehicle-card[open] { border-color:#b9d2ff; box-shadow:0 3px 14px rgba(13,110,253,.08); }
-    .profit-page .vehicle-top { padding:1rem; cursor:pointer; }
-    .profit-page .vehicle-details { border-top:1px solid var(--line); padding:1rem; background:#fafbfc; border-radius:0 0 12px 12px; }
-    .profit-page .vehicle-name { font-size:1.05rem; font-weight:750; }
+    .profit-page { --line:#e6ebf2; --muted:#718096; --soft:#f7f9fc; }
+    .profit-page .panel { background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 4px 16px rgba(15,35,60,.045); }
+    .profit-page .kpi { padding:1.25rem; height:100%; }
+    .profit-page .kpi-label { color:#64748b; font-size:.78rem; font-weight:700; letter-spacing:.03em; }
+    .profit-page .kpi-number { font-size:1.65rem; font-weight:800; line-height:1.15; margin:.45rem 0; }
+    .profit-page .section-title { font-size:1.05rem; font-weight:800; margin:0; }
+    .profit-page .muted,.profit-page .tiny { color:var(--muted); }
     .profit-page .tiny { font-size:.82rem; }
+    .profit-page .finance-line { display:flex; justify-content:space-between; gap:18px; padding:.72rem 0; border-bottom:1px solid var(--line); }
+    .profit-page .finance-line:last-child { border-bottom:0; }
+    .profit-page .vehicle-table { overflow:hidden; }
+    .profit-page .vehicle-row { border-bottom:1px solid var(--line); }
+    .profit-page .vehicle-row:last-child { border-bottom:0; }
+    .profit-page .vehicle-summary { display:grid; grid-template-columns:minmax(220px,1.7fr) 1fr 1fr .75fr .75fr auto; gap:18px; align-items:center; padding:1rem; cursor:pointer; list-style:none; }
+    .profit-page .vehicle-summary::-webkit-details-marker { display:none; }
+    .profit-page .vehicle-name { font-weight:800; }
     .profit-page .money-good { color:#198754; }
     .profit-page .money-bad { color:#dc3545; }
-    .profit-page .transaction-table td, .profit-page .transaction-table th { padding:.45rem .5rem; font-size:.84rem; }
+    .profit-page .vehicle-detail { padding:0 1rem 1rem; background:#fbfcfe; border-top:1px solid var(--line); }
+    .profit-page .booking-card { border:1px solid var(--line); border-radius:12px; background:#fff; margin-top:.75rem; overflow:hidden; }
+    .profit-page .booking-card summary { list-style:none; cursor:pointer; padding:.85rem 1rem; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+    .profit-page .booking-card summary::-webkit-details-marker { display:none; }
+    .profit-page .booking-card[open] { border-color:#b9d2ff; }
+    .profit-page .booking-transactions { border-top:1px solid var(--line); padding:.35rem 1rem .75rem; }
+    .profit-page .transaction-line { display:grid; grid-template-columns:100px 1fr auto; gap:12px; padding:.55rem 0; border-bottom:1px solid #edf1f5; font-size:.86rem; }
+    .profit-page .transaction-line:last-child { border-bottom:0; }
+    .profit-page .table-head { display:grid; grid-template-columns:minmax(220px,1.7fr) 1fr 1fr .75fr .75fr auto; gap:18px; padding:.7rem 1rem; background:#f6f8fb; color:#64748b; font-size:.78rem; font-weight:700; }
+    .profit-page .note { background:#f5f9ff; border:1px solid #cfe0ff; border-radius:12px; padding:.85rem 1rem; }
+    @media(max-width:992px){ .profit-page .table-head{display:none}.profit-page .vehicle-summary{grid-template-columns:1fr 1fr}.profit-page .vehicle-summary .vehicle-main{grid-column:1/-1}.profit-page .vehicle-summary .open-label{grid-column:1/-1}.profit-page .transaction-line{grid-template-columns:80px 1fr auto} }
 </style>
 
 <div class="profit-page">
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
-        <div>
-            <h1 class="h3 mb-1">Hiệu suất và lợi nhuận</h1>
-            <div class="text-muted">Xem xe nào đang tạo doanh thu, xe nào có chi phí và tiền nào đang chờ xử lý.</div>
-        </div>
-        <div class="text-end small text-muted">
-            <div><strong>@Model.FromDate.ToString("dd/MM/yyyy") – @Model.ToDate.ToString("dd/MM/yyyy")</strong></div>
-            <div>@periodDays ngày</div>
-        </div>
+        <div><h1 class="h3 mb-1">Hiệu suất và lợi nhuận</h1><div class="text-muted">Theo dõi doanh thu, chi phí và hiệu quả của từng xe.</div></div>
+        <div class="text-end small text-muted"><strong>@Model.FromDate.ToString("dd/MM/yyyy") – @Model.ToDate.ToString("dd/MM/yyyy")</strong><div>@periodDays ngày</div></div>
     </div>
 
     <form method="get" class="panel p-3 mb-3">
         <div class="row g-2 align-items-end">
-            <div class="col-lg-auto">
-                <div class="d-flex gap-2 flex-wrap">
-                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@sevenDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">7 ngày</a>
-                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@thirtyDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">30 ngày</a>
-                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@monthStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">Tháng này</a>
-                </div>
-            </div>
+            <div class="col-lg-auto"><div class="d-flex gap-2"><a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@sevenDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">7 ngày</a><a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@thirtyDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">30 ngày</a><a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@monthStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">Tháng này</a></div></div>
             <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Từ ngày</label><input name="fromDate" type="date" value="@Model.FromDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
             <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Đến ngày</label><input name="toDate" type="date" value="@Model.ToDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
             <div class="col-sm-4 col-lg-auto"><button class="btn btn-primary btn-sm px-4 w-100" type="submit">Xem báo cáo</button></div>
@@ -64,147 +59,70 @@
     </form>
 
     <div class="row g-3 mb-3">
-        <div class="col-md-4">
-            <div class="panel p-3 h-100">
-                <div class="kpi-label">TỔNG DOANH THU</div>
-                <div class="kpi-number">@Model.TotalRevenue.ToString("N0") đ</div>
-                <div class="small text-muted mt-2">Tiền thuê, gia hạn, phụ phí và phần cọc đã được quyết toán.</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="panel p-3 h-100">
-                <div class="kpi-label">CHI PHÍ & HOÀN DOANH THU</div>
-                <div class="kpi-number text-danger">@totalExpense.ToString("N0") đ</div>
-                <div class="small text-muted mt-2">Chi phí vận hành @Model.TotalOperatingCost.ToString("N0") đ · Hoàn doanh thu @Model.TotalRevenueRefunds.ToString("N0") đ.</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="panel p-3 h-100">
-                <div class="kpi-label">LỢI NHUẬN ƯỚC TÍNH</div>
-                <div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div>
-                <div class="small text-muted mt-2">Doanh thu trừ hoàn doanh thu và chi phí vận hành.</div>
-            </div>
-        </div>
+        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">TỔNG DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div><div class="tiny">Tiền thuê + gia hạn + phụ phí + phần cọc đã quyết toán.</div></div></div>
+        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">CHI PHÍ & HOÀN DOANH THU</div><div class="kpi-number text-danger">@totalExpense.ToString("N0") đ</div><div class="tiny">Vận hành @Model.TotalOperatingCost.ToString("N0") đ · Hoàn doanh thu @Model.TotalRevenueRefunds.ToString("N0") đ.</div></div></div>
+        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">LỢI NHUẬN ƯỚC TÍNH</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div><div class="tiny">Doanh thu sau chi phí vận hành và hoàn doanh thu.</div></div></div>
     </div>
 
     <div class="row g-3 mb-3">
-        <div class="col-lg-6">
-            <div class="panel p-3 h-100">
-                <h2 class="section-title mb-2">Doanh thu đến từ đâu?</h2>
-                <div class="finance-line"><span>Tiền thuê / giao xe</span><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Tiền gia hạn</span><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Phụ phí</span><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Khấu trừ từ cọc đã quyết toán</span><strong>@Model.TotalDepositDeductionRecovery.ToString("N0") đ</strong></div>
-            </div>
-        </div>
-        <div class="col-lg-6">
-            <div class="panel p-3 h-100">
-                <div class="d-flex justify-content-between align-items-center gap-2 mb-2"><h2 class="section-title">Tiền đang chờ xử lý</h2><a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index">Mở thanh toán</a></div>
-                <div class="finance-line"><span>Cần thu / chờ xác nhận</span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Cọc đang giữ</span><strong>@Model.DepositsHeld.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Chờ hoàn khách</span><strong class="text-warning">@Model.PendingRefunds.ToString("N0") đ</strong></div>
-                <div class="small text-muted mt-2">Các khoản này là trạng thái hiện tại của hệ thống, không phụ thuộc khoảng ngày đang xem.</div>
-            </div>
-        </div>
+        <div class="col-lg-6"><div class="panel p-3 h-100"><h2 class="section-title mb-2">Doanh thu đến từ đâu?</h2><div class="finance-line"><span>Tiền thuê / giao xe</span><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div><div class="finance-line"><span>Tiền gia hạn</span><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div><div class="finance-line"><span>Phụ phí</span><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div><div class="finance-line"><span>Khấu trừ từ cọc</span><strong>@Model.TotalDepositDeductionRecovery.ToString("N0") đ</strong></div></div></div>
+        <div class="col-lg-6"><div class="panel p-3 h-100"><div class="d-flex justify-content-between align-items-center mb-2"><h2 class="section-title">Tiền đang chờ xử lý</h2><a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index">Mở thanh toán</a></div><div class="finance-line"><span>Cần thu / chờ xác nhận</span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div><div class="finance-line"><span>Cọc đang giữ</span><strong>@Model.DepositsHeld.ToString("N0") đ</strong></div><div class="finance-line"><span>Chờ hoàn khách</span><strong class="text-warning">@Model.PendingRefunds.ToString("N0") đ</strong></div></div></div>
     </div>
 
-    <div class="panel p-3">
-        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
-            <div>
-                <h2 class="section-title">Từng xe</h2>
-                <div class="small text-muted">Chỉ hiển thị thông tin quan trọng. Bấm vào xe để xem chi tiết tiền và từng giao dịch.</div>
-            </div>
+    <div class="panel vehicle-table mb-3">
+        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap p-3">
+            <div><h2 class="section-title">Hiệu quả từng xe</h2><div class="tiny">Bấm “Xem chi tiết” để xem các đơn thuê của xe.</div></div>
             <input id="vehicle-search" type="search" class="form-control form-control-sm" style="max-width:280px" placeholder="Tìm tên xe hoặc biển số" />
         </div>
-
-        @if (vehicleRows.Count == 0)
+        <div class="table-head"><span>Xe</span><span>Doanh thu</span><span>Lợi nhuận</span><span>Xe được thuê</span><span>Chuyến thuê</span><span></span></div>
+        <div id="vehicle-grid">
+        @foreach (var item in vehicleRows)
         {
-            <div class="text-center text-muted py-5">Chưa có dữ liệu trong khoảng thời gian này.</div>
-        }
-        else
-        {
-            <div class="row g-3" id="vehicle-grid">
-                @foreach (var item in vehicleRows)
-                {
-                    <div class="col-xl-6 vehicle-wrapper" data-search="@($"{item.VehicleName} {item.LicensePlate}")">
-                        <details class="vehicle-card">
-                            <summary class="vehicle-top">
-                                <div class="d-flex justify-content-between align-items-start gap-3">
-                                    <div>
-                                        <div class="vehicle-name">@item.VehicleName</div>
-                                        <div class="tiny text-muted">@item.LicensePlate · @item.CompletedBookings chuyến hoàn tất</div>
-                                    </div>
-                                    <div class="text-end">
-                                        <div class="tiny text-muted">Lợi nhuận</div>
-                                        <div class="fw-bold @(item.NetOperatingProfit >= 0 ? "money-good" : "money-bad")">@item.NetOperatingProfit.ToString("N0") đ</div>
-                                    </div>
-                                </div>
-                                <div class="row g-2 mt-2">
-                                    <div class="col-6"><div class="tiny text-muted">Doanh thu</div><strong>@item.Revenue.ToString("N0") đ</strong></div>
-                                    <div class="col-6"><div class="tiny text-muted">Ngày có khách thuê</div><strong>@item.RentalDays / @periodDays ngày</strong></div>
-                                </div>
-                                <div class="small text-primary mt-3">Xem chi tiết ↓</div>
+            var bookingGroups = item.Transactions.Where(t => t.BookingId.HasValue).GroupBy(t => t.BookingId!.Value).OrderByDescending(g => g.Max(t => t.OccurredAt)).ToList();
+            var otherTransactions = item.Transactions.Where(t => !t.BookingId.HasValue).OrderByDescending(t => t.OccurredAt).ToList();
+            <details class="vehicle-row vehicle-wrapper" data-search="@($"{item.VehicleName} {item.LicensePlate}")">
+                <summary class="vehicle-summary">
+                    <div class="vehicle-main"><div class="vehicle-name">@item.VehicleName</div><div class="tiny">@item.LicensePlate</div></div>
+                    <div><div class="tiny d-lg-none">Doanh thu</div><strong class="text-primary">@item.Revenue.ToString("N0") đ</strong></div>
+                    <div><div class="tiny d-lg-none">Lợi nhuận</div><strong class="@(item.NetOperatingProfit >= 0 ? "money-good" : "money-bad")">@item.NetOperatingProfit.ToString("N0") đ</strong></div>
+                    <div><div class="tiny d-lg-none">Xe được thuê</div><strong>@item.RentalDays ngày</strong></div>
+                    <div><div class="tiny d-lg-none">Chuyến thuê</div><strong>@item.CompletedBookings</strong></div>
+                    <div class="open-label"><span class="btn btn-sm btn-outline-primary">Xem chi tiết ↓</span></div>
+                </summary>
+                <div class="vehicle-detail">
+                    <div class="pt-3 d-flex justify-content-between align-items-center"><div><strong>Các đơn thuê trong kỳ</strong><div class="tiny">Mỗi đơn được gom riêng; chỉ mở đơn khi cần đối chiếu dòng tiền.</div></div><span class="badge text-bg-light">@bookingGroups.Count đơn có giao dịch</span></div>
+                    @if (bookingGroups.Count == 0 && otherTransactions.Count == 0)
+                    { <div class="text-muted small py-3">Không có giao dịch trong kỳ.</div> }
+                    @foreach (var booking in bookingGroups)
+                    {
+                        var inflow = booking.Where(t => !t.IsOutflow).Sum(t => t.Amount);
+                        var outflow = booking.Where(t => t.IsOutflow).Sum(t => t.Amount);
+                        var net = inflow - outflow;
+                        var lastDate = booking.Max(t => t.OccurredAt);
+                        <details class="booking-card">
+                            <summary>
+                                <div><div class="fw-bold">Đơn #@booking.Key</div><div class="tiny">@lastDate.ToString("dd/MM/yyyy") · @booking.Count() giao dịch</div></div>
+                                <div class="d-flex align-items-center gap-3"><div class="text-end"><div class="tiny">Chênh lệch dòng tiền</div><strong class="@(net >= 0 ? "money-good" : "money-bad")">@(net >= 0 ? "+" : "−")@Math.Abs(net).ToString("N0") đ</strong></div><span class="text-primary small">Xem quyết toán ↓</span></div>
                             </summary>
-
-                            <div class="vehicle-details">
-                                <div class="row g-3 mb-3">
-                                    <div class="col-sm-6">
-                                        <div class="fw-semibold mb-2">Tiền vào</div>
-                                        <div class="finance-line py-2"><span>Tiền thuê</span><strong>@item.RentalRevenue.ToString("N0") đ</strong></div>
-                                        <div class="finance-line py-2"><span>Gia hạn</span><strong>@item.ExtensionRevenue.ToString("N0") đ</strong></div>
-                                        <div class="finance-line py-2"><span>Phụ phí</span><strong>@item.AdditionalChargeRevenue.ToString("N0") đ</strong></div>
-                                        @if (item.DepositDeductionRecovery > 0)
-                                        {
-                                            <div class="finance-line py-2"><span>Khấu trừ cọc</span><strong>@item.DepositDeductionRecovery.ToString("N0") đ</strong></div>
-                                        }
-                                    </div>
-                                    <div class="col-sm-6">
-                                        <div class="fw-semibold mb-2">Tiền ra / chi phí</div>
-                                        <div class="finance-line py-2"><span>Hoàn doanh thu</span><strong>@item.RevenueRefunds.ToString("N0") đ</strong></div>
-                                        <div class="finance-line py-2"><span>Bảo trì</span><strong>@item.MaintenanceCost.ToString("N0") đ</strong></div>
-                                        <div class="finance-line py-2"><span>Sự cố / phạt</span><strong>@item.IncidentCost.ToString("N0") đ</strong></div>
-                                        @if (item.CompensationCost > 0)
-                                        {
-                                            <div class="finance-line py-2"><span>Hỗ trợ / bồi thường</span><strong>@item.CompensationCost.ToString("N0") đ</strong></div>
-                                        }
-                                        <div class="finance-line py-2"><span>Hoàn cọc <span class="text-muted" title="Hoàn cọc là tiền giữ trước đó nên không trừ thêm vào lợi nhuận.">ⓘ</span></span><strong>@item.DepositRefunds.ToString("N0") đ</strong></div>
-                                    </div>
-                                </div>
-
-                                <div class="d-flex justify-content-between align-items-center mb-2"><strong class="small">Lịch sử dòng tiền</strong><span class="small text-muted">@item.Transactions.Count giao dịch</span></div>
-                                @if (item.Transactions.Count == 0)
-                                {
-                                    <div class="small text-muted">Không có giao dịch trong kỳ.</div>
-                                }
-                                else
-                                {
-                                    <div class="table-responsive">
-                                        <table class="table table-sm transaction-table mb-0">
-                                            <thead><tr><th>Ngày</th><th>Nội dung</th><th>Đơn</th><th class="text-end">Số tiền</th></tr></thead>
-                                            <tbody>
-                                            @foreach (var transaction in item.Transactions)
-                                            {
-                                                <tr>
-                                                    <td class="text-nowrap">@transaction.OccurredAt.ToString("dd/MM/yyyy")</td>
-                                                    <td>@transaction.Category</td>
-                                                    <td>@if(transaction.BookingId.HasValue){<a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@transaction.BookingId.Value" class="text-decoration-none">#@transaction.BookingId.Value</a>}else{<span class="text-muted">—</span>}</td>
-                                                    <td class="text-end text-nowrap fw-semibold @(transaction.IsOutflow ? "text-danger" : "text-success")">@(transaction.IsOutflow ? "−" : "+")@transaction.Amount.ToString("N0") đ</td>
-                                                </tr>
-                                            }
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                }
+                            <div class="booking-transactions">
+                                @foreach (var transaction in booking.OrderBy(t => t.OccurredAt))
+                                { <div class="transaction-line"><span class="muted">@transaction.OccurredAt.ToString("dd/MM/yyyy")</span><span>@transaction.Category</span><strong class="@(transaction.IsOutflow ? "money-bad" : "money-good")">@(transaction.IsOutflow ? "−" : "+")@transaction.Amount.ToString("N0") đ</strong></div> }
+                                <div class="text-end pt-2"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.Key" class="btn btn-sm btn-outline-primary">Mở đơn #@booking.Key</a></div>
                             </div>
                         </details>
-                    </div>
-                }
-                <div id="vehicle-empty" class="col-12 text-center text-muted py-4 d-none">Không tìm thấy xe phù hợp.</div>
-            </div>
+                    }
+                    @if (otherTransactions.Count > 0)
+                    {
+                        <details class="booking-card"><summary><div><div class="fw-bold">Giao dịch khác</div><div class="tiny">Không gắn với đơn thuê cụ thể</div></div><span class="text-primary small">Xem @otherTransactions.Count giao dịch ↓</span></summary><div class="booking-transactions">@foreach (var transaction in otherTransactions){<div class="transaction-line"><span class="muted">@transaction.OccurredAt.ToString("dd/MM/yyyy")</span><span>@transaction.Category</span><strong class="@(transaction.IsOutflow ? "money-bad" : "money-good")">@(transaction.IsOutflow ? "−" : "+")@transaction.Amount.ToString("N0") đ</strong></div>}</div></details>
+                    }
+                </div>
+            </details>
         }
+        <div id="vehicle-empty" class="text-center text-muted py-4 d-none">Không tìm thấy xe phù hợp.</div>
+        </div>
     </div>
 
-    <div class="small text-muted mt-3">Lợi nhuận ở đây là ước tính vận hành, chưa tính khấu hao xe, bảo hiểm, thuế và chi phí chung của doanh nghiệp.</div>
+    <div class="note small"><strong>Ghi chú:</strong> Lợi nhuận ước tính chưa bao gồm khấu hao xe, bảo hiểm, thuế và các chi phí chung khác của doanh nghiệp.</div>
 </div>
 
 @section Scripts {
@@ -213,16 +131,11 @@
     const input = document.getElementById('vehicle-search');
     const cards = Array.from(document.querySelectorAll('.vehicle-wrapper'));
     const empty = document.getElementById('vehicle-empty');
-    if (!input || cards.length === 0) return;
-
+    if (!input) return;
     input.addEventListener('input', () => {
         const q = input.value.trim().toLocaleLowerCase('vi-VN');
         let visible = 0;
-        cards.forEach(card => {
-            const match = !q || (card.dataset.search || '').toLocaleLowerCase('vi-VN').includes(q);
-            card.classList.toggle('d-none', !match);
-            if (match) visible++;
-        });
+        cards.forEach(card => { const match = !q || (card.dataset.search || '').toLocaleLowerCase('vi-VN').includes(q); card.classList.toggle('d-none', !match); if(match) visible++; });
         empty?.classList.toggle('d-none', visible !== 0);
     });
 })();
