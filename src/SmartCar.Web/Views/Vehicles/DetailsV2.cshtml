@@ -1,4 +1,4 @@
-﻿@model SmartCar.Application.Features.Vehicles.VehicleDto
+@model SmartCar.Application.Features.Vehicles.VehicleDto
 @using SmartCar.Application.Features.Reviews
 @using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
@@ -49,6 +49,36 @@
     #delivery-map {
         height: 300px;
         border-radius: 12px;
+    }
+
+    .delivery-map-legend {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: .5rem;
+        font-size: .82rem;
+        color: #6c757d;
+    }
+
+    .delivery-map-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+    }
+
+    .delivery-map-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .delivery-map-dot-store {
+        background: #dc3545;
+    }
+
+    .delivery-map-dot-customer {
+        background: #0d6efd;
     }
 
     .pickup-method-card {
@@ -294,6 +324,17 @@
                                          aria-label="Bản đồ chọn vị trí giao xe">
                                     </div>
 
+                                    <div class="delivery-map-legend">
+                                        <span class="delivery-map-legend-item">
+                                            <span class="delivery-map-dot delivery-map-dot-store"></span>
+                                            SmartCar
+                                        </span>
+                                        <span class="delivery-map-legend-item">
+                                            <span class="delivery-map-dot delivery-map-dot-customer"></span>
+                                            Điểm giao xe
+                                        </span>
+                                    </div>
+
                                     <div class="small text-muted mt-2"
                                          id="delivery-coordinate-text"></div>
 
@@ -483,6 +524,7 @@
 
             let map = null;
             let marker = null;
+            let storeMarker = null;
             let currentDeliveryFee = 0;
 
             const toRadians = degrees => degrees * Math.PI / 180;
@@ -591,7 +633,6 @@
                     return;
                 }
 
-                // Hidden input luôn dùng dấu chấm; controller parse bằng InvariantCulture.
                 latInput.value = normalizedLat.toFixed(7);
                 lngInput.value = normalizedLng.toFixed(7);
 
@@ -605,10 +646,22 @@
                 if (marker) {
                     marker.setLatLng([normalizedLat, normalizedLng]);
                 } else {
+                    const customerIcon = L.divIcon({
+                        className: '',
+                        html: '<div style="width:32px;height:32px;border-radius:50% 50% 50% 0;background:#0d6efd;border:3px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.28);transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;"><span style="width:9px;height:9px;border-radius:50%;background:#fff;display:block;"></span></div>',
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 31],
+                        popupAnchor: [0, -30]
+                    });
+
                     marker = L.marker(
                         [normalizedLat, normalizedLng],
-                        { draggable: true })
-                        .addTo(map);
+                        {
+                            draggable: true,
+                            icon: customerIcon
+                        })
+                        .addTo(map)
+                        .bindPopup('<strong>Điểm giao xe</strong>');
                 }
 
                 marker
@@ -642,9 +695,19 @@
                     })
                     .addTo(map);
 
-                L.marker([storeLat, storeLng])
+                const storeIcon = L.divIcon({
+                    className: '',
+                    html: '<div style="width:34px;height:34px;border-radius:10px;background:#dc3545;border:3px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">⌂</div>',
+                    iconSize: [34, 34],
+                    iconAnchor: [17, 17],
+                    popupAnchor: [0, -20]
+                });
+
+                storeMarker = L.marker(
+                    [storeLat, storeLng],
+                    { icon: storeIcon })
                     .addTo(map)
-                    .bindPopup('Điểm xuất phát SmartCar');
+                    .bindPopup('<strong>SmartCar</strong><br>Điểm xuất phát giao xe');
 
                 map.on('click', async event => {
                     setPoint(event.latlng.lat, event.latlng.lng);
