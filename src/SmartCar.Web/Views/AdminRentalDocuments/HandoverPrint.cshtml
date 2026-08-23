@@ -9,130 +9,20 @@
         : "Nhận tại cửa hàng";
     var awaitingSignature = booking.Status == BookingStatus.ReadyForPickup && string.IsNullOrWhiteSpace(Model.SignedDocumentPath);
     var includedDays = Math.Max(1, booking.NumberOfDays);
-    var effectiveIncludedKilometers = Math.Max(
-        Model.IncludedKilometers,
-        includedDays * RentalPolicy.IncludedKilometersPerDay);
+    var effectiveIncludedKilometers = Math.Max(Model.IncludedKilometers, includedDays * RentalPolicy.IncludedKilometersPerDay);
 }
 <!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="utf-8" />
-    <title>Biên bản giao xe #@booking.BookingId</title>
-    <style>
-        body { font-family: Arial, sans-serif; color:#111; margin:18mm; font-size:13px; line-height:1.45; }
-        h1 { text-align:center; font-size:21px; margin:0 0 4px; }
-        .sub { text-align:center; margin-bottom:18px; color:#555; }
-        .parties { border:1px solid #aaa; padding:10px; margin-bottom:14px; }
-        .parties div + div { margin-top:5px; }
-        .grid { display:grid; grid-template-columns:1fr 1fr; gap:7px 24px; }
-        table { width:100%; border-collapse:collapse; margin-top:14px; }
-        th,td { border:1px solid #aaa; padding:7px; text-align:left; vertical-align:top; }
-        th { width:30%; }
-        .extension-terms { margin-top:14px; border:2px solid #555; padding:12px; }
-        .extension-terms-title { font-weight:700; text-transform:uppercase; margin-bottom:6px; }
-        .extension-terms p { margin:6px 0 0; }
-        .confirm { margin-top:16px; padding:10px; border:1px solid #999; }
-        .signatures { display:grid; grid-template-columns:1fr 1fr; gap:70px; margin-top:34px; text-align:center; }
-        .signature-space { height:90px; }
-        .no-print { margin-bottom:16px; padding:12px; background:#f5f7fa; border:1px solid #d8dde6; border-radius:8px; }
-        .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-        button, .back { padding:7px 12px; border:1px solid #777; background:white; border-radius:5px; text-decoration:none; color:#111; cursor:pointer; }
-        .primary { background:#1769e0; color:#fff; border-color:#1769e0; }
-        .upload { margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-        .hint { margin-top:8px; color:#555; font-size:12px; }
-        @@media print { .no-print { display:none; } body { margin:12mm; } }
-    </style>
-</head>
-<body>
-    <div class="no-print">
-        <div class="actions">
-            <button class="primary" type="button" onclick="window.print()">In để ký</button>
-            <a class="back" href="/AdminBookings/Index">Danh sách đơn</a>
-        </div>
-
-        @if (awaitingSignature)
-        {
-            <div class="hint"><strong>Bước tiếp:</strong> Hai bên ký bản in, sau đó chụp/scan và tải lại. Chuyến chỉ bắt đầu sau bước này.</div>
-            <form class="upload" action="/AdminRentalDocuments/UploadHandoverSigned" method="post" enctype="multipart/form-data">
-                @Html.AntiForgeryToken()
-                <input type="hidden" name="bookingId" value="@booking.BookingId" />
-                <input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" required />
-                <button type="submit">Tải bản đã ký & bắt đầu chuyến</button>
-            </form>
-        }
-        else if (!string.IsNullOrWhiteSpace(Model.SignedDocumentPath))
-        {
-            <div class="hint">✓ Đã có chữ ký.</div>
-        }
-    </div>
-
-    <h1>BIÊN BẢN GIAO XE</h1>
-    <div class="sub">SmartCar · Đơn #@booking.BookingId</div>
-
-    <div class="parties">
-        <div><strong>Bên A – Bên cho thuê:</strong> SmartCar</div>
-        <div><strong>Bên B – Bên thuê:</strong> @booking.CustomerName · @booking.CustomerPhone</div>
-    </div>
-
-    <div class="grid">
-        <div><strong>Xe:</strong> @booking.VehicleName</div>
-        <div><strong>Biển số:</strong> @booking.LicensePlate</div>
-        <div><strong>Thời gian giao:</strong> @Model.RecordedAt.ToString("dd/MM/yyyy HH:mm")</div>
-        <div><strong>Dự kiến trả:</strong> @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div>
-        <div><strong>Cách nhận:</strong> @pickupText</div>
-        <div><strong>Ảnh đối chiếu:</strong> @Model.ImagePaths.Count ảnh lưu trên SmartCar</div>
-    </div>
-
-    <table>
-        <tr><th>Số km khi giao</th><td>@Model.Mileage.ToString("N0") km</td></tr>
-        <tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr>
-        <tr><th>Phụ kiện</th><td>@(Model.Accessories ?? "Theo trang bị xe")</td></tr>
-        <tr>
-            <th>Định mức sử dụng</th>
-            <td>
-                @RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày<br />
-                Chuyến này: @effectiveIncludedKilometers.ToString("N0") km / @includedDays ngày
-            </td>
-        </tr>
-        <tr><th>Vượt km</th><td>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</td></tr>
-        <tr><th>Trả muộn</th><td>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</td></tr>
-        <tr><th>Vi phạm / phạt nguội</th><td>@Model.TrafficFineTerms</td></tr>
-        <tr><th>Hư hỏng / thiếu</th><td>Hư hỏng, mất mát hoặc thiếu phụ kiện do Bên B gây ra được xử lý theo thiệt hại thực tế, hợp lý, có ảnh đối chiếu và chứng từ/báo giá hợp lệ.</td></tr>
-        <tr><th>Ghi chú</th><td>@(Model.Notes ?? "Không có")</td></tr>
-    </table>
-
-    <div class="extension-terms">
-        <div class="extension-terms-title">Điều khoản gia hạn và nghĩa vụ trả xe đúng hạn</div>
-        <p>
-            Bên B có thể gửi yêu cầu gia hạn nhưng việc gửi yêu cầu không đồng nghĩa với việc được phép giữ xe quá thời gian trả đã thỏa thuận. Gia hạn chỉ có hiệu lực khi được SmartCar chấp thuận theo quy trình của hệ thống.
-        </p>
-        <p>
-            Trường hợp yêu cầu gia hạn thông thường bị từ chối vì xe đã có đơn thuê kế tiếp, Bên B phải giao/trả xe đúng thời gian đã thỏa thuận. Nếu Bên B đã được thông báo từ chối gia hạn nhưng vẫn cố tình không giao/trả xe đúng hạn, làm ảnh hưởng đến đơn thuê kế tiếp, Bên B chịu phí trả muộn và khoản bồi thường <strong>bằng giá hợp đồng của đơn thuê bị ảnh hưởng</strong>.
-        </p>
-        <p>
-            Khoản bồi thường nêu trên được khấu trừ từ tiền cọc của Bên B. Nếu tiền cọc không đủ để thực hiện nghĩa vụ, Bên B có trách nhiệm thanh toán phần còn thiếu.
-        </p>
-        <p>
-            Trường hợp bất khả kháng phải có ảnh minh chứng và vị trí hiện tại để SmartCar xác minh; việc xử lý gia hạn, xe thay thế, hoàn tiền và bồi thường cho đơn thuê kế tiếp được thực hiện theo chính sách của SmartCar và hồ sơ thực tế của sự việc.
-        </p>
-    </div>
-
-    <div class="confirm">
-        <strong>XÁC NHẬN CỦA BÊN THUÊ:</strong><br />
-        Bên B xác nhận đã kiểm tra xe, số km, nhiên liệu, phụ kiện và ảnh đối chiếu lưu trong hồ sơ SmartCar; đã đọc, hiểu và đồng ý các chính sách phí/phạt, điều khoản gia hạn, nghĩa vụ trả xe đúng hạn và cơ chế khấu trừ tiền cọc nêu trên trước khi nhận xe.
-    </div>
-
-    <div class="signatures">
-        <div>
-            <strong>ĐẠI DIỆN BÊN A</strong>
-            <div class="signature-space"></div>
-            <div>(Ký, ghi rõ họ tên)</div>
-        </div>
-        <div>
-            <strong>BÊN B – KHÁCH HÀNG</strong>
-            <div class="signature-space"></div>
-            <div>(Ký, ghi rõ họ tên)</div>
-        </div>
-    </div>
-</body>
-</html>
+<html lang="vi"><head><meta charset="utf-8" /><title>Biên bản giao xe #@booking.BookingId</title>
+<style>
+body{font-family:Arial,sans-serif;color:#111;margin:18mm;font-size:13px;line-height:1.45}h1{text-align:center;font-size:21px;margin:0 0 4px}.sub{text-align:center;margin-bottom:18px;color:#555}.parties{border:1px solid #aaa;padding:10px;margin-bottom:14px}.parties div+div{margin-top:5px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #aaa;padding:7px;text-align:left;vertical-align:top}th{width:30%}.extension-terms{margin-top:14px;border:2px solid #555;padding:12px}.extension-terms-title{font-weight:700;text-transform:uppercase;margin-bottom:6px}.extension-terms p{margin:6px 0 0}.confirm{margin-top:16px;padding:10px;border:1px solid #999}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:34px;text-align:center}.signature-space{height:90px}.no-print{margin-bottom:16px;padding:12px;background:#f5f7fa;border:1px solid #d8dde6;border-radius:8px}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}button,.back{padding:7px 12px;border:1px solid #777;background:white;border-radius:5px;text-decoration:none;color:#111;cursor:pointer}.primary{background:#1769e0;color:#fff;border-color:#1769e0}.upload{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hint{margin-top:8px;color:#555;font-size:12px}.evidence{margin-top:20px;page-break-before:auto}.evidence h2{font-size:16px;margin:0 0 5px}.evidence-note{color:#555;font-size:12px;margin-bottom:10px}.photo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.photo{border:1px solid #aaa;padding:6px;break-inside:avoid;page-break-inside:avoid}.photo img{display:block;width:100%;height:190px;object-fit:contain;background:#f5f5f5}.photo-label{text-align:center;font-size:11px;margin-top:5px;color:#444}.no-evidence{border:1px dashed #aaa;padding:12px;color:#666}@media print{.no-print{display:none}body{margin:12mm}.photo img{height:165px}}
+</style></head><body>
+<div class="no-print"><div class="actions"><button class="primary" type="button" onclick="window.print()">In để ký</button><a class="back" href="/AdminBookings/Index">Danh sách đơn</a></div>
+@if(awaitingSignature){<div class="hint"><strong>Bước tiếp:</strong> Hai bên ký bản in, sau đó chụp/scan và tải lại. Chuyến chỉ bắt đầu sau bước này.</div><form class="upload" action="/AdminRentalDocuments/UploadHandoverSigned" method="post" enctype="multipart/form-data">@Html.AntiForgeryToken()<input type="hidden" name="bookingId" value="@booking.BookingId" /><input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" required /><button type="submit">Tải bản đã ký & bắt đầu chuyến</button></form>}else if(!string.IsNullOrWhiteSpace(Model.SignedDocumentPath)){<div class="hint">✓ Đã có chữ ký.</div>}</div>
+<h1>BIÊN BẢN GIAO XE</h1><div class="sub">SmartCar · Đơn #@booking.BookingId</div>
+<div class="parties"><div><strong>Bên A – Bên cho thuê:</strong> SmartCar</div><div><strong>Bên B – Bên thuê:</strong> @booking.CustomerName · @booking.CustomerPhone</div></div>
+<div class="grid"><div><strong>Xe:</strong> @booking.VehicleName</div><div><strong>Biển số:</strong> @booking.LicensePlate</div><div><strong>Thời gian giao:</strong> @Model.RecordedAt.ToString("dd/MM/yyyy HH:mm")</div><div><strong>Dự kiến trả:</strong> @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div><div><strong>Cách nhận:</strong> @pickupText</div><div><strong>Ảnh đối chiếu:</strong> @Model.ImagePaths.Count ảnh đính kèm bên dưới</div></div>
+<table><tr><th>Số km khi giao</th><td>@Model.Mileage.ToString("N0") km</td></tr><tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr><tr><th>Phụ kiện</th><td>@(Model.Accessories ?? "Theo trang bị xe")</td></tr><tr><th>Định mức sử dụng</th><td>@RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày<br/>Chuyến này: @effectiveIncludedKilometers.ToString("N0") km / @includedDays ngày</td></tr><tr><th>Vượt km</th><td>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</td></tr><tr><th>Trả muộn</th><td>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</td></tr><tr><th>Vi phạm / phạt nguội</th><td>@Model.TrafficFineTerms</td></tr><tr><th>Hư hỏng / thiếu</th><td>Hư hỏng, mất mát hoặc thiếu phụ kiện do Bên B gây ra được xử lý theo thiệt hại thực tế, hợp lý, có ảnh đối chiếu và chứng từ/báo giá hợp lệ.</td></tr><tr><th>Ghi chú</th><td>@(Model.Notes ?? "Không có")</td></tr></table>
+<div class="extension-terms"><div class="extension-terms-title">Điều khoản gia hạn và nghĩa vụ trả xe đúng hạn</div><p>Bên B có thể gửi yêu cầu gia hạn nhưng việc gửi yêu cầu không đồng nghĩa với việc được phép giữ xe quá thời gian trả đã thỏa thuận. Gia hạn chỉ có hiệu lực khi được SmartCar chấp thuận theo quy trình của hệ thống.</p><p>Trường hợp yêu cầu gia hạn thông thường bị từ chối vì xe đã có đơn thuê kế tiếp, Bên B phải giao/trả xe đúng thời gian đã thỏa thuận. Nếu Bên B đã được thông báo từ chối gia hạn nhưng vẫn cố tình không giao/trả xe đúng hạn, làm ảnh hưởng đến đơn thuê kế tiếp, Bên B chịu phí trả muộn và khoản bồi thường <strong>bằng giá hợp đồng của đơn thuê bị ảnh hưởng</strong>.</p><p>Khoản bồi thường nêu trên được khấu trừ từ tiền cọc của Bên B. Nếu tiền cọc không đủ để thực hiện nghĩa vụ, Bên B có trách nhiệm thanh toán phần còn thiếu.</p><p>Trường hợp bất khả kháng phải có ảnh minh chứng và vị trí hiện tại để SmartCar xác minh; việc xử lý gia hạn, xe thay thế, hoàn tiền và bồi thường cho đơn thuê kế tiếp được thực hiện theo chính sách của SmartCar và hồ sơ thực tế của sự việc.</p></div>
+<div class="evidence"><h2>ẢNH ĐỐI CHIẾU TÌNH TRẠNG XE KHI GIAO</h2><div class="evidence-note">Các ảnh dưới đây là một phần của biên bản và được dùng để đối chiếu tình trạng xe khi trả.</div>@if(Model.ImagePaths.Count>0){<div class="photo-grid">@for(var i=0;i<Model.ImagePaths.Count;i++){<div class="photo"><img src="@Model.ImagePaths[i]" alt="Ảnh đối chiếu khi giao @(i+1)"/><div class="photo-label">Ảnh @(i+1)</div></div>}</div>}else{<div class="no-evidence">Chưa có ảnh đối chiếu được lưu cho biên bản giao xe này.</div>}</div>
+<div class="confirm"><strong>XÁC NHẬN CỦA BÊN THUÊ:</strong><br/>Bên B xác nhận đã kiểm tra xe, số km, nhiên liệu, phụ kiện và các ảnh đối chiếu đính kèm trong biên bản; đã đọc, hiểu và đồng ý các chính sách phí/phạt, điều khoản gia hạn, nghĩa vụ trả xe đúng hạn và cơ chế khấu trừ tiền cọc nêu trên trước khi nhận xe.</div>
+<div class="signatures"><div><strong>ĐẠI DIỆN BÊN A</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div><div><strong>BÊN B – KHÁCH HÀNG</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div></div></body></html>
