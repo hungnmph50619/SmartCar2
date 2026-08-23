@@ -529,7 +529,6 @@
 
             const toRadians = degrees => degrees * Math.PI / 180;
 
-            // Giữ cùng công thức Haversine với RentalPolicy.cs ở backend.
             const calculateDistanceKm = (lat, lng) => {
                 const earthRadiusKm = 6371.0088;
                 const lat1 = toRadians(storeLat);
@@ -587,10 +586,16 @@
             };
 
             const reverseGeocode = async (lat, lng) => {
+                const fallbackAddress =
+                    `Vị trí đã chọn: ${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`;
+
+                address.value = 'Đang xác định địa chỉ...';
+                address.classList.add('text-muted');
+
                 try {
                     const url =
                         'https://nominatim.openstreetmap.org/reverse' +
-                        '?format=jsonv2&addressdetails=1' +
+                        '?format=jsonv2&addressdetails=1&accept-language=vi&zoom=18' +
                         '&lat=' + encodeURIComponent(lat) +
                         '&lon=' + encodeURIComponent(lng);
 
@@ -605,14 +610,20 @@
                     }
 
                     const result = await response.json();
+
                     if (result && result.display_name) {
                         address.value = result.display_name;
+                        address.classList.remove('text-muted');
+                        address.dispatchEvent(new Event('input', { bubbles: true }));
                         return true;
                     }
                 } catch (ex) {
                     console.warn('Không reverse geocode được địa chỉ:', ex);
                 }
 
+                address.value = fallbackAddress;
+                address.classList.remove('text-muted');
+                address.dispatchEvent(new Event('input', { bubbles: true }));
                 return false;
             };
 
@@ -785,8 +796,7 @@
 
                         if (!filled) {
                             error.textContent =
-                                'Đã lấy được tọa độ nhưng chưa tìm được tên địa chỉ. ' +
-                                'Bạn có thể nhập/chỉnh địa chỉ thủ công; tọa độ vẫn được giữ để tính phí.';
+                                'Đã lấy được vị trí. Dịch vụ tên địa chỉ đang tạm thời không phản hồi nên hệ thống hiển thị tọa độ thay thế.';
                             error.classList.remove('d-none');
                         }
 
@@ -847,7 +857,7 @@
                 try {
                     const url =
                         'https://nominatim.openstreetmap.org/search' +
-                        '?format=jsonv2&limit=1&countrycodes=vn&q=' +
+                        '?format=jsonv2&limit=1&countrycodes=vn&accept-language=vi&q=' +
                         encodeURIComponent(query);
 
                     const response = await fetch(url, {
@@ -875,6 +885,7 @@
 
                     if (results[0].display_name) {
                         address.value = results[0].display_name;
+                        address.dispatchEvent(new Event('input', { bubbles: true }));
                     }
                 } catch {
                     error.textContent =
