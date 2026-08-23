@@ -13,7 +13,6 @@
     {
         currentUser = await UserManager.GetUserAsync(User);
         var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
         if (!string.IsNullOrWhiteSpace(currentUserId))
         {
             unreadNotificationCount = await NotificationService.GetUnreadCountAsync(currentUserId);
@@ -84,6 +83,7 @@
     <script src="~/js/customer-trip-records.js" asp-append-version="true"></script>
     <script src="~/js/customer-extension-rejection-alert.js" asp-append-version="true"></script>
     <script src="~/js/extension-ux-labels.js" asp-append-version="true"></script>
+    <script src="~/js/delivery-geocoding-fix.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
