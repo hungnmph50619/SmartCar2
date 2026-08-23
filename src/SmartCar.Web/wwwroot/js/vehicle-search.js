@@ -95,16 +95,6 @@
             submitLoading?.classList.toggle('d-none', !isSubmitting);
         }
 
-        // A GET search navigates to a new URL. Do not leave the button permanently
-        // disabled/spinning if the browser restores the page from cache or navigation
-        // is interrupted. The short lock is only to prevent an accidental double click.
-        function brieflyLockSubmit() {
-            setSubmitting(true);
-            window.setTimeout(function () {
-                setSubmitting(false);
-            }, 1200);
-        }
-
         function getDisplayDate(display, hidden) {
             return parseVietnameseDateTime(display.value) || parseLocalIso(hidden.value);
         }
@@ -198,12 +188,27 @@
         }
 
         form.addEventListener('submit', function (event) {
-            if (submitButton.disabled) { event.preventDefault(); return; }
+            event.preventDefault();
+
             const values = validate();
-            if (!values) { event.preventDefault(); showGeneralError('Vui lòng kiểm tra lại thông tin được đánh dấu.'); setSubmitting(false); return; }
+            if (!values) {
+                showGeneralError('Vui lòng kiểm tra lại thông tin được đánh dấu.');
+                setSubmitting(false);
+                return;
+            }
+
             pickupHidden.value = toLocalIso(values.pickup);
             returnHidden.value = toLocalIso(values.returnDate);
-            brieflyLockSubmit();
+
+            const actionUrl = new URL(form.action, window.location.origin);
+            actionUrl.hash = '';
+
+            const params = new URLSearchParams(new FormData(form));
+            actionUrl.search = params.toString();
+            actionUrl.hash = 'vehicle-results';
+
+            setSubmitting(true);
+            window.location.assign(actionUrl.toString());
         });
 
         [pickupDisplay, returnDisplay].forEach(function (input) {
@@ -223,7 +228,6 @@
             });
         });
 
-        // Always start/render in an idle state, including BFCache restores.
         setSubmitting(false);
         window.addEventListener('pageshow', function () {
             setSubmitting(false);
