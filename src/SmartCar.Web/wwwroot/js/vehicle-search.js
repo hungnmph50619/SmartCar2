@@ -95,6 +95,16 @@
             submitLoading?.classList.toggle('d-none', !isSubmitting);
         }
 
+        // A GET search navigates to a new URL. Do not leave the button permanently
+        // disabled/spinning if the browser restores the page from cache or navigation
+        // is interrupted. The short lock is only to prevent an accidental double click.
+        function brieflyLockSubmit() {
+            setSubmitting(true);
+            window.setTimeout(function () {
+                setSubmitting(false);
+            }, 1200);
+        }
+
         function getDisplayDate(display, hidden) {
             return parseVietnameseDateTime(display.value) || parseLocalIso(hidden.value);
         }
@@ -148,6 +158,7 @@
         pickupPicker = createNativePicker(pickupDisplay, pickupHidden, 'Mở lịch chọn ngày giờ nhận xe', function () {
             return addMinutes(ceilToMinute(new Date()), 1);
         }, function (selectedPickup) {
+            setSubmitting(false);
             setFieldError(pickupDisplay, pickupError, '');
             showGeneralError('');
             const suggestedReturn = addDays(selectedPickup, 1);
@@ -161,6 +172,7 @@
             const pickup = getDisplayDate(pickupDisplay, pickupHidden);
             return pickup ? addMinutes(pickup, 1) : addMinutes(ceilToMinute(new Date()), 1);
         }, function (selectedReturn) {
+            setSubmitting(false);
             const pickup = getDisplayDate(pickupDisplay, pickupHidden);
             if (pickup && selectedReturn.getTime() <= pickup.getTime()) {
                 setFieldError(returnDisplay, returnError, 'Ngày giờ trả xe phải sau ngày giờ nhận xe.');
@@ -188,14 +200,15 @@
         form.addEventListener('submit', function (event) {
             if (submitButton.disabled) { event.preventDefault(); return; }
             const values = validate();
-            if (!values) { event.preventDefault(); showGeneralError('Vui lòng kiểm tra lại thông tin được đánh dấu.'); return; }
+            if (!values) { event.preventDefault(); showGeneralError('Vui lòng kiểm tra lại thông tin được đánh dấu.'); setSubmitting(false); return; }
             pickupHidden.value = toLocalIso(values.pickup);
             returnHidden.value = toLocalIso(values.returnDate);
-            setSubmitting(true);
+            brieflyLockSubmit();
         });
 
         [pickupDisplay, returnDisplay].forEach(function (input) {
             input.addEventListener('input', function () {
+                setSubmitting(false);
                 const isPickup = input === pickupDisplay;
                 const hidden = isPickup ? pickupHidden : returnHidden;
                 const picker = isPickup ? pickupPicker : returnPicker;
@@ -210,14 +223,18 @@
             });
         });
 
+        // Always start/render in an idle state, including BFCache restores.
+        setSubmitting(false);
         window.addEventListener('pageshow', function () {
             setSubmitting(false);
             pickupPicker?.sync();
             returnPicker?.sync();
         });
+        window.addEventListener('focus', function () {
+            setSubmitting(false);
+        });
     });
 
-    // Keep the currently displayed rental period when applying advanced filters.
     document.querySelectorAll('#advancedFilters form, [data-vehicle-filter-form]').forEach(function (filterForm) {
         filterForm.addEventListener('submit', function (event) {
             const period = getCurrentPeriod();
@@ -234,8 +251,6 @@
         });
     });
 
-    // Normalize the period passed to Details. This avoids culture-dependent DateTime URLs
-    // and guarantees Details receives exactly the dates currently shown to the user.
     document.querySelectorAll('#vehicle-results a[href*="Details"]').forEach(function (link) {
         link.addEventListener('click', function () {
             const period = getCurrentPeriod();
