@@ -217,10 +217,11 @@ function setupEvidenceFileInputs() {
         input.name = 'evidenceImages';
         input.multiple = true;
         input.accept = 'image/jpeg,image/png,image/webp';
+        input._smartEvidenceFiles = Array.from(input.files || []);
 
         const helpText = input.parentElement?.querySelector('.form-text');
         if (helpText) {
-            helpText.textContent = 'Chọn 2-8 ảnh JPG/PNG/WEBP, tối đa 5 MB/ảnh.';
+            helpText.textContent = 'Chọn 2-8 ảnh JPG/PNG/WEBP, tối đa 5 MB/ảnh. Có thể bấm Chọn tệp nhiều lần để cộng thêm ảnh.';
         }
 
         const preview = document.createElement('div');
@@ -232,6 +233,7 @@ function setupEvidenceFileInputs() {
         const validate = () => validateEvidenceInput(input, false);
 
         input.addEventListener('change', () => {
+            appendEvidenceFileSelection(input);
             normalizeEvidenceFileSelection(input);
             validate();
             render();
@@ -254,6 +256,36 @@ function setupEvidenceFileInputs() {
             }
         });
     });
+}
+
+function appendEvidenceFileSelection(input) {
+    const incomingFiles = Array.from(input.files || []);
+    const existingFiles = Array.isArray(input._smartEvidenceFiles) ? input._smartEvidenceFiles : [];
+
+    if (incomingFiles.length === 0) {
+        assignFiles(input, existingFiles);
+        return;
+    }
+
+    assignFiles(input, mergeEvidenceFiles(existingFiles, incomingFiles));
+}
+
+function mergeEvidenceFiles(existingFiles, incomingFiles) {
+    const result = [];
+    const seen = new Set();
+
+    [...existingFiles, ...incomingFiles].forEach(file => {
+        const key = evidenceFileKey(file);
+        if (seen.has(key)) return;
+        seen.add(key);
+        result.push(file);
+    });
+
+    return result;
+}
+
+function evidenceFileKey(file) {
+    return `${file.name}|${file.size}|${file.lastModified}`;
 }
 
 function validateEvidenceInput(input, showMessage) {
@@ -302,7 +334,9 @@ function forceMajeureEvidenceIsRequired(form, input) {
 }
 
 function normalizeEvidenceFileSelection(input) {
-    const files = Array.from(input.files || []);
+    const files = Array.isArray(input._smartEvidenceFiles)
+        ? input._smartEvidenceFiles
+        : Array.from(input.files || []);
     const validFiles = [];
     let message = '';
 
@@ -333,6 +367,7 @@ function normalizeEvidenceFileSelection(input) {
 }
 
 function assignFiles(input, files) {
+    input._smartEvidenceFiles = files;
     if (typeof DataTransfer === 'undefined') return;
     const transfer = new DataTransfer();
     files.forEach(file => transfer.items.add(file));
