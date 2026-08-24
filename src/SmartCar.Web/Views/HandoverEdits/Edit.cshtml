@@ -4,12 +4,16 @@
     ViewData["Title"] = "Chỉnh sửa thông tin biên bản giao xe";
     var handoverDate = Model.HandoverAt.ToString("yyyy-MM-dd");
     var handoverTime = Model.HandoverAt.ToString("HH:mm");
+    var currentImages = Model.ExistingImagePaths ?? new List<string>();
 }
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
-    <div><h1 class="h3 mb-1">Chỉnh sửa thông tin biên bản giao xe · #@Model.BookingId</h1><p class="text-muted mb-0">Chỉnh sửa thông tin, lưu lại và quay về bản xem trước trước khi in ký.</p></div>
+    <div>
+        <h1 class="h3 mb-1">Chỉnh sửa thông tin biên bản giao xe · #@Model.BookingId</h1>
+        <p class="text-muted mb-0">Chỉnh sửa thông tin, thêm/xóa ảnh đối chiếu rồi quay về bản xem trước trước khi in ký.</p>
+    </div>
     <a class="btn btn-outline-secondary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">← Quay lại xem biên bản</a>
 </div>
-<form asp-controller="HandoverEdits" asp-action="Edit" method="post" class="card card-body shadow-sm" data-loading-form>
+<form asp-controller="HandoverEdits" asp-action="Edit" method="post" enctype="multipart/form-data" class="card card-body shadow-sm" data-loading-form>
     <input asp-for="BookingId" type="hidden" />
     <input asp-for="HandoverAt" type="hidden" id="handover-at-value" />
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
@@ -17,11 +21,50 @@
     <div class="row g-3">
         <div class="col-md-6"><label class="form-label fw-semibold">Thời gian giao</label><div class="row g-2"><div class="col-7"><input type="date" id="handover-date" value="@handoverDate" class="form-control" required /></div><div class="col-5"><input type="text" id="handover-time" value="@handoverTime" class="form-control" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" required /></div></div><span asp-validation-for="HandoverAt" class="text-danger small"></span></div>
         <div class="col-md-3"><label asp-for="Mileage" class="form-label fw-semibold">Số km</label><input asp-for="Mileage" type="number" min="0" step="1" class="form-control" required /><span asp-validation-for="Mileage" class="text-danger small"></span></div>
-        <div class="col-md-3"><label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label><div class="input-group"><input asp-for="FuelLevel" type="number" min="0" max="100" maxlength="3" step="1" class="form-control" id="fuel-level" required /><span class="input-group-text">%</span></div><span asp-validation-for="FuelLevel" class="text-danger small"></span></div>
+        <div class="col-md-3"><label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label><div class="input-group"><input asp-for="FuelLevel" type="text" inputmode="numeric" maxlength="3" pattern="(?:100|[0-9]{1,2})" class="form-control" id="fuel-level" required /><span class="input-group-text">%</span></div><span asp-validation-for="FuelLevel" class="text-danger small"></span></div>
         <div class="col-12"><label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện</label><input asp-for="Accessories" class="form-control" maxlength="1000" /></div>
         <div class="col-12"><label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label><textarea asp-for="Notes" class="form-control" rows="3" maxlength="1500"></textarea></div>
     </div>
-    <div class="alert alert-info mt-4 mb-0"><strong>Ảnh đối chiếu được giữ nguyên.</strong> Sau khi lưu, hệ thống sẽ quay lại bản xem trước biên bản để kiểm tra trước khi in và ký.</div>
+
+    <hr class="my-4" />
+    <h2 class="h5 mb-2">Ảnh đối chiếu tình trạng xe</h2>
+    <p class="text-muted mb-3">Có thể xóa ảnh chọn nhầm hoặc thêm ảnh còn thiếu trước khi in và ký biên bản.</p>
+    <span asp-validation-for="ImagesToDelete" class="text-danger small d-block"></span>
+    <span asp-validation-for="NewImages" class="text-danger small d-block"></span>
+
+    @if (currentImages.Count == 0)
+    {
+        <div class="alert alert-warning mb-3">Biên bản hiện chưa có ảnh đối chiếu nào.</div>
+    }
+    else
+    {
+        <div class="row g-3 mb-3">
+            @for (var index = 0; index < currentImages.Count; index++)
+            {
+                var imagePath = currentImages[index];
+                var checkboxId = $"delete-image-{index}";
+                <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded-3 p-2 h-100 bg-light">
+                        <a href="@imagePath" target="_blank" rel="noopener">
+                            <img src="@imagePath" alt="Ảnh đối chiếu @(index + 1)" class="img-fluid rounded border bg-white" style="height: 150px; width: 100%; object-fit: contain;" />
+                        </a>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input delete-image-check" type="checkbox" name="ImagesToDelete" value="@imagePath" id="@checkboxId" />
+                            <label class="form-check-label text-danger fw-semibold" for="@checkboxId">Xóa ảnh này</label>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="border rounded-3 p-3 bg-white">
+        <label asp-for="NewImages" class="form-label fw-semibold">Thêm ảnh mới</label>
+        <input asp-for="NewImages" type="file" class="form-control" multiple accept="image/jpeg,image/png,image/webp" />
+        <div class="form-text">Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP; mỗi ảnh tối đa 5 MB. Ảnh mới sẽ được thêm vào cuối danh sách ảnh đối chiếu.</div>
+    </div>
+
+    <div class="alert alert-info mt-4 mb-0"><strong>Lưu ý:</strong> Ảnh không được đánh dấu xóa sẽ được giữ nguyên. Sau khi lưu, hệ thống sẽ quay lại bản xem trước biên bản để kiểm tra trước khi in và ký.</div>
     <div class="mt-4 d-flex gap-2"><button class="btn btn-primary" type="submit">Lưu và xem lại biên bản</button><a class="btn btn-outline-secondary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">Hủy</a></div>
 </form>
 @section Scripts {
