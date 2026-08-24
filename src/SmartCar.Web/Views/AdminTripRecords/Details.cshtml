@@ -13,6 +13,21 @@
     var deliveryFeeAmount = Math.Max(0m, rentalCollectedAmount - booking.RentalAmount);
     var rentalDisplayAmount = Math.Max(0m, rentalCollectedAmount - deliveryFeeAmount);
 
+    IReadOnlyList<string> handoverSignedPaths = Model.Handover.SignedDocumentPaths.Count > 0
+        ? Model.Handover.SignedDocumentPaths
+        : !string.IsNullOrWhiteSpace(Model.Handover.SignedDocumentPath)
+            ? new[] { Model.Handover.SignedDocumentPath }
+            : Array.Empty<string>();
+
+    IReadOnlyList<string> returnSignedPaths = Model.Return.SignedDocumentPaths.Count > 0
+        ? Model.Return.SignedDocumentPaths
+        : !string.IsNullOrWhiteSpace(Model.Return.SignedDocumentPath)
+            ? new[] { Model.Return.SignedDocumentPath }
+            : Array.Empty<string>();
+
+    var hasSignedHandover = handoverSignedPaths.Count > 0;
+    var hasSignedReturn = returnSignedPaths.Count > 0;
+
     const string overdueCompPrefix = "OVERDUE-COMP-";
     const string overdueDebtPrefix = "OVERDUE-DEBT-";
     bool IsOverdueImpactPayment(PaymentSummaryDto payment) =>
@@ -102,21 +117,97 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-6">
         <div class="card card-body shadow-sm h-100">
-            <div class="d-flex justify-content-between align-items-center gap-2 mb-3"><h2 class="h5 mb-0">Biên bản giao</h2><span class="badge @(Model.HasSignedHandover ? "bg-success" : "bg-danger")">@(Model.HasSignedHandover ? "Đã có chữ ký" : "Thiếu bản ký")</span></div>
-            <div class="row g-2 small mb-3"><div class="col-4"><span class="text-muted">Thời gian</span><br /><strong>@Model.Handover.RecordedAt.ToString("dd/MM HH:mm")</strong></div><div class="col-4"><span class="text-muted">Km</span><br /><strong>@Model.Handover.Mileage.ToString("N0")</strong></div><div class="col-4"><span class="text-muted">Nhiên liệu</span><br /><strong>@Model.Handover.FuelLevel</strong></div></div>
-            <div class="d-flex gap-2 flex-wrap mb-3"><a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@booking.BookingId">Bản in</a>@if (Model.HasSignedHandover){<a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="@Model.Handover.SignedDocumentPath">Xem bản ký</a>}</div>
-            @if (!Model.HasSignedHandover){<form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3"><input type="hidden" name="bookingId" value="@booking.BookingId" /><input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required /><button class="btn btn-outline-success" type="submit">Bổ sung bản ký</button></form>}
-            <div class="row g-2">@foreach (var image in Model.Handover.ImagePaths.Take(6)){<div class="col-4"><a href="@image" target="_blank"><img src="@image" class="img-fluid rounded border w-100" style="height:95px;object-fit:cover" alt="Ảnh giao xe" /></a></div>}</div>
+            <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                <h2 class="h5 mb-0">Biên bản giao</h2>
+                <span class="badge @(hasSignedHandover ? "bg-success" : "bg-danger")">@(hasSignedHandover ? "Đã ký" : "Thiếu ký")</span>
+            </div>
+            <div class="row g-2 small mb-3">
+                <div class="col-4"><span class="text-muted">Thời gian</span><br /><strong>@Model.Handover.RecordedAt.ToString("dd/MM HH:mm")</strong></div>
+                <div class="col-4"><span class="text-muted">Km</span><br /><strong>@Model.Handover.Mileage.ToString("N0")</strong></div>
+                <div class="col-4"><span class="text-muted">Nhiên liệu</span><br /><strong>@Model.Handover.FuelLevel</strong></div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@booking.BookingId">In biên bản</a>
+            </div>
+            @if (hasSignedHandover)
+            {
+                <div class="border border-success rounded bg-success bg-opacity-10 p-3 mb-3">
+                    <strong>Bản ký (@handoverSignedPaths.Count trang):</strong>
+                    <div class="d-flex gap-2 flex-wrap mt-2">
+                        @for (var index = 0; index < handoverSignedPaths.Count; index++)
+                        {
+                            <a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="@handoverSignedPaths[index]">Trang @(index + 1)</a>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="border rounded bg-light p-3 mb-3">
+                    <input type="hidden" name="bookingId" value="@booking.BookingId" />
+                    <div class="input-group input-group-sm">
+                        <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control" multiple required oninvalid="this.setCustomValidity('Vui lòng chọn ít nhất một ảnh bản ký.')" oninput="this.setCustomValidity('')" />
+                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
+                    </div>
+                    <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
+                </form>
+            }
+            <div class="row g-2">
+                @foreach (var image in Model.Handover.ImagePaths.Take(6))
+                {
+                    <div class="col-4">
+                        <a href="@image" target="_blank" rel="noopener"><img src="@image" class="img-fluid rounded border w-100" style="height:95px;object-fit:cover" alt="Ảnh giao xe" /></a>
+                    </div>
+                }
+            </div>
         </div>
     </div>
     <div class="col-lg-6">
         <div class="card card-body shadow-sm h-100">
-            <div class="d-flex justify-content-between align-items-center gap-2 mb-3"><h2 class="h5 mb-0">Biên bản trả</h2><span class="badge @(Model.HasSignedReturn ? "bg-success" : "bg-danger")">@(Model.HasSignedReturn ? "Đã có chữ ký" : "Thiếu bản ký")</span></div>
-            <div class="row g-2 small mb-3"><div class="col-4"><span class="text-muted">Thời gian</span><br /><strong>@Model.Return.RecordedAt.ToString("dd/MM HH:mm")</strong></div><div class="col-4"><span class="text-muted">Km</span><br /><strong>@Model.Return.Mileage.ToString("N0")</strong></div><div class="col-4"><span class="text-muted">Nhiên liệu</span><br /><strong>@Model.Return.FuelLevel</strong></div></div>
+            <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                <h2 class="h5 mb-0">Biên bản trả</h2>
+                <span class="badge @(hasSignedReturn ? "bg-success" : "bg-danger")">@(hasSignedReturn ? "Đã ký" : "Thiếu ký")</span>
+            </div>
+            <div class="row g-2 small mb-3">
+                <div class="col-4"><span class="text-muted">Thời gian</span><br /><strong>@Model.Return.RecordedAt.ToString("dd/MM HH:mm")</strong></div>
+                <div class="col-4"><span class="text-muted">Km</span><br /><strong>@Model.Return.Mileage.ToString("N0")</strong></div>
+                <div class="col-4"><span class="text-muted">Nhiên liệu</span><br /><strong>@Model.Return.FuelLevel</strong></div>
+            </div>
             <div class="mb-2"><span class="text-muted">Đối chiếu:</span> <strong>@Model.DrivenKilometers.ToString("N0") km</strong> · Hư hỏng mới: <strong>@(Model.Return.HasDamage ? "Có" : "Không")</strong></div>
-            <div class="d-flex gap-2 flex-wrap mb-3"><a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@booking.BookingId">Bản in</a>@if (Model.HasSignedReturn){<a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="@Model.Return.SignedDocumentPath">Xem bản ký</a>}</div>
-            @if (!Model.HasSignedReturn){<form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="input-group input-group-sm mb-3"><input type="hidden" name="bookingId" value="@booking.BookingId" /><input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" class="form-control" required /><button class="btn btn-outline-success" type="submit">Bổ sung bản ký</button></form>}
-            <div class="row g-2">@foreach (var image in Model.Return.ImagePaths.Take(6)){<div class="col-4"><a href="@image" target="_blank"><img src="@image" class="img-fluid rounded border w-100" style="height:95px;object-fit:cover" alt="Ảnh trả xe" /></a></div>}</div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@booking.BookingId">In biên bản</a>
+            </div>
+            @if (hasSignedReturn)
+            {
+                <div class="border border-success rounded bg-success bg-opacity-10 p-3 mb-3">
+                    <strong>Bản ký (@returnSignedPaths.Count trang):</strong>
+                    <div class="d-flex gap-2 flex-wrap mt-2">
+                        @for (var index = 0; index < returnSignedPaths.Count; index++)
+                        {
+                            <a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="@returnSignedPaths[index]">Trang @(index + 1)</a>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="border rounded bg-light p-3 mb-3">
+                    <input type="hidden" name="bookingId" value="@booking.BookingId" />
+                    <div class="input-group input-group-sm">
+                        <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control" multiple required oninvalid="this.setCustomValidity('Vui lòng chọn ít nhất một ảnh bản ký.')" oninput="this.setCustomValidity('')" />
+                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
+                    </div>
+                    <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
+                </form>
+            }
+            <div class="row g-2">
+                @foreach (var image in Model.Return.ImagePaths.Take(6))
+                {
+                    <div class="col-4">
+                        <a href="@image" target="_blank" rel="noopener"><img src="@image" class="img-fluid rounded border w-100" style="height:95px;object-fit:cover" alt="Ảnh trả xe" /></a>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 </div>
