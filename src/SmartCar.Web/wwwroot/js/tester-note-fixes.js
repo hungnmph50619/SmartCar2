@@ -65,34 +65,14 @@ function polishSignedDocumentUi() {
             return;
         }
 
-        const signedLinks = Array.from(body.querySelectorAll('a[href*="signed-handover-"], a[href*="signed-return-"]'));
-        const signedCount = signedLinks.length;
-        const badge = header.querySelector('.badge');
-
-        if (badge) {
-            badge.className = signedCount > 0 ? 'badge bg-success' : 'badge bg-secondary';
-            badge.textContent = signedCount > 0 ? 'Đã ký' : 'Chưa ký';
-        }
-
-        signedLinks.forEach((link, index) => {
-            link.className = 'btn btn-sm btn-outline-success text-decoration-none';
-            link.textContent = `Trang ${index + 1}`;
-        });
-
-        body.querySelectorAll('strong').forEach(strong => {
-            const text = strong.textContent?.trim() ?? '';
-            if (text === 'Bản ký biên bản giao:' || text === 'Bản ký biên bản trả:' || text.startsWith('Bản ký ')) {
-                strong.textContent = signedCount > 0 ? `Bản ký (${signedCount} trang):` : 'Bản ký:';
-            }
-        });
-
-        body.querySelectorAll('.col-6.col-md-4').forEach(column => {
-            if (!column.querySelector('img')) return;
-            column.querySelectorAll(':scope > .small.fw-semibold.mb-1').forEach(label => label.remove());
-        });
+        normalizeSignedBlock(header, body, title);
+        card.classList.add('customer-record-card');
     });
 
     if (isAdminInspection) {
+        normalizeAdminInspectionPanel(document.getElementById('evidence-handover'));
+        normalizeAdminInspectionPanel(document.getElementById('evidence-return'));
+
         document.querySelectorAll('a.btn, button.btn').forEach(button => {
             const text = button.textContent?.trim();
             if (text === 'In') {
@@ -103,4 +83,47 @@ function polishSignedDocumentUi() {
             }
         });
     }
+}
+
+function normalizeAdminInspectionPanel(panel) {
+    if (!(panel instanceof HTMLElement)) return;
+    const box = panel.querySelector(':scope > .border');
+    if (!box) return;
+
+    const title = box.querySelector('h2')?.textContent?.trim();
+    if (!title || !['Biên bản giao', 'Biên bản trả'].includes(title)) return;
+
+    normalizeSignedBlock(box, box, title);
+}
+
+function normalizeSignedBlock(headerRoot, bodyRoot, title) {
+    const isHandover = title.includes('giao');
+    const signedSelector = isHandover
+        ? 'a[href*="signed-handover-"]'
+        : 'a[href*="signed-return-"]';
+    const signedLinks = Array.from(bodyRoot.querySelectorAll(signedSelector));
+    const signedCount = signedLinks.length;
+    const badge = headerRoot.querySelector('.badge');
+
+    if (badge) {
+        badge.className = signedCount > 0 ? 'badge bg-success' : 'badge bg-danger';
+        badge.textContent = signedCount > 0 ? 'Đã ký' : 'Thiếu ký';
+    }
+
+    signedLinks.forEach((link, index) => {
+        link.className = 'btn btn-sm btn-outline-success text-decoration-none';
+        link.textContent = `Trang ${index + 1}`;
+    });
+
+    bodyRoot.querySelectorAll('strong').forEach(strong => {
+        const text = strong.textContent?.trim() ?? '';
+        if (text === 'Bản ký biên bản giao:' || text === 'Bản ký biên bản trả:' || text.startsWith('Bản ký ')) {
+            strong.textContent = signedCount > 0 ? `Bản ký (${signedCount} trang):` : 'Bản ký:';
+        }
+    });
+
+    bodyRoot.querySelectorAll('.col-6.col-md-4').forEach(column => {
+        if (!column.querySelector('img')) return;
+        column.querySelectorAll(':scope > .small.fw-semibold.mb-1').forEach(label => label.remove());
+    });
 }
