@@ -45,8 +45,10 @@
             ? Array.Empty<string>()
             : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    string? SignedPath(string? paths, string marker) =>
-        SplitPaths(paths).FirstOrDefault(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    IReadOnlyList<string> SignedPaths(string? paths, string marker) =>
+        SplitPaths(paths)
+            .Where(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
     IReadOnlyList<string> EvidencePaths(string? paths, string marker) =>
         SplitPaths(paths)
@@ -306,17 +308,29 @@
 
         @if (handoverRecord is not null)
         {
-            var handoverSigned = SignedPath(handoverRecord.ImagePaths, "signed-handover-");
+            var handoverSignedPaths = SignedPaths(handoverRecord.ImagePaths, "signed-handover-");
             var handoverEvidence = EvidencePaths(handoverRecord.ImagePaths, "signed-handover-");
             <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap">
                     <strong>Biên bản giao xe</strong>
-                    @if (handoverSigned is not null)
+                    @if (handoverSignedPaths.Count > 0)
                     {
-                        <a class="small text-decoration-none" href="@handoverSigned" target="_blank" rel="noopener">Xem bản ký</a>
+                        <span class="badge bg-success">Đã có @handoverSignedPaths.Count trang ký</span>
                     }
                 </div>
                 <div class="card-body">
+                    @if (handoverSignedPaths.Count > 0)
+                    {
+                        <div class="border rounded bg-light p-2 mb-3 small">
+                            <strong>Bản ký biên bản giao:</strong>
+                            <div class="d-flex gap-2 flex-wrap mt-2">
+                                @for (var index = 0; index < handoverSignedPaths.Count; index++)
+                                {
+                                    <a class="btn btn-sm btn-outline-success" href="@handoverSignedPaths[index]" target="_blank" rel="noopener">Xem trang @(index + 1)</a>
+                                }
+                            </div>
+                        </div>
+                    }
                     <div class="row g-3 mb-3">
                         <div class="col-md-4"><span class="text-muted">Thời gian</span><div class="fw-semibold">@handoverRecord.HandoverAt.ToString("dd/MM/yyyy HH:mm")</div></div>
                         <div class="col-md-4"><span class="text-muted">Km lúc giao</span><div class="fw-semibold">@handoverRecord.Mileage.ToString("N0") km</div></div>
@@ -357,17 +371,29 @@
 
         @if (returnRecord is not null)
         {
-            var returnSigned = SignedPath(returnRecord.ImagePaths, "signed-return-");
+            var returnSignedPaths = SignedPaths(returnRecord.ImagePaths, "signed-return-");
             var returnEvidence = EvidencePaths(returnRecord.ImagePaths, "signed-return-");
             <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap">
                     <strong>Biên bản trả xe</strong>
-                    @if (returnSigned is not null)
+                    @if (returnSignedPaths.Count > 0)
                     {
-                        <a class="small text-decoration-none" href="@returnSigned" target="_blank" rel="noopener">Xem bản ký</a>
+                        <span class="badge bg-success">Đã có @returnSignedPaths.Count trang ký</span>
                     }
                 </div>
                 <div class="card-body">
+                    @if (returnSignedPaths.Count > 0)
+                    {
+                        <div class="border rounded bg-light p-2 mb-3 small">
+                            <strong>Bản ký biên bản trả:</strong>
+                            <div class="d-flex gap-2 flex-wrap mt-2">
+                                @for (var index = 0; index < returnSignedPaths.Count; index++)
+                                {
+                                    <a class="btn btn-sm btn-outline-success" href="@returnSignedPaths[index]" target="_blank" rel="noopener">Xem trang @(index + 1)</a>
+                                }
+                            </div>
+                        </div>
+                    }
                     <div class="row g-3 mb-3">
                         <div class="col-md-4"><span class="text-muted">Thời gian</span><div class="fw-semibold">@returnRecord.ReturnedAt.ToString("dd/MM/yyyy HH:mm")</div></div>
                         <div class="col-md-4"><span class="text-muted">Km lúc trả</span><div class="fw-semibold">@returnRecord.Mileage.ToString("N0") km</div></div>
