@@ -114,7 +114,8 @@ public sealed class HandoverEditsController : Controller
 
         var currentPaths = SplitPaths(booking.Handover.ImagePaths).ToList();
         var vehiclePhotos = VehiclePhotos(booking.Handover.ImagePaths).ToList();
-        var deleteSet = model.ImagesToDelete
+        var imagesToDelete = model.ImagesToDelete ?? new List<string>();
+        var deleteSet = imagesToDelete
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -123,7 +124,7 @@ public sealed class HandoverEditsController : Controller
             ModelState.AddModelError(nameof(model.ImagesToDelete), "Danh sách ảnh cần xóa không hợp lệ.");
         }
 
-        var newImages = model.NewImages
+        var newImages = (model.NewImages ?? new List<IFormFile>())
             .Where(file => file.Length > 0)
             .ToList();
 
