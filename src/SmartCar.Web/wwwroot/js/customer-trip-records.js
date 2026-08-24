@@ -13,13 +13,8 @@
         : 'a[href*="signed-return-"]';
     const signedLinksForCard = card => Array.from(card.querySelectorAll(signedSelectorForTitle(cardTitle(card))));
 
-    const refreshSignedUi = card => {
+    const refreshSignedContent = card => {
         const signedLinks = signedLinksForCard(card);
-        const badge = card.querySelector(':scope > .card-header .badge');
-        if (badge) {
-            badge.className = signedLinks.length > 0 ? 'badge bg-success' : 'badge bg-secondary';
-            badge.textContent = signedLinks.length > 0 ? 'Đã ký' : 'Chưa ký';
-        }
 
         signedLinks.forEach((link, index) => {
             link.className = 'btn btn-sm btn-outline-success text-decoration-none';
@@ -33,7 +28,58 @@
             }
         });
 
+        card.querySelectorAll('.col-6.col-md-4').forEach(column => {
+            if (!column.querySelector('img')) return;
+            column.querySelectorAll(':scope > .small.fw-semibold.mb-1').forEach(label => label.remove());
+        });
+
         return signedLinks;
+    };
+
+    const rebuildRecordHeader = card => {
+        const title = cardTitle(card);
+        const header = card.querySelector(':scope > .card-header');
+        const body = card.querySelector(':scope > .card-body.customer-record-details, :scope > .card-body:not(.customer-trip-record-summary)');
+        if (!title || !header || !body) return;
+
+        card.querySelectorAll(':scope > .card-body.customer-trip-record-summary').forEach(item => item.remove());
+
+        const signedLinks = refreshSignedContent(card);
+        const hasSigned = signedLinks.length > 0;
+        body.classList.add('d-none', 'customer-record-details');
+
+        header.innerHTML = '';
+        header.className = 'card-header bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap py-3';
+
+        const heading = document.createElement('div');
+        heading.className = 'd-flex align-items-center gap-2 flex-wrap';
+
+        const headingText = document.createElement('strong');
+        headingText.textContent = title;
+
+        const badge = document.createElement('span');
+        badge.className = hasSigned ? 'badge bg-success' : 'badge bg-secondary';
+        badge.textContent = hasSigned ? 'Đã ký' : 'Chưa ký';
+
+        heading.append(headingText, badge);
+
+        const actions = document.createElement('div');
+        actions.className = 'd-flex align-items-center gap-2 flex-wrap';
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'btn btn-sm btn-primary';
+        toggle.textContent = 'Xem chi tiết';
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.addEventListener('click', () => {
+            const opening = body.classList.contains('d-none');
+            body.classList.toggle('d-none', !opening);
+            toggle.textContent = opening ? 'Thu gọn' : 'Xem chi tiết';
+            toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+        });
+
+        actions.appendChild(toggle);
+        header.append(heading, actions);
     };
 
     const initializeCustomerTripRecords = () => {
@@ -60,9 +106,9 @@
                             <h2 class="h5 text-success mb-1">✓ Chuyến thuê đã hoàn tất</h2>
                             <div class="text-muted small">Biên bản giao, biên bản trả, ảnh đối chiếu và bản ký được lưu chung trong hồ sơ chuyến.</div>
                         </div>
-                        <button type="button" class="btn btn-success" data-customer-trip-record-toggle>Xem hồ sơ chuyến thuê</button>
+                        <button type="button" class="btn btn-success" data-customer-trip-record-toggle>Ẩn hồ sơ chuyến thuê</button>
                     </div>
-                    <div class="d-none mt-3" data-customer-trip-record-content></div>
+                    <div class="mt-3" data-customer-trip-record-content></div>
                 </div>`;
 
             recordCards[0].before(wrapper);
@@ -75,54 +121,14 @@
 
             const toggle = wrapper.querySelector('[data-customer-trip-record-toggle]');
             toggle?.addEventListener('click', () => {
-                const opening = content?.classList.contains('d-none') === true;
-                content?.classList.toggle('d-none', !opening);
-                toggle.textContent = opening ? 'Ẩn hồ sơ chuyến thuê' : 'Xem hồ sơ chuyến thuê';
+                const closing = content?.classList.contains('d-none') !== true;
+                content?.classList.toggle('d-none', closing);
+                toggle.textContent = closing ? 'Xem hồ sơ chuyến thuê' : 'Ẩn hồ sơ chuyến thuê';
             });
         }
 
-        // Thu gọn từng biên bản bên trong hồ sơ để khách chỉ mở khi cần xem chi tiết.
-        recordCards.forEach(card => {
-            const body = card.querySelector(':scope > .card-body');
-            if (!body || body.dataset.compactRecordReady === 'true') return;
-            body.dataset.compactRecordReady = 'true';
-
-            const signedLinks = refreshSignedUi(card);
-            // Trang khách chỉ cần một nút chi tiết ở dòng tóm tắt, bỏ nút chi tiết thừa ở header.
-            card.querySelectorAll(':scope > .card-header button').forEach(button => button.remove());
-
-            const firstRow = body.querySelector(':scope > .row');
-            const summaryValues = firstRow
-                ? Array.from(firstRow.querySelectorAll('.fw-semibold')).map(item => normalize(item.textContent)).filter(Boolean)
-                : [];
-
-            const compact = document.createElement('div');
-            compact.className = 'card-body py-3';
-            compact.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                    <div class="small fw-semibold">${summaryValues.length > 0 ? summaryValues.join(' · ') : 'Đã có biên bản điện tử'}</div>
-                    <div class="d-flex gap-2 align-items-center flex-wrap" data-record-actions></div>
-                </div>`;
-            const actions = compact.querySelector('[data-record-actions]');
-
-            const badge = document.createElement('span');
-            badge.className = signedLinks.length > 0 ? 'badge bg-success' : 'badge bg-secondary';
-            badge.textContent = signedLinks.length > 0 ? 'Đã ký' : 'Chưa ký';
-            actions?.appendChild(badge);
-
-            const toggle = document.createElement('button');
-            toggle.type = 'button';
-            toggle.className = 'btn btn-sm btn-outline-primary';
-            toggle.textContent = 'Xem chi tiết';
-            body.classList.add('d-none');
-            toggle.addEventListener('click', () => {
-                const opening = body.classList.contains('d-none');
-                body.classList.toggle('d-none', !opening);
-                toggle.textContent = opening ? 'Thu gọn' : 'Xem chi tiết';
-            });
-            actions?.appendChild(toggle);
-            body.before(compact);
-        });
+        // Mỗi biên bản chỉ có một nút Xem chi tiết ở header. Không lặp dòng tóm tắt km/ngày/nhiên liệu.
+        recordCards.forEach(rebuildRecordHeader);
 
         // Đổi nhãn các khoản hoàn cọc để khách hiểu nguồn hoàn tiền.
         if (refundCard) {
