@@ -71,7 +71,7 @@ function polishSignedDocumentUi() {
 
         if (badge) {
             badge.className = signedCount > 0 ? 'badge bg-success' : 'badge bg-secondary';
-            badge.textContent = signedCount > 0 ? `Đã ký ${signedCount} trang` : 'Chưa ký';
+            badge.textContent = signedCount > 0 ? 'Đã ký' : 'Chưa ký';
         }
 
         signedLinks.forEach((link, index) => {
@@ -82,7 +82,7 @@ function polishSignedDocumentUi() {
         body.querySelectorAll('strong').forEach(strong => {
             const text = strong.textContent?.trim() ?? '';
             if (text === 'Bản ký biên bản giao:' || text === 'Bản ký biên bản trả:' || text.startsWith('Bản ký ')) {
-                strong.textContent = signedCount > 0 ? `Bản ký ${signedCount} trang:` : 'Bản ký:';
+                strong.textContent = signedCount > 0 ? `Bản ký (${signedCount} trang):` : 'Bản ký:';
             }
         });
 
