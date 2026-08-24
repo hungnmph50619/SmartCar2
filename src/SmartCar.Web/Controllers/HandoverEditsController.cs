@@ -7,6 +7,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -15,13 +16,21 @@ namespace SmartCar.Web.Controllers;
 public sealed class HandoverEditsController : Controller
 {
     private const string SignedMarker = "signed-handover-";
+    private const int MaximumImages = 25;
+    private const long MaximumImageBytes = 5 * 1024 * 1024;
+
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
+    private readonly IWebHostEnvironment _environment;
 
-    public HandoverEditsController(ApplicationDbContext dbContext, IAuditService auditService)
+    public HandoverEditsController(
+        ApplicationDbContext dbContext,
+        IAuditService auditService,
+        IWebHostEnvironment environment)
     {
         _dbContext = dbContext;
         _auditService = auditService;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -60,7 +69,8 @@ public sealed class HandoverEditsController : Controller
             TrafficFineTerms = record.TrafficFineTerms,
             DamageCompensationTerms = record.DamageCompensationTerms,
             PenaltyPolicyAccepted = true,
-            Notes = record.Notes
+            Notes = record.Notes,
+            ExistingImagePaths = VehiclePhotos(record.ImagePaths).ToList()
         });
     }
 
@@ -69,6 +79,9 @@ public sealed class HandoverEditsController : Controller
     public async Task<IActionResult> Edit(HandoverViewModel model, CancellationToken cancellationToken)
     {
         ModelState.Remove(nameof(HandoverViewModel.Images));
+        ModelState.Remove(nameof(HandoverViewModel.NewImages));
+        ModelState.Remove(nameof(HandoverViewModel.ExistingImagePaths));
+        ModelState.Remove(nameof(HandoverViewModel.ImagesToDelete));
         ModelState.Remove(nameof(HandoverViewModel.FrontImage));
         ModelState.Remove(nameof(HandoverViewModel.RearImage));
         ModelState.Remove(nameof(HandoverViewModel.LeftImage));
@@ -99,6 +112,41 @@ public sealed class HandoverEditsController : Controller
             return RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId = model.BookingId });
         }
 
+        var currentPaths = SplitPaths(booking.Handover.ImagePaths).ToList();
+        var vehiclePhotos = VehiclePhotos(booking.Handover.ImagePaths).ToList();
+        var deleteSet = model.ImagesToDelete
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (deleteSet.Any(path => !vehiclePhotos.Contains(path, StringComparer.OrdinalIgnoreCase)))
+        {
+            ModelState.AddModelError(nameof(model.ImagesToDelete), "Danh sách ảnh cần xóa không hợp lệ.");
+        }
+
+        var newImages = model.NewImages
+            .Where(file => file.Length > 0)
+            .ToList();
+
+        if (vehiclePhotos.Count - deleteSet.Count + newImages.Count > MaximumImages)
+        {
+            ModelState.AddModelError(
+                nameof(model.NewImages),
+                $"Biên bản chỉ được lưu tối đa {MaximumImages} ảnh đối chiếu.");
+        }
+
+        foreach (var image in newImages)
+        {
+            var error = await ImageFileValidator.ValidateAsync(
+                image,
+                MaximumImageBytes,
+                cancellationToken);
+
+            if (error is not null)
+            {
+                ModelState.AddModelError(nameof(model.NewImages), $"{image.FileName}: {error}");
+            }
+        }
+
         if (model.HandoverAt < booking.PickupDate || model.HandoverAt >= booking.ReturnDate)
         {
             ModelState.AddModelError(nameof(model.HandoverAt), "Thời gian giao phải nằm trong khoảng thuê đã đặt.");
@@ -116,25 +164,39 @@ public sealed class HandoverEditsController : Controller
 
         if (!ModelState.IsValid)
         {
-            var record = booking.Handover;
-            model.IncludedKilometers = record.IncludedKilometers;
-            model.ExcessKmFeePerKm = record.ExcessKmFeePerKm;
-            model.LateReturnFeeMultiplier = record.LateReturnFeeMultiplier;
-            model.TrafficFineTerms = record.TrafficFineTerms;
-            model.DamageCompensationTerms = record.DamageCompensationTerms;
-            model.PenaltyPolicyAccepted = true;
+            PopulatePolicyFields(model, booking.Handover);
             return View(model);
         }
 
-        booking.Handover.HandoverAt = model.HandoverAt;
-        booking.Handover.Mileage = model.Mileage!.Value;
-        booking.Handover.FuelLevel = $"{fuelPercent}%";
-        booking.Handover.ExteriorCondition = Normalize(model.ExteriorCondition);
-        booking.Handover.InteriorCondition = Normalize(model.InteriorCondition);
-        booking.Handover.Accessories = Normalize(model.Accessories);
-        booking.Handover.Notes = Normalize(model.Notes);
+        var addedPaths = new List<string>();
+        try
+        {
+            addedPaths = await SaveImagesAsync(
+                model.BookingId,
+                newImages,
+                cancellationToken);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            var updatedPaths = currentPaths
+                .Where(path => !deleteSet.Contains(path))
+                .Concat(addedPaths)
+                .ToList();
+
+            booking.Handover.HandoverAt = model.HandoverAt;
+            booking.Handover.Mileage = model.Mileage!.Value;
+            booking.Handover.FuelLevel = $"{fuelPercent}%";
+            booking.Handover.Accessories = Normalize(model.Accessories);
+            booking.Handover.Notes = Normalize(model.Notes);
+            booking.Handover.ImagePaths = string.Join(';', updatedPaths);
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            DeletePhysicalFiles(addedPaths);
+            throw;
+        }
+
+        DeletePhysicalFiles(deleteSet);
 
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _auditService.WriteAsync(
@@ -142,7 +204,7 @@ public sealed class HandoverEditsController : Controller
             "EditHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Chỉnh sửa biên bản giao xe chưa ký của đơn #{model.BookingId}.",
+            $"Chỉnh sửa biên bản giao xe chưa ký của đơn #{model.BookingId}. Xóa {deleteSet.Count} ảnh, thêm {addedPaths.Count} ảnh.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
@@ -154,10 +216,15 @@ public sealed class HandoverEditsController : Controller
         status == BookingStatus.ReadyForPickup &&
         !SplitPaths(imagePaths).Any(path => path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase));
 
-    private static IEnumerable<string> SplitPaths(string? imagePaths) =>
+    private static IReadOnlyList<string> SplitPaths(string? imagePaths) =>
         string.IsNullOrWhiteSpace(imagePaths)
             ? Array.Empty<string>()
             : imagePaths.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static IReadOnlyList<string> VehiclePhotos(string? imagePaths) =>
+        SplitPaths(imagePaths)
+            .Where(path => !path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
     private static bool TryParseFuel(string? value, out int percent)
     {
@@ -169,4 +236,81 @@ public sealed class HandoverEditsController : Controller
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static void PopulatePolicyFields(HandoverViewModel model, VehicleHandover record)
+    {
+        model.IncludedKilometers = record.IncludedKilometers;
+        model.ExcessKmFeePerKm = record.ExcessKmFeePerKm;
+        model.LateReturnFeeMultiplier = record.LateReturnFeeMultiplier;
+        model.TrafficFineTerms = record.TrafficFineTerms;
+        model.DamageCompensationTerms = record.DamageCompensationTerms;
+        model.PenaltyPolicyAccepted = true;
+        model.ExistingImagePaths = VehiclePhotos(record.ImagePaths).ToList();
+    }
+
+    private async Task<List<string>> SaveImagesAsync(
+        int bookingId,
+        IEnumerable<IFormFile> images,
+        CancellationToken cancellationToken)
+    {
+        var selectedImages = images
+            .Where(file => file.Length > 0)
+            .ToList();
+
+        var paths = new List<string>();
+        if (selectedImages.Count == 0)
+        {
+            return paths;
+        }
+
+        var relativeFolder = $"uploads/handovers/{bookingId}";
+        var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
+        Directory.CreateDirectory(folder);
+
+        try
+        {
+            foreach (var image in selectedImages)
+            {
+                var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+                var fileName = $"evidence-edit-{Guid.NewGuid():N}{extension}";
+                var fullPath = Path.Combine(folder, fileName);
+
+                await using var stream = System.IO.File.Create(fullPath);
+                await image.CopyToAsync(stream, cancellationToken);
+                paths.Add($"/{relativeFolder}/{fileName}");
+            }
+        }
+        catch
+        {
+            DeletePhysicalFiles(paths);
+            throw;
+        }
+
+        return paths;
+    }
+
+    private void DeletePhysicalFiles(IEnumerable<string> relativePaths)
+    {
+        foreach (var relativePath in relativePaths)
+        {
+            DeletePhysicalFile(relativePath);
+        }
+    }
+
+    private void DeletePhysicalFile(string? relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            return;
+        }
+
+        var fullPath = Path.Combine(
+            _environment.WebRootPath,
+            relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+
+        if (System.IO.File.Exists(fullPath))
+        {
+            System.IO.File.Delete(fullPath);
+        }
+    }
 }
