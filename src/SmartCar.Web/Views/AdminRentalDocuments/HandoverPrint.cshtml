@@ -7,22 +7,190 @@
     var pickupText = booking.PickupMethod == VehiclePickupMethod.Delivery
         ? $"Giao tận nơi - {booking.DeliveryAddress}"
         : "Nhận tại cửa hàng";
-    var awaitingSignature = booking.Status == BookingStatus.ReadyForPickup && string.IsNullOrWhiteSpace(Model.SignedDocumentPath);
+    IReadOnlyList<string> signedDocumentPaths = Model.SignedDocumentPaths.Count > 0
+        ? Model.SignedDocumentPaths
+        : !string.IsNullOrWhiteSpace(Model.SignedDocumentPath)
+            ? new[] { Model.SignedDocumentPath }
+            : Array.Empty<string>();
+    var awaitingSignature = booking.Status == BookingStatus.ReadyForPickup && signedDocumentPaths.Count == 0;
     var includedDays = Math.Max(1, booking.NumberOfDays);
     var effectiveIncludedKilometers = Math.Max(Model.IncludedKilometers, includedDays * RentalPolicy.IncludedKilometersPerDay);
+    const string signedAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 }
 <!DOCTYPE html>
-<html lang="vi"><head><meta charset="utf-8" /><title>Biên bản giao xe #@booking.BookingId</title>
-<style>
-body{font-family:Arial,sans-serif;color:#111;margin:18mm;font-size:13px;line-height:1.45}h1{text-align:center;font-size:21px;margin:0 0 4px}.sub{text-align:center;margin-bottom:18px;color:#555}.parties{border:1px solid #aaa;padding:10px;margin-bottom:14px}.parties div+div{margin-top:5px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #aaa;padding:7px;text-align:left;vertical-align:top}th{width:30%}.extension-terms{margin-top:14px;border:2px solid #555;padding:12px}.extension-terms-title{font-weight:700;text-transform:uppercase;margin-bottom:6px}.extension-terms p{margin:6px 0 0}.confirm{margin-top:16px;padding:10px;border:1px solid #999}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:34px;text-align:center}.signature-space{height:90px}.no-print{margin-bottom:16px;padding:12px;background:#f5f7fa;border:1px solid #d8dde6;border-radius:8px}.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}button,.back{padding:7px 12px;border:1px solid #777;background:white;border-radius:5px;text-decoration:none;color:#111;cursor:pointer}.primary{background:#1769e0;color:#fff;border-color:#1769e0}.edit{background:#fff7e6;border-color:#d89b24;color:#6b4900}.upload{margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hint{margin-top:8px;color:#555;font-size:12px}.evidence{margin-top:20px;page-break-before:auto}.evidence h2{font-size:16px;margin:0 0 5px}.evidence-note{color:#555;font-size:12px;margin-bottom:10px}.photo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.photo{border:1px solid #aaa;padding:6px;break-inside:avoid;page-break-inside:avoid}.photo img{display:block;width:100%;height:190px;object-fit:contain;background:#f5f5f5}.photo-label{text-align:center;font-size:11px;margin-top:5px;color:#444}.no-evidence{border:1px dashed #aaa;padding:12px;color:#666}@@media print{.no-print{display:none}body{margin:12mm}.photo img{height:165px}}
-</style></head><body>
-<div class="no-print"><div class="actions"><button class="primary" type="button" onclick="window.print()">In để ký</button>@if(awaitingSignature){<a class="back edit" href="/HandoverEdits/Edit?bookingId=@booking.BookingId">← Chỉnh sửa biên bản</a>}<a class="back" href="/AdminBookings/Index">Danh sách đơn</a></div>
-@if(awaitingSignature){<div class="hint"><strong>Bước tiếp:</strong> Kiểm tra biên bản. Nếu có sai sót, chọn <strong>Chỉnh sửa biên bản</strong>. Khi đã đúng, hai bên ký bản in rồi chụp/scan và tải lại. Chuyến chỉ bắt đầu sau bước này.</div><form class="upload" action="/AdminRentalDocuments/UploadHandoverSigned" method="post" enctype="multipart/form-data">@Html.AntiForgeryToken()<input type="hidden" name="bookingId" value="@booking.BookingId" /><input type="file" name="signedDocument" accept="image/jpeg,image/png,image/webp" required /><button type="submit">Tải bản đã ký & bắt đầu chuyến</button></form>}else if(!string.IsNullOrWhiteSpace(Model.SignedDocumentPath)){<div class="hint">✓ Đã có chữ ký. Biên bản đã khóa chỉnh sửa.</div>}</div>
-<h1>BIÊN BẢN GIAO XE</h1><div class="sub">SmartCar · Đơn #@booking.BookingId</div>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <title>Biên bản giao xe #@booking.BookingId</title>
+    <style>
+        body{font-family:Arial,sans-serif;color:#111;margin:18mm;font-size:13px;line-height:1.45}
+        h1{text-align:center;font-size:21px;margin:0 0 4px}
+        .sub{text-align:center;margin-bottom:18px;color:#555}
+        .parties{border:1px solid #aaa;padding:10px;margin-bottom:14px}.parties div+div{margin-top:5px}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px}
+        table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #aaa;padding:7px;text-align:left;vertical-align:top}th{width:30%}
+        .extension-terms{margin-top:14px;border:2px solid #555;padding:12px}.extension-terms-title{font-weight:700;text-transform:uppercase;margin-bottom:6px}.extension-terms p{margin:6px 0 0}
+        .confirm{margin-top:16px;padding:10px;border:1px solid #999}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:34px;text-align:center}.signature-space{height:90px}
+        .no-print{margin-bottom:16px;padding:12px;background:#f5f7fa;border:1px solid #d8dde6;border-radius:8px}
+        .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}button,.back{padding:7px 12px;border:1px solid #777;background:white;border-radius:5px;text-decoration:none;color:#111;cursor:pointer}.primary{background:#1769e0;color:#fff;border-color:#1769e0}.edit{background:#fff7e6;border-color:#d89b24;color:#6b4900}
+        .upload{margin-top:10px;display:block}.upload-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hint{margin-top:8px;color:#555;font-size:12px}.signed-upload-panel{margin-top:10px;border:1px solid #d8dde6;border-radius:8px;background:#fff;padding:10px}.signed-count{display:inline-block;border-radius:999px;background:#6c757d;color:#fff;padding:3px 8px;font-size:12px}.signed-count.ok{background:#198754}.signed-preview{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.signed-preview-card{position:relative;border:1px solid #ddd;border-radius:6px;background:#fff;padding:5px;width:118px}.signed-preview-card img{display:block;width:106px;height:82px;object-fit:cover;border:1px solid #ddd;border-radius:4px;background:#f6f6f6}.signed-preview-card .caption{font-size:11px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}.remove-signed-page{position:absolute;top:-7px;right:-7px;width:24px;height:24px;border-radius:50%;border:0;background:#dc3545;color:#fff;padding:0;line-height:1;font-weight:700}.signed-existing{margin-top:10px;border:1px solid #badbcc;background:#f0fff4;border-radius:8px;padding:10px}.signed-existing a{margin-right:8px;display:inline-block;margin-top:4px}
+        .evidence{margin-top:20px;page-break-before:auto}.evidence h2{font-size:16px;margin:0 0 5px}.evidence-note{color:#555;font-size:12px;margin-bottom:10px}.photo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.photo{border:1px solid #aaa;padding:6px;break-inside:avoid;page-break-inside:avoid}.photo img{display:block;width:100%;height:190px;object-fit:contain;background:#f5f5f5}.photo-label{text-align:center;font-size:11px;margin-top:5px;color:#444}.no-evidence{border:1px dashed #aaa;padding:12px;color:#666}
+        @@media print{.no-print{display:none}body{margin:12mm}.photo img{height:165px}}
+    </style>
+</head>
+<body>
+<div class="no-print">
+    <div class="actions">
+        <button class="primary" type="button" onclick="window.print()">In để ký</button>
+        @if (awaitingSignature)
+        {
+            <a class="back edit" href="/HandoverEdits/Edit?bookingId=@booking.BookingId">← Chỉnh sửa biên bản</a>
+        }
+        <a class="back" href="/AdminBookings/Index">Danh sách đơn</a>
+    </div>
+
+    @if (awaitingSignature)
+    {
+        <div class="hint"><strong>Bước tiếp:</strong> Kiểm tra biên bản. Nếu có sai sót, chọn <strong>Chỉnh sửa biên bản</strong>. Khi đã đúng, hai bên ký bản in rồi chụp/scan <strong>từng trang</strong> và tải lại. Chuyến chỉ bắt đầu sau bước này.</div>
+        <form class="upload" action="/AdminRentalDocuments/UploadHandoverSigned" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="bookingId" value="@booking.BookingId" />
+            <div class="signed-upload-panel">
+                <div class="upload-row">
+                    <input id="signed-documents" type="file" name="signedDocuments" accept="@signedAccept" multiple required />
+                    <button type="submit">Tải các trang đã ký & bắt đầu chuyến</button>
+                    <span id="signed-document-count" class="signed-count">Chưa chọn trang ký</span>
+                </div>
+                <div class="hint">Có thể chọn nhiều ảnh cùng lúc, ví dụ trang 1, trang 2, trang 3. Chỉ chấp nhận JPG, PNG hoặc WEBP; mỗi ảnh tối đa 8 MB; tối đa 12 trang.</div>
+                <div id="signed-document-preview" class="signed-preview"></div>
+            </div>
+        </form>
+    }
+    else if (signedDocumentPaths.Count > 0)
+    {
+        <div class="signed-existing">
+            <strong>✓ Đã có @signedDocumentPaths.Count trang bản ký. Biên bản đã khóa chỉnh sửa.</strong>
+            <div>
+                @for (var i = 0; i < signedDocumentPaths.Count; i++)
+                {
+                    <a href="@signedDocumentPaths[i]" target="_blank" rel="noopener">Xem trang @(i + 1)</a>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<h1>BIÊN BẢN GIAO XE</h1>
+<div class="sub">SmartCar · Đơn #@booking.BookingId</div>
 <div class="parties"><div><strong>Bên A – Bên cho thuê:</strong> SmartCar</div><div><strong>Bên B – Bên thuê:</strong> @booking.CustomerName · @booking.CustomerPhone</div></div>
 <div class="grid"><div><strong>Xe:</strong> @booking.VehicleName</div><div><strong>Biển số:</strong> @booking.LicensePlate</div><div><strong>Thời gian giao:</strong> @Model.RecordedAt.ToString("dd/MM/yyyy HH:mm")</div><div><strong>Dự kiến trả:</strong> @booking.ReturnDate.ToString("dd/MM/yyyy HH:mm")</div><div><strong>Cách nhận:</strong> @pickupText</div><div><strong>Ảnh đối chiếu:</strong> @Model.ImagePaths.Count ảnh đính kèm bên dưới</div></div>
 <table><tr><th>Số km khi giao</th><td>@Model.Mileage.ToString("N0") km</td></tr><tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr><tr><th>Phụ kiện</th><td>@(Model.Accessories ?? "Theo trang bị xe")</td></tr><tr><th>Định mức sử dụng</th><td>@RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày<br/>Chuyến này: @effectiveIncludedKilometers.ToString("N0") km / @includedDays ngày</td></tr><tr><th>Vượt km</th><td>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</td></tr><tr><th>Trả muộn</th><td>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</td></tr><tr><th>Vi phạm / phạt nguội</th><td>@Model.TrafficFineTerms</td></tr><tr><th>Hư hỏng / thiếu</th><td>Hư hỏng, mất mát hoặc thiếu phụ kiện do Bên B gây ra được xử lý theo thiệt hại thực tế, hợp lý, có ảnh đối chiếu và chứng từ/báo giá hợp lệ.</td></tr><tr><th>Ghi chú</th><td>@(Model.Notes ?? "Không có")</td></tr></table>
 <div class="extension-terms"><div class="extension-terms-title">Điều khoản gia hạn và nghĩa vụ trả xe đúng hạn</div><p>Bên B có thể gửi yêu cầu gia hạn nhưng việc gửi yêu cầu không đồng nghĩa với việc được phép giữ xe quá thời gian trả đã thỏa thuận. Gia hạn chỉ có hiệu lực khi được SmartCar chấp thuận theo quy trình của hệ thống.</p><p>Trường hợp yêu cầu gia hạn thông thường bị từ chối vì xe đã có đơn thuê kế tiếp, Bên B phải giao/trả xe đúng thời gian đã thỏa thuận. Nếu Bên B đã được thông báo từ chối gia hạn nhưng vẫn cố tình không giao/trả xe đúng hạn, làm ảnh hưởng đến đơn thuê kế tiếp, Bên B chịu phí trả muộn và khoản bồi thường <strong>bằng giá hợp đồng của đơn thuê bị ảnh hưởng</strong>.</p><p>Khoản bồi thường nêu trên được khấu trừ từ tiền cọc của Bên B. Nếu tiền cọc không đủ để thực hiện nghĩa vụ, Bên B có trách nhiệm thanh toán phần còn thiếu.</p><p>Trường hợp bất khả kháng phải có ảnh minh chứng và vị trí hiện tại để SmartCar xác minh; việc xử lý gia hạn, xe thay thế, hoàn tiền và bồi thường cho đơn thuê kế tiếp được thực hiện theo chính sách của SmartCar và hồ sơ thực tế của sự việc.</p></div>
 <div class="evidence"><h2>ẢNH ĐỐI CHIẾU TÌNH TRẠNG XE KHI GIAO</h2><div class="evidence-note">Các ảnh dưới đây là một phần của biên bản và được dùng để đối chiếu tình trạng xe khi trả.</div>@if(Model.ImagePaths.Count>0){<div class="photo-grid">@for(var i=0;i<Model.ImagePaths.Count;i++){<div class="photo"><img src="@Model.ImagePaths[i]" alt="Ảnh đối chiếu khi giao @(i+1)"/><div class="photo-label">Ảnh @(i+1)</div></div>}</div>}else{<div class="no-evidence">Chưa có ảnh đối chiếu được lưu cho biên bản giao xe này.</div>}</div>
 <div class="confirm"><strong>XÁC NHẬN CỦA BÊN THUÊ:</strong><br/>Bên B xác nhận đã kiểm tra xe, số km, nhiên liệu, phụ kiện và các ảnh đối chiếu đính kèm trong biên bản; đã đọc, hiểu và đồng ý các chính sách phí/phạt, điều khoản gia hạn, nghĩa vụ trả xe đúng hạn và cơ chế khấu trừ tiền cọc nêu trên trước khi nhận xe.</div>
-<div class="signatures"><div><strong>ĐẠI DIỆN BÊN A</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div><div><strong>BÊN B – KHÁCH HÀNG</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div></div></body></html>
+<div class="signatures"><div><strong>ĐẠI DIỆN BÊN A</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div><div><strong>BÊN B – KHÁCH HÀNG</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div></div>
+<script>
+(() => {
+    const input = document.getElementById('signed-documents');
+    const preview = document.getElementById('signed-document-preview');
+    const count = document.getElementById('signed-document-count');
+    if (!input || !preview || !count) return;
+
+    const maximumPages = 12;
+    const maximumBytes = 8 * 1024 * 1024;
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    let selectedFiles = Array.from(input.files || []);
+    let previewUrls = [];
+
+    function clearPreviewUrls() {
+        previewUrls.forEach(url => URL.revokeObjectURL(url));
+        previewUrls = [];
+    }
+
+    function syncInputFiles() {
+        const transfer = new DataTransfer();
+        selectedFiles.forEach(file => transfer.items.add(file));
+        input.files = transfer.files;
+    }
+
+    function validateFiles() {
+        let message = '';
+        if (selectedFiles.length === 0) {
+            message = 'Vui lòng chọn ít nhất một ảnh chụp/scan biên bản đã ký.';
+        } else if (selectedFiles.length > maximumPages) {
+            message = `Chỉ được chọn tối đa ${maximumPages} trang bản ký.`;
+        } else {
+            const oversized = selectedFiles.find(file => file.size > maximumBytes);
+            if (oversized) message = `Ảnh "${oversized.name}" vượt quá 8 MB.`;
+        }
+        if (!message) {
+            const invalid = selectedFiles.find(file => {
+                const lower = file.name.toLowerCase();
+                const extensionValid = allowedExtensions.some(ext => lower.endsWith(ext));
+                const typeValid = !file.type || allowedTypes.includes(file.type.toLowerCase());
+                return !extensionValid || !typeValid;
+            });
+            if (invalid) message = `Ảnh "${invalid.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`;
+        }
+        input.setCustomValidity(message);
+        return message === '';
+    }
+
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        syncInputFiles();
+        renderPreview();
+        validateFiles();
+    }
+
+    function renderPreview() {
+        clearPreviewUrls();
+        preview.innerHTML = '';
+        count.textContent = selectedFiles.length > 0 ? `Đã chọn ${selectedFiles.length} trang ký` : 'Chưa chọn trang ký';
+        count.className = `signed-count ${selectedFiles.length > 0 ? 'ok' : ''}`;
+        selectedFiles.forEach((file, index) => {
+            const url = URL.createObjectURL(file);
+            previewUrls.push(url);
+
+            const card = document.createElement('div');
+            card.className = 'signed-preview-card';
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'remove-signed-page';
+            remove.innerHTML = '&times;';
+            remove.title = 'Xóa trang này';
+            remove.setAttribute('aria-label', `Xóa trang ký ${index + 1}`);
+            remove.addEventListener('click', () => removeFile(index));
+
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = `Trang ký ${index + 1}`;
+
+            const caption = document.createElement('div');
+            caption.className = 'caption';
+            caption.title = file.name;
+            caption.textContent = `Trang ${index + 1}: ${file.name}`;
+
+            card.append(remove, img, caption);
+            preview.appendChild(card);
+        });
+    }
+
+    input.addEventListener('change', () => {
+        selectedFiles = Array.from(input.files || []);
+        renderPreview();
+        validateFiles();
+    });
+
+    input.form?.addEventListener('submit', event => {
+        if (!validateFiles()) {
+            event.preventDefault();
+            input.reportValidity();
+        }
+    });
+})();
+</script>
+</body>
+</html>
