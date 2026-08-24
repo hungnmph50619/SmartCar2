@@ -8,6 +8,33 @@
     const money = value => new Intl.NumberFormat('vi-VN').format(Math.max(0, value)) + ' đ';
 
     const cardTitle = card => normalize(card?.querySelector(':scope > .card-header strong')?.textContent);
+    const signedSelectorForTitle = title => title.includes('giao')
+        ? 'a[href*="signed-handover-"]'
+        : 'a[href*="signed-return-"]';
+    const signedLinksForCard = card => Array.from(card.querySelectorAll(signedSelectorForTitle(cardTitle(card))));
+
+    const refreshSignedUi = card => {
+        const signedLinks = signedLinksForCard(card);
+        const badge = card.querySelector(':scope > .card-header .badge');
+        if (badge) {
+            badge.className = signedLinks.length > 0 ? 'badge bg-success' : 'badge bg-secondary';
+            badge.textContent = signedLinks.length > 0 ? 'Đã ký' : 'Chưa ký';
+        }
+
+        signedLinks.forEach((link, index) => {
+            link.className = 'btn btn-sm btn-outline-success text-decoration-none';
+            link.textContent = `Trang ${index + 1}`;
+        });
+
+        card.querySelectorAll('strong').forEach(strong => {
+            const text = normalize(strong.textContent);
+            if (text === 'Bản ký biên bản giao:' || text === 'Bản ký biên bản trả:' || text.startsWith('Bản ký ')) {
+                strong.textContent = signedLinks.length > 0 ? `Bản ký (${signedLinks.length} trang):` : 'Bản ký:';
+            }
+        });
+
+        return signedLinks;
+    };
 
     const initializeCustomerTripRecords = () => {
         if (!/^\/Bookings\/Details(?:\/|$)/i.test(window.location.pathname)) return;
@@ -60,12 +87,14 @@
             if (!body || body.dataset.compactRecordReady === 'true') return;
             body.dataset.compactRecordReady = 'true';
 
+            const signedLinks = refreshSignedUi(card);
+            // Trang khách chỉ cần một nút chi tiết ở dòng tóm tắt, bỏ nút chi tiết thừa ở header.
+            card.querySelectorAll(':scope > .card-header button').forEach(button => button.remove());
+
             const firstRow = body.querySelector(':scope > .row');
             const summaryValues = firstRow
                 ? Array.from(firstRow.querySelectorAll('.fw-semibold')).map(item => normalize(item.textContent)).filter(Boolean)
                 : [];
-            const signedLink = Array.from(card.querySelectorAll(':scope > .card-header a'))
-                .find(link => normalize(link.textContent) === 'Xem bản ký');
 
             const compact = document.createElement('div');
             compact.className = 'card-body py-3';
@@ -76,12 +105,10 @@
                 </div>`;
             const actions = compact.querySelector('[data-record-actions]');
 
-            if (signedLink) {
-                const badge = document.createElement('span');
-                badge.className = 'badge bg-success';
-                badge.textContent = 'Đã có chữ ký';
-                actions?.appendChild(badge);
-            }
+            const badge = document.createElement('span');
+            badge.className = signedLinks.length > 0 ? 'badge bg-success' : 'badge bg-secondary';
+            badge.textContent = signedLinks.length > 0 ? 'Đã ký' : 'Chưa ký';
+            actions?.appendChild(badge);
 
             const toggle = document.createElement('button');
             toggle.type = 'button';
