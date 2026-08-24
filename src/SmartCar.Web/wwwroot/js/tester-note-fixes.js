@@ -229,32 +229,67 @@ function setupEvidenceFileInputs() {
         input.insertAdjacentElement('afterend', preview);
 
         const render = () => renderEvidencePreview(input, preview);
+        const validate = () => validateEvidenceInput(input, false);
+
         input.addEventListener('change', () => {
             normalizeEvidenceFileSelection(input);
+            validate();
             render();
         });
 
+        input.addEventListener('invalid', () => {
+            validateEvidenceInput(input, true);
+        });
+
         input.form?.addEventListener('submit', event => {
-            const requiresEvidence = forceMajeureEvidenceIsRequired(input.form, input);
-            const count = input.files?.length || 0;
-
-            if (requiresEvidence && count < 2) {
-                input.setCustomValidity('Vui lòng chọn tối thiểu 2 ảnh minh chứng.');
+            if (!validateEvidenceInput(input, true)) {
                 event.preventDefault();
                 input.reportValidity();
                 return;
             }
 
-            if (count > 8) {
-                input.setCustomValidity('Chỉ được chọn tối đa 8 ảnh minh chứng.');
+            if (!validateEvidenceLocation(input.form, input)) {
                 event.preventDefault();
-                input.reportValidity();
                 return;
             }
-
-            input.setCustomValidity('');
         });
     });
+}
+
+function validateEvidenceInput(input, showMessage) {
+    const requiresEvidence = forceMajeureEvidenceIsRequired(input.form, input);
+    const count = input.files?.length || 0;
+    let message = '';
+
+    if (requiresEvidence && count < 2) {
+        message = 'Vui lòng chọn tối thiểu 2 ảnh minh chứng.';
+    } else if (count > 8) {
+        message = 'Chỉ được chọn tối đa 8 ảnh minh chứng.';
+    }
+
+    input.setCustomValidity(message);
+    if (message && showMessage) input.reportValidity();
+    return message === '';
+}
+
+function validateEvidenceLocation(form, input) {
+    if (!forceMajeureEvidenceIsRequired(form, input)) return true;
+    const latitude = form.querySelector('input[name="evidenceLatitude"]')?.value?.trim();
+    const longitude = form.querySelector('input[name="evidenceLongitude"]')?.value?.trim();
+    if (latitude && longitude) return true;
+
+    const button = form.querySelector('.js-smart-current-location, #extension-get-location, .js-extension-location');
+    const status = form.querySelector('.js-smart-location-status, .js-location-status, #extension-location-status');
+    if (status) {
+        status.textContent = 'Vui lòng bấm Lấy vị trí hiện tại trước khi gửi yêu cầu.';
+        status.classList.add('text-danger');
+    }
+    if (button instanceof HTMLElement) {
+        button.focus();
+        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    alert('Vui lòng bấm Lấy vị trí hiện tại trước khi gửi yêu cầu bất khả kháng.');
+    return false;
 }
 
 function forceMajeureEvidenceIsRequired(form, input) {
@@ -272,7 +307,9 @@ function normalizeEvidenceFileSelection(input) {
     let message = '';
 
     for (const file of files) {
-        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        const extensionOk = /\.(jpe?g|png|webp)$/i.test(file.name || '');
+        const typeOk = !file.type || ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+        if (!extensionOk || !typeOk) {
             message = 'Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP.';
             continue;
         }
@@ -334,6 +371,7 @@ function renderEvidencePreview(input, preview) {
         remove.addEventListener('click', () => {
             const remaining = Array.from(input.files || []).filter((_, fileIndex) => fileIndex !== index);
             assignFiles(input, remaining);
+            validateEvidenceInput(input, false);
             renderEvidencePreview(input, preview);
         });
 
@@ -427,7 +465,10 @@ async function requestCurrentLocation(button) {
     button.disabled = true;
     const originalText = button.textContent;
     button.textContent = 'Đang lấy vị trí...';
-    if (status) status.textContent = 'Đang lấy vị trí hiện tại...';
+    if (status) {
+        status.textContent = 'Đang lấy vị trí hiện tại...';
+        status.classList.remove('text-danger');
+    }
 
     navigator.geolocation.getCurrentPosition(async position => {
         const latitude = position.coords.latitude;
@@ -437,14 +478,20 @@ async function requestCurrentLocation(button) {
         setLocationFields(form, latitude, longitude, placeName);
         renderLocationPreview(button, latitude, longitude, placeName);
 
-        if (status) status.textContent = placeName
-            ? `Đã lấy vị trí: ${placeName}`
-            : 'Đã lấy vị trí hiện tại.';
+        if (status) {
+            status.textContent = placeName
+                ? `Đã lấy vị trí: ${placeName}`
+                : 'Đã lấy vị trí hiện tại.';
+            status.classList.remove('text-danger');
+        }
 
         button.disabled = false;
         button.textContent = originalText || 'Lấy vị trí hiện tại';
     }, () => {
-        if (status) status.textContent = 'Không lấy được vị trí; hãy cấp quyền vị trí rồi thử lại.';
+        if (status) {
+            status.textContent = 'Không lấy được vị trí; hãy cấp quyền vị trí rồi thử lại.';
+            status.classList.add('text-danger');
+        }
         button.disabled = false;
         button.textContent = originalText || 'Lấy vị trí hiện tại';
     }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
@@ -465,16 +512,28 @@ function setLocationFields(form, latitude, longitude, placeName) {
 }
 
 async function reverseGeocodePlace(latitude, longitude) {
+    const local = await tryFetchJson(`/api/geocoding/reverse?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`);
+    const localName = extractPlaceName(local);
+    if (localName) return localName;
+
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}&zoom=18&addressdetails=1`;
+    const nominatim = await tryFetchJson(nominatimUrl);
+    return extractPlaceName(nominatim);
+}
+
+async function tryFetchJson(url) {
     try {
-        const response = await fetch(`/api/geocoding/reverse?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`, {
-            headers: { 'Accept': 'application/json' }
-        });
-        if (!response.ok) return '';
-        const data = await response.json();
-        return data.display_name || data.displayName || data.name || data.formattedAddress || formatAddressParts(data.address) || '';
+        const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!response.ok) return null;
+        return await response.json();
     } catch {
-        return '';
+        return null;
     }
+}
+
+function extractPlaceName(data) {
+    if (!data) return '';
+    return data.display_name || data.displayName || data.name || data.formattedAddress || formatAddressParts(data.address) || '';
 }
 
 function formatAddressParts(address) {
