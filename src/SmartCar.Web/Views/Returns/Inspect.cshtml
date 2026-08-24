@@ -167,7 +167,7 @@ else
             <div class="border rounded p-3 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                     <h2 class="h5 mb-0">Biên bản giao</h2>
-                    <span class="badge @(handoverSignedPaths.Count == 0 ? "bg-danger" : "bg-success")">@(handoverSignedPaths.Count == 0 ? "Thiếu bản ký" : $"Đã có {handoverSignedPaths.Count} trang ký")</span>
+                    <span class="badge @(handoverSignedPaths.Count == 0 ? "bg-danger" : "bg-success")">@(handoverSignedPaths.Count == 0 ? "Thiếu ký" : $"Đã ký {handoverSignedPaths.Count} trang")</span>
                 </div>
 
                 <div class="row g-2 mb-3">
@@ -184,13 +184,13 @@ else
                 }
 
                 <div class="d-flex gap-2 flex-wrap mb-3">
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In</a>
                 </div>
 
                 @if (handoverSignedPaths.Count > 0)
                 {
                     <div class="signed-links small mb-3">
-                        <strong>Xem bản ký (@handoverSignedPaths.Count trang):</strong>
+                        <strong>Bản ký @handoverSignedPaths.Count trang:</strong>
                         <div class="d-flex gap-2 flex-wrap mt-1">
                             @for (var index = 0; index < handoverSignedPaths.Count; index++)
                             {
@@ -206,8 +206,8 @@ else
                         <input type="hidden" name="bookingId" value="@Model.BookingId" />
                         <div class="d-flex gap-2 align-items-center flex-wrap">
                             <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm signed-file-input" multiple required />
-                            <button class="btn btn-sm btn-outline-success" type="submit">Tải các trang đã ký</button>
-                            <span class="badge text-bg-secondary signed-file-count">Chưa chọn trang ký</span>
+                            <button class="btn btn-sm btn-outline-success" type="submit">Tải bản ký</button>
+                            <span class="badge text-bg-secondary signed-file-count">Chưa chọn</span>
                         </div>
                         <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
                         <div class="signed-preview"></div>
@@ -224,8 +224,7 @@ else
                     @foreach (var image in handoverPhotos)
                     {
                         <div class="col-6 col-md-4">
-                            <div class="small fw-semibold mb-1">@EvidenceLabel(image)</div>
-                            <a href="@image" target="_blank" rel="noopener">
+                            <a href="@image" target="_blank" rel="noopener" title="@EvidenceLabel(image)">
                                 <img src="@image" alt="@EvidenceLabel(image) lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
                             </a>
                         </div>
@@ -238,7 +237,7 @@ else
             <div class="border rounded p-3 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                     <h2 class="h5 mb-0">Biên bản trả</h2>
-                    <span class="badge @(returnSignedPaths.Count == 0 ? "bg-danger" : "bg-success")">@(returnSignedPaths.Count == 0 ? "Thiếu bản ký" : $"Đã có {returnSignedPaths.Count} trang ký")</span>
+                    <span class="badge @(returnSignedPaths.Count == 0 ? "bg-danger" : "bg-success")">@(returnSignedPaths.Count == 0 ? "Thiếu ký" : $"Đã ký {returnSignedPaths.Count} trang")</span>
                 </div>
 
                 <div class="row g-2 mb-3">
@@ -254,17 +253,17 @@ else
                 <div class="mb-2">Hư hỏng mới: <strong class="@(Model.Return.HasDamage == true ? "text-danger" : "text-success")">@(Model.Return.HasDamage == true ? "Có" : "Không")</strong></div>
 
                 <div class="d-flex gap-2 flex-wrap mb-3">
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In để ký</a>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In</a>
                     @if (canEditReturn)
                     {
-                        <a class="btn btn-sm btn-outline-warning" asp-controller="ReturnEdits" asp-action="Edit" asp-route-bookingId="@Model.BookingId">← Chỉnh sửa biên bản trả</a>
+                        <a class="btn btn-sm btn-outline-warning" asp-controller="ReturnEdits" asp-action="Edit" asp-route-bookingId="@Model.BookingId">Sửa</a>
                     }
                 </div>
 
                 @if (returnSignedPaths.Count > 0)
                 {
                     <div class="signed-links small mb-3">
-                        <strong>Xem bản ký (@returnSignedPaths.Count trang):</strong>
+                        <strong>Bản ký @returnSignedPaths.Count trang:</strong>
                         <div class="d-flex gap-2 flex-wrap mt-1">
                             @for (var index = 0; index < returnSignedPaths.Count; index++)
                             {
@@ -280,8 +279,8 @@ else
                         <input type="hidden" name="bookingId" value="@Model.BookingId" />
                         <div class="d-flex gap-2 align-items-center flex-wrap">
                             <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm signed-file-input" multiple required />
-                            <button class="btn btn-sm btn-outline-success" type="submit">Tải các trang đã ký</button>
-                            <span class="badge text-bg-secondary signed-file-count">Chưa chọn trang ký</span>
+                            <button class="btn btn-sm btn-outline-success" type="submit">Tải bản ký</button>
+                            <span class="badge text-bg-secondary signed-file-count">Chưa chọn</span>
                         </div>
                         <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
                         <div class="signed-preview"></div>
@@ -298,8 +297,7 @@ else
                     @foreach (var image in returnPhotos)
                     {
                         <div class="col-6 col-md-4">
-                            <div class="small fw-semibold mb-1 @(EvidenceLabel(image) == "Hư hỏng" ? "text-danger" : "")">@EvidenceLabel(image)</div>
-                            <a href="@image" target="_blank" rel="noopener">
+                            <a href="@image" target="_blank" rel="noopener" title="@EvidenceLabel(image)">
                                 <img src="@image" alt="@EvidenceLabel(image) lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
                             </a>
                         </div>
@@ -473,7 +471,7 @@ else if (Model.Status == BookingStatus.Completed)
                 function renderPreview() {
                     clearPreviewUrls();
                     preview.innerHTML = '';
-                    count.textContent = selectedFiles.length > 0 ? `Đã chọn ${selectedFiles.length} trang ký` : 'Chưa chọn trang ký';
+                    count.textContent = selectedFiles.length > 0 ? `${selectedFiles.length} trang` : 'Chưa chọn';
                     count.className = `badge ${selectedFiles.length > 0 ? 'text-bg-success' : 'text-bg-secondary'} signed-file-count`;
                     selectedFiles.forEach((file, index) => {
                         const url = URL.createObjectURL(file);
@@ -493,7 +491,7 @@ else if (Model.Status == BookingStatus.Completed)
                         const caption = document.createElement('div');
                         caption.className = 'caption';
                         caption.title = file.name;
-                        caption.textContent = `Trang ${index + 1}: ${file.name}`;
+                        caption.textContent = `Trang ${index + 1}`;
                         card.append(remove, img, caption);
                         preview.appendChild(card);
                     });
