@@ -17,6 +17,7 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminRentalDocumentsController : Controller
 {
     private const long MaximumSignedDocumentBytes = 8 * 1024 * 1024;
+    private const int MaximumSignedDocumentPages = 12;
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
 
@@ -58,6 +59,7 @@ public sealed class AdminRentalDocumentsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
+        var signedPaths = FindSignedPaths(record.ImagePaths, HandoverSignedMarker);
         return View(new HandoverDocumentViewModel
         {
             Booking = booking,
@@ -75,7 +77,8 @@ public sealed class AdminRentalDocumentsController : Controller
             DamageCompensationTerms = record.DamageCompensationTerms,
             PenaltyPolicyAccepted = record.PenaltyPolicyAccepted,
             ImagePaths = VehiclePhotos(record.ImagePaths, HandoverSignedMarker),
-            SignedDocumentPath = FindSignedPath(record.ImagePaths, HandoverSignedMarker)
+            SignedDocumentPaths = signedPaths,
+            SignedDocumentPath = signedPaths.FirstOrDefault()
         });
     }
 
@@ -100,6 +103,7 @@ public sealed class AdminRentalDocumentsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
+        var signedPaths = FindSignedPaths(record.ImagePaths, ReturnSignedMarker);
         return View(new ReturnDocumentViewModel
         {
             Booking = booking,
@@ -114,7 +118,8 @@ public sealed class AdminRentalDocumentsController : Controller
             LateFee = record.LateFee,
             Notes = record.Notes,
             ImagePaths = VehiclePhotos(record.ImagePaths, ReturnSignedMarker),
-            SignedDocumentPath = FindSignedPath(record.ImagePaths, ReturnSignedMarker)
+            SignedDocumentPaths = signedPaths,
+            SignedDocumentPath = signedPaths.FirstOrDefault()
         });
     }
 
@@ -122,7 +127,8 @@ public sealed class AdminRentalDocumentsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UploadHandoverSigned(
         int bookingId,
-        IFormFile signedDocument,
+        List<IFormFile>? signedDocuments,
+        IFormFile? signedDocument,
         CancellationToken cancellationToken)
     {
         var booking = await _dbContext.Bookings
@@ -136,66 +142,76 @@ public sealed class AdminRentalDocumentsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
-        var existingSigned = FindSignedPath(booking.Handover.ImagePaths, HandoverSignedMarker);
-        if (booking.Status == BookingStatus.Completed && existingSigned is not null)
+        var existingSigned = FindSignedPaths(booking.Handover.ImagePaths, HandoverSignedMarker);
+        if (booking.Status == BookingStatus.Completed && existingSigned.Count > 0)
         {
             TempData["ErrorMessage"] = "Hồ sơ đã hoàn tất nên bản ký không thể thay đổi.";
             return RedirectToAction("Details", "AdminTripRecords", new { id = bookingId });
         }
 
-        var error = await ValidateSignedDocumentAsync(signedDocument, cancellationToken);
+        var selectedSignedDocuments = CollectSignedFiles(signedDocuments, signedDocument);
+        var error = await ValidateSignedDocumentsAsync(selectedSignedDocuments, cancellationToken);
         if (error is not null)
         {
             TempData["ErrorMessage"] = error;
-            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+            return RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId });
         }
 
-        var newPath = await SaveSignedDocumentAsync(
+        var newPaths = await SaveSignedDocumentsAsync(
             bookingId,
             "handovers",
             HandoverSignedMarker,
-            signedDocument,
+            selectedSignedDocuments,
             cancellationToken);
 
-        ReplaceSignedPath(booking.Handover, newPath, HandoverSignedMarker);
-
         var startsRental = booking.Status == BookingStatus.ReadyForPickup;
-        if (startsRental)
+        try
         {
-            if (booking.Vehicle.Status != VehicleStatus.Available)
+            ReplaceSignedPaths(booking.Handover, newPaths, HandoverSignedMarker);
+
+            if (startsRental)
             {
-                DeletePhysicalFile(newPath);
-                TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao.";
-                return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+                if (booking.Vehicle.Status != VehicleStatus.Available)
+                {
+                    DeletePhysicalFiles(newPaths);
+                    TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao.";
+                    return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+                }
+
+                booking.Status = BookingStatus.Rented;
+                booking.Vehicle.Status = VehicleStatus.Rented;
+                booking.Vehicle.CurrentMileage = booking.Handover.Mileage;
+
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = booking.CustomerId,
+                    Title = "Đã bàn giao xe",
+                    Message = $"Đơn #{booking.BookingId} đã hoàn tất bàn giao và bắt đầu chuyến thuê."
+                });
             }
 
-            booking.Status = BookingStatus.Rented;
-            booking.Vehicle.Status = VehicleStatus.Rented;
-            booking.Vehicle.CurrentMileage = booking.Handover.Mileage;
-
-            _dbContext.Notifications.Add(new Notification
-            {
-                UserId = booking.CustomerId,
-                Title = "Đã bàn giao xe",
-                Message = $"Đơn #{booking.BookingId} đã hoàn tất bàn giao và bắt đầu chuyến thuê."
-            });
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            DeletePhysicalFiles(newPaths);
+            throw;
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        DeletePhysicalFile(existingSigned);
+        DeletePhysicalFiles(existingSigned);
 
         await WriteAuditAsync(
             "UploadSignedHandover",
             nameof(VehicleHandover),
             bookingId,
             startsRental
-                ? $"Tải bản giao có chữ ký và bắt đầu chuyến thuê của đơn #{bookingId}."
-                : $"Tải bản ký tay biên bản giao xe của đơn #{bookingId}.",
+                ? $"Tải {newPaths.Count} trang bản giao có chữ ký và bắt đầu chuyến thuê của đơn #{bookingId}."
+                : $"Tải {newPaths.Count} trang bản ký tay biên bản giao xe của đơn #{bookingId}.",
             cancellationToken);
 
         TempData["SuccessMessage"] = startsRental
-            ? "Đã lưu bản ký. Chuyến thuê đã bắt đầu."
-            : "Đã lưu bản giao xe có chữ ký.";
+            ? $"Đã lưu {newPaths.Count} trang bản ký. Chuyến thuê đã bắt đầu."
+            : $"Đã lưu {newPaths.Count} trang bản giao xe có chữ ký.";
 
         return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
     }
@@ -204,7 +220,8 @@ public sealed class AdminRentalDocumentsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UploadReturnSigned(
         int bookingId,
-        IFormFile signedDocument,
+        List<IFormFile>? signedDocuments,
+        IFormFile? signedDocument,
         CancellationToken cancellationToken)
     {
         var booking = await _dbContext.Bookings
@@ -217,39 +234,49 @@ public sealed class AdminRentalDocumentsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
-        var existingSigned = FindSignedPath(booking.VehicleReturn.ImagePaths, ReturnSignedMarker);
-        if (booking.Status == BookingStatus.Completed && existingSigned is not null)
+        var existingSigned = FindSignedPaths(booking.VehicleReturn.ImagePaths, ReturnSignedMarker);
+        if (booking.Status == BookingStatus.Completed && existingSigned.Count > 0)
         {
             TempData["ErrorMessage"] = "Hồ sơ đã hoàn tất nên bản ký không thể thay đổi.";
             return RedirectToAction("Details", "AdminTripRecords", new { id = bookingId });
         }
 
-        var error = await ValidateSignedDocumentAsync(signedDocument, cancellationToken);
+        var selectedSignedDocuments = CollectSignedFiles(signedDocuments, signedDocument);
+        var error = await ValidateSignedDocumentsAsync(selectedSignedDocuments, cancellationToken);
         if (error is not null)
         {
             TempData["ErrorMessage"] = error;
             return RedirectToAction("Inspect", "Returns", new { bookingId });
         }
 
-        var newPath = await SaveSignedDocumentAsync(
+        var newPaths = await SaveSignedDocumentsAsync(
             bookingId,
             "returns",
             ReturnSignedMarker,
-            signedDocument,
+            selectedSignedDocuments,
             cancellationToken);
 
-        ReplaceSignedPath(booking.VehicleReturn, newPath, ReturnSignedMarker);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        DeletePhysicalFile(existingSigned);
+        try
+        {
+            ReplaceSignedPaths(booking.VehicleReturn, newPaths, ReturnSignedMarker);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            DeletePhysicalFiles(newPaths);
+            throw;
+        }
+
+        DeletePhysicalFiles(existingSigned);
 
         await WriteAuditAsync(
             "UploadSignedReturn",
             nameof(VehicleReturn),
             bookingId,
-            $"Tải bản ký tay biên bản trả xe của đơn #{bookingId}.",
+            $"Tải {newPaths.Count} trang bản ký tay biên bản trả xe của đơn #{bookingId}.",
             cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lưu bản trả xe có chữ ký.";
+        TempData["SuccessMessage"] = $"Đã lưu {newPaths.Count} trang bản trả xe có chữ ký.";
         return RedirectToAction("Inspect", "Returns", new { bookingId });
     }
 
@@ -261,70 +288,135 @@ public sealed class AdminRentalDocumentsController : Controller
                 .ToArray();
 
     internal static string? FindSignedPath(string? imagePaths, string marker) =>
+        FindSignedPaths(imagePaths, marker).FirstOrDefault();
+
+    internal static IReadOnlyList<string> FindSignedPaths(string? imagePaths, string marker) =>
         SplitPaths(imagePaths)
-            .FirstOrDefault(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
+            .Where(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
     private static IReadOnlyList<string> VehiclePhotos(string? imagePaths, string marker) =>
         SplitPaths(imagePaths)
             .Where(path => !path.Contains(marker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
-    private static void ReplaceSignedPath(VehicleHandover record, string newPath, string marker)
+    private static void ReplaceSignedPaths(VehicleHandover record, IReadOnlyCollection<string> newPaths, string marker)
     {
         record.ImagePaths = string.Join(
             ';',
             SplitPaths(record.ImagePaths)
                 .Where(path => !path.Contains(marker, StringComparison.OrdinalIgnoreCase))
-                .Append(newPath));
+                .Concat(newPaths));
     }
 
-    private static void ReplaceSignedPath(VehicleReturn record, string newPath, string marker)
+    private static void ReplaceSignedPaths(VehicleReturn record, IReadOnlyCollection<string> newPaths, string marker)
     {
         record.ImagePaths = string.Join(
             ';',
             SplitPaths(record.ImagePaths)
                 .Where(path => !path.Contains(marker, StringComparison.OrdinalIgnoreCase))
-                .Append(newPath));
+                .Concat(newPaths));
     }
 
-    private async Task<string?> ValidateSignedDocumentAsync(
-        IFormFile? file,
-        CancellationToken cancellationToken)
+    private static List<IFormFile> CollectSignedFiles(
+        IEnumerable<IFormFile>? files,
+        IFormFile? singleFile)
     {
-        if (file is null || file.Length == 0)
+        var selectedFiles = files?
+            .Where(file => file.Length > 0)
+            .ToList() ?? new List<IFormFile>();
+
+        if (singleFile is { Length: > 0 })
         {
-            return "Vui lòng chọn ảnh chụp/scan biên bản đã ký.";
+            selectedFiles.Add(singleFile);
         }
 
-        var validationError = await ImageFileValidator.ValidateAsync(
-            file,
-            MaximumSignedDocumentBytes,
-            cancellationToken);
-
-        return validationError is null
-            ? null
-            : $"Bản ký: {validationError}";
+        return selectedFiles;
     }
 
-    private async Task<string> SaveSignedDocumentAsync(
+    private async Task<string?> ValidateSignedDocumentsAsync(
+        IReadOnlyCollection<IFormFile> files,
+        CancellationToken cancellationToken)
+    {
+        if (files.Count == 0)
+        {
+            return "Vui lòng chọn ít nhất một ảnh chụp/scan biên bản đã ký.";
+        }
+
+        if (files.Count > MaximumSignedDocumentPages)
+        {
+            return $"Chỉ được tải tối đa {MaximumSignedDocumentPages} ảnh chụp/scan biên bản đã ký trong một lần.";
+        }
+
+        var pageNumber = 1;
+        foreach (var file in files)
+        {
+            var validationError = await ImageFileValidator.ValidateAsync(
+                file,
+                MaximumSignedDocumentBytes,
+                cancellationToken);
+
+            if (validationError is not null)
+            {
+                return $"Bản ký trang {pageNumber}: {validationError}";
+            }
+
+            pageNumber++;
+        }
+
+        return null;
+    }
+
+    private async Task<List<string>> SaveSignedDocumentsAsync(
         int bookingId,
         string documentFolder,
         string marker,
-        IFormFile file,
+        IEnumerable<IFormFile> files,
         CancellationToken cancellationToken)
     {
+        var selectedFiles = files
+            .Where(file => file.Length > 0)
+            .ToList();
+
+        var paths = new List<string>();
+        if (selectedFiles.Count == 0)
+        {
+            return paths;
+        }
+
         var relativeFolder = $"uploads/{documentFolder}/{bookingId}";
         var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
         Directory.CreateDirectory(folder);
 
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var fileName = $"{marker}{Guid.NewGuid():N}{extension}";
-        var fullPath = Path.Combine(folder, fileName);
+        try
+        {
+            foreach (var file in selectedFiles)
+            {
+                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+                var fileName = $"{marker}{Guid.NewGuid():N}{extension}";
+                var fullPath = Path.Combine(folder, fileName);
 
-        await using var stream = System.IO.File.Create(fullPath);
-        await file.CopyToAsync(stream, cancellationToken);
+                await using var stream = System.IO.File.Create(fullPath);
+                await file.CopyToAsync(stream, cancellationToken);
 
-        return $"/{relativeFolder}/{fileName}";
+                paths.Add($"/{relativeFolder}/{fileName}");
+            }
+        }
+        catch
+        {
+            DeletePhysicalFiles(paths);
+            throw;
+        }
+
+        return paths;
+    }
+
+    private void DeletePhysicalFiles(IEnumerable<string> relativePaths)
+    {
+        foreach (var relativePath in relativePaths)
+        {
+            DeletePhysicalFile(relativePath);
+        }
     }
 
     private void DeletePhysicalFile(string? relativePath)
