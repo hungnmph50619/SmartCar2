@@ -182,6 +182,13 @@ public sealed class HandoverViewModel
     [Display(Name = "Ảnh khác")]
     public List<IFormFile> Images { get; set; } = new();
 
+    [Display(Name = "Ảnh mới bổ sung")]
+    public List<IFormFile> NewImages { get; set; } = new();
+
+    public List<string> ExistingImagePaths { get; set; } = new();
+
+    public List<string> ImagesToDelete { get; set; } = new();
+
     [Range(0, int.MaxValue)]
     public int IncludedKilometers { get; set; }
 
