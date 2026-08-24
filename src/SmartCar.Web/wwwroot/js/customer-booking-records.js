@@ -28,9 +28,9 @@ function initializeCustomerTripRecordCards() {
 
         body.querySelectorAll("strong").forEach((strong) => {
             const text = strong.textContent?.trim() ?? "";
-            if (text === "Bản ký biên bản giao:" || text === "Bản ký biên bản trả:") {
+            if (text === "Bản ký biên bản giao:" || text === "Bản ký biên bản trả:" || text.startsWith("Bản ký ")) {
                 strong.textContent = signedPageCount > 0
-                    ? `Bản ký ${signedPageCount} trang:`
+                    ? `Bản ký (${signedPageCount} trang):`
                     : "Bản ký:";
             }
         });
@@ -49,7 +49,7 @@ function initializeCustomerTripRecordCards() {
             ? "badge bg-success"
             : "badge bg-secondary";
         signedBadge.textContent = signedPageCount > 0
-            ? `Đã ký ${signedPageCount} trang`
+            ? "Đã ký"
             : "Chưa ký";
 
         heading.append(headingText, signedBadge);
