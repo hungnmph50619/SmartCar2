@@ -1,13 +1,13 @@
 @model SmartCar.Web.ViewModels.HandoverViewModel
 @using SmartCar.Domain.Constants
 @{
-    ViewData["Title"] = "Chỉnh sửa biên bản giao xe";
+    ViewData["Title"] = "Chỉnh sửa thông tin biên bản giao xe";
     var handoverDate = Model.HandoverAt.ToString("yyyy-MM-dd");
     var handoverTime = Model.HandoverAt.ToString("HH:mm");
 }
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
-    <div><h1 class="h3 mb-1">Chỉnh sửa biên bản giao xe · #@Model.BookingId</h1><p class="text-muted mb-0">Chỉ chỉnh sửa được trước khi tải bản ký và bắt đầu chuyến.</p></div>
-    <a class="btn btn-outline-secondary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">← Quay lại bản in</a>
+    <div><h1 class="h3 mb-1">Chỉnh sửa thông tin biên bản giao xe · #@Model.BookingId</h1><p class="text-muted mb-0">Chỉnh sửa thông tin, lưu lại và quay về bản xem trước trước khi in ký.</p></div>
+    <a class="btn btn-outline-secondary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">← Quay lại xem biên bản</a>
 </div>
 <form asp-controller="HandoverEdits" asp-action="Edit" method="post" class="card card-body shadow-sm" data-loading-form>
     <input asp-for="BookingId" type="hidden" />
@@ -23,8 +23,8 @@
         <div class="col-md-6"><label asp-for="InteriorCondition" class="form-label fw-semibold">Tình trạng nội thất</label><textarea asp-for="InteriorCondition" class="form-control" rows="2" maxlength="1500"></textarea></div>
         <div class="col-12"><label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label><textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500"></textarea></div>
     </div>
-    <div class="alert alert-info mt-4 mb-0"><strong>Ảnh đối chiếu được giữ nguyên.</strong> Nếu ảnh đã chọn sai, hãy quay lại danh sách đơn để xử lý trước khi ký.</div>
-    <div class="mt-4 d-flex gap-2"><button class="btn btn-primary" type="submit">Lưu thay đổi</button><a class="btn btn-outline-secondary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">Hủy</a></div>
+    <div class="alert alert-info mt-4 mb-0"><strong>Ảnh đối chiếu được giữ nguyên.</strong> Sau khi lưu, hệ thống sẽ quay lại bản xem trước biên bản để kiểm tra trước khi in và ký.</div>
+    <div class="mt-4 d-flex gap-2"><button class="btn btn-primary" type="submit">Lưu và xem lại biên bản</button><a class="btn btn-outline-secondary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">Hủy</a></div>
 </form>
 @section Scripts {
 <partial name="_ValidationScriptsPartial" />
