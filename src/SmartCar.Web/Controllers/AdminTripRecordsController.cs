@@ -62,6 +62,12 @@ public sealed class AdminTripRecordsController : Controller
 
         var handoverPaths = SplitPaths(records.Handover.ImagePaths);
         var returnPaths = SplitPaths(records.VehicleReturn.ImagePaths);
+        var signedHandoverPaths = handoverPaths
+            .Where(path => path.Contains(HandoverSignedMarker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var signedReturnPaths = returnPaths
+            .Where(path => path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
         var model = new TripRecordViewModel
         {
@@ -82,8 +88,8 @@ public sealed class AdminTripRecordsController : Controller
                 ImagePaths = handoverPaths
                     .Where(path => !path.Contains(HandoverSignedMarker, StringComparison.OrdinalIgnoreCase))
                     .ToArray(),
-                SignedDocumentPath = handoverPaths
-                    .FirstOrDefault(path => path.Contains(HandoverSignedMarker, StringComparison.OrdinalIgnoreCase))
+                SignedDocumentPaths = signedHandoverPaths,
+                SignedDocumentPath = signedHandoverPaths.FirstOrDefault()
             },
             Return = new ReturnDocumentViewModel
             {
@@ -99,8 +105,8 @@ public sealed class AdminTripRecordsController : Controller
                 ImagePaths = returnPaths
                     .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
                     .ToArray(),
-                SignedDocumentPath = returnPaths
-                    .FirstOrDefault(path => path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
+                SignedDocumentPaths = signedReturnPaths,
+                SignedDocumentPath = signedReturnPaths.FirstOrDefault()
             }
         };
 
