@@ -17,11 +17,9 @@
     <div class="row g-3">
         <div class="col-md-6"><label class="form-label fw-semibold">Thời gian giao</label><div class="row g-2"><div class="col-7"><input type="date" id="handover-date" value="@handoverDate" class="form-control" required /></div><div class="col-5"><input type="text" id="handover-time" value="@handoverTime" class="form-control" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" required /></div></div><span asp-validation-for="HandoverAt" class="text-danger small"></span></div>
         <div class="col-md-3"><label asp-for="Mileage" class="form-label fw-semibold">Số km</label><input asp-for="Mileage" type="number" min="0" step="1" class="form-control" required /><span asp-validation-for="Mileage" class="text-danger small"></span></div>
-        <div class="col-md-3"><label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label><div class="input-group"><input asp-for="FuelLevel" type="number" min="0" max="100" step="1" class="form-control" required /><span class="input-group-text">%</span></div><span asp-validation-for="FuelLevel" class="text-danger small"></span></div>
+        <div class="col-md-3"><label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label><div class="input-group"><input asp-for="FuelLevel" type="number" min="0" max="100" maxlength="3" step="1" class="form-control" id="fuel-level" required /><span class="input-group-text">%</span></div><span asp-validation-for="FuelLevel" class="text-danger small"></span></div>
         <div class="col-12"><label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện</label><input asp-for="Accessories" class="form-control" maxlength="1000" /></div>
-        <div class="col-md-6"><label asp-for="ExteriorCondition" class="form-label fw-semibold">Tình trạng bên ngoài</label><textarea asp-for="ExteriorCondition" class="form-control" rows="2" maxlength="1500"></textarea></div>
-        <div class="col-md-6"><label asp-for="InteriorCondition" class="form-label fw-semibold">Tình trạng nội thất</label><textarea asp-for="InteriorCondition" class="form-control" rows="2" maxlength="1500"></textarea></div>
-        <div class="col-12"><label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label><textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500"></textarea></div>
+        <div class="col-12"><label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label><textarea asp-for="Notes" class="form-control" rows="3" maxlength="1500"></textarea></div>
     </div>
     <div class="alert alert-info mt-4 mb-0"><strong>Ảnh đối chiếu được giữ nguyên.</strong> Sau khi lưu, hệ thống sẽ quay lại bản xem trước biên bản để kiểm tra trước khi in và ký.</div>
     <div class="mt-4 d-flex gap-2"><button class="btn btn-primary" type="submit">Lưu và xem lại biên bản</button><a class="btn btn-outline-secondary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">Hủy</a></div>
@@ -30,10 +28,26 @@
 <partial name="_ValidationScriptsPartial" />
 <script>
 (() => {
- const form=document.querySelector('form'); const hidden=document.getElementById('handover-at-value'); const date=document.getElementById('handover-date'); const time=document.getElementById('handover-time');
+ const form=document.querySelector('form');
+ const hidden=document.getElementById('handover-at-value');
+ const date=document.getElementById('handover-date');
+ const time=document.getElementById('handover-time');
+ const fuel=document.getElementById('fuel-level');
  function sync(){ if(!date.value||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time.value)) return false; hidden.value=`${date.value}T${time.value}`; return true; }
- form.addEventListener('submit',e=>{ if(!sync()){e.preventDefault(); time.setCustomValidity('Giờ phải theo định dạng HH:mm, ví dụ 14:30.'); time.reportValidity();} });
- date.addEventListener('change',sync); time.addEventListener('input',()=>{time.setCustomValidity('');sync();}); sync();
+ fuel.addEventListener('input',()=>{
+     fuel.value=fuel.value.replace(/[^0-9]/g,'').slice(0,3);
+     if(Number(fuel.value)>100) fuel.value='100';
+ });
+ form.addEventListener('submit',e=>{
+     if(!sync()){
+         e.preventDefault();
+         time.setCustomValidity('Giờ phải theo định dạng HH:mm, ví dụ 14:30.');
+         time.reportValidity();
+     }
+ });
+ date.addEventListener('change',sync);
+ time.addEventListener('input',()=>{time.setCustomValidity('');sync();});
+ sync();
 })();
 </script>
 }
