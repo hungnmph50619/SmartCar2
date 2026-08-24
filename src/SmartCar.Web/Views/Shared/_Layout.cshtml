@@ -39,6 +39,23 @@
     <link rel="stylesheet" href="~/css/home-ux.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/home-ux-final.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/profile-ux.css" asp-append-version="true" />
+    <style>
+        .smart-location-preview iframe,
+        iframe[title="Bản đồ vị trí hiện tại"],
+        iframe[title="Bản đồ vị trí minh chứng"] {
+            height: 230px !important;
+            min-height: 230px !important;
+        }
+
+        @media (max-width: 575.98px) {
+            .smart-location-preview iframe,
+            iframe[title="Bản đồ vị trí hiện tại"],
+            iframe[title="Bản đồ vị trí minh chứng"] {
+                height: 205px !important;
+                min-height: 205px !important;
+            }
+        }
+    </style>
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body>
