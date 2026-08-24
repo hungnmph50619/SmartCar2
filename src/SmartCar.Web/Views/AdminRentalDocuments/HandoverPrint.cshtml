@@ -51,7 +51,7 @@
 
     @if (awaitingSignature)
     {
-        <div class="hint"><strong>Bước tiếp:</strong> Kiểm tra biên bản. Nếu có sai sót, chọn <strong>Chỉnh sửa biên bản</strong>. Khi đã đúng, hai bên ký bản in rồi chụp/scan <strong>từng trang</strong> và tải lại. Chuyến chỉ bắt đầu sau bước này.</div>
+        <div class="hint"><strong>Bước tiếp:</strong> In, ký từng trang rồi tải ảnh bản ký lên.</div>
         <form class="upload" action="/AdminRentalDocuments/UploadHandoverSigned" method="post" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
             <input type="hidden" name="bookingId" value="@booking.BookingId" />
@@ -61,7 +61,7 @@
                     <button type="submit">Tải các trang đã ký & bắt đầu chuyến</button>
                     <span id="signed-document-count" class="signed-count">Chưa chọn trang ký</span>
                 </div>
-                <div class="hint">Có thể chọn nhiều ảnh cùng lúc, ví dụ trang 1, trang 2, trang 3. Chỉ chấp nhận JPG, PNG hoặc WEBP; mỗi ảnh tối đa 8 MB; tối đa 12 trang.</div>
+                <div class="hint">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
                 <div id="signed-document-preview" class="signed-preview"></div>
             </div>
         </form>
