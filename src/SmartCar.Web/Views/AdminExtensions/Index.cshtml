@@ -1,4 +1,5 @@
 @model IReadOnlyList<SmartCar.Application.Features.Extensions.ExtensionDto>
+@using System.Globalization
 @using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 @using SmartCar.Web.ViewModels
@@ -7,15 +8,90 @@
     var conflictResolutions = ViewBag.ConflictResolutions as IReadOnlyDictionary<int, ExtensionConflictResolutionViewModel>
         ?? new Dictionary<int, ExtensionConflictResolutionViewModel>();
 
-    (string Text, string? ImagePath) ParseEvidence(string? value)
+    decimal? ParseCoordinate(string? value)
     {
-        const string marker = "Ảnh minh chứng: ";
-        if (string.IsNullOrWhiteSpace(value)) return (string.Empty, null);
-        var index = value.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        if (index < 0) return (value.Trim(), null);
-        var text = value[..index].Trim().TrimEnd('|').Trim();
-        var imagePath = value[(index + marker.Length)..].Trim();
-        return (text, string.IsNullOrWhiteSpace(imagePath) ? null : imagePath);
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return decimal.TryParse(
+            value.Trim().Replace(',', '.'),
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out var parsed)
+            ? parsed
+            : null;
+    }
+
+    (string Text, IReadOnlyList<string> ImagePaths, decimal? Latitude, decimal? Longitude, string? PlaceName) ParseEvidence(string? value)
+    {
+        const string imageMarker = "Ảnh minh chứng: ";
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (string.Empty, Array.Empty<string>(), null, null, null);
+        }
+
+        var rawText = value.Trim();
+        var imagePaths = Array.Empty<string>();
+        var imageIndex = rawText.IndexOf(imageMarker, StringComparison.OrdinalIgnoreCase);
+        if (imageIndex >= 0)
+        {
+            var imageText = rawText[(imageIndex + imageMarker.Length)..].Trim();
+            imagePaths = imageText
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToArray();
+            rawText = rawText[..imageIndex].Trim().TrimEnd('|').Trim();
+        }
+
+        decimal? latitude = null;
+        decimal? longitude = null;
+        string? placeName = null;
+        var textParts = new List<string>();
+
+        foreach (var part in rawText.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var locationMatch = System.Text.RegularExpressions.Regex.Match(
+                part,
+                @"Vị trí trực tiếp:\s*(-?\d+(?:[\.,]\d+)?)\s*,\s*(-?\d+(?:[\.,]\d+)?)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (locationMatch.Success)
+            {
+                latitude = ParseCoordinate(locationMatch.Groups[1].Value);
+                longitude = ParseCoordinate(locationMatch.Groups[2].Value);
+                continue;
+            }
+
+            if (part.StartsWith("Địa điểm:", StringComparison.OrdinalIgnoreCase))
+            {
+                placeName = part["Địa điểm:".Length..].Trim();
+                continue;
+            }
+
+            if (!part.StartsWith("Ảnh minh chứng:", StringComparison.OrdinalIgnoreCase))
+            {
+                textParts.Add(part.Trim());
+            }
+        }
+
+        return (string.Join(" | ", textParts), imagePaths, latitude, longitude, placeName);
+    }
+
+    string MapUrl(decimal latitude, decimal longitude)
+    {
+        const decimal delta = 0.004m;
+        var bbox = string.Join(',', new[]
+        {
+            (longitude - delta).ToString(CultureInfo.InvariantCulture),
+            (latitude - delta).ToString(CultureInfo.InvariantCulture),
+            (longitude + delta).ToString(CultureInfo.InvariantCulture),
+            (latitude + delta).ToString(CultureInfo.InvariantCulture)
+        });
+        var marker = string.Join(',', new[]
+        {
+            latitude.ToString(CultureInfo.InvariantCulture),
+            longitude.ToString(CultureInfo.InvariantCulture)
+        });
+
+        return $"https://www.openstreetmap.org/export/embed.html?bbox={Uri.EscapeDataString(bbox)}&layer=mapnik&marker={Uri.EscapeDataString(marker)}";
     }
 }
 
@@ -35,8 +111,9 @@
 </div>
 
 <details class="card card-body shadow-sm mb-4">
-    <summary class="fw-semibold">+ Ghi nhận yêu cầu qua điện thoại</summary>
-    <form asp-controller="AdminExtensions" asp-action="CreateForCustomer" method="post" enctype="multipart/form-data" class="row g-3 mt-2" id="admin-extension-phone-form">
+    <summary class="fw-semibold">+ Tạo yêu cầu hộ khách khi khách gọi hotline</summary>
+    <div class="small text-muted mt-2">Chỉ dùng khi khách không tự gửi được yêu cầu trên tài khoản, nhưng có gọi điện cho SmartCar và cung cấp đủ thông tin.</div>
+    <form asp-controller="AdminExtensionRequests" asp-action="CreateForCustomer" method="post" enctype="multipart/form-data" class="row g-3 mt-2" id="admin-extension-phone-form">
         <input name="requestedReturnDate" type="hidden" id="admin-requested-return-value" />
         <div class="col-md-2"><label class="form-label">Mã đơn</label><input name="bookingId" type="number" min="1" class="form-control" required placeholder="#" /></div>
         <div class="col-md-4">
@@ -47,9 +124,14 @@
         <div class="col-md-6"><label class="form-label">Lý do gia hạn</label><input name="note" class="form-control" maxlength="300" placeholder="Ghi đúng nội dung khách trình bày" required /></div>
         <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="isForceMajeure" value="true" id="admin-force-majeure" /><label class="form-check-label fw-semibold" for="admin-force-majeure">Bất khả kháng</label></div><div class="small text-muted">Chỉ chọn khi có sự cố khách quan; cần ảnh minh chứng và vị trí hiện tại.</div></div>
         <div class="col-md-4"><label class="form-label">Mô tả sự cố</label><textarea name="evidenceNote" class="form-control" rows="2" maxlength="1000" placeholder="Mô tả tình trạng xe hoặc sự cố..."></textarea></div>
-        <div class="col-md-3"><label class="form-label">Vị trí hiện tại</label><input name="customerLiveLocation" class="form-control" maxlength="300" placeholder="Link hoặc tọa độ" /></div>
-        <div class="col-md-3"><label class="form-label">Ảnh minh chứng</label><input name="evidenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" /><div class="form-text">Tối đa 5 MB.</div></div>
-        <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary w-100" type="submit">Ghi nhận</button></div>
+        <div class="col-md-4">
+            <label class="form-label">Vị trí hiện tại</label>
+            <input name="customerLiveLocation" type="hidden" />
+            <button class="btn btn-outline-primary w-100 js-smart-current-location" type="button">Lấy vị trí hiện tại</button>
+            <div class="form-text js-smart-location-status">Chưa lấy vị trí.</div>
+        </div>
+        <div class="col-md-4"><label class="form-label">Ảnh minh chứng</label><input name="evidenceImages" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" multiple /><div class="form-text">Chọn 2-8 ảnh JPG/PNG/WEBP, tối đa 5 MB/ảnh.</div></div>
+        <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary px-4" type="submit">Ghi nhận</button></div>
     </form>
 </details>
 
@@ -93,7 +175,37 @@ else
                             <div class="border rounded p-2 mb-3 @(string.IsNullOrWhiteSpace(item.EvidenceNote) ? "border-danger" : "border-warning")">
                                 <div class="small text-muted">Minh chứng bất khả kháng</div>
                                 <div>@(string.IsNullOrWhiteSpace(evidence.Text) ? "Chưa đủ thông tin." : evidence.Text)</div>
-                                @if (!string.IsNullOrWhiteSpace(evidence.ImagePath)) { <a href="@evidence.ImagePath" target="_blank" rel="noopener" class="d-inline-block mt-2"><img src="@evidence.ImagePath" alt="Ảnh minh chứng" class="img-thumbnail" style="max-height:160px;max-width:240px;object-fit:contain" /></a> }
+                                @if (evidence.ImagePaths.Count > 0)
+                                {
+                                    <div class="row g-2 mt-2">
+                                        @for (var imageIndex = 0; imageIndex < evidence.ImagePaths.Count; imageIndex++)
+                                        {
+                                            var imagePath = evidence.ImagePaths[imageIndex];
+                                            <div class="col-6 col-md-4">
+                                                <a href="@imagePath" target="_blank" rel="noopener" class="d-block text-decoration-none">
+                                                    <img src="@imagePath" alt="Ảnh minh chứng @(imageIndex + 1)" class="img-thumbnail w-100" style="height:130px;object-fit:cover" />
+                                                    <div class="small text-muted mt-1">Ảnh @(imageIndex + 1)</div>
+                                                </a>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                @if (evidence.Latitude.HasValue && evidence.Longitude.HasValue)
+                                {
+                                    var lat = evidence.Latitude.Value;
+                                    var lng = evidence.Longitude.Value;
+                                    <div class="mt-3">
+                                        <div class="small border rounded bg-light p-2 mb-2">
+                                            <strong>Vị trí khách gửi:</strong> @lat.ToString("0.000000", CultureInfo.InvariantCulture), @lng.ToString("0.000000", CultureInfo.InvariantCulture)
+                                            @if (!string.IsNullOrWhiteSpace(evidence.PlaceName))
+                                            {
+                                                <br />
+                                                <strong>Địa điểm:</strong> @evidence.PlaceName
+                                            }
+                                        </div>
+                                        <iframe title="Bản đồ vị trí khách gửi" class="w-100 rounded border" style="height:230px" loading="lazy" src="@MapUrl(lat, lng)"></iframe>
+                                    </div>
+                                }
                             </div>
                         }
 
@@ -162,7 +274,7 @@ else
 
                         @if (item.Status == BookingExtensionStatus.NeedsEvidence)
                         {
-                            <div class="alert alert-warning py-2 mb-3"><strong>Chờ khách bổ sung.</strong> @item.AdminNote</div>
+                            <div class="alert alert-warning py-2 mb-3"><strong>Chờ khách bổ sung minh chứng.</strong> @item.AdminNote</div>
                             <details><summary class="text-danger fw-semibold">Từ chối yêu cầu</summary><form asp-controller="AdminExtensions" asp-action="Reject" method="post" class="mt-2"><input type="hidden" name="ExtensionId" value="@item.BookingExtensionId" /><textarea name="Reason" class="form-control mb-2" required maxlength="500" placeholder="Lý do từ chối"></textarea><button class="btn btn-outline-danger" type="submit">Từ chối & báo khách</button></form></details>
                         }
                         else if (item.HasScheduleConflict && !item.IsForceMajeure)
@@ -187,7 +299,7 @@ else
                             }
 
                             <div class="row g-2">
-                                <div class="col-md-6"><details class="border rounded p-2 h-100"><summary class="fw-semibold text-warning">Yêu cầu thêm minh chứng</summary><form asp-controller="AdminExtensions" asp-action="RequestEvidence" method="post" class="mt-2"><input type="hidden" name="extensionId" value="@item.BookingExtensionId" /><textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Khách cần bổ sung gì?"></textarea><button class="btn btn-sm btn-warning w-100" type="submit">Gửi yêu cầu</button></form></details></div>
+                                <div class="col-md-6"><details class="border rounded p-2 h-100"><summary class="fw-semibold text-warning">Yêu cầu khách bổ sung minh chứng</summary><form asp-controller="AdminExtensions" asp-action="RequestEvidence" method="post" class="mt-2"><input type="hidden" name="extensionId" value="@item.BookingExtensionId" /><textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Khách cần bổ sung gì?"></textarea><button class="btn btn-sm btn-warning w-100" type="submit">Gửi yêu cầu bổ sung</button></form></details></div>
                                 <div class="col-md-6"><details class="border rounded p-2 h-100"><summary class="fw-semibold text-danger">Không duyệt</summary><form asp-controller="AdminExtensions" asp-action="Reject" method="post" class="mt-2"><input type="hidden" name="ExtensionId" value="@item.BookingExtensionId" /><textarea name="Reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Lý do từ chối"></textarea><button class="btn btn-sm btn-outline-danger w-100" type="submit">Từ chối & báo khách</button></form></details></div>
                             </div>
                         }
