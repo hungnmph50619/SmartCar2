@@ -224,24 +224,29 @@ else
                             <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
                             <input type="hidden" name="bookingId" value="@item.BookingId" />
                             <div class="fw-semibold mb-1">Bổ sung minh chứng bất khả kháng</div>
-                            <div class="small text-muted mb-3">Bổ sung đúng như lúc gửi ban đầu: ảnh minh chứng, vị trí hiện tại và mô tả sự cố.</div>
-                            <div class="row g-3">
-                                <div class="col-lg-5">
-                                    <label class="form-label small">Ảnh minh chứng</label>
+                            <div class="small text-muted mb-2">Không cần nhập lại lý do gia hạn. Chỉ bổ sung phần SmartCar yêu cầu để xác minh bất khả kháng.</div>
+                            @if (!string.IsNullOrWhiteSpace(item.AdminNote))
+                            {
+                                <div class="alert alert-info py-2 small mb-3"><strong>SmartCar yêu cầu:</strong> @item.AdminNote</div>
+                            }
+                            <div class="row g-3 align-items-start">
+                                <div class="col-lg-6 col-md-6">
+                                    <label class="form-label small fw-semibold">Ảnh minh chứng bổ sung</label>
                                     <input name="evidenceImages" type="file" accept="image/jpeg,image/png,image/webp" class="form-control" multiple required />
-                                    <div class="form-text">Chọn 2-8 ảnh JPG/PNG/WEBP, tối đa 5 MB/ảnh. Có thể chọn thêm nhiều lần.</div>
+                                    <div class="form-text">Chọn 2-8 ảnh JPG/PNG/WEBP, tối đa 5 MB/ảnh. Có thể bấm Chọn tệp nhiều lần để cộng thêm ảnh.</div>
                                 </div>
-                                <div class="col-lg-5">
-                                    <label class="form-label small">Vị trí hiện tại</label>
+                                <div class="col-lg-6 col-md-6">
+                                    <label class="form-label small fw-semibold">Vị trí hiện tại</label>
                                     <button type="button" class="btn btn-outline-primary w-100 js-smart-current-location">Lấy vị trí hiện tại</button>
                                     <div class="form-text js-smart-location-status">Chưa lấy vị trí.</div>
                                 </div>
-                                <div class="col-lg-2 d-grid align-items-end">
-                                    <button class="btn btn-primary" type="submit">Gửi lại để duyệt</button>
-                                </div>
                                 <div class="col-12">
-                                    <label class="form-label small">Mô tả sự cố</label>
-                                    <textarea name="evidenceNote" class="form-control" rows="3" maxlength="1000" required placeholder="Mô tả sự cố đang xảy ra, tình trạng xe và nội dung ảnh minh chứng..."></textarea>
+                                    <label class="form-label small fw-semibold">Mô tả bổ sung</label>
+                                    <textarea name="evidenceNote" class="form-control" rows="3" maxlength="1000" required placeholder="Ghi rõ sự cố hiện tại, tình trạng xe và nội dung ảnh minh chứng bổ sung..."></textarea>
+                                    <div class="form-text">Không nhập lại lý do gia hạn cũ; chỉ ghi nội dung cần bổ sung theo yêu cầu của SmartCar.</div>
+                                </div>
+                                <div class="col-12 d-flex justify-content-end">
+                                    <button class="btn btn-primary px-4" type="submit">Gửi lại để duyệt</button>
                                 </div>
                             </div>
                         </form>
