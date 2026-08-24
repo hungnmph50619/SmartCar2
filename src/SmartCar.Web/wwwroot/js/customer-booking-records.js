@@ -18,11 +18,25 @@ function initializeCustomerTripRecordCards() {
             return;
         }
 
+        const signedLinks = Array.from(body.querySelectorAll("a[href*='signed-handover-'], a[href*='signed-return-']"));
+        const signedPageCount = signedLinks.length;
+
+        signedLinks.forEach((link, index) => {
+            link.className = "btn btn-sm btn-outline-success text-decoration-none";
+            link.textContent = `Trang ${index + 1}`;
+        });
+
+        body.querySelectorAll("strong").forEach((strong) => {
+            const text = strong.textContent?.trim() ?? "";
+            if (text === "Bản ký biên bản giao:" || text === "Bản ký biên bản trả:") {
+                strong.textContent = signedPageCount > 0
+                    ? `Bản ký ${signedPageCount} trang:`
+                    : "Bản ký:";
+            }
+        });
+
         card.classList.add("customer-record-card");
         body.classList.add("d-none", "customer-record-details");
-
-        const existingSignedLink = Array.from(header.querySelectorAll("a"))
-            .find((link) => link.textContent?.trim() === "Xem bản ký");
 
         const heading = document.createElement("div");
         heading.className = "d-flex align-items-center gap-2 flex-wrap";
@@ -31,22 +45,17 @@ function initializeCustomerTripRecordCards() {
         headingText.textContent = title;
 
         const signedBadge = document.createElement("span");
-        signedBadge.className = existingSignedLink
+        signedBadge.className = signedPageCount > 0
             ? "badge bg-success"
             : "badge bg-secondary";
-        signedBadge.textContent = existingSignedLink
-            ? "Đã có bản ký"
-            : "Chưa có bản ký";
+        signedBadge.textContent = signedPageCount > 0
+            ? `Đã ký ${signedPageCount} trang`
+            : "Chưa ký";
 
         heading.append(headingText, signedBadge);
 
         const actions = document.createElement("div");
         actions.className = "d-flex align-items-center gap-2 flex-wrap";
-
-        if (existingSignedLink) {
-            existingSignedLink.className = "btn btn-sm btn-outline-primary text-decoration-none";
-            actions.appendChild(existingSignedLink);
-        }
 
         const toggleButton = document.createElement("button");
         toggleButton.type = "button";
@@ -69,6 +78,7 @@ function initializeCustomerTripRecordCards() {
         body.querySelectorAll(".col-6.col-md-4").forEach((column) => {
             if (column.querySelector("img")) {
                 column.classList.add("customer-record-photo");
+                column.querySelectorAll(":scope > .small.fw-semibold.mb-1").forEach((label) => label.remove());
             }
         });
     });
@@ -90,12 +100,6 @@ function initializeCustomerTripRecordCards() {
             .customer-record-card .customer-record-photo img {
                 height: 82px !important;
                 object-fit: cover;
-            }
-
-            .customer-record-card .customer-record-photo .small {
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
             }
         `;
         document.head.appendChild(style);
