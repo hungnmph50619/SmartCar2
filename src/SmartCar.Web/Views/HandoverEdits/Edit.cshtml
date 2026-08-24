@@ -32,6 +32,10 @@
     <p class="text-muted mb-3">Có thể xóa ảnh chọn nhầm hoặc thêm ảnh còn thiếu trước khi in và ký biên bản.</p>
     <span asp-validation-for="ImagesToDelete" class="text-danger small d-block"></span>
     <span asp-validation-for="NewImages" class="text-danger small d-block"></span>
+    <div id="delete-image-summary" class="alert alert-danger d-none py-2 mb-3">
+        <strong>Đã chọn xóa ảnh.</strong>
+        <span id="delete-image-summary-text">Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và xem lại biên bản”.</span>
+    </div>
 
     @if (currentImages.Count == 0)
     {
@@ -45,16 +49,17 @@
                 var imagePath = currentImages[index];
                 var checkboxId = $"delete-image-{index}";
                 <div class="col-sm-6 col-lg-3 existing-image-card">
-                    <div class="border rounded-3 p-2 h-100 bg-light position-relative">
+                    <div class="border rounded-3 p-2 h-100 bg-light position-relative existing-image-box">
                         <button type="button" class="btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center mark-delete-image" style="width: 26px; height: 26px; padding: 0; top: -8px; right: -8px; z-index: 2; line-height: 1;" title="Xóa ảnh này" aria-label="Xóa ảnh đối chiếu @(index + 1)">&times;</button>
                         <input class="delete-image-check d-none" type="checkbox" name="ImagesToDelete" value="@imagePath" id="@checkboxId" />
-                        <a href="@imagePath" target="_blank" rel="noopener">
-                            <img src="@imagePath" alt="Ảnh đối chiếu @(index + 1)" class="img-fluid rounded border bg-white" style="height: 150px; width: 100%; object-fit: contain;" />
+                        <a href="@imagePath" target="_blank" rel="noopener" class="existing-image-link">
+                            <img src="@imagePath" alt="Ảnh đối chiếu @(index + 1)" class="img-fluid rounded border bg-white existing-image-thumb" style="height: 150px; width: 100%; object-fit: contain;" />
                         </a>
-                        <div class="small text-muted text-center mt-2">Ảnh @(index + 1)</div>
-                        <div class="d-none text-center mt-2 delete-image-note">
-                            <span class="badge text-bg-danger">Sẽ xóa khi lưu</span>
-                            <button type="button" class="btn btn-link btn-sm p-0 ms-1 undo-delete-image">Hoàn tác</button>
+                        <div class="small text-muted text-center mt-2 image-title">Ảnh @(index + 1)</div>
+                        <div class="delete-image-note d-none mt-2 rounded-3 border border-danger bg-danger-subtle text-danger p-2">
+                            <div class="fw-semibold">Đã chọn xóa ảnh này</div>
+                            <div class="small">Ảnh chưa bị xóa ngay. Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và xem lại biên bản”.</div>
+                            <button type="button" class="btn btn-outline-danger btn-sm mt-2 undo-delete-image">Giữ lại ảnh</button>
                         </div>
                     </div>
                 </div>
@@ -92,27 +97,32 @@
  const imageCount=document.getElementById('new-handover-image-count');
  const imageValidation=form?.querySelector('[data-valmsg-for="NewImages"]');
  const existingList=document.getElementById('existing-image-list');
+ const deleteSummary=document.getElementById('delete-image-summary');
+ const deleteSummaryText=document.getElementById('delete-image-summary-text');
  const maximumImageBytes=5*1024*1024;
  const allowedImageExtensions=['.jpg','.jpeg','.png','.webp'];
  const allowedImageTypes=['image/jpeg','image/png','image/webp'];
  let previewUrls=[];
  let selectedImageFiles=Array.from(imageInput?.files || []);
  function sync(){ if(!date.value||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time.value)) return false; hidden.value=`${date.value}T${time.value}`; return true; }
+ function selectedDeleteCount(){ return document.querySelectorAll('.delete-image-check:checked').length; }
+ function updateDeleteSummary(){ const count=selectedDeleteCount(); if(!deleteSummary||!deleteSummaryText) return; if(count>0){ deleteSummary.classList.remove('d-none'); deleteSummaryText.textContent=`Đã chọn xóa ${count} ảnh. Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và xem lại biên bản”.`; return;} deleteSummary.classList.add('d-none'); deleteSummaryText.textContent='Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và xem lại biên bản”.'; }
  function setImageValidationMessage(message,showInline){ if(!imageValidation) return; if(showInline&&message){imageValidation.textContent=message; imageValidation.classList.remove('field-validation-valid'); imageValidation.classList.add('field-validation-error'); return;} if(!message){imageValidation.textContent=''; imageValidation.classList.remove('field-validation-error'); imageValidation.classList.add('field-validation-valid');} }
- function currentImageCountAfterDelete(){ const currentCount=Number(existingList?.dataset.currentCount || 0); const deleteCount=document.querySelectorAll('.delete-image-check:checked').length; return Math.max(0,currentCount-deleteCount); }
+ function currentImageCountAfterDelete(){ const currentCount=Number(existingList?.dataset.currentCount || 0); return Math.max(0,currentCount-selectedDeleteCount()); }
  function validateNewImages(showInline=false){ if(!imageInput) return true; let message=''; const total=currentImageCountAfterDelete()+selectedImageFiles.length; if(total>25){message='Biên bản chỉ được lưu tối đa 25 ảnh đối chiếu.';} if(!message){ const oversized=selectedImageFiles.find(file=>file.size>maximumImageBytes); if(oversized) message=`Ảnh "${oversized.name}" vượt quá 5 MB.`; } if(!message){ const invalidFormat=selectedImageFiles.find(file=>{ const lowerName=file.name.toLowerCase(); const extensionValid=allowedImageExtensions.some(extension=>lowerName.endsWith(extension)); const typeValid=!file.type||allowedImageTypes.includes(file.type.toLowerCase()); return !extensionValid||!typeValid; }); if(invalidFormat) message=`Ảnh "${invalidFormat.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`; } imageInput.setCustomValidity(message); setImageValidationMessage(message,showInline); return message===''; }
  function clearPreviewUrls(){ previewUrls.forEach(url=>URL.revokeObjectURL(url)); previewUrls=[]; }
  function syncImageInputFiles(){ if(!imageInput) return; const transfer=new DataTransfer(); selectedImageFiles.forEach(file=>transfer.items.add(file)); imageInput.files=transfer.files; }
  function removeNewImage(index){ selectedImageFiles.splice(index,1); syncImageInputFiles(); renderImagePreview(); validateNewImages(true); }
  function renderImagePreview(){ if(!imageInput||!imagePreview||!imageCount) return; clearPreviewUrls(); imagePreview.innerHTML=''; imageCount.textContent=selectedImageFiles.length>0?`Đã chọn ${selectedImageFiles.length} ảnh mới`:'Chưa chọn ảnh'; imageCount.className=`badge ${selectedImageFiles.length>0?'text-bg-success':'text-bg-secondary'}`; selectedImageFiles.forEach((file,index)=>{ const url=URL.createObjectURL(file); previewUrls.push(url); const wrapper=document.createElement('div'); wrapper.className='border rounded bg-white p-1 position-relative'; wrapper.style.width='116px'; const removeButton=document.createElement('button'); removeButton.type='button'; removeButton.className='btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center'; removeButton.style.width='24px'; removeButton.style.height='24px'; removeButton.style.padding='0'; removeButton.style.top='-7px'; removeButton.style.right='-7px'; removeButton.style.zIndex='2'; removeButton.style.lineHeight='1'; removeButton.innerHTML='&times;'; removeButton.title='Xóa ảnh này'; removeButton.setAttribute('aria-label',`Xóa ảnh mới ${index+1}`); removeButton.addEventListener('click',()=>removeNewImage(index)); const image=document.createElement('img'); image.src=url; image.alt=file.name; image.className='rounded border bg-light'; image.style.width='106px'; image.style.height='82px'; image.style.objectFit='cover'; const caption=document.createElement('div'); caption.className='small text-muted text-truncate mt-1'; caption.title=file.name; caption.textContent=file.name; wrapper.append(removeButton,image,caption); imagePreview.appendChild(wrapper); }); }
- document.querySelectorAll('.mark-delete-image').forEach(button=>{ button.addEventListener('click',()=>{ const card=button.closest('.existing-image-card'); const check=card?.querySelector('.delete-image-check'); const note=card?.querySelector('.delete-image-note'); const img=card?.querySelector('img'); if(check) check.checked=true; if(note) note.classList.remove('d-none'); if(img){img.classList.add('opacity-50'); img.style.filter='grayscale(1)';} button.classList.add('d-none'); validateNewImages(true); }); });
- document.querySelectorAll('.undo-delete-image').forEach(button=>{ button.addEventListener('click',()=>{ const card=button.closest('.existing-image-card'); const check=card?.querySelector('.delete-image-check'); const note=card?.querySelector('.delete-image-note'); const img=card?.querySelector('img'); const deleteButton=card?.querySelector('.mark-delete-image'); if(check) check.checked=false; if(note) note.classList.add('d-none'); if(img){img.classList.remove('opacity-50'); img.style.filter='';} if(deleteButton) deleteButton.classList.remove('d-none'); validateNewImages(true); }); });
+ document.querySelectorAll('.mark-delete-image').forEach(button=>{ button.addEventListener('click',()=>{ const card=button.closest('.existing-image-card'); const box=card?.querySelector('.existing-image-box'); const check=card?.querySelector('.delete-image-check'); const note=card?.querySelector('.delete-image-note'); const img=card?.querySelector('.existing-image-thumb'); const link=card?.querySelector('.existing-image-link'); const title=card?.querySelector('.image-title'); if(check) check.checked=true; if(note) note.classList.remove('d-none'); if(box){ box.classList.remove('bg-light'); box.classList.add('border-danger','bg-danger-subtle','shadow-sm'); } if(img){img.classList.add('opacity-50'); img.style.filter='grayscale(1)';} if(link) link.classList.add('pe-none'); if(title){title.textContent='Đã chọn xóa ảnh này'; title.classList.remove('text-muted'); title.classList.add('text-danger','fw-semibold');} button.classList.add('d-none'); updateDeleteSummary(); validateNewImages(true); }); });
+ document.querySelectorAll('.undo-delete-image').forEach(button=>{ button.addEventListener('click',()=>{ const card=button.closest('.existing-image-card'); const box=card?.querySelector('.existing-image-box'); const check=card?.querySelector('.delete-image-check'); const note=card?.querySelector('.delete-image-note'); const img=card?.querySelector('.existing-image-thumb'); const link=card?.querySelector('.existing-image-link'); const title=card?.querySelector('.image-title'); const deleteButton=card?.querySelector('.mark-delete-image'); if(check) check.checked=false; if(note) note.classList.add('d-none'); if(box){ box.classList.add('bg-light'); box.classList.remove('border-danger','bg-danger-subtle','shadow-sm'); } if(img){img.classList.remove('opacity-50'); img.style.filter='';} if(link) link.classList.remove('pe-none'); if(title){ const index=Array.from(document.querySelectorAll('.existing-image-card')).indexOf(card); title.textContent=`Ảnh ${index+1}`; title.classList.add('text-muted'); title.classList.remove('text-danger','fw-semibold');} if(deleteButton) deleteButton.classList.remove('d-none'); updateDeleteSummary(); validateNewImages(true); }); });
  fuel.addEventListener('input',()=>{ fuel.value=fuel.value.replace(/[^0-9]/g,'').slice(0,3); if(Number(fuel.value)>100) fuel.value='100'; });
  imageInput?.addEventListener('change',()=>{ selectedImageFiles=Array.from(imageInput.files || []); renderImagePreview(); validateNewImages(true); });
  form.addEventListener('submit',e=>{ let valid=true; if(!sync()){ time.setCustomValidity('Giờ phải theo định dạng HH:mm, ví dụ 14:30.'); time.reportValidity(); valid=false; } if(!validateNewImages(true)){ imageInput?.reportValidity(); valid=false; } if(!valid) e.preventDefault(); });
  date.addEventListener('change',sync);
  time.addEventListener('input',()=>{time.setCustomValidity('');sync();});
  renderImagePreview();
+ updateDeleteSummary();
  sync();
 })();
 </script>
