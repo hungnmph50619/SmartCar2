@@ -44,8 +44,33 @@ document.addEventListener('DOMContentLoaded', () => {
         input.addEventListener('paste', () => window.setTimeout(normalize, 0));
     });
 
+    localizeSignedFileValidationMessages();
     polishSignedDocumentUi();
 });
+
+function localizeSignedFileValidationMessages() {
+    const signedFileInputs = document.querySelectorAll(
+        '.signed-file-input, #signed-documents, input[type="file"][name="signedDocuments"], input[type="file"][name="signedDocument"]'
+    );
+    const requiredMessage = 'Vui lòng chọn ít nhất một ảnh bản ký.';
+
+    signedFileInputs.forEach(input => {
+        if (!(input instanceof HTMLInputElement)) return;
+
+        const refreshMessage = () => {
+            if (input.files && input.files.length > 0) {
+                input.setCustomValidity('');
+            } else {
+                input.setCustomValidity(requiredMessage);
+            }
+        };
+
+        input.addEventListener('invalid', refreshMessage);
+        input.addEventListener('change', refreshMessage);
+        input.form?.addEventListener('submit', refreshMessage);
+        refreshMessage();
+    });
+}
 
 function polishSignedDocumentUi() {
     const path = window.location.pathname;
