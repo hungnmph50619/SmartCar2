@@ -16,6 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<ISecureDocumentStorage, SecureDocumentStorage>();
 builder.Services.AddScoped<IUserBankAccountService, UserBankAccountService>();
 builder.Services.AddScoped<KycAdminNotificationConsolidationFilter>();

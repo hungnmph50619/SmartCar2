@@ -45,8 +45,10 @@
             ? Array.Empty<string>()
             : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    string? SignedPath(string? paths, string marker) =>
-        SplitPaths(paths).FirstOrDefault(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    IReadOnlyList<string> SignedPaths(string? paths, string marker) =>
+        SplitPaths(paths)
+            .Where(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
     IReadOnlyList<string> EvidencePaths(string? paths, string marker) =>
         SplitPaths(paths)
@@ -242,9 +244,11 @@
                         <div class="alert alert-light border small">
                             Nếu xe có đơn kế tiếp, gia hạn thông thường sẽ bị từ chối. Bất khả kháng cần ảnh và vị trí hiện tại.
                         </div>
-                        <form asp-controller="Extensions" asp-action="SubmitRequest" method="post" class="row g-3" id="customer-extension-form">
+                        <form asp-controller="Extensions" asp-action="SubmitRequest" method="post" enctype="multipart/form-data" class="row g-3" id="customer-extension-form">
                             <input type="hidden" name="BookingId" value="@Model.BookingId" />
                             <input type="hidden" name="RequestedReturnDate" id="requested-return-value" />
+                            <input type="hidden" name="evidenceLatitude" id="extension-evidence-latitude" />
+                            <input type="hidden" name="evidenceLongitude" id="extension-evidence-longitude" />
                             <div class="col-md-6">
                                 <label class="form-label">Thời gian trả mới</label>
                                 <div class="row g-2">
@@ -265,13 +269,32 @@
                                     <input class="form-check-input" type="checkbox" name="isForceMajeure" value="true" id="force-majeure-@Model.BookingId" />
                                     <label class="form-check-label fw-semibold" for="force-majeure-@Model.BookingId">Bất khả kháng</label>
                                 </div>
+                                <div class="form-text">Nếu chọn, bắt buộc gửi ảnh sự cố và lấy vị trí hiện tại để SmartCar kiểm tra.</div>
                             </div>
-                            <div class="col-md-9">
-                                <label class="form-label">Minh chứng / vị trí</label>
-                                <textarea name="evidenceNote" class="form-control" rows="2" maxlength="1000" placeholder="Bắt buộc khi chọn bất khả kháng"></textarea>
+                            <div class="col-12 d-none" id="force-majeure-evidence">
+                                <div class="border rounded p-3 bg-light">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold" for="extension-evidence-image">Ảnh minh chứng</label>
+                                            <input class="form-control" type="file" id="extension-evidence-image" name="evidenceImage" accept="image/jpeg,image/png,image/webp" />
+                                            <div class="form-text">Ảnh tình trạng xe/sự cố. JPG, PNG hoặc WEBP, tối đa 5 MB.</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold">Vị trí hiện tại</label>
+                                            <div class="d-grid">
+                                                <button class="btn btn-outline-primary" type="button" id="extension-get-location">Lấy vị trí hiện tại</button>
+                                            </div>
+                                            <div class="form-text" id="extension-location-status" aria-live="polite">Chưa lấy vị trí.</div>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label" for="extension-evidence-note">Mô tả minh chứng</label>
+                                            <textarea id="extension-evidence-note" name="evidenceNote" class="form-control" rows="2" maxlength="1000" placeholder="Ví dụ: xe thủng lốp, đang chờ cứu hộ..."></textarea>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-3 d-flex align-items-end">
-                                <button class="btn btn-primary w-100" type="submit">Gửi yêu cầu</button>
+                            <div class="col-12 d-flex justify-content-end">
+                                <button class="btn btn-primary px-4" type="submit">Gửi yêu cầu</button>
                             </div>
                         </form>
                     }
@@ -285,17 +308,29 @@
 
         @if (handoverRecord is not null)
         {
-            var handoverSigned = SignedPath(handoverRecord.ImagePaths, "signed-handover-");
+            var handoverSignedPaths = SignedPaths(handoverRecord.ImagePaths, "signed-handover-");
             var handoverEvidence = EvidencePaths(handoverRecord.ImagePaths, "signed-handover-");
             <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap">
                     <strong>Biên bản giao xe</strong>
-                    @if (handoverSigned is not null)
+                    @if (handoverSignedPaths.Count > 0)
                     {
-                        <a class="small text-decoration-none" href="@handoverSigned" target="_blank" rel="noopener">Xem bản ký</a>
+                        <span class="badge bg-success">Đã có @handoverSignedPaths.Count trang ký</span>
                     }
                 </div>
                 <div class="card-body">
+                    @if (handoverSignedPaths.Count > 0)
+                    {
+                        <div class="border rounded bg-light p-2 mb-3 small">
+                            <strong>Bản ký biên bản giao:</strong>
+                            <div class="d-flex gap-2 flex-wrap mt-2">
+                                @for (var index = 0; index < handoverSignedPaths.Count; index++)
+                                {
+                                    <a class="btn btn-sm btn-outline-success" href="@handoverSignedPaths[index]" target="_blank" rel="noopener">Xem trang @(index + 1)</a>
+                                }
+                            </div>
+                        </div>
+                    }
                     <div class="row g-3 mb-3">
                         <div class="col-md-4"><span class="text-muted">Thời gian</span><div class="fw-semibold">@handoverRecord.HandoverAt.ToString("dd/MM/yyyy HH:mm")</div></div>
                         <div class="col-md-4"><span class="text-muted">Km lúc giao</span><div class="fw-semibold">@handoverRecord.Mileage.ToString("N0") km</div></div>
@@ -336,17 +371,29 @@
 
         @if (returnRecord is not null)
         {
-            var returnSigned = SignedPath(returnRecord.ImagePaths, "signed-return-");
+            var returnSignedPaths = SignedPaths(returnRecord.ImagePaths, "signed-return-");
             var returnEvidence = EvidencePaths(returnRecord.ImagePaths, "signed-return-");
             <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap">
                     <strong>Biên bản trả xe</strong>
-                    @if (returnSigned is not null)
+                    @if (returnSignedPaths.Count > 0)
                     {
-                        <a class="small text-decoration-none" href="@returnSigned" target="_blank" rel="noopener">Xem bản ký</a>
+                        <span class="badge bg-success">Đã có @returnSignedPaths.Count trang ký</span>
                     }
                 </div>
                 <div class="card-body">
+                    @if (returnSignedPaths.Count > 0)
+                    {
+                        <div class="border rounded bg-light p-2 mb-3 small">
+                            <strong>Bản ký biên bản trả:</strong>
+                            <div class="d-flex gap-2 flex-wrap mt-2">
+                                @for (var index = 0; index < returnSignedPaths.Count; index++)
+                                {
+                                    <a class="btn btn-sm btn-outline-success" href="@returnSignedPaths[index]" target="_blank" rel="noopener">Xem trang @(index + 1)</a>
+                                }
+                            </div>
+                        </div>
+                    }
                     <div class="row g-3 mb-3">
                         <div class="col-md-4"><span class="text-muted">Thời gian</span><div class="fw-semibold">@returnRecord.ReturnedAt.ToString("dd/MM/yyyy HH:mm")</div></div>
                         <div class="col-md-4"><span class="text-muted">Km lúc trả</span><div class="fw-semibold">@returnRecord.Mileage.ToString("N0") km</div></div>
@@ -585,6 +632,13 @@
         const date = document.getElementById('requested-return-date');
         const time = document.getElementById('requested-return-time');
         const preview = document.getElementById('extension-price-preview');
+        const forceMajeure = form.querySelector('input[name="isForceMajeure"]');
+        const evidencePanel = document.getElementById('force-majeure-evidence');
+        const evidenceImage = document.getElementById('extension-evidence-image');
+        const latitude = document.getElementById('extension-evidence-latitude');
+        const longitude = document.getElementById('extension-evidence-longitude');
+        const locationButton = document.getElementById('extension-get-location');
+        const locationStatus = document.getElementById('extension-location-status');
         const currentReturn = new Date('@Model.ReturnDate.ToString("yyyy-MM-ddTHH:mm:ss")');
         const minimum = new Date('@Model.ReturnDate.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm:ss")');
         const dailyPrice = Number('@Model.DailyPrice.ToString(System.Globalization.CultureInfo.InvariantCulture)');
@@ -620,14 +674,103 @@
             return true;
         }
 
+        function syncForceMajeureUi() {
+            const enabled = forceMajeure?.checked === true;
+            evidencePanel?.classList.toggle('d-none', !enabled);
+            if (evidenceImage instanceof HTMLInputElement) {
+                evidenceImage.required = enabled;
+                if (!enabled) evidenceImage.setCustomValidity('');
+            }
+            if (!enabled) {
+                if (latitude instanceof HTMLInputElement) latitude.value = '';
+                if (longitude instanceof HTMLInputElement) longitude.value = '';
+                if (locationStatus) {
+                    locationStatus.textContent = 'Chưa lấy vị trí.';
+                    locationStatus.classList.remove('text-success', 'text-danger');
+                    locationStatus.classList.add('text-muted');
+                }
+            }
+        }
+
+        function setLocationStatus(message, state) {
+            if (!locationStatus) return;
+            locationStatus.textContent = message;
+            locationStatus.classList.remove('text-muted', 'text-success', 'text-danger');
+            locationStatus.classList.add(state === 'success' ? 'text-success' : state === 'error' ? 'text-danger' : 'text-muted');
+        }
+
+        locationButton?.addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                setLocationStatus('Trình duyệt không hỗ trợ lấy vị trí.', 'error');
+                return;
+            }
+
+            if (locationButton instanceof HTMLButtonElement) {
+                locationButton.disabled = true;
+                locationButton.textContent = 'Đang lấy vị trí...';
+            }
+            setLocationStatus('Đang yêu cầu vị trí hiện tại...', 'normal');
+
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lng = position.coords.longitude.toFixed(6);
+                    if (latitude instanceof HTMLInputElement) latitude.value = lat;
+                    if (longitude instanceof HTMLInputElement) longitude.value = lng;
+                    setLocationStatus(`✓ Đã lấy vị trí hiện tại (${lat}, ${lng})`, 'success');
+                    if (locationButton instanceof HTMLButtonElement) {
+                        locationButton.disabled = false;
+                        locationButton.textContent = 'Lấy lại vị trí hiện tại';
+                    }
+                },
+                error => {
+                    if (latitude instanceof HTMLInputElement) latitude.value = '';
+                    if (longitude instanceof HTMLInputElement) longitude.value = '';
+                    const message = error.code === 1
+                        ? 'Bạn chưa cho phép truy cập vị trí. Hãy cho phép vị trí rồi thử lại.'
+                        : 'Không lấy được vị trí hiện tại. Vui lòng thử lại.';
+                    setLocationStatus(message, 'error');
+                    if (locationButton instanceof HTMLButtonElement) {
+                        locationButton.disabled = false;
+                        locationButton.textContent = 'Thử lấy vị trí lại';
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+        });
+
+        forceMajeure?.addEventListener('change', syncForceMajeureUi);
         date?.addEventListener('change', sync);
         time?.addEventListener('input', sync);
         form.addEventListener('submit', event => {
             if (!sync()) {
                 event.preventDefault();
                 time?.reportValidity();
+                return;
+            }
+
+            if (forceMajeure?.checked) {
+                if (evidenceImage instanceof HTMLInputElement && (!evidenceImage.files || evidenceImage.files.length === 0)) {
+                    event.preventDefault();
+                    evidenceImage.setCustomValidity('Bất khả kháng bắt buộc phải có ảnh minh chứng.');
+                    evidenceImage.reportValidity();
+                    return;
+                }
+
+                const hasLocation = latitude instanceof HTMLInputElement && longitude instanceof HTMLInputElement && latitude.value && longitude.value;
+                if (!hasLocation) {
+                    event.preventDefault();
+                    setLocationStatus('Bất khả kháng bắt buộc phải bấm “Lấy vị trí hiện tại” trước khi gửi.', 'error');
+                    locationButton?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
             }
         });
+
+        evidenceImage?.addEventListener('change', () => {
+            if (evidenceImage instanceof HTMLInputElement) evidenceImage.setCustomValidity('');
+        });
+
+        syncForceMajeureUi();
         sync();
     })();
 </script>

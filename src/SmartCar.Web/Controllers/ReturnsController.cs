@@ -18,7 +18,7 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class ReturnsController : Controller
 {
-    private const int MaximumImages = 18;
+    private const int MaximumImages = 25;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";

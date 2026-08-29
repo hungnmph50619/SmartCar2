@@ -48,8 +48,26 @@ public sealed class AdminTripRecordsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id });
         }
 
+        // Nếu xe thực tế được trả sau giờ nhận của đơn kế tiếp, lưu ID đơn bị ảnh hưởng
+        // để phần quyết toán giải thích rõ khoản cọc bị giữ lại/bồi thường.
+        ViewBag.AffectedBookingId = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.VehicleId == records.VehicleId
+                && item.BookingId != records.BookingId
+                && item.PickupDate > records.ReturnDate
+                && item.PickupDate < records.VehicleReturn.ReturnedAt)
+            .OrderBy(item => item.PickupDate)
+            .Select(item => (int?)item.BookingId)
+            .FirstOrDefaultAsync(cancellationToken);
+
         var handoverPaths = SplitPaths(records.Handover.ImagePaths);
         var returnPaths = SplitPaths(records.VehicleReturn.ImagePaths);
+        var signedHandoverPaths = handoverPaths
+            .Where(path => path.Contains(HandoverSignedMarker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var signedReturnPaths = returnPaths
+            .Where(path => path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
         var model = new TripRecordViewModel
         {
@@ -70,8 +88,8 @@ public sealed class AdminTripRecordsController : Controller
                 ImagePaths = handoverPaths
                     .Where(path => !path.Contains(HandoverSignedMarker, StringComparison.OrdinalIgnoreCase))
                     .ToArray(),
-                SignedDocumentPath = handoverPaths
-                    .FirstOrDefault(path => path.Contains(HandoverSignedMarker, StringComparison.OrdinalIgnoreCase))
+                SignedDocumentPaths = signedHandoverPaths,
+                SignedDocumentPath = signedHandoverPaths.FirstOrDefault()
             },
             Return = new ReturnDocumentViewModel
             {
@@ -87,8 +105,8 @@ public sealed class AdminTripRecordsController : Controller
                 ImagePaths = returnPaths
                     .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
                     .ToArray(),
-                SignedDocumentPath = returnPaths
-                    .FirstOrDefault(path => path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
+                SignedDocumentPaths = signedReturnPaths,
+                SignedDocumentPath = signedReturnPaths.FirstOrDefault()
             }
         };
 

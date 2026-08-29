@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
 using SmartCar.Domain.Enums;
 using SmartCar.Web.Validation;
@@ -153,11 +153,12 @@ public sealed class HandoverViewModel
     [Required(ErrorMessage = "Vui lòng nhập thời gian giao xe.")]
     public DateTime HandoverAt { get; set; } = DateTime.Now;
 
-    [Range(0, int.MaxValue, ErrorMessage = "Số km không hợp lệ.")]
-    public int Mileage { get; set; }
+    [Required(ErrorMessage = "Vui lòng nhập số km khi giao xe.")]
+    [Range(0, int.MaxValue, ErrorMessage = "Số km phải là số nguyên từ 0 trở lên.")]
+    public int? Mileage { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi giao xe.")]
-    [StringLength(30)]
+    [RegularExpression(@"^(?:100|[0-9]{1,2})$", ErrorMessage = "Mức nhiên liệu phải là số từ 0 đến 100.")]
     public string FuelLevel { get; set; } = string.Empty;
 
     [StringLength(1500)]
@@ -180,6 +181,13 @@ public sealed class HandoverViewModel
 
     [Display(Name = "Ảnh khác")]
     public List<IFormFile> Images { get; set; } = new();
+
+    [Display(Name = "Ảnh mới bổ sung")]
+    public List<IFormFile>? NewImages { get; set; }
+
+    public List<string> ExistingImagePaths { get; set; } = new();
+
+    public List<string>? ImagesToDelete { get; set; }
 
     [Range(0, int.MaxValue)]
     public int IncludedKilometers { get; set; }

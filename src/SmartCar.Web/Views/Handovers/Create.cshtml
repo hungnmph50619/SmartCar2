@@ -1,4 +1,4 @@
-﻿@model SmartCar.Web.ViewModels.HandoverViewModel
+@model SmartCar.Web.ViewModels.HandoverViewModel
 @using SmartCar.Domain.Constants
 
 @{
@@ -50,14 +50,14 @@
 
         <div class="col-md-3">
             <label asp-for="Mileage" class="form-label fw-semibold">Số km</label>
-            <input asp-for="Mileage" type="number" min="0" step="1" class="form-control" required />
+            <input asp-for="Mileage" id="handover-mileage" type="number" min="0" step="1" class="form-control" placeholder="Nhập số km" required />
             <span asp-validation-for="Mileage" class="text-danger small"></span>
         </div>
 
         <div class="col-md-3">
             <label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label>
             <div class="input-group">
-                <input asp-for="FuelLevel" type="number" min="0" max="100" step="1" class="form-control" required />
+                <input asp-for="FuelLevel" id="handover-fuel" type="number" min="0" max="100" step="1" class="form-control" placeholder="0 - 100" required />
                 <span class="input-group-text">%</span>
             </div>
             <span asp-validation-for="FuelLevel" class="text-danger small"></span>
@@ -75,52 +75,19 @@
     <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap mb-2">
         <div>
             <h2 class="h5 mb-1">2. Ảnh đối chiếu</h2>
-            <div class="text-muted small">7 ảnh bắt buộc · tối đa 5 MB/ảnh.</div>
+            <div class="text-muted small">Chọn nhiều ảnh trong một lần · tối thiểu 7, tối đa 25 ảnh · tối đa 5 MB/ảnh.</div>
         </div>
-        <span class="badge text-bg-light">Giao ↔ Trả cùng vị trí</span>
+        <span class="badge text-bg-light">Nên có: trước · sau · trái · phải · nội thất · đồng hồ km · nhiên liệu</span>
     </div>
 
-    <div class="row g-3">
-        <div class="col-6 col-lg-3">
-            <label asp-for="FrontImage" class="form-label">Phía trước *</label>
-            <input asp-for="FrontImage" type="file" accept="@imageAccept" class="form-control" required />
-            <span asp-validation-for="FrontImage" class="text-danger small"></span>
+    <div class="border rounded p-3 bg-light">
+        <label asp-for="Images" class="form-label fw-semibold">Chọn ảnh bàn giao *</label>
+        <input asp-for="Images" id="handover-images" type="file" multiple accept="@imageAccept" class="form-control" required />
+        <span asp-validation-for="Images" class="text-danger small"></span>
+        <div class="text-end mt-2">
+            <span id="handover-image-count" class="badge text-bg-secondary">Chưa chọn ảnh</span>
         </div>
-        <div class="col-6 col-lg-3">
-            <label asp-for="RearImage" class="form-label">Phía sau *</label>
-            <input asp-for="RearImage" type="file" accept="@imageAccept" class="form-control" required />
-            <span asp-validation-for="RearImage" class="text-danger small"></span>
-        </div>
-        <div class="col-6 col-lg-3">
-            <label asp-for="LeftImage" class="form-label">Bên trái *</label>
-            <input asp-for="LeftImage" type="file" accept="@imageAccept" class="form-control" required />
-            <span asp-validation-for="LeftImage" class="text-danger small"></span>
-        </div>
-        <div class="col-6 col-lg-3">
-            <label asp-for="RightImage" class="form-label">Bên phải *</label>
-            <input asp-for="RightImage" type="file" accept="@imageAccept" class="form-control" required />
-            <span asp-validation-for="RightImage" class="text-danger small"></span>
-        </div>
-        <div class="col-6 col-lg-3">
-            <label asp-for="InteriorImage" class="form-label">Nội thất *</label>
-            <input asp-for="InteriorImage" type="file" accept="@imageAccept" class="form-control" required />
-            <span asp-validation-for="InteriorImage" class="text-danger small"></span>
-        </div>
-        <div class="col-6 col-lg-3">
-            <label asp-for="OdometerImage" class="form-label">Đồng hồ km *</label>
-            <input asp-for="OdometerImage" type="file" accept="@imageAccept" class="form-control" required />
-            <span asp-validation-for="OdometerImage" class="text-danger small"></span>
-        </div>
-        <div class="col-6 col-lg-3">
-            <label asp-for="FuelImage" class="form-label">Nhiên liệu *</label>
-            <input asp-for="FuelImage" type="file" accept="@imageAccept" class="form-control" required />
-            <span asp-validation-for="FuelImage" class="text-danger small"></span>
-        </div>
-        <div class="col-6 col-lg-3">
-            <label asp-for="Images" class="form-label">Ảnh khác</label>
-            <input asp-for="Images" type="file" multiple accept="@imageAccept" class="form-control" />
-            <span asp-validation-for="Images" class="text-danger small"></span>
-        </div>
+        <div id="handover-image-preview" class="d-flex flex-wrap gap-2 mt-3"></div>
     </div>
 
     @if (!ViewData.ModelState.IsValid)
@@ -152,12 +119,6 @@
         <div class="small mt-1">@Model.DamageCompensationTerms</div>
     </div>
 
-    <div class="form-check border border-warning rounded p-3 ps-5 bg-light mb-3">
-        <input asp-for="PenaltyPolicyAccepted" class="form-check-input" required />
-        <label asp-for="PenaltyPolicyAccepted" class="form-check-label fw-semibold">Đã thông báo và khách đồng ý các chính sách trên trước khi nhận xe.</label>
-        <span asp-validation-for="PenaltyPolicyAccepted" class="text-danger small d-block"></span>
-    </div>
-
     <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
     <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Chỉ ghi khi cần, ví dụ vết xước sẵn có"></textarea>
     <span asp-validation-for="Notes" class="text-danger small"></span>
@@ -176,7 +137,18 @@
             const hidden = document.getElementById('handover-at-value');
             const date = document.getElementById('handover-date');
             const time = document.getElementById('handover-time');
+            const mileage = document.getElementById('handover-mileage');
+            const fuel = document.getElementById('handover-fuel');
+            const imageInput = document.getElementById('handover-images');
+            const imagePreview = document.getElementById('handover-image-preview');
+            const imageCount = document.getElementById('handover-image-count');
+            const imageValidation = form?.querySelector('[data-valmsg-for="Images"]');
             const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+            const maximumImageBytes = 5 * 1024 * 1024;
+            const allowedImageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+            const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+            let previewUrls = [];
+            let selectedImageFiles = Array.from(imageInput?.files || []);
 
             function syncDateTime() {
                 if (!date?.value || !timePattern.test(time?.value || '')) return false;
@@ -184,19 +156,223 @@
                 return true;
             }
 
-            date?.addEventListener('change', syncDateTime);
-            time?.addEventListener('input', syncDateTime);
-            form?.addEventListener('submit', event => {
-                if (!syncDateTime()) {
-                    event.preventDefault();
-                    time?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
-                    time?.reportValidity();
+            function validateDate() {
+                if (!date) return true;
+                const message = date.value ? '' : 'Vui lòng chọn ngày giao xe.';
+                date.setCustomValidity(message);
+                return message === '';
+            }
+
+            function validateTime() {
+                if (!time) return true;
+                const raw = time.value.trim();
+                const message = !raw
+                    ? 'Vui lòng nhập giờ giao xe.'
+                    : timePattern.test(raw)
+                        ? ''
+                        : 'Giờ giao xe phải theo định dạng 24 giờ HH:mm, ví dụ 14:30.';
+                time.setCustomValidity(message);
+                return message === '';
+            }
+
+            function validateMileage() {
+                if (!mileage) return true;
+                const raw = mileage.value.trim();
+                let message = '';
+                if (!raw) {
+                    message = 'Vui lòng nhập số km khi giao xe.';
                 } else {
-                    time?.setCustomValidity('');
+                    const value = Number(raw);
+                    if (!Number.isInteger(value) || value < 0) {
+                        message = 'Số km phải là số nguyên từ 0 trở lên.';
+                    }
+                }
+                mileage.setCustomValidity(message);
+                return message === '';
+            }
+
+            function validateFuel() {
+                if (!fuel) return true;
+                const raw = fuel.value.trim();
+                let message = '';
+                if (!raw) {
+                    message = 'Vui lòng nhập mức nhiên liệu khi giao xe.';
+                } else {
+                    const value = Number(raw);
+                    if (!Number.isInteger(value) || value < 0 || value > 100) {
+                        message = 'Mức nhiên liệu phải là số nguyên từ 0 đến 100.';
+                    }
+                }
+                fuel.setCustomValidity(message);
+                return message === '';
+            }
+
+            function setImageValidationMessage(message, showInline) {
+                if (!imageValidation) return;
+
+                if (showInline && message) {
+                    imageValidation.textContent = message;
+                    imageValidation.classList.remove('field-validation-valid');
+                    imageValidation.classList.add('field-validation-error');
+                    return;
+                }
+
+                if (!message) {
+                    imageValidation.textContent = '';
+                    imageValidation.classList.remove('field-validation-error');
+                    imageValidation.classList.add('field-validation-valid');
+                }
+            }
+
+            function validateImages(showInline = false) {
+                if (!imageInput) return true;
+
+                let message = '';
+                const imageTotal = selectedImageFiles.length;
+
+                if (imageTotal < 7) {
+                    message = 'Vui lòng chọn ít nhất 7 ảnh bàn giao.';
+                } else if (imageTotal > 25) {
+                    message = 'Vui lòng chọn tối đa 25 ảnh bàn giao.';
+                } else {
+                    const oversized = selectedImageFiles.find(file => file.size > maximumImageBytes);
+                    if (oversized) {
+                        message = `Ảnh "${oversized.name}" vượt quá 5 MB.`;
+                    }
+                }
+
+                if (!message) {
+                    const invalidFormat = selectedImageFiles.find(file => {
+                        const lowerName = file.name.toLowerCase();
+                        const extensionValid = allowedImageExtensions.some(extension => lowerName.endsWith(extension));
+                        const typeValid = !file.type || allowedImageTypes.includes(file.type.toLowerCase());
+                        return !extensionValid || !typeValid;
+                    });
+
+                    if (invalidFormat) {
+                        message = `Ảnh "${invalidFormat.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`;
+                    }
+                }
+
+                imageInput.setCustomValidity(message);
+                setImageValidationMessage(message, showInline);
+                return message === '';
+            }
+
+            function clearPreviewUrls() {
+                previewUrls.forEach(url => URL.revokeObjectURL(url));
+                previewUrls = [];
+            }
+
+            function syncImageInputFiles() {
+                if (!imageInput) return;
+                const transfer = new DataTransfer();
+                selectedImageFiles.forEach(file => transfer.items.add(file));
+                imageInput.files = transfer.files;
+            }
+
+            function removeImage(index) {
+                selectedImageFiles.splice(index, 1);
+                syncImageInputFiles();
+                renderImagePreview();
+                validateImages(true);
+            }
+
+            function renderImagePreview() {
+                if (!imageInput || !imagePreview || !imageCount) return;
+
+                clearPreviewUrls();
+                imagePreview.innerHTML = '';
+                imageCount.textContent = selectedImageFiles.length > 0
+                    ? `Đã chọn ${selectedImageFiles.length} ảnh`
+                    : 'Chưa chọn ảnh';
+                imageCount.className = `badge ${selectedImageFiles.length >= 7 && selectedImageFiles.length <= 25 ? 'text-bg-success' : 'text-bg-secondary'}`;
+
+                selectedImageFiles.forEach((file, index) => {
+                    const url = URL.createObjectURL(file);
+                    previewUrls.push(url);
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'border rounded bg-white p-1 position-relative';
+                    wrapper.style.width = '116px';
+
+                    const removeButton = document.createElement('button');
+                    removeButton.type = 'button';
+                    removeButton.className = 'btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center';
+                    removeButton.style.width = '24px';
+                    removeButton.style.height = '24px';
+                    removeButton.style.padding = '0';
+                    removeButton.style.top = '-7px';
+                    removeButton.style.right = '-7px';
+                    removeButton.style.zIndex = '2';
+                    removeButton.style.lineHeight = '1';
+                    removeButton.innerHTML = '&times;';
+                    removeButton.title = 'Xóa ảnh này';
+                    removeButton.setAttribute('aria-label', `Xóa ảnh ${index + 1}`);
+                    removeButton.addEventListener('click', () => removeImage(index));
+
+                    const image = document.createElement('img');
+                    image.src = url;
+                    image.alt = `Ảnh bàn giao ${index + 1}`;
+                    image.className = 'rounded d-block w-100';
+                    image.style.height = '78px';
+                    image.style.objectFit = 'cover';
+                    image.style.cursor = 'zoom-in';
+                    image.title = 'Bấm để xem ảnh lớn';
+                    image.addEventListener('click', () => window.open(url, '_blank'));
+
+                    const caption = document.createElement('div');
+                    caption.className = 'small text-muted text-center text-truncate mt-1';
+                    caption.textContent = `${index + 1}. ${file.name}`;
+                    caption.title = file.name;
+
+                    wrapper.append(removeButton, image, caption);
+                    imagePreview.appendChild(wrapper);
+                });
+            }
+
+            date?.addEventListener('change', () => {
+                validateDate();
+                syncDateTime();
+            });
+            date?.addEventListener('invalid', validateDate);
+
+            time?.addEventListener('input', () => {
+                validateTime();
+                syncDateTime();
+            });
+            time?.addEventListener('invalid', validateTime);
+
+            mileage?.addEventListener('input', validateMileage);
+            mileage?.addEventListener('invalid', validateMileage);
+
+            fuel?.addEventListener('input', validateFuel);
+            fuel?.addEventListener('invalid', validateFuel);
+
+            imageInput?.addEventListener('change', () => {
+                selectedImageFiles = Array.from(imageInput.files || []);
+                renderImagePreview();
+                validateImages(true);
+            });
+            imageInput?.addEventListener('invalid', () => validateImages(true));
+
+            form?.addEventListener('submit', event => {
+                const validDate = validateDate();
+                const validTime = validateTime();
+                const validMileage = validateMileage();
+                const validFuel = validateFuel();
+                const validImages = validateImages(true);
+
+                if (!validDate || !validTime || !validMileage || !validFuel || !validImages || !syncDateTime()) {
+                    event.preventDefault();
+                    const firstInvalid = form.querySelector(':invalid');
+                    firstInvalid?.reportValidity();
                 }
             });
 
             syncDateTime();
+            renderImagePreview();
+            validateImages(false);
             document.getElementById('handover-validation-summary')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         })();
     </script>

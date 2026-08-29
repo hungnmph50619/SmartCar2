@@ -19,6 +19,7 @@ public sealed class HandoverDocumentViewModel
     public string DamageCompensationTerms { get; init; } = string.Empty;
     public bool PenaltyPolicyAccepted { get; init; }
     public IReadOnlyList<string> ImagePaths { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> SignedDocumentPaths { get; init; } = Array.Empty<string>();
     public string? SignedDocumentPath { get; init; }
 }
 
@@ -36,6 +37,7 @@ public sealed class ReturnDocumentViewModel
     public decimal LateFee { get; init; }
     public string? Notes { get; init; }
     public IReadOnlyList<string> ImagePaths { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> SignedDocumentPaths { get; init; } = Array.Empty<string>();
     public string? SignedDocumentPath { get; init; }
 }
 
@@ -47,7 +49,7 @@ public sealed class TripRecordViewModel
 
     public int DrivenKilometers => Math.Max(0, Return.Mileage - Handover.Mileage);
 
-    public bool HasSignedHandover => !string.IsNullOrWhiteSpace(Handover.SignedDocumentPath);
-    public bool HasSignedReturn => !string.IsNullOrWhiteSpace(Return.SignedDocumentPath);
+    public bool HasSignedHandover => Handover.SignedDocumentPaths.Count > 0 || !string.IsNullOrWhiteSpace(Handover.SignedDocumentPath);
+    public bool HasSignedReturn => Return.SignedDocumentPaths.Count > 0 || !string.IsNullOrWhiteSpace(Return.SignedDocumentPath);
     public bool IsClosed => Booking.Status == SmartCar.Domain.Enums.BookingStatus.Completed;
 }
