@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
@@ -7,17 +8,24 @@ using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Filters;
 using SmartCar.Web.Services;
 
+// Giữ tiếng Việt hiển thị đúng trong Developer PowerShell/Terminal khi chạy app.
+Console.InputEncoding = Encoding.UTF8;
+Console.OutputEncoding = Encoding.UTF8;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<ISecureDocumentStorage, SecureDocumentStorage>();
 builder.Services.AddScoped<IUserBankAccountService, UserBankAccountService>();
 builder.Services.AddScoped<KycAdminNotificationConsolidationFilter>();
+builder.Services.AddScoped<AdminWorkNotificationFilter>();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
     options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
+    options.Filters.AddService<AdminWorkNotificationFilter>();
 });
 
 var app = builder.Build();

@@ -1,8 +1,9 @@
-using System.Data;
+﻿using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -48,6 +49,47 @@ internal sealed class BookingService : IBookingService
                 "Thời gian nhận xe phải ở tương lai và trước thời gian trả xe.");
         }
 
+        if (!Enum.IsDefined(request.PickupMethod))
+        {
+            return BookingMutationResult.Failure("Phương thức nhận xe không hợp lệ.");
+        }
+
+        if (request.PickupMethod == VehiclePickupMethod.Delivery)
+        {
+            if (string.IsNullOrWhiteSpace(request.DeliveryAddress))
+            {
+                return BookingMutationResult.Failure("Vui lòng nhập địa chỉ giao xe.");
+            }
+
+            if (request.DeliveryAddress.Trim().Length > 500)
+            {
+                return BookingMutationResult.Failure("Địa chỉ giao xe tối đa 500 ký tự.");
+            }
+
+            if (!request.DeliveryLatitude.HasValue || !request.DeliveryLongitude.HasValue)
+            {
+                return BookingMutationResult.Failure(
+                    "Vui lòng tìm địa chỉ hoặc chọn chính xác điểm giao xe trên bản đồ để hệ thống tính phí giao xe.");
+            }
+
+            if (request.DeliveryLatitude.Value is < -90 or > 90 ||
+                request.DeliveryLongitude.Value is < -180 or > 180)
+            {
+                return BookingMutationResult.Failure("Vị trí giao xe trên bản đồ không hợp lệ.");
+            }
+
+            var deliveryDistanceKm = RentalPolicy.CalculateDeliveryDistanceKm(
+                request.DeliveryLatitude.Value,
+                request.DeliveryLongitude.Value);
+
+            if (deliveryDistanceKm > RentalPolicy.MaxDeliveryDistanceKm)
+            {
+                return BookingMutationResult.Failure(
+                    $"SmartCar chỉ hỗ trợ giao xe trong bán kính tối đa {RentalPolicy.MaxDeliveryDistanceKm:0} km. " +
+                    $"Điểm bạn chọn cách cửa hàng khoảng {deliveryDistanceKm:0.0} km.");
+            }
+        }
+
         var documentsValid = await _documentService.HasValidRentalDocumentsAsync(
             customerId,
             request.ReturnDate,
@@ -66,15 +108,23 @@ internal sealed class BookingService : IBookingService
         var vehicle = await _dbContext.Vehicles
             .FirstOrDefaultAsync(item => item.VehicleId == request.VehicleId, cancellationToken);
 
-        if (vehicle is null || vehicle.Status != VehicleStatus.Available)
+        if (vehicle is null)
         {
-            return BookingMutationResult.Failure("Xe không tồn tại hoặc hiện không thể cho thuê.");
+            return BookingMutationResult.Failure("Không tìm thấy xe.");
         }
 
-        var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(item =>
-            item.VehicleId == request.VehicleId &&
-            item.Status != IncidentStatus.Resolved &&
-            item.Status != IncidentStatus.Cancelled,
+        if (vehicle.Status is not (VehicleStatus.Available or VehicleStatus.Rented))
+        {
+            return BookingMutationResult.Failure(
+                "Xe đang bảo trì, kiểm tra hoặc ngừng hoạt động nên chưa thể đặt.");
+        }
+
+        var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(
+            item =>
+                item.VehicleId == request.VehicleId &&
+                item.IncidentType != IncidentType.TrafficFine &&
+                item.Status != IncidentStatus.Resolved &&
+                item.Status != IncidentStatus.Cancelled,
             cancellationToken);
 
         if (hasOpenIncident)
@@ -85,26 +135,36 @@ internal sealed class BookingService : IBookingService
         var hasValidRegistration = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Registration,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: true,
             cancellationToken);
         var hasValidInspection = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Inspection,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: false,
             cancellationToken);
         var hasValidInsurance = await HasValidVehicleDocumentAsync(
             request.VehicleId,
             VehicleDocumentType.Insurance,
+            request.PickupDate,
+            request.ReturnDate,
+            allowNoExpiry: false,
+            cancellationToken);
+        var hasValidRoadFee = await HasValidVehicleDocumentAsync(
+            request.VehicleId,
+            VehicleDocumentType.RoadFee,
+            request.PickupDate,
             request.ReturnDate,
             allowNoExpiry: false,
             cancellationToken);
 
-        if (!hasValidRegistration || !hasValidInspection || !hasValidInsurance)
+        if (!hasValidRegistration || !hasValidInspection || !hasValidInsurance || !hasValidRoadFee)
         {
             return BookingMutationResult.Failure(
-                "Xe chưa có đủ đăng ký, đăng kiểm và bảo hiểm còn hiệu lực đến ngày trả.");
+                "Xe chưa có đủ Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ còn hiệu lực đến ngày trả.");
         }
 
         var hasConflict = await HasConflictAsync(
@@ -124,6 +184,11 @@ internal sealed class BookingService : IBookingService
             1,
             (int)Math.Ceiling((request.ReturnDate - request.PickupDate).TotalHours / 24d));
         var rentalAmount = numberOfDays * vehicle.DailyPrice;
+        var depositAmount = RentalPolicy.CalculateDeposit(rentalAmount);
+        var deliveryFee = RentalPolicy.CalculateDeliveryFee(
+            request.PickupMethod,
+            request.DeliveryLatitude,
+            request.DeliveryLongitude);
 
         var booking = new Booking
         {
@@ -134,9 +199,19 @@ internal sealed class BookingService : IBookingService
             DailyPrice = vehicle.DailyPrice,
             NumberOfDays = numberOfDays,
             RentalAmount = rentalAmount,
-            DiscountAmount = 0,
+            DepositAmount = depositAmount,
             AdditionalAmount = 0,
-            TotalAmount = rentalAmount,
+            TotalAmount = rentalAmount + deliveryFee,
+            PickupMethod = request.PickupMethod,
+            DeliveryAddress = request.PickupMethod == VehiclePickupMethod.Delivery
+                ? request.DeliveryAddress?.Trim()
+                : null,
+            DeliveryLatitude = request.PickupMethod == VehiclePickupMethod.Delivery
+                ? request.DeliveryLatitude
+                : null,
+            DeliveryLongitude = request.PickupMethod == VehiclePickupMethod.Delivery
+                ? request.DeliveryLongitude
+                : null,
             Status = BookingStatus.PendingConfirmation,
             CreatedAt = DateTime.UtcNow
         };
@@ -144,19 +219,16 @@ internal sealed class BookingService : IBookingService
         _dbContext.Bookings.Add(booking);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-
         return BookingMutationResult.Success(booking.BookingId);
     }
 
     public async Task<IReadOnlyList<BookingListItemDto>> GetCustomerBookingsAsync(
         string customerId,
-        CancellationToken cancellationToken = default)
-    {
-        return await ListQuery()
+        CancellationToken cancellationToken = default) =>
+        await ListQuery()
             .Where(booking => booking.CustomerId == customerId)
             .OrderByDescending(booking => booking.CreatedAt)
             .ToListAsync(cancellationToken);
-    }
 
     public Task<BookingDetailsDto?> GetCustomerBookingAsync(
         int bookingId,
@@ -215,10 +287,10 @@ internal sealed class BookingService : IBookingService
             booking.CustomerId,
             booking.ReturnDate,
             cancellationToken);
+
         if (!documentsValid)
         {
-            return OperationResult.Failure(
-                "CCCD hoặc GPLX của khách không còn hiệu lực đến ngày trả xe.");
+            return OperationResult.Failure("CCCD hoặc GPLX của khách không còn hiệu lực đến ngày trả xe.");
         }
 
         var hasConflict = await HasConflictAsync(
@@ -234,24 +306,71 @@ internal sealed class BookingService : IBookingService
         }
 
         booking.Status = BookingStatus.PendingPayment;
-        var rentalPaymentAmount = Math.Max(0, booking.RentalAmount - booking.DiscountAmount);
 
-        if (!booking.Payments.Any(payment => payment.Type == PaymentType.Rental))
+        var deliveryFee = Math.Max(
+            0m,
+            booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
+
+        if (deliveryFee <= 0m &&
+            booking.PickupMethod == VehiclePickupMethod.Delivery &&
+            booking.DeliveryLatitude.HasValue &&
+            booking.DeliveryLongitude.HasValue)
+        {
+            deliveryFee = RentalPolicy.CalculateDeliveryFee(
+                booking.PickupMethod,
+                booking.DeliveryLatitude,
+                booking.DeliveryLongitude);
+        }
+
+        var rentalPaymentAmount = booking.RentalAmount + deliveryFee;
+        booking.TotalAmount = booking.RentalAmount + deliveryFee + booking.AdditionalAmount;
+
+        var rentalPayment = booking.Payments
+            .FirstOrDefault(payment => payment.Type == PaymentType.Rental);
+
+        if (rentalPayment is null)
         {
             booking.Payments.Add(new Payment
             {
                 Type = PaymentType.Rental,
                 Amount = rentalPaymentAmount,
                 Status = PaymentStatus.Pending,
-                Method = "Mo phong"
+                Method = PaymentMethods.NotSelected
             });
+        }
+        else if (rentalPayment.Status == PaymentStatus.Pending)
+        {
+            rentalPayment.Amount = rentalPaymentAmount;
+        }
+
+        if (booking.DepositAmount > 0)
+        {
+            var depositPayment = booking.Payments
+                .FirstOrDefault(payment => payment.Type == PaymentType.Deposit);
+
+            if (depositPayment is null)
+            {
+                booking.Payments.Add(new Payment
+                {
+                    Type = PaymentType.Deposit,
+                    Amount = booking.DepositAmount,
+                    Status = PaymentStatus.Pending,
+                    Method = PaymentMethods.NotSelected
+                });
+            }
+            else if (depositPayment.Status == PaymentStatus.Pending)
+            {
+                depositPayment.Amount = booking.DepositAmount;
+            }
         }
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã được xác nhận",
-            Message = $"Đơn #{booking.BookingId} đã được xác nhận. Vui lòng thanh toán để giữ xe."
+            Message =
+                $"Đơn #{booking.BookingId} đã được xác nhận. " +
+                $"Tổng thanh toán trước khi nhận xe: {(rentalPaymentAmount + booking.DepositAmount):N0} đồng."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -301,6 +420,7 @@ internal sealed class BookingService : IBookingService
         CancellationToken cancellationToken = default)
     {
         var booking = await _dbContext.Bookings
+            .Include(item => item.Vehicle)
             .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
@@ -310,11 +430,84 @@ internal sealed class BookingService : IBookingService
         }
 
         var rentalPaid = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
+            payment.Type == PaymentType.Rental &&
+            payment.Status == PaymentStatus.Paid);
 
-        if (booking.Status != BookingStatus.Paid || !rentalPaid)
+        var paidDeposit = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+        var depositRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.DepositRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var depositSatisfied = booking.DepositAmount <= 0 ||
+            Math.Max(0m, paidDeposit - depositRefundPlanned) >= booking.DepositAmount;
+
+        var hasOpenSwapPayment = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.VehicleSwapAdjustment &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
+
+        if (booking.Status != BookingStatus.Paid ||
+            !rentalPaid ||
+            !depositSatisfied ||
+            hasOpenSwapPayment)
         {
-            return OperationResult.Failure("Đơn phải thanh toán tiền thuê trước khi chuẩn bị giao xe.");
+            return OperationResult.Failure(
+                hasOpenSwapPayment
+                    ? "Cần thanh toán xong chênh lệch đổi xe trước khi chuẩn bị giao xe."
+                    : "Đơn phải thanh toán đủ tiền thuê và tiền cọc trước khi chuẩn bị giao xe.");
+        }
+
+        var previousActiveBooking = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item =>
+                item.VehicleId == booking.VehicleId &&
+                item.BookingId != booking.BookingId &&
+                item.PickupDate < booking.PickupDate &&
+                BlockingStatuses.Contains(item.Status))
+            .OrderByDescending(item => item.PickupDate)
+            .Select(item => new
+            {
+                item.BookingId,
+                item.Status,
+                item.ReturnDate
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (previousActiveBooking is not null)
+        {
+            var previousStatusText = previousActiveBooking.Status switch
+            {
+                BookingStatus.Rented => "đang thuê",
+                BookingStatus.PendingInspection => "chờ kiểm tra sau khi trả",
+                BookingStatus.ReadyForPickup => "sẵn sàng bàn giao",
+                BookingStatus.Paid => "đã thanh toán",
+                BookingStatus.PendingPayment => "chờ thanh toán",
+                BookingStatus.PendingConfirmation => "chờ xác nhận",
+                _ => previousActiveBooking.Status.ToString()
+            };
+
+            return OperationResult.Failure(
+                $"Chưa thể đánh dấu xe sẵn sàng. Đơn #{previousActiveBooking.BookingId} của cùng xe vẫn {previousStatusText} " +
+                $"(dự kiến trả {previousActiveBooking.ReturnDate:dd/MM/yyyy HH:mm}). Xe phải được trả và hoàn tất kiểm tra trước.");
+        }
+
+        if (booking.Vehicle.Status != VehicleStatus.Available)
+        {
+            var vehicleStateMessage = booking.Vehicle.Status switch
+            {
+                VehicleStatus.Rented => "Xe vẫn đang được khách trước sử dụng.",
+                VehicleStatus.Inspection => "Xe đã được trả nhưng đang chờ hoàn tất kiểm tra.",
+                VehicleStatus.Maintenance => "Xe đang bảo trì.",
+                _ => "Xe hiện chưa ở trạng thái sẵn sàng."
+            };
+
+            return OperationResult.Failure(
+                $"{vehicleStateMessage} Chỉ được xác nhận sẵn sàng khi trạng thái xe là Có sẵn.");
         }
 
         booking.Status = BookingStatus.ReadyForPickup;
@@ -354,7 +547,10 @@ internal sealed class BookingService : IBookingService
                     .FirstOrDefault(),
                 PickupDate = booking.PickupDate,
                 ReturnDate = booking.ReturnDate,
+                PickupMethod = booking.PickupMethod,
+                DeliveryAddress = booking.DeliveryAddress,
                 TotalAmount = booking.TotalAmount,
+                DepositAmount = booking.DepositAmount,
                 Status = booking.Status,
                 CreatedAt = booking.CreatedAt
             });
@@ -381,8 +577,9 @@ internal sealed class BookingService : IBookingService
             query = query.Where(booking => booking.CustomerId == customerId);
         }
 
-        var booking = await query
-            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+        var booking = await query.FirstOrDefaultAsync(
+            item => item.BookingId == bookingId,
+            cancellationToken);
 
         if (booking is null)
         {
@@ -401,7 +598,47 @@ internal sealed class BookingService : IBookingService
                 charge.ChargeType,
                 charge.Description,
                 charge.Amount))
-            .ToList() ?? new List<ChargeSummaryDto>();
+            .ToList()
+            ?? new List<ChargeSummaryDto>();
+
+        var depositDeduction = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method == PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+        var actualAdditionalAmount = booking.VehicleReturn is null
+            ? booking.AdditionalAmount
+            : charges.Sum(charge => charge.Amount);
+        var legacyMisclassifiedDeduction = Math.Min(
+            depositDeduction,
+            Math.Max(0m, booking.AdditionalAmount - actualAdditionalAmount));
+        var normalizedAdditionalAmount = Math.Max(
+            0m,
+            booking.AdditionalAmount - legacyMisclassifiedDeduction);
+        var normalizedTotalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - legacyMisclassifiedDeduction);
+
+        var paidDeposit = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+        var depositRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.DepositRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var effectiveDeposit = Math.Max(0m, paidDeposit - depositRefundPlanned);
+
+        var cashAdditionalPaid = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
 
         return new BookingDetailsDto
         {
@@ -419,13 +656,17 @@ internal sealed class BookingService : IBookingService
                 .FirstOrDefault(),
             PickupDate = booking.PickupDate,
             ReturnDate = booking.ReturnDate,
+            PickupMethod = booking.PickupMethod,
+            DeliveryAddress = booking.DeliveryAddress,
+            DeliveryLatitude = booking.DeliveryLatitude,
+            DeliveryLongitude = booking.DeliveryLongitude,
             DailyPrice = booking.DailyPrice,
             NumberOfDays = booking.NumberOfDays,
             RentalAmount = booking.RentalAmount,
-            PromotionCode = booking.PromotionCode,
-            DiscountAmount = booking.DiscountAmount,
-            AdditionalAmount = booking.AdditionalAmount,
-            TotalAmount = booking.TotalAmount,
+            DepositAmount = booking.DepositAmount,
+            AdditionalAmount = normalizedAdditionalAmount,
+            DepositDeductionAmount = depositDeduction,
+            TotalAmount = normalizedTotalAmount,
             Status = booking.Status,
             CreatedAt = booking.CreatedAt,
             CancelReason = booking.CancelReason,
@@ -438,19 +679,21 @@ internal sealed class BookingService : IBookingService
             HasReturn = booking.VehicleReturn is not null,
             HasReview = booking.Review is not null,
             RentalPaid = booking.Payments.Any(payment =>
-                payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid),
-            AdditionalChargePaid = booking.AdditionalAmount == 0 || booking.Payments.Any(payment =>
-                payment.Type == PaymentType.AdditionalCharge &&
-                payment.Status == PaymentStatus.Paid &&
-                payment.Amount >= booking.AdditionalAmount),
+                payment.Type == PaymentType.Rental &&
+                payment.Status == PaymentStatus.Paid),
+            DepositPaid = booking.DepositAmount <= 0 || effectiveDeposit >= booking.DepositAmount,
+            AdditionalChargePaid = normalizedAdditionalAmount == 0 ||
+                cashAdditionalPaid >= normalizedAdditionalAmount,
             ExtensionPaid = booking.Extensions.All(extension =>
                 extension.Status != BookingExtensionStatus.Approved),
             Payments = booking.Payments
+                .Where(payment => payment.Method != PaymentMethods.DepositDeduction)
                 .OrderBy(payment => payment.PaymentId)
                 .Select(payment => new PaymentSummaryDto(
                     payment.PaymentId,
                     payment.Type,
                     payment.Amount,
+                    payment.Method,
                     payment.Status,
                     payment.PaidAt,
                     payment.TransactionCode))
@@ -477,24 +720,27 @@ internal sealed class BookingService : IBookingService
         DateTime returnDate,
         int? excludedBookingId,
         CancellationToken cancellationToken) =>
-        _dbContext.Bookings.AnyAsync(booking =>
-            booking.VehicleId == vehicleId &&
-            (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
-            BlockingStatuses.Contains(booking.Status) &&
-            pickupDate < booking.ReturnDate &&
-            returnDate > booking.PickupDate,
+        _dbContext.Bookings.AnyAsync(
+            booking =>
+                booking.VehicleId == vehicleId &&
+                (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
+                BlockingStatuses.Contains(booking.Status) &&
+                pickupDate < booking.ReturnDate &&
+                returnDate > booking.PickupDate,
             cancellationToken);
 
     private Task<bool> HasValidVehicleDocumentAsync(
         int vehicleId,
         VehicleDocumentType documentType,
+        DateTime requiredFrom,
         DateTime requiredUntil,
         bool allowNoExpiry,
         CancellationToken cancellationToken) =>
         _dbContext.VehicleDocuments.AnyAsync(document =>
             document.VehicleId == vehicleId &&
             document.DocumentType == documentType &&
+            document.IssuedDate.Date <= requiredFrom.Date &&
             ((allowNoExpiry && !document.ExpiryDate.HasValue) ||
-             (document.ExpiryDate.HasValue && document.ExpiryDate.Value >= requiredUntil)),
+             (document.ExpiryDate.HasValue && document.ExpiryDate.Value.Date >= requiredUntil.Date)),
             cancellationToken);
 }

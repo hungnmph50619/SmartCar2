@@ -1,8 +1,13 @@
 @model SmartCar.Web.ViewModels.VehicleFormViewModel
 @using SmartCar.Application.Features.Vehicles
+@using SmartCar.Application.Features.VehicleDocuments
 @{
     ViewData["Title"] = "Sửa xe";
     var vehicle = ViewBag.Vehicle as VehicleDto;
+    var documentOverview = ViewBag.VehicleDocumentOverview as VehicleDocumentOverviewDto;
+    var rentalLegalStatus = ViewBag.RentalLegalStatus as VehicleLegalStatusDto;
+    var rentalPickupDate = ViewBag.RentalPickupDate as DateTime?;
+    var rentalReturnDate = ViewBag.RentalReturnDate as DateTime?;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
@@ -19,15 +24,115 @@
     }
 </div>
 
+@if (vehicle is not null && documentOverview is not null)
+{
+    <div class="alert @(documentOverview.LegalStatus.IsEligible ? "alert-success" : "alert-danger") shadow-sm" role="status">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <strong class="d-block mb-1">
+                    @(documentOverview.LegalStatus.IsEligible
+                        ? "✓ Đủ điều kiện pháp lý cho thuê"
+                        : "⚠ Chưa đủ điều kiện pháp lý cho thuê")
+                </strong>
+                @if (documentOverview.LegalStatus.IsEligible)
+                {
+                    <span>Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ đều đang hợp lệ.</span>
+                }
+                else
+                {
+                    <span>Xe cần xử lý các vấn đề sau trước khi được coi là đủ điều kiện pháp lý:</span>
+                    <ul class="mb-0 mt-2 ps-3">
+                        @foreach (var reason in documentOverview.LegalStatus.Reasons)
+                        {
+                            <li>@reason</li>
+                        }
+                    </ul>
+                }
+            </div>
+            <a class="btn btn-sm @(documentOverview.LegalStatus.IsEligible ? "btn-outline-success" : "btn-outline-danger")"
+               asp-controller="VehicleDocuments"
+               asp-action="Index"
+               asp-route-vehicleId="@vehicle.VehicleId">
+                Quản lý giấy tờ
+            </a>
+        </div>
+    </div>
+
+
+    <section class="card card-body shadow-sm mb-4">
+        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+            <div>
+                <h2 class="h5 mb-1">Kiểm tra pháp lý theo ngày thuê</h2>
+                <p class="text-muted small mb-0">Kiểm tra 4 giấy tờ có còn hiệu lực đến hết ngày trả xe dự kiến hay không.</p>
+            </div>
+        </div>
+        <form method="get" asp-action="Edit" class="row g-3 align-items-end" data-rental-date-form>
+            <input type="hidden" name="id" value="@vehicle.VehicleId" />
+            <input type="hidden" name="pickupDate" id="pickupDateValue" value="@(rentalPickupDate?.ToString("yyyy-MM-dd"))" />
+            <input type="hidden" name="returnDate" id="returnDateValue" value="@(rentalReturnDate?.ToString("yyyy-MM-dd"))" />
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="pickupDateDisplay">Ngày nhận dự kiến</label>
+                <div class="input-group">
+                    <input class="form-control" id="pickupDateDisplay" type="text" inputmode="numeric" maxlength="10" placeholder="dd/MM/yyyy" value="@(rentalPickupDate?.ToString("dd/MM/yyyy"))" />
+                    <button type="button" class="btn btn-outline-secondary" data-calendar-trigger="pickupDateNative" title="Chọn từ lịch" aria-label="Chọn ngày nhận từ lịch">📅</button>
+                    <input type="date" id="pickupDateNative" class="visually-hidden" data-calendar-sync="pickupDateDisplay" tabindex="-1" />
+                </div>
+                <div class="form-text">Ví dụ: 15/08/2026 — có thể gõ tay hoặc bấm 📅 để chọn từ lịch.</div>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="returnDateDisplay">Ngày trả dự kiến</label>
+                <div class="input-group">
+                    <input class="form-control" id="returnDateDisplay" type="text" inputmode="numeric" maxlength="10" placeholder="dd/MM/yyyy" value="@(rentalReturnDate?.ToString("dd/MM/yyyy"))" />
+                    <button type="button" class="btn btn-outline-secondary" data-calendar-trigger="returnDateNative" title="Chọn từ lịch" aria-label="Chọn ngày trả từ lịch">📅</button>
+                    <input type="date" id="returnDateNative" class="visually-hidden" data-calendar-sync="returnDateDisplay" tabindex="-1" />
+                </div>
+                <div class="form-text">Ví dụ: 20/08/2026 — có thể gõ tay hoặc bấm 📅 để chọn từ lịch.</div>
+            </div>
+            <div class="col-12 col-md-4">
+                <button type="submit" class="btn btn-outline-primary">Kiểm tra</button>
+            </div>
+            <div class="col-12">
+                <div class="text-danger small d-none" data-rental-date-error></div>
+            </div>
+        </form>
+
+        @if (rentalLegalStatus is not null && rentalPickupDate.HasValue && rentalReturnDate.HasValue)
+        {
+            <div class="alert @(rentalLegalStatus.IsEligible ? "alert-success" : "alert-danger") mt-3 mb-0" role="status">
+                <strong class="d-block mb-1">
+                    @(rentalLegalStatus.IsEligible
+                        ? $"✓ Đủ điều kiện pháp lý từ {rentalPickupDate.Value:dd/MM/yyyy} đến {rentalReturnDate.Value:dd/MM/yyyy}"
+                        : $"⚠ Chưa đủ điều kiện pháp lý từ {rentalPickupDate.Value:dd/MM/yyyy} đến {rentalReturnDate.Value:dd/MM/yyyy}")
+                </strong>
+                @if (rentalLegalStatus.IsEligible)
+                {
+                    <span>Cả 4 loại giấy tờ đều bao phủ toàn bộ khoảng thuê dự kiến.</span>
+                }
+                else
+                {
+                    <ul class="mb-0 mt-2 ps-3">
+                        @foreach (var reason in rentalLegalStatus.Reasons)
+                        {
+                            <li>@reason</li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+    </section>
+}
+
 <form asp-action="Edit"
       method="post"
       enctype="multipart/form-data"
+      data-vehicle-form
       class="card card-body shadow-sm mb-4"
-      data-loading-form>
+      data-loading-form
+      novalidate>
     <partial name="_VehicleForm" model="Model" />
     <div class="mt-4 d-flex gap-2 flex-wrap">
         <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu thay đổi...">Lưu thay đổi</button>
-        <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
+        <a class="btn btn-outline-secondary" asp-action="Index" data-vehicle-back>Quay lại</a>
     </div>
 </form>
 
@@ -90,4 +195,5 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/admin-vehicle-form.js" asp-append-version="true"></script>
 }

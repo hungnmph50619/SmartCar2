@@ -1,0 +1,34 @@
+@model SmartCar.Web.ViewModels.VehicleDocumentViewModel
+@{
+    ViewData["Title"] = "Sửa giấy tờ xe";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/vehicle-documents.css" asp-append-version="true" />
+}
+
+<div class="doc-page">
+    <div class="doc-heading">
+        <div>
+            <div class="doc-breadcrumb">
+                <a asp-controller="AdminVehicles" asp-action="Index">Quản lý xe</a>
+                <span>/</span>
+                <a asp-action="Index" asp-route-vehicleId="@Model.VehicleId">Giấy tờ xe</a>
+                <span>/</span>
+                Sửa
+            </div>
+            <h1>Sửa giấy tờ xe</h1>
+            <p>Cập nhật thông tin đã nhập. Không cần tải lại ảnh nếu chỉ sửa nội dung.</p>
+        </div>
+        <a class="doc-secondary-btn" asp-action="Index" asp-route-vehicleId="@Model.VehicleId">← Quay lại danh sách</a>
+    </div>
+
+    @{ ViewData["IsEdit"] = true; }
+    @await Html.PartialAsync("_VehicleDocumentForm", Model)
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/vehicle-documents-ui.js" asp-append-version="true"></script>
+    <script src="~/js/vehicle-documents-list.js" asp-append-version="true"></script>
+}

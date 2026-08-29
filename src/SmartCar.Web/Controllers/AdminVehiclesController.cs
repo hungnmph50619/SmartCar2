@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using SmartCar.Application.Features.Brands;
 using SmartCar.Application.Features.Vehicles;
+using SmartCar.Application.Features.VehicleDocuments;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Web.Services;
@@ -18,21 +19,29 @@ public sealed class AdminVehiclesController : Controller
 
     private readonly IVehicleService _vehicleService;
     private readonly IBrandService _brandService;
+    private readonly IVehicleDocumentService _vehicleDocumentService;
     private readonly IWebHostEnvironment _environment;
 
     public AdminVehiclesController(
         IVehicleService vehicleService,
         IBrandService brandService,
+        IVehicleDocumentService vehicleDocumentService,
         IWebHostEnvironment environment)
     {
         _vehicleService = vehicleService;
         _brandService = brandService;
+        _vehicleDocumentService = vehicleDocumentService;
         _environment = environment;
     }
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
-        return View(await _vehicleService.GetAllAsync(cancellationToken));
+        var vehicles = await _vehicleService.GetAllAsync(cancellationToken);
+        ViewBag.VehicleDocumentOverviews = await _vehicleDocumentService
+            .GetOverviewsByVehicleIdsAsync(
+                vehicles.Select(vehicle => vehicle.VehicleId).ToArray(),
+                cancellationToken);
+        return View(vehicles);
     }
 
     [HttpGet]
@@ -48,7 +57,13 @@ public sealed class AdminVehiclesController : Controller
         VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        await ValidateImagesAsync(viewModel.Images, 0, cancellationToken);
+        var createImages = viewModel.Images ?? new List<IFormFile>();
+        if (!createImages.Any(file => file.Length > 0))
+        {
+            ModelState.AddModelError(nameof(VehicleFormViewModel.Images), "Vui lòng chọn ít nhất một ảnh xe.");
+        }
+
+        await ValidateImagesAsync(createImages, 0, cancellationToken);
         if (!ModelState.IsValid)
         {
             await LoadBrandsAsync(viewModel.BrandId, cancellationToken);
@@ -78,13 +93,17 @@ public sealed class AdminVehiclesController : Controller
             return View(viewModel);
         }
 
-        await SaveImagesAsync(result.VehicleId.Value, viewModel.Images, cancellationToken);
-        TempData["SuccessMessage"] = "Đã thêm xe mới.";
+        await SaveImagesAsync(result.VehicleId.Value, createImages, cancellationToken);
+        TempData["SuccessMessage"] = "Đã thêm xe mới với trạng thái Ngừng hoạt động. Vui lòng bổ sung đủ Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ, sau đó chuyển xe sang Sẵn sàng.";
         return RedirectToAction(nameof(Edit), new { id = result.VehicleId.Value });
     }
 
     [HttpGet]
-    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(
+        int id,
+        DateTime? pickupDate,
+        DateTime? returnDate,
+        CancellationToken cancellationToken)
     {
         var vehicle = await _vehicleService.GetByIdAsync(id, cancellationToken);
         if (vehicle is null)
@@ -92,8 +111,22 @@ public sealed class AdminVehiclesController : Controller
             return NotFound();
         }
 
-        await LoadBrandsAsync(vehicle.BrandId, cancellationToken);
+        await LoadBrandsAsync(vehicle.BrandId, cancellationToken, includeInactiveSelectedBrand: true);
         ViewBag.Vehicle = vehicle;
+        ViewBag.VehicleDocumentOverview = await _vehicleDocumentService
+            .GetOverviewByVehicleAsync(vehicle.VehicleId, cancellationToken);
+
+        ViewBag.RentalPickupDate = pickupDate;
+        ViewBag.RentalReturnDate = returnDate;
+        if (pickupDate.HasValue && returnDate.HasValue)
+        {
+            ViewBag.RentalLegalStatus = await _vehicleDocumentService
+                .GetRentalLegalStatusAsync(
+                    vehicle.VehicleId,
+                    pickupDate.Value,
+                    returnDate.Value,
+                    cancellationToken);
+        }
 
         return View(new VehicleFormViewModel
         {
@@ -128,8 +161,9 @@ public sealed class AdminVehiclesController : Controller
             return NotFound();
         }
 
+        var editImages = viewModel.Images ?? new List<IFormFile>();
         await ValidateImagesAsync(
-            viewModel.Images,
+            editImages,
             currentVehicle.Images.Count,
             cancellationToken);
         if (!ModelState.IsValid)
@@ -175,7 +209,7 @@ public sealed class AdminVehiclesController : Controller
             return View(viewModel);
         }
 
-        await SaveImagesAsync(viewModel.VehicleId, viewModel.Images, cancellationToken);
+        await SaveImagesAsync(viewModel.VehicleId, editImages, cancellationToken);
         TempData["SuccessMessage"] = "Đã cập nhật xe.";
         return RedirectToAction(nameof(Edit), new { id = viewModel.VehicleId });
     }
@@ -313,17 +347,38 @@ public sealed class AdminVehiclesController : Controller
         VehicleFormViewModel viewModel,
         CancellationToken cancellationToken)
     {
-        await LoadBrandsAsync(viewModel.BrandId, cancellationToken);
+        await LoadBrandsAsync(viewModel.BrandId, cancellationToken, includeInactiveSelectedBrand: true);
         ViewBag.Vehicle = await _vehicleService.GetByIdAsync(viewModel.VehicleId, cancellationToken);
+        ViewBag.VehicleDocumentOverview = await _vehicleDocumentService
+            .GetOverviewByVehicleAsync(viewModel.VehicleId, cancellationToken);
     }
 
-    private async Task LoadBrandsAsync(int? selectedId, CancellationToken cancellationToken)
+    private async Task LoadBrandsAsync(
+        int? selectedId,
+        CancellationToken cancellationToken,
+        bool includeInactiveSelectedBrand = false)
     {
-        ViewBag.Brands = new SelectList(
-            await _brandService.GetActiveAsync(cancellationToken),
-            "BrandId",
-            "BrandName",
-            selectedId);
+        var brands = includeInactiveSelectedBrand
+            ? await _brandService.GetAllAsync(cancellationToken)
+            : await _brandService.GetActiveAsync(cancellationToken);
+
+        var items = brands
+            .Where(brand =>
+                brand.IsActive ||
+                (includeInactiveSelectedBrand &&
+                 selectedId.HasValue &&
+                 brand.BrandId == selectedId.Value))
+            .Select(brand => new SelectListItem
+            {
+                Value = brand.BrandId.ToString(),
+                Text = brand.IsActive
+                    ? brand.BrandName
+                    : $"{brand.BrandName} (Đã ngừng hoạt động)",
+                Selected = brand.BrandId == selectedId
+            })
+            .ToList();
+
+        ViewBag.Brands = items;
     }
 
     private void AddErrors(IEnumerable<string> errors)

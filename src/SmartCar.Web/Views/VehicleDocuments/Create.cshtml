@@ -1,59 +1,33 @@
 @model SmartCar.Web.ViewModels.VehicleDocumentViewModel
-@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Thêm giấy tờ xe";
 }
 
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card card-body shadow-sm">
-            <h1 class="h3 mb-3">Thêm giấy tờ pháp lý xe</h1>
-            <form asp-action="Create" method="post" class="row g-3">
-                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-                <div class="col-md-6">
-                    <label class="form-label">Xe</label>
-                    <select asp-for="VehicleId" asp-items="ViewBag.Vehicles" class="form-select"></select>
-                    <span asp-validation-for="VehicleId" class="text-danger"></span>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Loại giấy tờ</label>
-                    <select asp-for="DocumentType" class="form-select">
-                        @foreach (var type in Enum.GetValues<VehicleDocumentType>())
-                        {
-                            <option value="@type">@type.ToVietnamese()</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Số giấy tờ</label>
-                    <input asp-for="DocumentNumber" class="form-control" />
-                    <span asp-validation-for="DocumentNumber" class="text-danger"></span>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Ngày cấp</label>
-                    <input asp-for="IssuedDate" type="date" class="form-control" />
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Ngày hết hạn</label>
-                    <input asp-for="ExpiryDate" type="date" class="form-control" />
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Đường dẫn ảnh hoặc tệp</label>
-                    <input asp-for="ImagePath" class="form-control" placeholder="/uploads/documents/... hoặc địa chỉ lưu trữ" />
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Ghi chú</label>
-                    <textarea asp-for="Notes" class="form-control" rows="3"></textarea>
-                </div>
-                <div class="col-12 d-flex gap-2">
-                    <button class="btn btn-primary" type="submit">Lưu giấy tờ</button>
-                    <a class="btn btn-outline-secondary" asp-action="Index" asp-route-vehicleId="@Model.VehicleId">Quay lại</a>
-                </div>
-            </form>
+@section Styles {
+    <link rel="stylesheet" href="~/css/vehicle-documents.css" asp-append-version="true" />
+}
+
+<div class="doc-page">
+    <div class="doc-heading">
+        <div>
+            <div class="doc-breadcrumb">
+                <a asp-controller="AdminVehicles" asp-action="Index">Quản lý xe</a>
+                <span>/</span>
+                <a asp-action="Index" asp-route-vehicleId="@Model.VehicleId">Giấy tờ xe</a>
+                <span>/</span>
+                Thêm mới
+            </div>
+            <h1>Thêm giấy tờ xe</h1>
+            <p>Nhập thông tin theo giấy tờ gốc. Ngày tháng sử dụng định dạng dd/mm/yyyy.</p>
         </div>
+        <a class="doc-secondary-btn" asp-action="Index" asp-route-vehicleId="@Model.VehicleId">← Quay lại danh sách</a>
     </div>
+
+    @{ ViewData["IsEdit"] = false; }
+    @await Html.PartialAsync("_VehicleDocumentForm", Model)
 </div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/vehicle-documents-ui.js" asp-append-version="true"></script>
 }

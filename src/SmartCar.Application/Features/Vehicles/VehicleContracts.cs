@@ -37,7 +37,10 @@ public sealed record VehicleSearchRequest(
     int? BrandId = null,
     int? Seats = null,
     string? Transmission = null,
-    decimal? MaxDailyPrice = null);
+    string? FuelType = null,
+    decimal? MinDailyPrice = null,
+    decimal? MaxDailyPrice = null,
+    int? MinManufactureYear = null);
 
 public sealed record CreateVehicleRequest(
     int BrandId,

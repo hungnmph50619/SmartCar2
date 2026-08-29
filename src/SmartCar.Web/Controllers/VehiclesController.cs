@@ -8,6 +8,7 @@ using SmartCar.Application.Features.Reviews;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -19,17 +20,23 @@ public sealed class VehiclesController : Controller
     private readonly IBrandService _brandService;
     private readonly IReviewService _reviewService;
     private readonly IDocumentService _documentService;
+    private readonly IUserBankAccountService _bankAccountService;
+    private readonly IConfiguration _configuration;
 
     public VehiclesController(
         IVehicleService vehicleService,
         IBrandService brandService,
         IReviewService reviewService,
-        IDocumentService documentService)
+        IDocumentService documentService,
+        IUserBankAccountService bankAccountService,
+        IConfiguration configuration)
     {
         _vehicleService = vehicleService;
         _brandService = brandService;
         _reviewService = reviewService;
         _documentService = documentService;
+        _bankAccountService = bankAccountService;
+        _configuration = configuration;
     }
 
     [HttpGet]
@@ -76,43 +83,26 @@ public sealed class VehiclesController : Controller
                 model.BrandId,
                 model.Seats,
                 model.Transmission,
-                model.MaxDailyPrice),
+                model.FuelType,
+                model.MinDailyPrice,
+                model.MaxDailyPrice,
+                model.MinManufactureYear),
             cancellationToken);
 
-        IEnumerable<VehicleDto> filteredVehicles = vehicles;
-
-        if (!string.IsNullOrWhiteSpace(model.FuelType))
+        IEnumerable<VehicleDto> sortedVehicles = model.SortBy switch
         {
-            filteredVehicles = filteredVehicles.Where(vehicle =>
-                string.Equals(vehicle.FuelType, model.FuelType, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (model.MinDailyPrice.HasValue)
-        {
-            filteredVehicles = filteredVehicles.Where(vehicle =>
-                vehicle.DailyPrice >= model.MinDailyPrice.Value);
-        }
-
-        if (model.MinManufactureYear.HasValue)
-        {
-            filteredVehicles = filteredVehicles.Where(vehicle =>
-                vehicle.ManufactureYear >= model.MinManufactureYear.Value);
-        }
-
-        filteredVehicles = model.SortBy switch
-        {
-            "price_desc" => filteredVehicles
+            "price_desc" => vehicles
                 .OrderByDescending(vehicle => vehicle.DailyPrice)
                 .ThenByDescending(vehicle => vehicle.ManufactureYear),
-            "year_desc" => filteredVehicles
+            "year_desc" => vehicles
                 .OrderByDescending(vehicle => vehicle.ManufactureYear)
                 .ThenBy(vehicle => vehicle.DailyPrice),
-            _ => filteredVehicles
+            _ => vehicles
                 .OrderBy(vehicle => vehicle.DailyPrice)
                 .ThenByDescending(vehicle => vehicle.ManufactureYear)
         };
 
-        return View(filteredVehicles.ToArray());
+        return View(sortedVehicles.ToArray());
     }
 
     [HttpGet]
@@ -136,9 +126,33 @@ public sealed class VehiclesController : Controller
         ViewBag.AverageRating = reviews.Count == 0 ? 0 : reviews.Average(review => review.Rating);
         ViewBag.PickupDate = selectedPickupDate;
         ViewBag.ReturnDate = selectedReturnDate;
+
+        // Thông tin cửa hàng dùng cho lựa chọn nhận xe trực tiếp.
+        ViewBag.StoreAddress =
+            _configuration["SmartCar:StoreAddress"]
+            ?? "SmartCar - Tòa FPT Polytechnic, Nam Từ Liêm, Hà Nội";
+
+        // Kiểm tra lại đúng khoảng thời gian ngay tại trang chi tiết để tránh
+        // khách mở URL cũ rồi gửi đơn khi xe đã phát sinh lịch thuê khác.
+        var periodVehicles = await _vehicleService.SearchAvailableAsync(
+            new VehicleSearchRequest(
+                selectedPickupDate,
+                selectedReturnDate),
+            cancellationToken);
+
+        ViewBag.AvailableForSelectedPeriod =
+            periodVehicles.Any(item => item.VehicleId == id);
+
         ViewBag.KycVerified = false;
         ViewBag.KycVerifiedCount = 0;
         ViewBag.KycTotal = 2;
+        ViewBag.CitizenApproved = false;
+        ViewBag.LicenseApproved = false;
+        ViewBag.CitizenValidForRental = false;
+        ViewBag.LicenseValidForRental = false;
+        ViewBag.CitizenExpiryDate = null;
+        ViewBag.LicenseExpiryDate = null;
+        ViewBag.HasBankAccount = false;
 
         if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Customer))
         {
@@ -151,31 +165,44 @@ public sealed class VehiclesController : Controller
                 var licenseFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
                 var licenseBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
-                var citizenVerified = citizenFront is not null &&
+                var citizenApproved = citizenFront is not null &&
                                       citizenBack is not null &&
                                       citizenFront.Status == DocumentStatus.Verified &&
                                       citizenBack.Status == DocumentStatus.Verified &&
                                       citizenFront.HasRequiredData &&
-                                      citizenBack.HasRequiredData &&
-                                      citizenFront.ExpiryDate.HasValue &&
-                                      citizenFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+                                      citizenBack.HasRequiredData;
 
-                var licenseVerified = licenseFront is not null &&
+                var licenseApproved = licenseFront is not null &&
                                       licenseBack is not null &&
                                       licenseFront.Status == DocumentStatus.Verified &&
                                       licenseBack.Status == DocumentStatus.Verified &&
                                       licenseFront.HasRequiredData &&
-                                      licenseBack.HasRequiredData &&
-                                      licenseFront.ExpiryDate.HasValue &&
-                                      licenseFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+                                      licenseBack.HasRequiredData;
 
-                var verifiedCount = (citizenVerified ? 1 : 0) + (licenseVerified ? 1 : 0);
-                ViewBag.KycVerifiedCount = verifiedCount;
-                ViewBag.KycVerified = verifiedCount == 2;
+                var citizenValidForRental = citizenApproved &&
+                                            citizenFront!.ExpiryDate.HasValue &&
+                                            citizenFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+
+                var licenseValidForRental = licenseApproved &&
+                                            licenseFront!.ExpiryDate.HasValue &&
+                                            licenseFront.ExpiryDate.Value.Date >= selectedReturnDate.Date;
+
+                var approvedCount = (citizenApproved ? 1 : 0) + (licenseApproved ? 1 : 0);
+                ViewBag.KycVerifiedCount = approvedCount;
+                ViewBag.KycVerified = citizenValidForRental && licenseValidForRental;
+                ViewBag.CitizenApproved = citizenApproved;
+                ViewBag.LicenseApproved = licenseApproved;
+                ViewBag.CitizenValidForRental = citizenValidForRental;
+                ViewBag.LicenseValidForRental = licenseValidForRental;
+                ViewBag.CitizenExpiryDate = citizenFront?.ExpiryDate;
+                ViewBag.LicenseExpiryDate = licenseFront?.ExpiryDate;
+                ViewBag.HasBankAccount = await _bankAccountService.GetDefaultAsync(
+                    customerId,
+                    cancellationToken) is not null;
             }
         }
 
-        return View(vehicle);
+        return View("DetailsV2", vehicle);
     }
 
     private async Task LoadBrandsAsync(int? selectedId, CancellationToken cancellationToken)

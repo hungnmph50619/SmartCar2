@@ -22,7 +22,10 @@ public sealed class DocumentUploadViewModel
 public sealed class CitizenIdVerificationViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập họ và tên trên CCCD.")]
-    [StringLength(150, ErrorMessage = "Họ và tên không được vượt quá 150 ký tự.")]
+    [StringLength(100, MinimumLength = 2, ErrorMessage = "Họ và tên phải có từ 2 đến 100 ký tự.")]
+    [RegularExpression(
+        @"^ *[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ]+(?:(?: +|['’\-])[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ]+)* *$",
+        ErrorMessage = "Họ và tên chỉ được chứa chữ cái, khoảng trắng, dấu nháy hoặc dấu gạch nối.")]
     [Display(Name = "Họ và tên trên CCCD")]
     public string FullNameOnDocument { get; set; } = string.Empty;
 
@@ -49,9 +52,6 @@ public sealed class CitizenIdVerificationViewModel
     [Display(Name = "Ngày hết hạn")]
     public DateTime? ExpiryDate { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng nhập nơi cư trú trên CCCD.")]
-    [StringLength(500, ErrorMessage = "Nơi cư trú không được vượt quá 500 ký tự.")]
-    [Display(Name = "Nơi cư trú trên CCCD")]
     public string PermanentAddress { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng chọn ảnh CCCD mặt trước.")]
@@ -76,7 +76,7 @@ public sealed class DrivingLicenseVerificationViewModel
     public string FullNameOnDocument { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số GPLX.")]
-    [RegularExpression(@"^[A-Za-z0-9]{4,20}$", ErrorMessage = "Số GPLX chỉ gồm chữ và số, từ 4 đến 20 ký tự, không có khoảng trắng.")]
+    [RegularExpression(@"^[A-Za-z0-9]{8,12}$", ErrorMessage = "Số GPLX phải gồm từ 8 đến 12 ký tự chữ hoặc số, không có khoảng trắng.")]
     [Display(Name = "Số GPLX")]
     public string DocumentNumber { get; set; } = string.Empty;
 

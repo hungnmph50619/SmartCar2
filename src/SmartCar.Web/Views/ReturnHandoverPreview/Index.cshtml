@@ -1,0 +1,55 @@
+@model SmartCar.Domain.Entities.VehicleHandover
+@{
+    Layout = null;
+    var images = ViewBag.ImagePaths as IReadOnlyList<string> ?? Array.Empty<string>();
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Đối chiếu biên bản giao</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 14px; color: #172033; background: #fff; }
+        .summary { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 10px 12px; background: #f7f9fc; border: 1px solid #e0e5ec; border-radius: 10px; font-size: 14px; }
+        .summary strong { color: #0b5ed7; }
+        .accessories, .notes { margin-top: 10px; font-size: 13px; }
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin-top: 12px; }
+        .photo { border: 1px solid #dfe3e8; border-radius: 8px; padding: 4px; background: #fff; }
+        .photo img { width: 100%; height: 82px; object-fit: cover; border-radius: 6px; display: block; cursor: zoom-in; }
+        .empty { margin-top: 12px; color: #6c757d; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="summary">
+        <span>Thời gian giao: <strong>@Model.HandoverAt.ToString("dd/MM/yyyy HH:mm")</strong></span>
+        <span>Số km: <strong>@Model.Mileage.ToString("N0") km</strong></span>
+        <span>Nhiên liệu: <strong>@Model.FuelLevel</strong></span>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Accessories))
+    {
+        <div class="accessories"><strong>Phụ kiện lúc giao:</strong> @Model.Accessories</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.Notes))
+    {
+        <div class="notes"><strong>Ghi chú lúc giao:</strong> @Model.Notes</div>
+    }
+
+    @if (images.Count > 0)
+    {
+        <div class="gallery">
+            @foreach (var imagePath in images)
+            {
+                <a class="photo" href="@imagePath" target="_blank" rel="noopener" title="Bấm để xem ảnh lớn">
+                    <img src="@imagePath" alt="Ảnh đối chiếu lúc giao" loading="lazy" />
+                </a>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="empty">Không có ảnh đối chiếu lúc giao.</div>
+    }
+</body>
+</html>

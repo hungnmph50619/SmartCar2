@@ -1,92 +1,216 @@
 @model SmartCar.Application.Features.Reports.FleetReportDto
 @{
-    ViewData["Title"] = "Hiệu suất và lợi nhuận đội xe";
+    ViewData["Title"] = "Hiệu suất và lợi nhuận";
+    var today = DateTime.Today;
+    var sevenDaysStart = today.AddDays(-6);
+    var thirtyDaysStart = today.AddDays(-29);
+    var monthStart = new DateTime(today.Year, today.Month, 1);
+    var periodDays = Math.Max(1, (Model.ToDate.Date - Model.FromDate.Date).Days + 1);
+    var totalOutstanding = Model.OutstandingReceivables + Model.OutstandingDeposits;
+    var totalExpense = Model.TotalOperatingCost + Model.TotalRevenueRefunds;
+    var vehicleRows = Model.Vehicles.OrderByDescending(x => x.NetOperatingProfit).ThenBy(x => x.VehicleName).ToList();
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h1 class="h3 mb-1">Hiệu suất và lợi nhuận đội xe</h1>
-        <p class="text-muted mb-0">Doanh thu thực thu trừ hoàn tiền, bảo trì và chi phí sự cố.</p>
+<style>
+    .profit-page { --line:#e6ebf2; --muted:#718096; }
+    .profit-page .panel { background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 4px 16px rgba(15,35,60,.045); }
+    .profit-page .kpi { padding:1.15rem; height:100%; }
+    .profit-page .kpi-label { color:#64748b; font-size:.78rem; font-weight:700; }
+    .profit-page .kpi-number { font-size:1.55rem; font-weight:800; margin-top:.35rem; }
+    .profit-page .section-title { font-size:1.05rem; font-weight:800; margin:0; }
+    .profit-page .tiny { color:var(--muted); font-size:.82rem; }
+    .profit-page .money-good { color:#198754; }
+    .profit-page .money-bad { color:#dc3545; }
+    .profit-page .finance-line { display:flex; justify-content:space-between; gap:18px; padding:.7rem 0; border-bottom:1px solid var(--line); }
+    .profit-page .finance-line:last-child { border-bottom:0; }
+    .profit-page .vehicle-list { overflow:hidden; }
+    .profit-page .vehicle-head,
+    .profit-page .vehicle-summary { display:grid; grid-template-columns:minmax(220px,1.7fr) 1fr 1fr .9fr .9fr auto; gap:18px; align-items:center; }
+    .profit-page .vehicle-head { padding:.7rem 1rem; background:#f6f8fb; color:#64748b; font-size:.78rem; font-weight:700; border-bottom:1px solid var(--line); }
+    .profit-page .vehicle-row { border-bottom:1px solid var(--line); }
+    .profit-page .vehicle-row:last-child { border-bottom:0; }
+    .profit-page .vehicle-summary { list-style:none; cursor:pointer; padding:1rem; }
+    .profit-page .vehicle-summary::-webkit-details-marker { display:none; }
+    .profit-page .vehicle-name { font-weight:800; }
+    .profit-page .vehicle-detail { border-top:1px solid var(--line); background:#fbfcfe; padding:1rem; }
+    .profit-page .booking-head,
+    .profit-page .booking-summary { display:grid; grid-template-columns:120px 1fr 1fr 1fr 1fr auto; gap:14px; align-items:center; }
+    .profit-page .booking-head { padding:.55rem .75rem; color:#64748b; font-size:.75rem; font-weight:700; }
+    .profit-page .booking-row { border:1px solid var(--line); border-radius:10px; background:#fff; margin-top:.55rem; overflow:hidden; }
+    .profit-page .booking-summary { list-style:none; cursor:pointer; padding:.75rem; }
+    .profit-page .booking-summary::-webkit-details-marker { display:none; }
+    .profit-page .booking-transactions { border-top:1px solid var(--line); padding:.35rem .75rem .75rem; }
+    .profit-page .transaction-line { display:grid; grid-template-columns:100px 1fr auto; gap:12px; padding:.5rem 0; border-bottom:1px solid #edf1f5; font-size:.85rem; }
+    .profit-page .transaction-line:last-child { border-bottom:0; }
+    .profit-page .result-line { display:flex; justify-content:space-between; gap:16px; margin-top:.65rem; padding:.65rem .75rem; background:#f6f8fb; border-radius:8px; }
+    @@media(max-width:992px){
+        .profit-page .vehicle-head,.profit-page .booking-head{display:none}
+        .profit-page .vehicle-summary{grid-template-columns:1fr 1fr}
+        .profit-page .vehicle-summary .vehicle-main,.profit-page .vehicle-summary .open-cell{grid-column:1/-1}
+        .profit-page .booking-summary{grid-template-columns:1fr 1fr}
+        .profit-page .booking-summary .booking-main,.profit-page .booking-summary .booking-open{grid-column:1/-1}
+    }
+</style>
+
+<div class="profit-page">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <h1 class="h3 mb-1">Hiệu suất và lợi nhuận</h1>
+            <div class="text-muted">Theo dõi nhanh doanh thu, lợi nhuận và từng đơn thuê.</div>
+        </div>
+        <div class="text-end small text-muted">
+            <strong>@Model.FromDate.ToString("dd/MM/yyyy") – @Model.ToDate.ToString("dd/MM/yyyy")</strong>
+            <div>@periodDays ngày</div>
+        </div>
+    </div>
+
+    <form method="get" class="panel p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-lg-auto">
+                <div class="d-flex gap-2">
+                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@sevenDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">7 ngày</a>
+                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@thirtyDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">30 ngày</a>
+                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@monthStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">Tháng này</a>
+                </div>
+            </div>
+            <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Từ ngày</label><input name="fromDate" type="date" value="@Model.FromDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+            <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Đến ngày</label><input name="toDate" type="date" value="@Model.ToDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+            <div class="col-sm-4 col-lg-auto"><button class="btn btn-primary btn-sm px-4 w-100" type="submit">Xem báo cáo</button></div>
+        </div>
+    </form>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div></div></div>
+        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">CHI PHÍ & HOÀN</div><div class="kpi-number text-danger">@totalExpense.ToString("N0") đ</div></div></div>
+        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">LỢI NHUẬN ƯỚC TÍNH</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div></div></div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="panel p-3 h-100">
+                <h2 class="section-title mb-2">Nguồn doanh thu</h2>
+                <div class="finance-line"><span>Tiền thuê / giao xe</span><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Gia hạn</span><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Phụ phí</span><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Khấu trừ cọc</span><strong>@Model.TotalDepositDeductionRecovery.ToString("N0") đ</strong></div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="panel p-3 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h2 class="section-title">Tiền đang xử lý</h2>
+                    <a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index">Mở thanh toán</a>
+                </div>
+                <div class="finance-line"><span>Cần thu</span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Cọc đang giữ</span><strong>@Model.DepositsHeld.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Chờ hoàn</span><strong class="text-warning">@Model.PendingRefunds.ToString("N0") đ</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel vehicle-list mb-3">
+        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap p-3">
+            <div><h2 class="section-title">Hiệu quả từng xe</h2></div>
+            <input id="vehicle-search" type="search" class="form-control form-control-sm" style="max-width:280px" placeholder="Tìm tên xe hoặc biển số" />
+        </div>
+
+        <div class="vehicle-head">
+            <span>Xe</span><span>Doanh thu</span><span>Lợi nhuận</span><span>Thời gian thuê</span><span>Đơn hoàn tất</span><span></span>
+        </div>
+
+        <div id="vehicle-grid">
+        @foreach (var item in vehicleRows)
+        {
+            var bookingGroups = item.Transactions
+                .Where(t => t.BookingId.HasValue)
+                .GroupBy(t => t.BookingId!.Value)
+                .OrderByDescending(g => g.Max(t => t.OccurredAt))
+                .ToList();
+
+            <details class="vehicle-row vehicle-wrapper" data-search="@($"{item.VehicleName} {item.LicensePlate}")">
+                <summary class="vehicle-summary">
+                    <div class="vehicle-main"><div class="vehicle-name">@item.VehicleName</div><div class="tiny">@item.LicensePlate</div></div>
+                    <div><strong class="text-primary">@item.Revenue.ToString("N0") đ</strong></div>
+                    <div><strong class="@(item.NetOperatingProfit >= 0 ? "money-good" : "money-bad")">@item.NetOperatingProfit.ToString("N0") đ</strong></div>
+                    <div><strong>@item.RentalDays / @periodDays ngày</strong></div>
+                    <div><strong>@item.CompletedBookings đơn</strong></div>
+                    <div class="open-cell"><span class="btn btn-sm btn-outline-primary">Xem chi tiết ↓</span></div>
+                </summary>
+
+                <div class="vehicle-detail">
+                    @if (bookingGroups.Count == 0)
+                    {
+                        <div class="text-muted small">Không có đơn có giao dịch trong kỳ.</div>
+                    }
+                    else
+                    {
+                        <div class="booking-head">
+                            <span>Đơn</span><span>Doanh thu</span><span>Hoàn tiền thuê</span><span>Hoàn cọc</span><span>Kết quả</span><span></span>
+                        </div>
+
+                        @foreach (var booking in bookingGroups)
+                        {
+                            var revenueCollected = booking.Where(t => !t.IsOutflow).Sum(t => t.Amount);
+                            var depositRefund = booking.Where(t => t.IsOutflow && t.Category == "Hoàn cọc").Sum(t => t.Amount);
+                            var revenueRefund = booking.Where(t => t.IsOutflow && (t.Category == "Hoàn doanh thu" || t.Category == "Hoàn chênh lệch đổi xe")).Sum(t => t.Amount);
+                            var directCost = booking.Where(t => t.IsOutflow && t.Category != "Hoàn cọc" && t.Category != "Hoàn doanh thu" && t.Category != "Hoàn chênh lệch đổi xe" && t.Category != "Hỗ trợ/bồi thường").Sum(t => t.Amount);
+                            var result = revenueCollected - revenueRefund - directCost;
+                            var lastDate = booking.Max(t => t.OccurredAt);
+
+                            <details class="booking-row">
+                                <summary class="booking-summary">
+                                    <div class="booking-main"><strong>#@booking.Key</strong><div class="tiny">@lastDate.ToString("dd/MM/yyyy")</div></div>
+                                    <div><strong class="text-primary">@revenueCollected.ToString("N0") đ</strong></div>
+                                    <div><strong class="@(revenueRefund > 0 ? "money-bad" : string.Empty)">@revenueRefund.ToString("N0") đ</strong></div>
+                                    <div><strong>@depositRefund.ToString("N0") đ</strong></div>
+                                    <div><strong class="@(result >= 0 ? "money-good" : "money-bad")">@result.ToString("N0") đ</strong></div>
+                                    <div class="booking-open text-primary small">Xem giao dịch ↓</div>
+                                </summary>
+
+                                <div class="booking-transactions">
+                                    @foreach (var transaction in booking.OrderBy(t => t.OccurredAt))
+                                    {
+                                        var label = transaction.Category == "Hỗ trợ/bồi thường" ? "Hỗ trợ/bồi thường" : transaction.Category;
+                                        <div class="transaction-line">
+                                            <span class="tiny">@transaction.OccurredAt.ToString("dd/MM/yyyy")</span>
+                                            <span>@label</span>
+                                            <strong class="@(transaction.IsOutflow ? "money-bad" : "money-good")">@(transaction.IsOutflow ? "−" : "+")@transaction.Amount.ToString("N0") đ</strong>
+                                        </div>
+                                    }
+                                    <div class="result-line">
+                                        <span><strong>Kết quả đơn</strong></span>
+                                        <strong class="@(result >= 0 ? "money-good" : "money-bad")">@result.ToString("N0") đ</strong>
+                                    </div>
+                                    <div class="text-end pt-2"><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.Key" class="btn btn-sm btn-outline-primary">Mở đơn #@booking.Key</a></div>
+                                </div>
+                            </details>
+                        }
+                    }
+                </div>
+            </details>
+        }
+        <div id="vehicle-empty" class="text-center text-muted py-4 d-none">Không tìm thấy xe phù hợp.</div>
+        </div>
     </div>
 </div>
 
-<form method="get" class="card card-body shadow-sm mb-4">
-    <div class="row g-3 align-items-end">
-        <div class="col-md-4">
-            <label class="form-label">Từ ngày</label>
-            <input name="fromDate" type="date" value="@Model.FromDate.ToString("yyyy-MM-dd")" class="form-control" />
-        </div>
-        <div class="col-md-4">
-            <label class="form-label">Đến ngày</label>
-            <input name="toDate" type="date" value="@Model.ToDate.ToString("yyyy-MM-dd")" class="form-control" />
-        </div>
-        <div class="col-md-4">
-            <button class="btn btn-primary w-100" type="submit">Cập nhật báo cáo</button>
-        </div>
-    </div>
-</form>
-
-<div class="row g-3 mb-4">
-    <div class="col-md-3"><div class="card card-body shadow-sm"><span class="text-muted">Doanh thu</span><strong class="fs-4">@Model.TotalRevenue.ToString("N0") đ</strong></div></div>
-    <div class="col-md-3"><div class="card card-body shadow-sm"><span class="text-muted">Hoàn tiền</span><strong class="fs-4 text-warning">@Model.TotalRefunds.ToString("N0") đ</strong></div></div>
-    <div class="col-md-3"><div class="card card-body shadow-sm"><span class="text-muted">Chi phí vận hành</span><strong class="fs-4 text-danger">@Model.TotalOperatingCost.ToString("N0") đ</strong></div></div>
-    <div class="col-md-3"><div class="card card-body shadow-sm"><span class="text-muted">Lợi nhuận ước tính</span><strong class="fs-4 @(Model.TotalNetProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetProfit.ToString("N0") đ</strong></div></div>
-</div>
-
-<div class="card card-body shadow-sm mb-4">
-    <div class="d-flex justify-content-between mb-2">
-        <strong>Tỷ lệ khai thác trung bình</strong>
-        <span>@Model.AverageUtilizationRate.ToString("0.##")%</span>
-    </div>
-    <div class="progress" style="height:24px">
-        <div class="progress-bar" role="progressbar" style="width:@($"{Math.Min(100, Model.AverageUtilizationRate):0.##}%")">
-            @Model.AverageUtilizationRate.ToString("0.##")%
-        </div>
-    </div>
-</div>
-
-<div class="card shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Xe</th>
-                    <th>Doanh thu</th>
-                    <th>Hoàn tiền</th>
-                    <th>Bảo trì</th>
-                    <th>Sự cố/phạt</th>
-                    <th>Lợi nhuận</th>
-                    <th style="min-width:180px">Khai thác</th>
-                    <th>Đơn hoàn tất</th>
-                </tr>
-            </thead>
-            <tbody>
-            @if (Model.Vehicles.Count == 0)
-            {
-                <tr><td colspan="8" class="text-center text-muted py-4">Chưa có dữ liệu xe.</td></tr>
-            }
-            else
-            {
-                @foreach (var item in Model.Vehicles)
-                {
-                    <tr>
-                        <td><strong>@item.VehicleName</strong><div class="small text-muted">@item.LicensePlate</div></td>
-                        <td>@item.Revenue.ToString("N0") đ</td>
-                        <td>@item.Refunds.ToString("N0") đ</td>
-                        <td>@item.MaintenanceCost.ToString("N0") đ</td>
-                        <td>@item.IncidentCost.ToString("N0") đ<div class="small text-muted">@item.IncidentCount sự cố</div></td>
-                        <td class="fw-bold @(item.NetProfit >= 0 ? "text-success" : "text-danger")">@item.NetProfit.ToString("N0") đ</td>
-                        <td>
-                            <div class="d-flex justify-content-between small"><span>@item.RentalDays ngày</span><span>@item.UtilizationRate.ToString("0.##")%</span></div>
-                            <div class="progress" style="height:10px">
-                                <div class="progress-bar" style="width:@($"{Math.Min(100, item.UtilizationRate):0.##}%")"></div>
-                            </div>
-                        </td>
-                        <td>@item.CompletedBookings</td>
-                    </tr>
-                }
-            }
-            </tbody>
-        </table>
-    </div>
-</div>
+@section Scripts {
+<script>
+(() => {
+    const input = document.getElementById('vehicle-search');
+    const rows = Array.from(document.querySelectorAll('.vehicle-wrapper'));
+    const empty = document.getElementById('vehicle-empty');
+    if (!input) return;
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLocaleLowerCase('vi-VN');
+        let visible = 0;
+        rows.forEach(row => {
+            const match = !q || (row.dataset.search || '').toLocaleLowerCase('vi-VN').includes(q);
+            row.classList.toggle('d-none', !match);
+            if (match) visible++;
+        });
+        empty?.classList.toggle('d-none', visible !== 0);
+    });
+})();
+</script>
+}

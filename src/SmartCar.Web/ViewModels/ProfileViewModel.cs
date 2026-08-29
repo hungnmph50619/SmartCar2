@@ -45,8 +45,6 @@ public sealed class ProfileViewModel
 
     [ValidateNever]
     public IReadOnlyList<BankOption> AvailableBanks { get; set; } = Array.Empty<BankOption>();
-
-    public bool? BankHolderMatchesKyc { get; set; }
 }
 
 public sealed class BankAccountViewModel
@@ -63,6 +61,7 @@ public sealed class BankAccountViewModel
 
     [Required(ErrorMessage = "Vui lòng nhập tên chủ tài khoản.")]
     [StringLength(150, ErrorMessage = "Tên chủ tài khoản không được vượt quá 150 ký tự.")]
+    [RegularExpression(@"^[\p{L}]+(?:[ ]+[\p{L}]+)*$", ErrorMessage = "Tên chủ tài khoản chỉ được chứa chữ cái và khoảng trắng.")]
     [Display(Name = "Chủ tài khoản")]
     public string AccountHolderName { get; set; } = string.Empty;
 

@@ -11,15 +11,18 @@
 <form asp-action="Create"
       method="post"
       enctype="multipart/form-data"
+      data-vehicle-form
       class="card card-body shadow-sm"
-      data-loading-form>
+      data-loading-form
+      novalidate>
     <partial name="_VehicleForm" model="Model" />
     <div class="mt-4 d-flex gap-2 flex-wrap">
         <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu xe...">Lưu xe</button>
-        <a class="btn btn-outline-secondary" asp-action="Index">Quay lại</a>
+        <a class="btn btn-outline-secondary" asp-action="Index" data-vehicle-back>Quay lại</a>
     </div>
 </form>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/admin-vehicle-form.js" asp-append-version="true"></script>
 }

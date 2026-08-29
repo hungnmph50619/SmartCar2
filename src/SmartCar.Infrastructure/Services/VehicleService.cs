@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Vehicles;
+using SmartCar.Application.Features.VehicleDocuments;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -19,10 +20,20 @@ internal sealed class VehicleService : IVehicleService
         BookingStatus.PendingInspection
     };
 
-    private readonly ApplicationDbContext _dbContext;
-
-    public VehicleService(ApplicationDbContext dbContext)
+    private static readonly VehicleStatus[] StatusesRequiringLegalEligibility =
     {
+        VehicleStatus.Available,
+        VehicleStatus.Rented
+    };
+
+    private readonly ApplicationDbContext _dbContext;
+    private readonly IVehicleDocumentService _vehicleDocumentService;
+
+    public VehicleService(
+        ApplicationDbContext dbContext,
+        IVehicleDocumentService vehicleDocumentService)
+    {
+        _vehicleDocumentService = vehicleDocumentService;
         _dbContext = dbContext;
     }
 
@@ -56,7 +67,9 @@ internal sealed class VehicleService : IVehicleService
         }
 
         var query = VehicleQuery()
-            .Where(vehicle => vehicle.Status == VehicleStatus.Available)
+            .Where(vehicle =>
+                vehicle.Status == VehicleStatus.Available ||
+                vehicle.Status == VehicleStatus.Rented)
             .Where(vehicle => !vehicle.Bookings.Any(booking =>
                 BlockingBookingStatuses.Contains(booking.Status) &&
                 request.PickupDate < booking.ReturnDate &&
@@ -66,15 +79,24 @@ internal sealed class VehicleService : IVehicleService
                 incident.Status != IncidentStatus.Cancelled))
             .Where(vehicle => vehicle.Documents.Any(document =>
                 document.DocumentType == VehicleDocumentType.Registration &&
-                (!document.ExpiryDate.HasValue || document.ExpiryDate.Value >= request.ReturnDate)))
+                document.IssuedDate.Date <= request.PickupDate.Date &&
+                (!document.ExpiryDate.HasValue ||
+                 document.ExpiryDate.Value.Date >= request.ReturnDate.Date)))
             .Where(vehicle => vehicle.Documents.Any(document =>
                 document.DocumentType == VehicleDocumentType.Inspection &&
+                document.IssuedDate.Date <= request.PickupDate.Date &&
                 document.ExpiryDate.HasValue &&
-                document.ExpiryDate.Value >= request.ReturnDate))
+                document.ExpiryDate.Value.Date >= request.ReturnDate.Date))
             .Where(vehicle => vehicle.Documents.Any(document =>
                 document.DocumentType == VehicleDocumentType.Insurance &&
+                document.IssuedDate.Date <= request.PickupDate.Date &&
                 document.ExpiryDate.HasValue &&
-                document.ExpiryDate.Value >= request.ReturnDate));
+                document.ExpiryDate.Value.Date >= request.ReturnDate.Date))
+            .Where(vehicle => vehicle.Documents.Any(document =>
+                document.DocumentType == VehicleDocumentType.RoadFee &&
+                document.IssuedDate.Date <= request.PickupDate.Date &&
+                document.ExpiryDate.HasValue &&
+                document.ExpiryDate.Value.Date >= request.ReturnDate.Date));
 
         if (request.BrandId.HasValue)
         {
@@ -91,9 +113,24 @@ internal sealed class VehicleService : IVehicleService
             query = query.Where(vehicle => vehicle.Transmission == request.Transmission);
         }
 
+        if (!string.IsNullOrWhiteSpace(request.FuelType))
+        {
+            query = query.Where(vehicle => vehicle.FuelType == request.FuelType);
+        }
+
+        if (request.MinDailyPrice.HasValue)
+        {
+            query = query.Where(vehicle => vehicle.DailyPrice >= request.MinDailyPrice.Value);
+        }
+
         if (request.MaxDailyPrice.HasValue)
         {
             query = query.Where(vehicle => vehicle.DailyPrice <= request.MaxDailyPrice.Value);
+        }
+
+        if (request.MinManufactureYear.HasValue)
+        {
+            query = query.Where(vehicle => vehicle.ManufactureYear >= request.MinManufactureYear.Value);
         }
 
         var vehicles = await query
@@ -136,7 +173,10 @@ internal sealed class VehicleService : IVehicleService
             Color = NormalizeOptional(request.Color),
             DailyPrice = request.DailyPrice,
             CurrentMileage = request.CurrentMileage,
-            Status = VehicleStatus.Available,
+            // Xe mới tạo chưa có giấy tờ pháp lý nào (Đăng ký/Đăng kiểm/Bảo hiểm/Phí đường bộ),
+            // nên không thể ở trạng thái Sẵn sàng/Cho thuê ngay. Admin cần bổ sung đủ giấy tờ
+            // rồi chuyển trạng thái thủ công qua ChangeStatusAsync (đã có kiểm tra pháp lý).
+            Status = VehicleStatus.Inactive,
             Description = NormalizeOptional(request.Description),
             CreatedAt = DateTime.UtcNow
         };
@@ -221,14 +261,62 @@ internal sealed class VehicleService : IVehicleService
             return OperationResult.Failure("Không tìm thấy xe.");
         }
 
-        var hasActiveRental = await _dbContext.Bookings.AnyAsync(booking =>
+        var hasBlockingBooking = await _dbContext.Bookings.AnyAsync(booking =>
             booking.VehicleId == vehicleId &&
-            booking.Status == BookingStatus.Rented,
+            BlockingBookingStatuses.Contains(booking.Status),
             cancellationToken);
 
-        if (hasActiveRental && status != VehicleStatus.Rented)
+        if (hasBlockingBooking && status != vehicle.Status)
         {
-            return OperationResult.Failure("Không thể đổi trạng thái khi xe đang được khách thuê.");
+            return OperationResult.Failure(
+                "Không thể tùy ý đổi trạng thái xe khi đang có đơn thuê chưa hoàn tất.");
+        }
+
+        // BUG FIX: Admin không được mở lại xe (Available) nếu hồ sơ pháp lý chưa đủ.
+        // Kiểm tra này nằm ở service/server, không phụ thuộc vào việc UI có disable nút hay không.
+        if (status == VehicleStatus.Available)
+        {
+            var legalStatus = (await _vehicleDocumentService
+                .GetOverviewByVehicleAsync(vehicleId, cancellationToken))
+                .LegalStatus;
+
+            if (!legalStatus.IsEligible)
+            {
+                var reasonText = legalStatus.Reasons.Count > 0
+                    ? string.Join(" ", legalStatus.Reasons)
+                    : "Giấy tờ pháp lý của xe chưa đầy đủ hoặc đã hết hạn.";
+
+                return OperationResult.Failure(
+                    $"Không thể mở lại hoạt động cho xe vì xe chưa đủ điều kiện pháp lý cho thuê. {reasonText}");
+            }
+
+            var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(incident =>
+                incident.VehicleId == vehicleId &&
+                incident.Status != IncidentStatus.Resolved &&
+                incident.Status != IncidentStatus.Cancelled,
+                cancellationToken);
+
+            if (hasOpenIncident)
+            {
+                return OperationResult.Failure(
+                    "Không thể mở lại hoạt động cho xe vì xe vẫn còn sự cố chưa được xử lý.");
+            }
+        }
+        else if (StatusesRequiringLegalEligibility.Contains(status))
+        {
+            var legalStatus = (await _vehicleDocumentService
+                .GetOverviewByVehicleAsync(vehicleId, cancellationToken))
+                .LegalStatus;
+
+            if (!legalStatus.IsEligible)
+            {
+                var reasonText = legalStatus.Reasons.Count > 0
+                    ? string.Join(" ", legalStatus.Reasons)
+                    : "Giấy tờ pháp lý của xe chưa đầy đủ hoặc đã hết hạn.";
+
+                return OperationResult.Failure(
+                    $"Không thể chuyển xe sang trạng thái này vì xe chưa đủ điều kiện pháp lý cho thuê. {reasonText}");
+            }
         }
 
         vehicle.Status = status;
@@ -363,21 +451,55 @@ internal sealed class VehicleService : IVehicleService
 
         if (manufactureYear < 1980 || manufactureYear > DateTime.UtcNow.Year)
         {
-            return "Năm sản xuất không hợp lệ.";
+            return $"Năm sản xuất phải từ 1980 đến {DateTime.UtcNow.Year}.";
         }
 
-        if (seats <= 0 || dailyPrice <= 0 || currentMileage < 0)
+        int[] allowedSeats = [2, 4, 5, 7, 8, 9, 16];
+        if (!allowedSeats.Contains(seats))
         {
-            return "Số chỗ, giá thuê hoặc số km không hợp lệ.";
+            return "Số chỗ không hợp lệ. Vui lòng chọn 2, 4, 5, 7, 8, 9 hoặc 16 chỗ.";
         }
 
-        var brandExists = await _dbContext.Brands.AnyAsync(
-            brand => brand.BrandId == brandId && brand.IsActive,
-            cancellationToken);
-
-        if (!brandExists)
+        const decimal maxDailyPrice = 100_000_000m;
+        if (dailyPrice < 1 || dailyPrice > maxDailyPrice)
         {
-            return "Hãng xe không tồn tại hoặc đã ngừng hoạt động.";
+            return "Giá thuê/ngày phải từ 1 đến 100.000.000 đồng.";
+        }
+
+        const int maxCurrentMileage = 2_000_000;
+        if (currentMileage < 0 || currentMileage > maxCurrentMileage)
+        {
+            return "Số km hiện tại phải từ 0 đến 2.000.000 km.";
+        }
+
+        var brand = await _dbContext.Brands
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.BrandId == brandId, cancellationToken);
+
+        if (brand is null)
+        {
+            return "Hãng xe không tồn tại.";
+        }
+
+        if (!brand.IsActive)
+        {
+            // Khi tạo xe, hãng luôn phải đang hoạt động.
+            if (!vehicleId.HasValue)
+            {
+                return "Hãng xe đã ngừng hoạt động.";
+            }
+
+            // Khi sửa, được giữ nguyên hãng cũ dù hãng vừa bị ngừng,
+            // nhưng không được chuyển sang một hãng inactive khác.
+            var currentBrandId = await _dbContext.Vehicles
+                .Where(vehicle => vehicle.VehicleId == vehicleId.Value)
+                .Select(vehicle => vehicle.BrandId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (currentBrandId != brandId)
+            {
+                return "Không thể chuyển xe sang một hãng đã ngừng hoạt động.";
+            }
         }
 
         var normalizedPlate = NormalizeLicensePlate(licensePlate);

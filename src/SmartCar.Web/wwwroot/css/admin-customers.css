@@ -121,8 +121,7 @@
 }
 
 .customer-rental-eligibility p {
-    min-height: 72px;
-    color: rgba(255, 255, 255, .82);
+    color: rgba(255, 255, 255, .84);
 }
 
 .customer-rental-eligibility .btn-outline-success {
@@ -130,8 +129,96 @@
     color: #fff;
 }
 
+.eligibility-status-list {
+    display: grid;
+    gap: 10px;
+    margin: 18px 0 22px;
+}
+
+.eligibility-status-item {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, .07);
+    color: rgba(255, 255, 255, .88);
+}
+
+.eligibility-status-item strong {
+    color: #fff;
+    font-size: 13px;
+}
+
+.eligibility-icon {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 900;
+}
+
+.eligibility-icon.is-ok {
+    background: rgba(40, 199, 111, .22);
+    color: #b9ffd6;
+}
+
+.eligibility-icon.is-missing {
+    background: rgba(255, 193, 7, .18);
+    color: #ffe28a;
+}
+
+.document-step-nav {
+    position: sticky;
+    top: 76px;
+    z-index: 20;
+    display: flex;
+    gap: 8px;
+    margin: -4px 0 18px;
+    padding: 7px;
+    border: 1px solid #dce6f2;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .96);
+    box-shadow: 0 8px 22px rgba(20, 53, 88, .08);
+    backdrop-filter: blur(8px);
+}
+
+.document-step-nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 8px 13px;
+    border-radius: 9px;
+    color: #53657b;
+    font-size: 13px;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.document-step-nav a:hover {
+    color: #1f6fe5;
+    background: #eef5ff;
+}
+
+.document-step-nav .step-number {
+    display: grid;
+    width: 21px;
+    height: 21px;
+    place-items: center;
+    border-radius: 999px;
+    background: #e9f2ff;
+    color: #1f6fe5;
+    font-size: 11px;
+}
+
 .document-review-card {
     border-radius: 18px;
+    scroll-margin-top: 132px;
 }
 
 .document-meta {
@@ -145,6 +232,10 @@
     border: 1px solid #e6ecf4;
     border-radius: 12px;
     background: #f9fbfd;
+}
+
+.document-image-viewer {
+    position: relative;
 }
 
 .document-image-link {
@@ -162,6 +253,8 @@
     width: 100%;
     height: 310px;
     object-fit: contain;
+    transform-origin: center center;
+    transition: transform .2s ease;
 }
 
 .document-image-link span {
@@ -174,6 +267,25 @@
     color: #fff;
     font-size: 12px;
     font-weight: 700;
+}
+
+.document-rotate-btn {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    z-index: 3;
+    border: 1px solid rgba(255, 255, 255, .72);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .92);
+    color: #173652;
+    box-shadow: 0 5px 14px rgba(18, 53, 89, .12);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.document-rotate-btn:hover {
+    background: #fff;
+    color: #1f6fe5;
 }
 
 .document-checklist,
@@ -205,6 +317,29 @@
     font-size: 14px;
 }
 
+.document-decision-block {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #e8edf4;
+}
+
+.document-decision-block .btn-success {
+    min-width: 190px;
+    font-weight: 800;
+    box-shadow: 0 7px 18px rgba(25, 135, 84, .14);
+}
+
+.document-reject-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.document-reject-action .btn {
+    font-weight: 700;
+}
+
 .resubmission-form {
     padding: 16px;
     border: 1px solid #f0c7cb;
@@ -234,8 +369,25 @@
         grid-template-columns: 1fr;
     }
 
+    .document-step-nav {
+        top: 68px;
+        overflow-x: auto;
+    }
+
+    .document-step-nav a {
+        flex: 0 0 auto;
+    }
+
     .document-image-link img {
         height: 230px;
+    }
+
+    .eligibility-status-item {
+        grid-template-columns: 24px 1fr;
+    }
+
+    .eligibility-status-item strong {
+        grid-column: 2;
     }
 
     .admin-customer-table th,

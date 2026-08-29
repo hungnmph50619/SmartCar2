@@ -1,0 +1,515 @@
+@model SmartCar.Web.ViewModels.ReturnInspectionViewModel
+@using Microsoft.EntityFrameworkCore
+@using SmartCar.Domain.Enums
+@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext Db
+
+@{
+    ViewData["Title"] = $"Đối chiếu giao - trả #{Model.BookingId}";
+    var canComplete = Model.Status == BookingStatus.PendingInspection;
+    var hasUnpaidCharge = Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid;
+    var awaitingRefund = Model.Status == BookingStatus.AwaitingRefund || Model.RefundStatus == PaymentStatus.AwaitingRefund;
+    var fuelDifference = Model.FuelDifferencePercent;
+    var fuelDifferenceText = fuelDifference.HasValue
+        ? $"{(fuelDifference.Value > 0 ? "+" : string.Empty)}{fuelDifference.Value}%"
+        : null;
+    var fuelReduced = fuelDifference.HasValue && fuelDifference.Value < 0;
+
+    const string overdueCompPrefix = "OVERDUE-COMP-";
+    const string overdueDebtPrefix = "OVERDUE-DEBT-";
+    var overduePaymentRows = await Db.Payments
+        .AsNoTracking()
+        .Where(payment =>
+            payment.BookingId == Model.BookingId &&
+            payment.Type == PaymentType.AdditionalCharge &&
+            payment.TransactionCode != null &&
+            (payment.TransactionCode.StartsWith(overdueCompPrefix) ||
+             payment.TransactionCode.StartsWith(overdueDebtPrefix)))
+        .Select(payment => new { payment.Amount, payment.TransactionCode })
+        .ToListAsync();
+
+    int? ParseAffectedBookingId(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return null;
+        var prefix = code.StartsWith(overdueCompPrefix, StringComparison.OrdinalIgnoreCase)
+            ? overdueCompPrefix
+            : code.StartsWith(overdueDebtPrefix, StringComparison.OrdinalIgnoreCase)
+                ? overdueDebtPrefix
+                : null;
+        if (prefix is null) return null;
+
+        var parts = code[prefix.Length..].Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 && int.TryParse(parts[1], out var affectedId)
+            ? affectedId
+            : null;
+    }
+
+    var overdueImpacts = overduePaymentRows
+        .Select(row => new { AffectedBookingId = ParseAffectedBookingId(row.TransactionCode), row.Amount })
+        .Where(row => row.AffectedBookingId.HasValue)
+        .GroupBy(row => row.AffectedBookingId!.Value)
+        .Select(group => new { BookingId = group.Key, CompensationAmount = group.Sum(row => row.Amount) })
+        .OrderBy(item => item.BookingId)
+        .ToList();
+
+    var handoverSignedPaths = Model.Handover.ImagePaths
+        .Where(path => path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    var returnSignedPaths = Model.Return.ImagePaths
+        .Where(path => path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    var handoverPhotos = Model.Handover.ImagePaths
+        .Where(path => !path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    var returnPhotos = Model.Return.ImagePaths
+        .Where(path => !path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+    var hasSignedDocuments = handoverSignedPaths.Count > 0 && returnSignedPaths.Count > 0;
+    var canEditReturn = Model.Status == BookingStatus.PendingInspection && returnSignedPaths.Count == 0;
+
+    const string accessoryLabel = "Phụ kiện khi trả:";
+    const string noteSeparator = " | Ghi chú: ";
+    var rawReturnNotes = Model.Return.Notes?.Trim();
+    string? returnAccessoryStatus = null;
+    string? returnNote = rawReturnNotes;
+    if (!string.IsNullOrWhiteSpace(rawReturnNotes) && rawReturnNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
+    {
+        var body = rawReturnNotes[accessoryLabel.Length..].Trim();
+        var separatorIndex = body.IndexOf(noteSeparator, StringComparison.Ordinal);
+        if (separatorIndex >= 0)
+        {
+            returnAccessoryStatus = body[..separatorIndex].Trim();
+            returnNote = body[(separatorIndex + noteSeparator.Length)..].Trim();
+        }
+        else
+        {
+            returnAccessoryStatus = body;
+            returnNote = null;
+        }
+    }
+    var missingAccessories = returnAccessoryStatus?.StartsWith("Thiếu/mất:", StringComparison.OrdinalIgnoreCase) == true;
+
+    string EvidenceLabel(string path)
+    {
+        var file = System.IO.Path.GetFileName(path).ToLowerInvariant();
+        if (file.StartsWith("front-")) return "Phía trước";
+        if (file.StartsWith("rear-")) return "Phía sau";
+        if (file.StartsWith("left-")) return "Bên trái";
+        if (file.StartsWith("right-")) return "Bên phải";
+        if (file.StartsWith("interior-")) return "Nội thất";
+        if (file.StartsWith("odometer-")) return "Đồng hồ km";
+        if (file.StartsWith("fuel-")) return "Nhiên liệu";
+        if (file.StartsWith("damage-")) return "Hư hỏng";
+        return "Ảnh khác";
+    }
+}
+
+<style>
+    .signed-upload-card{border:1px solid #d8dde6;border-radius:.5rem;padding:.75rem;background:#f8fafc}
+    .signed-preview{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}
+    .signed-preview-card{position:relative;border:1px solid #dee2e6;border-radius:.5rem;background:#fff;padding:.25rem;width:108px}
+    .signed-preview-card img{display:block;width:98px;height:72px;object-fit:cover;border-radius:.35rem;background:#f1f3f5}
+    .signed-preview-card .caption{font-size:.72rem;color:#6c757d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.25rem}
+    .remove-signed-page{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border:0;border-radius:50%;background:#dc3545;color:#fff;line-height:1;font-weight:700}
+    .signed-links{border:1px solid #badbcc;background:#f0fff4;border-radius:.5rem;padding:.5rem .75rem}
+</style>
+
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
+    <div>
+        <h1 class="h3 mb-1">Đối chiếu giao - trả xe</h1>
+        <p class="text-muted mb-0">Đơn #@Model.BookingId · @Model.VehicleName · @Model.LicensePlate</p>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+        @if (Model.Status is BookingStatus.AwaitingRefund or BookingStatus.Completed)
+        {
+            <a class="btn btn-outline-primary" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Hồ sơ chuyến</a>
+        }
+        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại đơn</a>
+    </div>
+</div>
+
+@if (awaitingRefund)
+{
+    <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <span><strong>Đã kiểm tra xong.</strong> Chờ quyết toán cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong>.</span>
+        <a class="btn btn-sm btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Xử lý hoàn cọc</a>
+    </div>
+}
+else
+{
+    <div class="alert alert-info">So sánh đúng vị trí ảnh giao ↔ trả trước khi ghi nhận phát sinh.</div>
+}
+
+<div class="card card-body shadow-sm mb-4">
+    <div class="row g-3 align-items-center mb-3">
+        <div class="col-md-4">
+            <div class="small text-muted">Khách hàng</div>
+            <strong>@Model.CustomerName</strong>
+        </div>
+        <div class="col-md-4">
+            <div class="small text-muted">Quãng đường đã chạy</div>
+            <strong class="fs-5">@Model.DrivenKilometers.ToString("N0") km</strong>
+        </div>
+        <div class="col-md-4">
+            <div class="small text-muted">Nhiên liệu giao → trả</div>
+            <strong class="fs-5 @(fuelReduced ? "text-danger" : "")">
+                @Model.Handover.FuelDisplay → @Model.Return.FuelDisplay
+                @if (!string.IsNullOrWhiteSpace(fuelDifferenceText))
+                {
+                    <span class="fs-6">(@fuelDifferenceText)</span>
+                }
+            </strong>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-6" id="evidence-handover">
+            <div class="border rounded p-3 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                    <h2 class="h5 mb-0">Biên bản giao</h2>
+                    <span class="badge @(handoverSignedPaths.Count == 0 ? "bg-danger" : "bg-success")">@(handoverSignedPaths.Count == 0 ? "Thiếu ký" : $"Đã ký {handoverSignedPaths.Count} trang")</span>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6"><div class="small text-muted">Thời gian</div><strong>@Model.Handover.RecordedAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div class="col-3"><div class="small text-muted">Số km</div><strong>@Model.Handover.Mileage.ToString("N0")</strong></div>
+                    <div class="col-3"><div class="small text-muted">Nhiên liệu</div><strong>@Model.Handover.FuelDisplay</strong></div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(Model.Handover.Accessories))
+                {
+                    <div class="small border rounded p-2 mb-3">
+                        <strong>Phụ kiện lúc giao:</strong> @Model.Handover.Accessories
+                    </div>
+                }
+
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@Model.BookingId">In</a>
+                </div>
+
+                @if (handoverSignedPaths.Count > 0)
+                {
+                    <div class="signed-links small mb-3">
+                        <strong>Bản ký @handoverSignedPaths.Count trang:</strong>
+                        <div class="d-flex gap-2 flex-wrap mt-1">
+                            @for (var index = 0; index < handoverSignedPaths.Count; index++)
+                            {
+                                <a class="btn btn-sm btn-outline-success" href="@handoverSignedPaths[index]" target="_blank" rel="noopener">Trang @(index + 1)</a>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (handoverSignedPaths.Count == 0 && Model.Status != BookingStatus.Completed)
+                {
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="signed-upload-card signed-upload mb-3">
+                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm signed-file-input" multiple required />
+                            <button class="btn btn-sm btn-outline-success" type="submit">Tải bản ký</button>
+                            <span class="badge text-bg-secondary signed-file-count">Chưa chọn</span>
+                        </div>
+                        <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
+                        <div class="signed-preview"></div>
+                    </form>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.Handover.Notes))
+                {
+                    <div class="mb-3"><div class="small text-muted">Ghi chú</div><div>@Model.Handover.Notes</div></div>
+                }
+
+                <div class="small text-muted mb-2">Ảnh lúc giao (@handoverPhotos.Count)</div>
+                <div class="row g-2">
+                    @foreach (var image in handoverPhotos)
+                    {
+                        <div class="col-6 col-md-4">
+                            <a href="@image" target="_blank" rel="noopener" title="@EvidenceLabel(image)">
+                                <img src="@image" alt="@EvidenceLabel(image) lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6" id="evidence-return">
+            <div class="border rounded p-3 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
+                    <h2 class="h5 mb-0">Biên bản trả</h2>
+                    <span class="badge @(returnSignedPaths.Count == 0 ? "bg-danger" : "bg-success")">@(returnSignedPaths.Count == 0 ? "Thiếu ký" : $"Đã ký {returnSignedPaths.Count} trang")</span>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6"><div class="small text-muted">Thời gian</div><strong>@Model.Return.RecordedAt.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div class="col-3"><div class="small text-muted">Số km</div><strong>@Model.Return.Mileage.ToString("N0")</strong></div>
+                    <div class="col-3"><div class="small text-muted">Nhiên liệu</div><strong>@Model.Return.FuelDisplay</strong></div>
+                </div>
+
+                <div class="small border rounded p-2 mb-2 @(missingAccessories ? "border-danger" : string.Empty)">
+                    <strong>Phụ kiện khi trả:</strong>
+                    <span class="@(missingAccessories ? "text-danger fw-semibold" : "text-success")">@(returnAccessoryStatus ?? "Chưa ghi nhận cấu trúc")</span>
+                </div>
+                <div class="mb-2">Hư hỏng mới: <strong class="@(Model.Return.HasDamage == true ? "text-danger" : "text-success")">@(Model.Return.HasDamage == true ? "Có" : "Không")</strong></div>
+
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In</a>
+                    @if (canEditReturn)
+                    {
+                        <a class="btn btn-sm btn-outline-warning" asp-controller="ReturnEdits" asp-action="Edit" asp-route-bookingId="@Model.BookingId">Sửa</a>
+                    }
+                </div>
+
+                @if (returnSignedPaths.Count > 0)
+                {
+                    <div class="signed-links small mb-3">
+                        <strong>Bản ký @returnSignedPaths.Count trang:</strong>
+                        <div class="d-flex gap-2 flex-wrap mt-1">
+                            @for (var index = 0; index < returnSignedPaths.Count; index++)
+                            {
+                                <a class="btn btn-sm btn-outline-success" href="@returnSignedPaths[index]" target="_blank" rel="noopener">Trang @(index + 1)</a>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (returnSignedPaths.Count == 0 && Model.Status != BookingStatus.Completed)
+                {
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="signed-upload-card signed-upload mb-3">
+                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm signed-file-input" multiple required />
+                            <button class="btn btn-sm btn-outline-success" type="submit">Tải bản ký</button>
+                            <span class="badge text-bg-secondary signed-file-count">Chưa chọn</span>
+                        </div>
+                        <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
+                        <div class="signed-preview"></div>
+                    </form>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(returnNote))
+                {
+                    <div class="mb-3"><div class="small text-muted">Ghi chú</div><div>@returnNote</div></div>
+                }
+
+                <div class="small text-muted mb-2">Ảnh lúc trả (@returnPhotos.Count)</div>
+                <div class="row g-2">
+                    @foreach (var image in returnPhotos)
+                    {
+                        <div class="col-6 col-md-4">
+                            <a href="@image" target="_blank" rel="noopener" title="@EvidenceLabel(image)">
+                                <img src="@image" alt="@EvidenceLabel(image) lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (overdueImpacts.Count > 0)
+{
+    <div class="card card-body shadow-sm border-danger mb-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+                <h2 class="h5 text-danger mb-1">Ảnh hưởng đơn thuê kế tiếp</h2>
+                <p class="text-muted small mb-0">Đơn hiện tại đã giữ xe quá hạn sau khi bị từ chối gia hạn và đã làm ảnh hưởng đơn khác.</p>
+            </div>
+            <span class="badge bg-danger">Đã xử lý vi phạm</span>
+        </div>
+
+        @foreach (var impact in overdueImpacts)
+        {
+            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap border rounded p-3 mb-2">
+                <div>
+                    <div class="fw-semibold">Ảnh hưởng đơn #@impact.BookingId</div>
+                    <div class="small text-muted">Khoản bồi thường ghi nhận cho đơn bị ảnh hưởng</div>
+                </div>
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <strong class="text-danger">@impact.CompensationAmount.ToString("N0") đ</strong>
+                    <a class="btn btn-sm btn-outline-danger" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@impact.BookingId">Xem đơn #@impact.BookingId</a>
+                </div>
+            </div>
+        }
+
+        <div class="small text-muted mt-1">Khoản bồi thường này được theo dõi riêng với phụ phí trả muộn, vượt km hoặc hư hỏng và được tính khi quyết toán tiền cọc.</div>
+    </div>
+}
+
+<div class="card card-body shadow-sm mb-4">
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+        <div>
+            <h2 class="h5 mb-1">Phụ phí</h2>
+            <p class="text-muted small mb-0">Mỗi khoản phải có mô tả và ảnh/căn cứ đối chiếu.</p>
+        </div>
+        <a class="btn btn-sm btn-outline-primary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Xử lý phụ phí</a>
+    </div>
+
+    @if (Model.AdditionalCharges.Count == 0)
+    {
+        <div class="text-success fw-semibold">Không có phụ phí.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle mb-2">
+                <thead><tr><th>Loại</th><th>Nội dung</th><th>Bằng chứng</th><th class="text-end">Số tiền</th></tr></thead>
+                <tbody>
+                    @foreach (var charge in Model.AdditionalCharges)
+                    {
+                        <tr>
+                            <td>@charge.ChargeType.ToVietnamese()</td>
+                            <td>@charge.Description</td>
+                            <td><a href="#evidence-return" class="btn btn-sm btn-link p-0">Xem ảnh</a></td>
+                            <td class="text-end fw-semibold">@charge.Amount.ToString("N0") đ</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex justify-content-between"><span>Tổng phụ phí</span><strong>@Model.AdditionalAmount.ToString("N0") đ</strong></div>
+        <div class="mt-2"><span class="badge @(Model.AdditionalChargePaid ? "bg-success" : "bg-warning text-dark")">@(Model.AdditionalChargePaid ? "Đã thanh toán" : "Chưa thanh toán")</span></div>
+    }
+</div>
+
+@if (canComplete)
+{
+    <div class="card card-body shadow-sm border-primary">
+        <h2 class="h5">Kết thúc kiểm tra</h2>
+
+        @if (!hasSignedDocuments)
+        {
+            <div class="alert alert-warning mb-0">Cần đủ <strong>bản ký giao</strong> và <strong>bản ký trả</strong> trước khi tiếp tục.</div>
+        }
+        else if (hasUnpaidCharge)
+        {
+            <div class="alert alert-warning mb-0">Còn phụ phí <strong>@Model.AdditionalAmount.ToString("N0") đ</strong> chưa thanh toán.</div>
+        }
+        else
+        {
+            <p class="text-muted">Đủ hồ sơ. Hệ thống sẽ chuyển sang bước <strong>quyết toán tiền cọc</strong>, khấu trừ các khoản đã ghi nhận trước khi xác định số tiền hoàn thực tế.</p>
+            <form asp-controller="Returns" asp-action="Complete" method="post" data-loading-form data-confirm="Xác nhận đã đối chiếu đủ hồ sơ giao - trả và chuyển sang quyết toán cọc?">
+                <input type="hidden" name="BookingId" value="@Model.BookingId" />
+                <input type="hidden" name="reviewConfirmed" value="true" />
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="inspectionRequiresMaintenance" />
+                    <label class="form-check-label" for="inspectionRequiresMaintenance">Xe cần bảo trì hoặc sửa chữa</label>
+                </div>
+                <textarea name="MaintenanceNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Nội dung bảo trì nếu có"></textarea>
+                <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">@(Model.DepositAmount > 0 ? "Xác nhận & quyết toán cọc" : "Xác nhận → Hoàn tất")</button>
+            </form>
+        }
+    </div>
+}
+else if (Model.Status == BookingStatus.Completed)
+{
+    <div class="alert alert-success d-flex justify-content-between align-items-center gap-2 flex-wrap">
+        <strong>Chuyến đã hoàn tất.</strong>
+        <a class="btn btn-sm btn-success" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Xem hồ sơ chuyến</a>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        (() => {
+            const maximumPages = 12;
+            const maximumBytes = 8 * 1024 * 1024;
+            const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+            document.querySelectorAll('.signed-upload').forEach(form => {
+                const input = form.querySelector('.signed-file-input');
+                const preview = form.querySelector('.signed-preview');
+                const count = form.querySelector('.signed-file-count');
+                if (!input || !preview || !count) return;
+
+                let selectedFiles = Array.from(input.files || []);
+                let previewUrls = [];
+
+                function clearPreviewUrls() {
+                    previewUrls.forEach(url => URL.revokeObjectURL(url));
+                    previewUrls = [];
+                }
+
+                function syncInputFiles() {
+                    const transfer = new DataTransfer();
+                    selectedFiles.forEach(file => transfer.items.add(file));
+                    input.files = transfer.files;
+                }
+
+                function validateFiles() {
+                    let message = '';
+                    if (selectedFiles.length === 0) {
+                        message = 'Vui lòng chọn ít nhất một ảnh chụp/scan biên bản đã ký.';
+                    } else if (selectedFiles.length > maximumPages) {
+                        message = `Chỉ được chọn tối đa ${maximumPages} trang bản ký.`;
+                    } else {
+                        const oversized = selectedFiles.find(file => file.size > maximumBytes);
+                        if (oversized) message = `Ảnh "${oversized.name}" vượt quá 8 MB.`;
+                    }
+                    if (!message) {
+                        const invalid = selectedFiles.find(file => {
+                            const lower = file.name.toLowerCase();
+                            const extensionValid = allowedExtensions.some(ext => lower.endsWith(ext));
+                            const typeValid = !file.type || allowedTypes.includes(file.type.toLowerCase());
+                            return !extensionValid || !typeValid;
+                        });
+                        if (invalid) message = `Ảnh "${invalid.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`;
+                    }
+                    input.setCustomValidity(message);
+                    return message === '';
+                }
+
+                function removeFile(index) {
+                    selectedFiles.splice(index, 1);
+                    syncInputFiles();
+                    renderPreview();
+                    validateFiles();
+                }
+
+                function renderPreview() {
+                    clearPreviewUrls();
+                    preview.innerHTML = '';
+                    count.textContent = selectedFiles.length > 0 ? `${selectedFiles.length} trang` : 'Chưa chọn';
+                    count.className = `badge ${selectedFiles.length > 0 ? 'text-bg-success' : 'text-bg-secondary'} signed-file-count`;
+                    selectedFiles.forEach((file, index) => {
+                        const url = URL.createObjectURL(file);
+                        previewUrls.push(url);
+
+                        const card = document.createElement('div');
+                        card.className = 'signed-preview-card';
+                        const remove = document.createElement('button');
+                        remove.type = 'button';
+                        remove.className = 'remove-signed-page';
+                        remove.innerHTML = '&times;';
+                        remove.title = 'Xóa trang này';
+                        remove.addEventListener('click', () => removeFile(index));
+                        const img = document.createElement('img');
+                        img.src = url;
+                        img.alt = `Trang ký ${index + 1}`;
+                        const caption = document.createElement('div');
+                        caption.className = 'caption';
+                        caption.title = file.name;
+                        caption.textContent = `Trang ${index + 1}`;
+                        card.append(remove, img, caption);
+                        preview.appendChild(card);
+                    });
+                }
+
+                input.addEventListener('change', () => {
+                    selectedFiles = Array.from(input.files || []);
+                    renderPreview();
+                    validateFiles();
+                });
+
+                form.addEventListener('submit', event => {
+                    if (!validateFiles()) {
+                        event.preventDefault();
+                        input.reportValidity();
+                    }
+                });
+            });
+        })();
+    </script>
+}

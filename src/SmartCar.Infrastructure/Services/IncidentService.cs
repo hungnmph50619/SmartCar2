@@ -68,6 +68,11 @@ internal sealed class IncidentService : IIncidentService
             return OperationResult.Failure("Các khoản tiền không được âm.");
         }
 
+        if (request.IncidentType == IncidentType.TrafficFine && !request.BookingId.HasValue)
+        {
+            return OperationResult.Failure("Vi phạm giao thông/phạt nguội phải gắn với đơn thuê để xác định người điều khiển.");
+        }
+
         var vehicle = await _dbContext.Vehicles
             .FirstOrDefaultAsync(item => item.VehicleId == request.VehicleId, cancellationToken);
 
@@ -76,19 +81,29 @@ internal sealed class IncidentService : IIncidentService
             return OperationResult.Failure("Không tìm thấy xe.");
         }
 
+        Booking? relatedBooking = null;
         if (request.BookingId.HasValue)
         {
-            var validBooking = await _dbContext.Bookings.AnyAsync(item =>
-                item.BookingId == request.BookingId.Value &&
-                item.VehicleId == request.VehicleId,
-                cancellationToken);
+            relatedBooking = await _dbContext.Bookings
+                .FirstOrDefaultAsync(item =>
+                    item.BookingId == request.BookingId.Value &&
+                    item.VehicleId == request.VehicleId,
+                    cancellationToken);
 
-            if (!validBooking)
+            if (relatedBooking is null)
             {
                 return OperationResult.Failure("Đơn thuê không thuộc xe đã chọn.");
             }
+
+            if (request.IncidentType == IncidentType.TrafficFine &&
+                (request.OccurredAt < relatedBooking.PickupDate || request.OccurredAt > relatedBooking.ReturnDate))
+            {
+                return OperationResult.Failure(
+                    "Thời điểm vi phạm không nằm trong thời gian của đơn thuê đã chọn. Hãy kiểm tra lại đơn hoặc thời điểm vi phạm.");
+            }
         }
 
+        var customerHandlesTrafficFine = request.IncidentType == IncidentType.TrafficFine;
         var incident = new VehicleIncident
         {
             VehicleId = request.VehicleId,
@@ -98,11 +113,15 @@ internal sealed class IncidentService : IIncidentService
             OccurredAt = request.OccurredAt,
             Location = Normalize(request.Location),
             Description = request.Description.Trim(),
-            EstimatedCost = request.EstimatedCost,
-            FineAmount = request.FineAmount,
-            CustomerLiabilityAmount = request.CustomerLiabilityAmount,
+            EstimatedCost = customerHandlesTrafficFine ? 0m : request.EstimatedCost,
+            FineAmount = customerHandlesTrafficFine ? 0m : request.FineAmount,
+            CustomerLiabilityAmount = customerHandlesTrafficFine ? 0m : request.CustomerLiabilityAmount,
             EvidencePaths = Normalize(request.EvidencePaths),
-            Notes = Normalize(request.Notes),
+            Notes = customerHandlesTrafficFine
+                ? AppendText(
+                    Normalize(request.Notes),
+                    "Khách trực tiếp làm việc với cơ quan có thẩm quyền; SmartCar chỉ cung cấp hồ sơ thuê xe để xác định người điều khiển.")
+                : Normalize(request.Notes),
             CreatedAt = DateTime.UtcNow
         };
 
@@ -111,6 +130,18 @@ internal sealed class IncidentService : IIncidentService
         if (request.IncidentType != IncidentType.TrafficFine && vehicle.Status != VehicleStatus.Rented)
         {
             vehicle.Status = VehicleStatus.Maintenance;
+        }
+
+        if (customerHandlesTrafficFine && relatedBooking is not null)
+        {
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = relatedBooking.CustomerId,
+                Title = "Thông báo vi phạm giao thông",
+                Message =
+                    $"Đơn #{relatedBooking.BookingId} có vi phạm ghi nhận lúc {request.OccurredAt:dd/MM/yyyy HH:mm}. " +
+                    "Vui lòng trực tiếp làm việc với cơ quan có thẩm quyền khi được yêu cầu. SmartCar cung cấp hồ sơ thuê xe cần thiết để xác định người điều khiển."
+            });
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -129,7 +160,8 @@ internal sealed class IncidentService : IIncidentService
                 incident.OccurredAt,
                 incident.EstimatedCost,
                 incident.FineAmount,
-                incident.CustomerLiabilityAmount
+                incident.CustomerLiabilityAmount,
+                CustomerHandlesTrafficFine = customerHandlesTrafficFine
             }),
             cancellationToken: cancellationToken);
 
@@ -152,7 +184,7 @@ internal sealed class IncidentService : IIncidentService
 
         if (incident.Status != IncidentStatus.Open)
         {
-            return OperationResult.Failure("Chỉ sự cố mới ghi nhận mới chuyển sang điều tra.");
+            return OperationResult.Failure("Chỉ sự cố mới ghi nhận mới chuyển sang đang xử lý.");
         }
 
         incident.Status = IncidentStatus.Investigating;
@@ -203,14 +235,18 @@ internal sealed class IncidentService : IIncidentService
             incident.CustomerLiabilityAmount
         });
 
+        var customerHandlesTrafficFine = incident.IncidentType == IncidentType.TrafficFine;
+
         incident.Status = IncidentStatus.Resolved;
-        incident.ActualCost = request.RequiresMaintenance ? 0m : request.ActualCost;
-        incident.FineAmount = request.FineAmount;
-        incident.CustomerLiabilityAmount = request.CustomerLiabilityAmount;
+        incident.ActualCost = customerHandlesTrafficFine
+            ? 0m
+            : request.RequiresMaintenance ? 0m : request.ActualCost;
+        incident.FineAmount = customerHandlesTrafficFine ? 0m : request.FineAmount;
+        incident.CustomerLiabilityAmount = customerHandlesTrafficFine ? 0m : request.CustomerLiabilityAmount;
         incident.Notes = Normalize(request.Notes) ?? incident.Notes;
         incident.ResolvedAt = DateTime.UtcNow;
 
-        if (request.RequiresMaintenance)
+        if (!customerHandlesTrafficFine && request.RequiresMaintenance)
         {
             incident.Vehicle.Status = VehicleStatus.Maintenance;
 
@@ -241,7 +277,24 @@ internal sealed class IncidentService : IIncidentService
                 cancellationToken: cancellationToken);
         }
 
-        if (request.CustomerLiabilityAmount > 0 && incident.BookingId.HasValue)
+        if (customerHandlesTrafficFine && incident.BookingId.HasValue)
+        {
+            var customerId = await _dbContext.Bookings
+                .Where(item => item.BookingId == incident.BookingId.Value)
+                .Select(item => item.CustomerId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(customerId))
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = customerId,
+                    Title = "Vi phạm giao thông đã cập nhật",
+                    Message = $"SmartCar đã ghi nhận hồ sơ vi phạm của đơn #{incident.BookingId.Value} là đã hoàn tất xử lý."
+                });
+            }
+        }
+        else if (request.CustomerLiabilityAmount > 0 && incident.BookingId.HasValue)
         {
             _dbContext.Notifications.Add(new Notification
             {
@@ -270,7 +323,8 @@ internal sealed class IncidentService : IIncidentService
                 incident.FineAmount,
                 incident.CustomerLiabilityAmount,
                 incident.ResolvedAt,
-                request.RequiresMaintenance
+                RequiresMaintenance = customerHandlesTrafficFine ? false : request.RequiresMaintenance,
+                CustomerHandlesTrafficFine = customerHandlesTrafficFine
             }),
             cancellationToken: cancellationToken);
 
@@ -279,4 +333,9 @@ internal sealed class IncidentService : IIncidentService
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string AppendText(string? current, string addition) =>
+        string.IsNullOrWhiteSpace(current)
+            ? addition
+            : $"{current.Trim()} {addition}";
 }

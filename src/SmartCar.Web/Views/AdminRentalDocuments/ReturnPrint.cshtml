@@ -1,0 +1,28 @@
+@model SmartCar.Web.ViewModels.ReturnDocumentViewModel
+@{
+    Layout = null;
+    var booking = Model.Booking;
+    const string accessoryLabel = "Phụ kiện khi trả:";
+    const string noteSeparator = " | Ghi chú: ";
+    var rawNotes = Model.Notes?.Trim();
+    string? returnedAccessories = null;
+    string? returnNote = rawNotes;
+    if (!string.IsNullOrWhiteSpace(rawNotes) && rawNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
+    {
+        var body = rawNotes[accessoryLabel.Length..].Trim();
+        var separatorIndex = body.IndexOf(noteSeparator, StringComparison.Ordinal);
+        if (separatorIndex >= 0) { returnedAccessories = body[..separatorIndex].Trim(); returnNote = body[(separatorIndex + noteSeparator.Length)..].Trim(); }
+        else { returnedAccessories = body; returnNote = null; }
+    }
+}
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/><title>Biên bản trả xe #@booking.BookingId</title><style>
+body{font-family:Arial,sans-serif;color:#111;margin:18mm;font-size:13px;line-height:1.45}h1{text-align:center;font-size:21px;margin:0 0 4px}.sub{text-align:center;margin-bottom:18px;color:#555}.parties{border:1px solid #aaa;padding:10px;margin-bottom:14px}.parties div+div{margin-top:5px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 24px}table{width:100%;border-collapse:collapse;margin-top:14px}th,td{border:1px solid #aaa;padding:7px;text-align:left;vertical-align:top}th{width:30%}.confirm{margin-top:16px;padding:10px;border:1px solid #999}.signatures{display:grid;grid-template-columns:1fr 1fr;gap:70px;margin-top:34px;text-align:center}.signature-space{height:90px}.no-print{margin-bottom:14px}.hint{margin-top:7px;color:#555;font-size:12px}.evidence{margin-top:20px}.evidence h2{font-size:16px;margin:0 0 5px}.evidence-note{color:#555;font-size:12px;margin-bottom:10px}.photo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.photo{border:1px solid #aaa;padding:6px;break-inside:avoid;page-break-inside:avoid}.photo img{display:block;width:100%;height:190px;object-fit:contain;background:#f5f5f5}.photo-label{text-align:center;font-size:11px;margin-top:5px;color:#444}.no-evidence{border:1px dashed #aaa;padding:12px;color:#666}@@media print{.no-print{display:none}body{margin:12mm}.photo img{height:165px}}
+</style></head><body>
+<div class="no-print"><button type="button" onclick="window.print()">In để ký</button> <button type="button" onclick="window.close()">Đóng</button><div class="hint">Sau khi hai bên ký, quay lại màn đối chiếu và tải bản đã ký lên SmartCar.</div></div>
+<h1>BIÊN BẢN TRẢ XE</h1><div class="sub">SmartCar · Đơn #@booking.BookingId</div>
+<div class="parties"><div><strong>Bên A – Bên cho thuê:</strong> SmartCar</div><div><strong>Bên B – Bên thuê:</strong> @booking.CustomerName · @booking.CustomerPhone</div></div>
+<div class="grid"><div><strong>Xe:</strong> @booking.VehicleName</div><div><strong>Biển số:</strong> @booking.LicensePlate</div><div><strong>Thời gian trả:</strong> @Model.RecordedAt.ToString("dd/MM/yyyy HH:mm")</div><div><strong>Ảnh đối chiếu:</strong> @Model.ImagePaths.Count ảnh đính kèm bên dưới</div></div>
+<table><tr><th>Số km khi trả</th><td>@Model.Mileage.ToString("N0") km</td></tr><tr><th>Nhiên liệu</th><td>@Model.FuelLevel</td></tr><tr><th>Phụ kiện khi trả</th><td>@(returnedAccessories ?? "Chưa ghi nhận cấu trúc")</td></tr><tr><th>Hư hỏng mới</th><td>@(Model.HasDamage ? "Có" : "Không")</td></tr><tr><th>Trả muộn</th><td>@(Model.IsLateReturn ? $"Có - {Model.LateMinutes} phút" : "Không")</td></tr><tr><th>Ghi chú</th><td>@(string.IsNullOrWhiteSpace(returnNote) ? "Không có" : returnNote)</td></tr></table>
+<div class="evidence"><h2>ẢNH ĐỐI CHIẾU TÌNH TRẠNG XE KHI TRẢ</h2><div class="evidence-note">Các ảnh dưới đây là một phần của biên bản trả xe và là căn cứ đối chiếu với tình trạng xe khi giao.</div>@if(Model.ImagePaths.Count>0){<div class="photo-grid">@for(var i=0;i<Model.ImagePaths.Count;i++){<div class="photo"><img src="@Model.ImagePaths[i]" alt="Ảnh đối chiếu khi trả @(i+1)"/><div class="photo-label">Ảnh @(i+1)</div></div>}</div>}else{<div class="no-evidence">Chưa có ảnh đối chiếu được lưu cho biên bản trả xe này.</div>}</div>
+<div class="confirm">Hai bên xác nhận đã đối chiếu xe khi trả với các ảnh đính kèm, số km, nhiên liệu, phụ kiện và biên bản giao lưu trên SmartCar. Khoản phát sinh chỉ được xử lý khi có căn cứ đối chiếu.</div>
+<div class="signatures"><div><strong>ĐẠI DIỆN BÊN A</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div><div><strong>BÊN B – KHÁCH HÀNG</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div></div></body></html>

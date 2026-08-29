@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
@@ -8,6 +9,7 @@ using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
@@ -16,24 +18,29 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class ReturnsController : Controller
 {
-    private const int MaximumImages = 10;
+    private const int MaximumImages = 25;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
+    private const string HandoverSignedMarker = "signed-handover-";
+    private const string ReturnSignedMarker = "signed-return-";
 
     private readonly IReturnService _returnService;
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
     private readonly IWebHostEnvironment _environment;
+    private readonly ApplicationDbContext _dbContext;
 
     public ReturnsController(
         IReturnService returnService,
         IBookingService bookingService,
         IAuditService auditService,
-        IWebHostEnvironment environment)
+        IWebHostEnvironment environment,
+        ApplicationDbContext dbContext)
     {
         _returnService = returnService;
         _bookingService = bookingService;
         _auditService = auditService;
         _environment = environment;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -54,12 +61,23 @@ public sealed class ReturnsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
         }
 
+        var handover = await _dbContext.VehicleHandovers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (handover is null)
+        {
+            TempData["ErrorMessage"] = "Không tìm thấy biên bản giao xe để đối chiếu.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        SetHandoverBaseline(handover);
+
         return View(new ReturnViewModel
         {
             BookingId = bookingId,
-            ReturnedAt = DateTime.Now > booking.ReturnDate
-                ? DateTime.Now
-                : booking.ReturnDate
+            ReturnedAt = DateTime.Now > booking.ReturnDate ? DateTime.Now : booking.ReturnDate,
+            Mileage = handover.Mileage
         });
     }
 
@@ -69,16 +87,36 @@ public sealed class ReturnsController : Controller
         ReturnViewModel model,
         CancellationToken cancellationToken)
     {
-        await ValidateImagesAsync(model.Images, cancellationToken);
+        var evidenceFiles = BuildEvidenceFiles(model);
+        await ValidateImagesAsync(
+            evidenceFiles,
+            model.DamageImages,
+            model.Images,
+            model.HasDamage,
+            cancellationToken);
+
         if (!ModelState.IsValid)
         {
+            await PopulateHandoverBaselineAsync(model.BookingId, cancellationToken);
             return View(model);
         }
 
-        var imagePaths = await SaveImagesAsync(
-            model.BookingId,
-            model.Images,
-            cancellationToken);
+        IReadOnlyList<string> imagePaths;
+        try
+        {
+            imagePaths = await SaveImagesAsync(
+                model.BookingId,
+                evidenceFiles,
+                model.DamageImages,
+                model.Images,
+                cancellationToken);
+        }
+        catch
+        {
+            ModelState.AddModelError(nameof(ReturnViewModel.Images), "Không thể lưu ảnh trả xe. Vui lòng thử lại.");
+            await PopulateHandoverBaselineAsync(model.BookingId, cancellationToken);
+            return View(model);
+        }
 
         var result = await _returnService.CreateAsync(
             new CreateReturnRequest(
@@ -97,6 +135,7 @@ public sealed class ReturnsController : Controller
         {
             DeleteSavedImages(imagePaths);
             AddErrors(result.Errors);
+            await PopulateHandoverBaselineAsync(model.BookingId, cancellationToken);
             return View(model);
         }
 
@@ -104,11 +143,82 @@ public sealed class ReturnsController : Controller
             "CreateReturn",
             nameof(VehicleReturn),
             model.BookingId,
-            $"Lập biên bản trả xe cho đơn #{model.BookingId}, số km {model.Mileage}, {imagePaths.Count} ảnh, có hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
+            $"Lập biên bản trả xe đơn #{model.BookingId}, {model.Mileage:N0} km, {imagePaths.Count} ảnh chứng cứ, hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
             cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã lập biên bản trả xe và lưu ảnh tình trạng xe. Xe chuyển sang chờ kiểm tra.";
-        return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+        TempData["SuccessMessage"] =
+            "Đã lưu biên bản trả xe. Hãy in, ký và tải bản ký trước khi kết thúc kiểm tra.";
+
+        return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Inspect(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        var records = await _dbContext.Bookings
+            .AsNoTracking()
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (records?.Handover is null || records.VehicleReturn is null)
+        {
+            TempData["ErrorMessage"] =
+                "Cần có cả biên bản giao xe và biên bản trả xe để đối chiếu.";
+            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        }
+
+        var refundPayment = booking.Payments
+            .Where(payment => payment.Type == PaymentType.Refund)
+            .OrderByDescending(payment => payment.PaymentId)
+            .FirstOrDefault();
+
+        var model = new ReturnInspectionViewModel
+        {
+            BookingId = booking.BookingId,
+            CustomerName = booking.CustomerName,
+            VehicleName = booking.VehicleName,
+            LicensePlate = booking.LicensePlate,
+            Status = booking.Status,
+            DepositAmount = booking.DepositAmount,
+            AdditionalAmount = booking.AdditionalAmount,
+            AdditionalChargePaid = booking.AdditionalChargePaid,
+            RefundStatus = refundPayment?.Status,
+            RefundAmount = refundPayment?.Amount ?? 0m,
+            AdditionalCharges = booking.AdditionalCharges,
+            Handover = new InspectionSnapshotViewModel
+            {
+                RecordedAt = records.Handover.HandoverAt,
+                Mileage = records.Handover.Mileage,
+                FuelLevel = records.Handover.FuelLevel,
+                ExteriorCondition = records.Handover.ExteriorCondition,
+                InteriorCondition = records.Handover.InteriorCondition,
+                Accessories = records.Handover.Accessories,
+                Notes = records.Handover.Notes,
+                ImagePaths = SplitImagePaths(records.Handover.ImagePaths)
+            },
+            Return = new InspectionSnapshotViewModel
+            {
+                RecordedAt = records.VehicleReturn.ReturnedAt,
+                Mileage = records.VehicleReturn.Mileage,
+                FuelLevel = records.VehicleReturn.FuelLevel,
+                ExteriorCondition = records.VehicleReturn.ExteriorCondition,
+                InteriorCondition = records.VehicleReturn.InteriorCondition,
+                HasDamage = records.VehicleReturn.HasDamage,
+                Notes = records.VehicleReturn.Notes,
+                ImagePaths = SplitImagePaths(records.VehicleReturn.ImagePaths)
+            }
+        };
+
+        return View(model);
     }
 
     [HttpPost]
@@ -155,6 +265,7 @@ public sealed class ReturnsController : Controller
             bookingId,
             additionalChargeId,
             cancellationToken);
+
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã xóa phụ phí."
             : string.Join("; ", result.Errors);
@@ -176,65 +287,209 @@ public sealed class ReturnsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Complete(
         CompleteBookingViewModel model,
+        bool reviewConfirmed,
         CancellationToken cancellationToken)
     {
+        if (!reviewConfirmed)
+        {
+            TempData["ErrorMessage"] =
+                "Vui lòng đối chiếu biên bản giao và trả trước khi kết thúc kiểm tra.";
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+        }
+
+        var records = await _dbContext.Bookings
+            .AsNoTracking()
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
+            .FirstOrDefaultAsync(item => item.BookingId == model.BookingId, cancellationToken);
+
+        if (records?.Handover is null || records.VehicleReturn is null)
+        {
+            TempData["ErrorMessage"] = "Thiếu biên bản giao hoặc trả xe.";
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+        }
+
+        if (!HasSignedCopy(records.Handover.ImagePaths, HandoverSignedMarker) ||
+            !HasSignedCopy(records.VehicleReturn.ImagePaths, ReturnSignedMarker))
+        {
+            TempData["ErrorMessage"] =
+                "Cần tải đủ bản giao và bản trả có chữ ký của khách + đại diện SmartCar trước khi kết thúc chuyến.";
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+        }
+
         var result = await _returnService.CompleteAsync(
             model.BookingId,
             model.RequiresMaintenance,
             model.MaintenanceNote,
             cancellationToken);
-        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã hoàn tất đơn và cập nhật trạng thái xe."
-            : string.Join("; ", result.Errors);
 
-        if (result.Succeeded)
+        if (!result.Succeeded)
         {
-            await WriteAuditAsync(
-                "CompleteBooking",
-                nameof(Booking),
-                model.BookingId,
-                $"Hoàn tất đơn #{model.BookingId}. Yêu cầu bảo trì: {(model.RequiresMaintenance ? "Có" : "Không")}.",
-                cancellationToken);
+            TempData["ErrorMessage"] = string.Join("; ", result.Errors);
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
         }
 
-        return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .FirstOrDefaultAsync(item => item.BookingId == model.BookingId, cancellationToken);
+
+        var awaitingRefund = booking?.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Status == PaymentStatus.AwaitingRefund)
+            .OrderByDescending(payment => payment.PaymentId)
+            .FirstOrDefault();
+
+        if (booking is not null && awaitingRefund is not null)
+        {
+            booking.Status = BookingStatus.AwaitingRefund;
+
+            var completionNotification = await _dbContext.Notifications
+                .Where(notification =>
+                    notification.UserId == booking.CustomerId &&
+                    notification.Title == "Đơn thuê đã hoàn tất" &&
+                    notification.Message.Contains($"#{booking.BookingId}"))
+                .OrderByDescending(notification => notification.NotificationId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (completionNotification is not null)
+            {
+                completionNotification.Title = "Đã kiểm tra xe - chờ hoàn cọc";
+                completionNotification.Message =
+                    $"Đơn #{booking.BookingId} đã kiểm tra xong. Đang chờ hoàn cọc {awaitingRefund.Amount:N0} đồng.";
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            TempData["SuccessMessage"] = $"Đã đối chiếu hồ sơ. Chờ hoàn cọc {awaitingRefund.Amount:N0} đ.";
+        }
+        else
+        {
+            TempData["SuccessMessage"] = "Đã đối chiếu và hoàn tất chuyến thuê.";
+        }
+
+        await WriteAuditAsync(
+            "CompleteBooking",
+            nameof(Booking),
+            model.BookingId,
+            awaitingRefund is not null
+                ? $"Kết thúc kiểm tra đơn #{model.BookingId}; chuyển sang chờ hoàn cọc."
+                : $"Hoàn tất đơn #{model.BookingId} sau khi đủ hồ sơ giao-trả có chữ ký.",
+            cancellationToken);
+
+        if (awaitingRefund is not null)
+        {
+            return RedirectToAction(
+                "Index",
+                "AdminPayments",
+                new
+                {
+                    section = "refund",
+                    status = PaymentStatus.AwaitingRefund,
+                    type = PaymentType.Refund
+                });
+        }
+
+        return RedirectToAction("Details", "AdminTripRecords", new { id = model.BookingId });
     }
 
-    private async Task ValidateImagesAsync(
-        IReadOnlyCollection<IFormFile> images,
+    private async Task PopulateHandoverBaselineAsync(
+        int bookingId,
         CancellationToken cancellationToken)
     {
-        var selectedImages = images.Where(file => file.Length > 0).ToList();
-        if (selectedImages.Count == 0)
-        {
-            ModelState.AddModelError(nameof(ReturnViewModel.Images),
-                "Vui lòng tải ít nhất một ảnh tình trạng xe khi trả.");
-            return;
-        }
+        var handover = await _dbContext.VehicleHandovers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
-        if (selectedImages.Count > MaximumImages)
+        if (handover is not null)
         {
-            ModelState.AddModelError(nameof(ReturnViewModel.Images),
-                $"Chỉ được tải tối đa {MaximumImages} ảnh khi trả xe.");
+            SetHandoverBaseline(handover);
         }
+    }
 
-        foreach (var image in selectedImages)
+    private void SetHandoverBaseline(VehicleHandover handover)
+    {
+        ViewBag.HandoverMileage = handover.Mileage;
+        ViewBag.HandoverFuelLevel = handover.FuelLevel;
+        ViewBag.HandoverAt = handover.HandoverAt;
+        ViewBag.HandoverIncludedKilometers = handover.IncludedKilometers;
+        ViewBag.HandoverExcessKmFeePerKm = handover.ExcessKmFeePerKm;
+        ViewBag.HandoverExteriorCondition = handover.ExteriorCondition;
+        ViewBag.HandoverInteriorCondition = handover.InteriorCondition;
+        ViewBag.HandoverAccessories = handover.Accessories;
+    }
+
+    private static IReadOnlyList<(string Label, string FieldName, IFormFile? File)> BuildEvidenceFiles(
+        ReturnViewModel model) =>
+        new (string, string, IFormFile?)[]
         {
-            var error = await ImageFileValidator.ValidateAsync(
-                image,
-                MaximumImageBytes,
-                cancellationToken);
-            if (error is not null)
+            ("front", nameof(ReturnViewModel.FrontImage), model.FrontImage),
+            ("rear", nameof(ReturnViewModel.RearImage), model.RearImage),
+            ("left", nameof(ReturnViewModel.LeftImage), model.LeftImage),
+            ("right", nameof(ReturnViewModel.RightImage), model.RightImage),
+            ("interior", nameof(ReturnViewModel.InteriorImage), model.InteriorImage),
+            ("odometer", nameof(ReturnViewModel.OdometerImage), model.OdometerImage),
+            ("fuel", nameof(ReturnViewModel.FuelImage), model.FuelImage)
+        };
+
+    private async Task ValidateImagesAsync(
+        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
+        IReadOnlyCollection<IFormFile> damageImages,
+        IReadOnlyCollection<IFormFile> otherImages,
+        bool hasDamage,
+        CancellationToken cancellationToken)
+    {
+        foreach (var evidence in evidenceFiles)
+        {
+            if (evidence.File is null || evidence.File.Length == 0)
             {
-                ModelState.AddModelError(nameof(ReturnViewModel.Images),
-                    $"{image.FileName}: {error}");
+                ModelState.AddModelError(evidence.FieldName, "Cần ảnh này để đối chiếu với lúc giao.");
+                continue;
             }
+
+            await ValidateImageAsync(evidence.File, evidence.FieldName, cancellationToken);
+        }
+
+        var selectedDamageImages = damageImages.Where(file => file.Length > 0).ToList();
+        var selectedOtherImages = otherImages.Where(file => file.Length > 0).ToList();
+
+        if (hasDamage && selectedDamageImages.Count == 0)
+        {
+            ModelState.AddModelError(nameof(ReturnViewModel.DamageImages), "Đã đánh dấu hư hỏng thì phải có ảnh hư hỏng.");
+        }
+
+        if (evidenceFiles.Count + selectedDamageImages.Count + selectedOtherImages.Count > MaximumImages)
+        {
+            ModelState.AddModelError(nameof(ReturnViewModel.Images), $"Tổng số ảnh tối đa là {MaximumImages}.");
+        }
+
+        foreach (var image in selectedDamageImages)
+        {
+            await ValidateImageAsync(image, nameof(ReturnViewModel.DamageImages), cancellationToken);
+        }
+
+        foreach (var image in selectedOtherImages)
+        {
+            await ValidateImageAsync(image, nameof(ReturnViewModel.Images), cancellationToken);
+        }
+    }
+
+    private async Task ValidateImageAsync(
+        IFormFile image,
+        string fieldName,
+        CancellationToken cancellationToken)
+    {
+        var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
+        if (error is not null)
+        {
+            ModelState.AddModelError(fieldName, $"{image.FileName}: {error}");
         }
     }
 
     private async Task<IReadOnlyList<string>> SaveImagesAsync(
         int bookingId,
-        IEnumerable<IFormFile> images,
+        IReadOnlyList<(string Label, string FieldName, IFormFile? File)> evidenceFiles,
+        IEnumerable<IFormFile> damageImages,
+        IEnumerable<IFormFile> otherImages,
         CancellationToken cancellationToken)
     {
         var relativeFolder = $"uploads/returns/{bookingId}";
@@ -242,18 +497,46 @@ public sealed class ReturnsController : Controller
         Directory.CreateDirectory(folder);
 
         var paths = new List<string>();
-        foreach (var image in images.Where(file => file.Length > 0))
+        try
         {
-            var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-            var fileName = $"{Guid.NewGuid():N}{extension}";
-            var fullPath = Path.Combine(folder, fileName);
+            foreach (var evidence in evidenceFiles.Where(item => item.File is { Length: > 0 }))
+            {
+                paths.Add(await SaveOneImageAsync(folder, relativeFolder, evidence.Label, evidence.File!, cancellationToken));
+            }
 
-            await using var stream = System.IO.File.Create(fullPath);
-            await image.CopyToAsync(stream, cancellationToken);
-            paths.Add($"/{relativeFolder}/{fileName}");
+            foreach (var image in damageImages.Where(file => file.Length > 0))
+            {
+                paths.Add(await SaveOneImageAsync(folder, relativeFolder, "damage", image, cancellationToken));
+            }
+
+            foreach (var image in otherImages.Where(file => file.Length > 0))
+            {
+                paths.Add(await SaveOneImageAsync(folder, relativeFolder, "other", image, cancellationToken));
+            }
+
+            return paths;
         }
+        catch
+        {
+            DeleteSavedImages(paths);
+            throw;
+        }
+    }
 
-        return paths;
+    private static async Task<string> SaveOneImageAsync(
+        string folder,
+        string relativeFolder,
+        string label,
+        IFormFile image,
+        CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+        var fileName = $"{label}-{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using var stream = System.IO.File.Create(fullPath);
+        await image.CopyToAsync(stream, cancellationToken);
+        return $"/{relativeFolder}/{fileName}";
     }
 
     private void DeleteSavedImages(IEnumerable<string> imagePaths)
@@ -263,12 +546,24 @@ public sealed class ReturnsController : Controller
             var fullPath = Path.Combine(
                 _environment.WebRootPath,
                 imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+
             if (System.IO.File.Exists(fullPath))
             {
                 System.IO.File.Delete(fullPath);
             }
         }
     }
+
+    private static IReadOnlyList<string> SplitImagePaths(string? imagePaths) =>
+        string.IsNullOrWhiteSpace(imagePaths)
+            ? Array.Empty<string>()
+            : imagePaths
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+
+    private static bool HasSignedCopy(string? imagePaths, string marker) =>
+        SplitImagePaths(imagePaths)
+            .Any(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
 
     private Task WriteAuditAsync(
         string action,

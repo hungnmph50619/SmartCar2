@@ -2,6 +2,8 @@
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Bảo trì xe";
+    var startDate = DateTime.Now.ToString("yyyy-MM-dd");
+    var startTime = DateTime.Now.ToString("HH:mm");
 }
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -13,15 +15,20 @@
 
 <div class="row g-4">
     <div class="col-lg-4">
-        <form asp-action="Create" method="post" class="card card-body shadow-sm">
+        <form asp-action="Create" method="post" class="card card-body shadow-sm" id="maintenance-create-form">
             <h2 class="h5">Tạo phiếu bảo trì</h2>
             <div class="mb-3">
                 <label class="form-label">Xe</label>
                 <select name="VehicleId" asp-items="ViewBag.Vehicles" class="form-select"></select>
             </div>
             <div class="mb-3">
-                <label class="form-label">Ngày bắt đầu</label>
-                <input name="StartDate" type="datetime-local" value="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")" class="form-control" />
+                <label class="form-label">Bắt đầu</label>
+                <input name="StartDate" type="hidden" id="maintenance-start-value" />
+                <div class="row g-2">
+                    <div class="col-7"><input type="date" id="maintenance-start-date" value="@startDate" class="form-control" required /></div>
+                    <div class="col-5"><input type="text" id="maintenance-start-time" value="@startTime" class="form-control" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" required /></div>
+                </div>
+                <div class="form-text">Giờ 24h.</div>
             </div>
             <div class="mb-3">
                 <label class="form-label">Nội dung</label>
@@ -81,3 +88,32 @@
         }
     </div>
 </div>
+
+<script>
+    (() => {
+        const form = document.getElementById('maintenance-create-form');
+        const hidden = document.getElementById('maintenance-start-value');
+        const date = document.getElementById('maintenance-start-date');
+        const time = document.getElementById('maintenance-start-time');
+        const pattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+        function sync() {
+            if (!date?.value || !pattern.test(time?.value || '')) return false;
+            hidden.value = `${date.value}T${time.value}`;
+            return true;
+        }
+
+        date?.addEventListener('change', sync);
+        time?.addEventListener('input', sync);
+        form?.addEventListener('submit', event => {
+            if (!sync()) {
+                event.preventDefault();
+                time?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
+                time?.reportValidity();
+            } else {
+                time?.setCustomValidity('');
+            }
+        });
+        sync();
+    })();
+</script>

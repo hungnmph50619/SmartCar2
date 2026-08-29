@@ -1,6 +1,7 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Handovers;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -20,7 +21,8 @@ internal sealed class HandoverService : IHandoverService
         CreateHandoverRequest request,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -44,11 +46,39 @@ internal sealed class HandoverService : IHandoverService
         }
 
         var rentalPaid = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
+            payment.Type == PaymentType.Rental &&
+            payment.Status == PaymentStatus.Paid);
 
-        if (!rentalPaid)
+        var depositPaidAmount = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+
+        var depositRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.DepositRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+
+        var depositSatisfied = booking.DepositAmount <= 0 ||
+            Math.Max(0m, depositPaidAmount - depositRefundPlanned) >= booking.DepositAmount;
+
+        var hasOpenSwapPayment = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.VehicleSwapAdjustment &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
+
+        if (hasOpenSwapPayment)
         {
-            return OperationResult.Failure("Khách hàng chưa thanh toán tiền thuê.");
+            return OperationResult.Failure(
+                "Khách cần thanh toán xong chênh lệch đổi xe trước khi giao xe.");
+        }
+
+        if (!rentalPaid || !depositSatisfied)
+        {
+            return OperationResult.Failure(
+                "Khách phải thanh toán đủ tiền thuê và tiền cọc trước khi giao xe.");
         }
 
         if (booking.Vehicle.Status != VehicleStatus.Available)
@@ -70,40 +100,70 @@ internal sealed class HandoverService : IHandoverService
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
         {
-            return OperationResult.Failure("Số km giao xe không được nhỏ hơn số km hiện tại.");
+            return OperationResult.Failure(
+                $"Số km giao xe không được nhỏ hơn số km hiện tại ({booking.Vehicle.CurrentMileage:N0} km).");
         }
 
-        if (string.IsNullOrWhiteSpace(request.FuelLevel))
+        if (!TryParseFuelPercent(request.FuelLevel, out var fuelPercent))
         {
-            return OperationResult.Failure("Vui lòng ghi nhận mức nhiên liệu khi giao xe.");
+            return OperationResult.Failure(
+                "Mức nhiên liệu khi giao phải là số từ 0 đến 100%.");
         }
+
+        if (!request.PenaltyPolicyAccepted)
+        {
+            return OperationResult.Failure(
+                "Cần xác nhận đã thông báo và khách đã đồng ý chính sách phí/phạt trước khi giao xe.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ImagePaths))
+        {
+            return OperationResult.Failure(
+                "Biên bản giao xe phải có ảnh đối chiếu tình trạng xe.");
+        }
+
+        var rentalDays = Math.Max(
+            1,
+            (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalDays));
 
         booking.Handover = new VehicleHandover
         {
             HandoverAt = request.HandoverAt,
             Mileage = request.Mileage,
-            FuelLevel = request.FuelLevel.Trim(),
+            FuelLevel = $"{fuelPercent}%",
             ExteriorCondition = Normalize(request.ExteriorCondition),
             InteriorCondition = Normalize(request.InteriorCondition),
             Accessories = Normalize(request.Accessories),
             ImagePaths = Normalize(request.ImagePaths),
-            Notes = Normalize(request.Notes)
+            Notes = Normalize(request.Notes),
+            IncludedKilometers = rentalDays * RentalPolicy.IncludedKilometersPerDay,
+            ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
+            LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
+            TrafficFineTerms = RentalPolicy.TrafficFineTerms,
+            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
+            PenaltyPolicyAccepted = true
         };
-
-        booking.Status = BookingStatus.Rented;
-        booking.Vehicle.Status = VehicleStatus.Rented;
-        booking.Vehicle.CurrentMileage = request.Mileage;
-
-        _dbContext.Notifications.Add(new Notification
-        {
-            UserId = booking.CustomerId,
-            Title = "Đã bàn giao xe",
-            Message = $"Xe của đơn #{booking.BookingId} đã được bàn giao thành công."
-        });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
+    }
+
+    private static bool TryParseFuelPercent(string? value, out int percent)
+    {
+        percent = 0;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var normalized = value.Trim();
+        if (normalized.EndsWith('%'))
+        {
+            normalized = normalized[..^1].Trim();
+        }
+
+        return int.TryParse(normalized, out percent) && percent is >= 0 and <= 100;
     }
 
     private static string? Normalize(string? value) =>

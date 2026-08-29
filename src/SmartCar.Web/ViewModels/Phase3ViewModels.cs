@@ -1,10 +1,13 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Web.ViewModels;
 
 public sealed class VehicleDocumentViewModel
 {
+    public int? VehicleDocumentId { get; set; }
+
     [Required]
     public int VehicleId { get; set; }
 
@@ -20,8 +23,10 @@ public sealed class VehicleDocumentViewModel
 
     public DateTime? ExpiryDate { get; set; }
 
-    [StringLength(300)]
-    public string? ImagePath { get; set; }
+    [Display(Name = "Ảnh giấy tờ")]
+    public IFormFile? ImageFile { get; set; }
+
+    public string? ExistingImagePath { get; set; }
 
     [StringLength(500)]
     public string? Notes { get; set; }
@@ -76,44 +81,4 @@ public sealed class IncidentResolveViewModel
     public string? Notes { get; set; }
 
     public bool RequiresMaintenance { get; set; }
-}
-
-public sealed class PromotionViewModel
-{
-    [Required]
-    [StringLength(50)]
-    public string Code { get; set; } = string.Empty;
-
-    [Required]
-    [StringLength(200)]
-    public string Name { get; set; } = string.Empty;
-
-    public PromotionType PromotionType { get; set; }
-
-    [Range(0.01, double.MaxValue)]
-    public decimal Value { get; set; }
-
-    [Range(0, double.MaxValue)]
-    public decimal? MaximumDiscount { get; set; }
-
-    [Range(0, double.MaxValue)]
-    public decimal MinimumRentalAmount { get; set; }
-
-    public DateTime StartAt { get; set; } = DateTime.Today;
-    public DateTime EndAt { get; set; } = DateTime.Today.AddMonths(1);
-
-    [Range(1, int.MaxValue)]
-    public int? UsageLimit { get; set; }
-
-    public bool IsActive { get; set; } = true;
-}
-
-public sealed class ApplyPromotionViewModel
-{
-    [Required]
-    public int BookingId { get; set; }
-
-    [Required]
-    [StringLength(50)]
-    public string Code { get; set; } = string.Empty;
 }
