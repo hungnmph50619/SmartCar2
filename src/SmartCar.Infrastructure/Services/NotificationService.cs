@@ -268,59 +268,138 @@ internal sealed class NotificationService : INotificationService
                 .AsNoTracking()
                 .Where(payment =>
                     payment.Status == PaymentStatus.AwaitingConfirmation &&
-                    payment.Method == PaymentMethods.BankQr)
+                    payment.Method == PaymentMethods.BankQr &&
+                    payment.Type != PaymentType.Deposit)
                 .Select(payment => new
                 {
                     payment.PaymentId,
-                    payment.BookingId
+                    payment.BookingId,
+                    payment.Type,
+                    payment.Amount,
+                    payment.Booking.CustomerId,
+                    payment.Booking.Vehicle.VehicleName,
+                    DepositAmount = payment.Booking.Payments
+                        .Where(item =>
+                            item.Type == PaymentType.Deposit &&
+                            item.Status == PaymentStatus.AwaitingConfirmation &&
+                            item.Method == PaymentMethods.BankQr)
+                        .Sum(item => item.Amount)
                 })
                 .ToListAsync(cancellationToken);
 
-        if (pendingQrPayments.Count == 0)
-        {
-            return;
-        }
-
-        var existingTitles =
+        var existingNotifications =
             await _dbContext.Notifications
-                .AsNoTracking()
                 .Where(item =>
                     item.UserId == adminId &&
                     item.Title.StartsWith(
                         "Thanh toán QR chờ xác nhận|"))
-                .Select(item => item.Title)
                 .ToListAsync(cancellationToken);
 
-        var existingTitleSet =
-            existingTitles.ToHashSet(StringComparer.Ordinal);
+        var existingByTitle = existingNotifications
+            .GroupBy(item => item.Title, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First(),
+                StringComparer.Ordinal);
 
-        var added = false;
+        var customerIds = pendingQrPayments
+            .Select(item => item.CustomerId)
+            .Distinct()
+            .ToList();
+
+        var customerNames = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => customerIds.Contains(user.Id))
+            .ToDictionaryAsync(
+                user => user.Id,
+                user => user.FullName,
+                cancellationToken);
+
+        var changed = false;
 
         foreach (var payment in pendingQrPayments)
         {
             var title =
                 $"Thanh toán QR chờ xác nhận|{payment.PaymentId}";
 
-            if (existingTitleSet.Contains(title))
+            var totalSubmitted = payment.Type == PaymentType.Rental
+                ? payment.Amount + payment.DepositAmount
+                : payment.Amount;
+
+            customerNames.TryGetValue(
+                payment.CustomerId,
+                out var customerName);
+
+            customerName = string.IsNullOrWhiteSpace(customerName)
+                ? "Khách hàng"
+                : customerName;
+
+            var message =
+                $"{customerName} báo đã chuyển {totalSubmitted:N0} đồng cho đơn #{payment.BookingId} - {payment.VehicleName}. " +
+                "Hãy kiểm tra và xác nhận thanh toán.";
+
+            if (existingByTitle.TryGetValue(title, out var existing))
+            {
+                if (!string.Equals(
+                        existing.Message,
+                        message,
+                        StringComparison.Ordinal))
+                {
+                    existing.Message = message;
+                    changed = true;
+                }
+
+                if (existing.IsRead)
+                {
+                    existing.IsRead = false;
+                    changed = true;
+                }
+
+                continue;
+            }
+
+            var notification = new Notification
+            {
+                UserId = adminId,
+                Title = title,
+                Message = message
+            };
+
+            _dbContext.Notifications.Add(notification);
+            existingByTitle[title] = notification;
+            changed = true;
+        }
+
+        // Dữ liệu cũ có thể đã tạo một work item riêng cho tiền cọc.
+        // Cọc được chuyển cùng khoản Rental nên không phải một việc độc lập.
+        foreach (var notification in existingNotifications)
+        {
+            var separatorIndex = notification.Title.IndexOf('|');
+            if (separatorIndex <= 0 ||
+                !int.TryParse(
+                    notification.Title[(separatorIndex + 1)..],
+                    out var paymentId))
             {
                 continue;
             }
 
-            _dbContext.Notifications.Add(
-                new Notification
-                {
-                    UserId = adminId,
-                    Title = title,
-                    Message =
-                        $"Thanh toán QR của đơn #{payment.BookingId} đang chờ xác nhận. " +
-                        "Hãy kiểm tra tài khoản ngân hàng trước khi xác nhận đã nhận tiền."
-                });
+            var isDepositPayment = await _dbContext.Payments
+                .AsNoTracking()
+                .AnyAsync(
+                    payment =>
+                        payment.PaymentId == paymentId &&
+                        payment.Type == PaymentType.Deposit,
+                    cancellationToken);
 
-            existingTitleSet.Add(title);
-            added = true;
+            if (isDepositPayment && !notification.IsRead)
+            {
+                notification.IsRead = true;
+                notification.ReadAt ??= DateTime.UtcNow;
+                changed = true;
+            }
         }
 
-        if (added)
+        if (changed)
         {
             await _dbContext.SaveChangesAsync(
                 cancellationToken);
@@ -445,6 +524,8 @@ internal sealed class NotificationService : INotificationService
                                payment =>
                                    payment.PaymentId ==
                                        paymentId &&
+                                   payment.Type !=
+                                       PaymentType.Deposit &&
                                    payment.Status ==
                                        PaymentStatus
                                            .AwaitingConfirmation &&

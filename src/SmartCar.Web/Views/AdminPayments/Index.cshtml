@@ -1,4 +1,4 @@
-@model IReadOnlyList<SmartCar.Application.Features.Payments.AdminPaymentListItemDto>
+﻿@model IReadOnlyList<SmartCar.Application.Features.Payments.AdminPaymentListItemDto>
 @using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 @using SmartCar.Web.Services
@@ -14,7 +14,8 @@
         PaymentStatus.Pending => "Chờ thanh toán",
         PaymentStatus.AwaitingConfirmation => "Chờ đối soát",
         PaymentStatus.Paid => "Đã thu",
-        PaymentStatus.AwaitingRefund => "Chờ hoàn",
+        PaymentStatus.AwaitingRefund => "Chờ chủ/admin duyệt",
+        PaymentStatus.RefundApproved => "Đã duyệt - chờ nhân viên",
         PaymentStatus.Refunded => "Đã hoàn",
         PaymentStatus.Failed => "Lỗi",
         _ => status.ToString()
@@ -24,6 +25,7 @@
     {
         PaymentStatus.Paid or PaymentStatus.Refunded => "bg-success",
         PaymentStatus.AwaitingConfirmation or PaymentStatus.AwaitingRefund => "bg-warning text-dark",
+        PaymentStatus.RefundApproved => "bg-info text-dark",
         PaymentStatus.Failed => "bg-danger",
         _ => "bg-secondary"
     };
@@ -122,22 +124,30 @@ else if (currentSection == "refund")
                     @foreach (var group in refundGroups)
                     {
                         var first = group.First();
-                        var pending = group
+                        var awaitingApproval = group
                             .Where(payment => payment.Status == PaymentStatus.AwaitingRefund)
                             .OrderBy(payment => payment.PaymentId)
                             .ToList();
-                        var shown = pending.Count > 0
-                            ? pending
-                            : group.OrderBy(payment => payment.PaymentId).ToList();
+                        var approved = group
+                            .Where(payment => payment.Status == PaymentStatus.RefundApproved)
+                            .OrderBy(payment => payment.PaymentId)
+                            .ToList();
+                        var shown = awaitingApproval.Count > 0
+                            ? awaitingApproval
+                            : approved.Count > 0
+                                ? approved
+                                : group.OrderBy(payment => payment.PaymentId).ToList();
                         var shownTotal = shown.Sum(payment => payment.Amount);
                         var alreadyRefunded = group
                             .Where(payment => payment.Status == PaymentStatus.Refunded && !shown.Contains(payment))
                             .Sum(payment => payment.Amount);
-                        var rowStatus = pending.Count > 0
+                        var rowStatus = awaitingApproval.Count > 0
                             ? PaymentStatus.AwaitingRefund
-                            : group.All(payment => payment.Status == PaymentStatus.Refunded)
-                                ? PaymentStatus.Refunded
-                                : group.First().Status;
+                            : approved.Count > 0
+                                ? PaymentStatus.RefundApproved
+                                : group.All(payment => payment.Status == PaymentStatus.Refunded)
+                                    ? PaymentStatus.Refunded
+                                    : group.First().Status;
                         var transactionCodes = shown
                             .Where(payment => !string.IsNullOrWhiteSpace(payment.TransactionCode))
                             .Select(payment => payment.TransactionCode!)
@@ -150,7 +160,7 @@ else if (currentSection == "refund")
                             _ => "Nhiều giao dịch"
                         };
                         UserBankAccountDto? bank = null;
-                        if (pending.Count > 0)
+                        if (awaitingApproval.Count > 0 || approved.Count > 0)
                         {
                             bank = await BankAccountService.GetDefaultAsync(first.CustomerId);
                         }
@@ -178,27 +188,27 @@ else if (currentSection == "refund")
                             <td><span class="badge @StatusBadge(rowStatus)">@StatusText(rowStatus)</span></td>
                             <td class="small">@transactionText</td>
                             <td>
-                                @if (pending.Count > 0)
+                                @if (awaitingApproval.Count > 0)
                                 {
-                                    if (bank is null)
+                                    @if (bank is null)
                                     {
-                                        <span class="text-danger small">Khách chưa có tài khoản nhận hoàn.</span>
+                                        <div class="text-warning small mb-2">Khách chưa có tài khoản nhận hoàn mặc định.</div>
                                     }
                                     else
                                     {
                                         <div class="small mb-2">
-                                            <strong>@bank.BankName</strong> · <span class="user-select-all">@bank.AccountNumber</span><br />
+                                            <strong>@bank.BankName</strong> · @bank.MaskedAccountNumber<br />
                                             @bank.AccountHolderName
                                         </div>
-                                        <form asp-action="ConfirmRefundBatch" method="post" data-confirm="Xác nhận bạn đã chuyển đúng tổng số tiền hoàn cho khách?">
-                                            <input type="hidden" name="bookingId" value="@first.BookingId" />
-                                            <input type="hidden" name="section" value="refund" />
-                                            <div class="input-group input-group-sm">
-                                                <input name="transactionCode" class="form-control" maxlength="100" placeholder="Mã giao dịch" required />
-                                                <button class="btn btn-success" type="submit">Đã hoàn @shownTotal.ToString("N0") đ</button>
-                                            </div>
-                                        </form>
                                     }
+                                    <form asp-action="ApproveRefundBatch" method="post" data-confirm="Xác nhận duyệt toàn bộ khoản hoàn của đơn này cho nhân viên thực hiện?">
+                                        <input type="hidden" name="bookingId" value="@first.BookingId" />
+                                        <button class="btn btn-sm btn-warning" type="submit">Duyệt hoàn @shownTotal.ToString("N0") đ</button>
+                                    </form>
+                                }
+                                else if (rowStatus == PaymentStatus.RefundApproved)
+                                {
+                                    <span class="text-primary small">✓ Chủ/Admin đã duyệt. Chờ nhân viên thực hiện chuyển tiền.</span>
                                 }
                                 else if (rowStatus == PaymentStatus.Refunded)
                                 {

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Accounts;
@@ -105,7 +105,8 @@ internal sealed class AccountService : IAccountService
         }
 
         var isAdmin = await _userManager.IsInRoleAsync(user, RoleNames.Admin);
-        return LoginResult.Success(isAdmin);
+        var isStaff = await _userManager.IsInRoleAsync(user, RoleNames.Staff);
+        return LoginResult.Success(isAdmin, isStaff);
     }
 
     public async Task<string?> GeneratePasswordResetTokenAsync(

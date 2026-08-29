@@ -340,7 +340,7 @@ internal sealed class ReturnService : IReturnService
             .Where(payment =>
                 payment.Type == PaymentType.Refund &&
                 payment.Method == PaymentMethods.DepositRefund &&
-                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
 
         var depositAlreadyDeducted = booking.Payments

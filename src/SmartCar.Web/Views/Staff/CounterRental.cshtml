@@ -1,0 +1,27 @@
+﻿@model SmartCar.Web.ViewModels.StaffCounterRentalViewModel
+@{
+    ViewData["Title"] = "Thuê xe tại quầy";
+}
+<div class="mb-3"><h1 class="h3 mb-1">Tạo đơn thuê tại quầy</h1><p class="text-muted mb-0">Chọn tài khoản khách đã có trên hệ thống. Thanh toán được ghi nhận bằng <strong>tiền mặt tại quầy</strong>.</p></div>
+<form asp-action="CounterRental" method="post" class="card card-body shadow-sm" data-loading-form>
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+    <div class="alert alert-info">Sau khi tạo, đơn chuyển sang <strong>Đã thanh toán</strong>. Nhân viên vẫn phải chuẩn bị xe, xác minh CCCD người nhận, lập biên bản và kiểm tra bản ký trước khi giao xe.</div>
+    <div class="row g-3">
+        <div class="col-12"><label asp-for="CustomerId" class="form-label fw-semibold">Khách hàng *</label><select asp-for="CustomerId" class="form-select"><option value="">-- Chọn khách hàng --</option>@foreach(var item in Model.Customers){
+            <option value="@item.Value">@item.Text</option>
+        }
+    </select><span asp-validation-for="CustomerId" class="text-danger small"></span></div>
+    <div class="col-12"><label asp-for="VehicleId" class="form-label fw-semibold">Xe *</label><select asp-for="VehicleId" class="form-select"><option value="0">-- Chọn xe --</option>@foreach(var item in Model.Vehicles){
+        <option value="@item.Value">@item.Text</option>
+    }
+</select><span asp-validation-for="VehicleId" class="text-danger small"></span></div>
+<div class="col-md-6"><label asp-for="PickupDate" class="form-label fw-semibold">Thời gian nhận *</label><input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" /><span asp-validation-for="PickupDate" class="text-danger small"></span></div>
+<div class="col-md-6"><label asp-for="ReturnDate" class="form-label fw-semibold">Thời gian trả *</label><input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" /><span asp-validation-for="ReturnDate" class="text-danger small"></span></div>
+<div class="col-md-6"><label class="form-label fw-semibold">Hình thức nhận xe</label><input class="form-control" value="Nhận tại cửa hàng" disabled /></div>
+<div class="col-md-6"><label class="form-label fw-semibold">Thanh toán</label><input class="form-control" value="@Model.PaymentMethod" disabled /></div>
+</div>
+<div class="mt-4 d-flex gap-2"><button class="btn btn-primary" type="submit" data-loading-text="Đang tạo đơn...">Tạo đơn và ghi nhận tiền mặt</button><a class="btn btn-outline-secondary" asp-action="Index">Hủy</a></div>
+</form>
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

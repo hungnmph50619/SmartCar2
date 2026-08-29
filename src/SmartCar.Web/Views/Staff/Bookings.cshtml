@@ -1,0 +1,243 @@
+﻿@model IReadOnlyList<SmartCar.Application.Features.Bookings.BookingListItemDto>
+
+@using SmartCar.Domain.Enums
+
+@{
+    ViewData["Title"] = "Xử lý đơn thuê";
+
+    BookingStatus? selectedStatus = ViewBag.Status;
+    string? query = ViewBag.Query;
+
+    var statuses = new[]
+    {
+        BookingStatus.Paid,
+        BookingStatus.ReadyForPickup,
+        BookingStatus.Rented,
+        BookingStatus.PendingInspection,
+        BookingStatus.AwaitingRefund,
+        BookingStatus.Completed
+    };
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+    <div>
+        <h1 class="h3 mb-1">Đơn thuộc nghiệp vụ nhân viên</h1>
+        <p class="text-muted mb-0">
+            Xử lý các đơn đã tới bước nghiệp vụ của nhân viên.
+        </p>
+    </div>
+
+    <a class="btn btn-primary"
+       asp-controller="Staff"
+       asp-action="CounterRental">
+        + Thuê tại quầy
+    </a>
+</div>
+
+<form method="get"
+      asp-controller="Staff"
+      asp-action="Bookings"
+      class="card card-body shadow-sm mb-3">
+
+    <div class="row g-2 align-items-end">
+
+        <div class="col-md-5">
+            <label class="form-label">
+                Tìm đơn / khách / SĐT / xe / biển số
+            </label>
+
+            <input class="form-control"
+                   name="query"
+                   value="@query"
+                   placeholder="#123, tên khách, SĐT, biển số..." />
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">
+                Trạng thái
+            </label>
+
+            <select class="form-select" name="status">
+                <option value="">Tất cả nghiệp vụ</option>
+
+                @foreach (var status in statuses)
+                {
+                    if (selectedStatus == status)
+                    {
+                        <option value="@status" selected>
+                            @status.ToVietnamese()
+                        </option>
+                    }
+                    else
+                    {
+                        <option value="@status">
+                            @status.ToVietnamese()
+                        </option>
+                    }
+                }
+            </select>
+        </div>
+
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit"
+                    class="btn btn-primary flex-fill">
+                Lọc
+            </button>
+
+            <a class="btn btn-outline-secondary"
+               asp-controller="Staff"
+               asp-action="Bookings">
+                Xóa lọc
+            </a>
+        </div>
+
+    </div>
+</form>
+
+<div class="card shadow-sm">
+
+    @if (Model == null || Model.Count == 0)
+    {
+        <div class="card-body text-muted">
+            Không tìm thấy đơn phù hợp.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+
+            <table class="table table-hover align-middle mb-0">
+
+                <thead class="table-light">
+                    <tr>
+                        <th>Đơn</th>
+                        <th>Khách hàng</th>
+                        <th>Xe</th>
+                        <th>Thời gian thuê</th>
+                        <th>Số tiền</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    @foreach (var item in Model)
+                    {
+                        <tr>
+
+                            <td>
+                                <strong>#@item.BookingId</strong>
+
+                                <div class="small text-muted">
+                                    @item.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                                </div>
+                            </td>
+
+                            <td>
+                                <strong>
+                                    @item.CustomerName
+                                </strong>
+
+                                @if (!string.IsNullOrWhiteSpace(item.CustomerPhone))
+                                {
+                                    <div class="small text-muted">
+                                        @item.CustomerPhone
+                                    </div>
+                                }
+                            </td>
+
+                            <td>
+                                <strong>
+                                    @item.VehicleName
+                                </strong>
+
+                                <div class="small text-muted">
+                                    @item.LicensePlate
+                                </div>
+                            </td>
+
+                            <td>
+                                <div>
+                                    <strong>Nhận:</strong>
+                                    @item.PickupDate.ToString("dd/MM/yyyy HH:mm")
+                                </div>
+
+                                <div class="small text-muted">
+                                    <strong>Trả:</strong>
+                                    @item.ReturnDate.ToString("dd/MM/yyyy HH:mm")
+                                </div>
+                            </td>
+
+                            <td>
+                                <strong>
+                                    @item.GrandTotalAmount.ToString("N0") đ
+                                </strong>
+
+                                <div class="small text-muted">
+                                    Thuê/phí:
+                                    @item.TotalAmount.ToString("N0") đ
+                                </div>
+
+                                @if (item.DepositAmount > 0)
+                                {
+                                    <div class="small text-muted">
+                                        Cọc:
+                                        @item.DepositAmount.ToString("N0") đ
+                                    </div>
+                                }
+                            </td>
+
+                            <td>
+                                @{
+                                    var badgeClass = item.Status switch
+                                    {
+                                        BookingStatus.Paid
+                                            => "bg-info text-dark",
+
+                                        BookingStatus.ReadyForPickup
+                                            => "bg-primary",
+
+                                        BookingStatus.Rented
+                                            => "bg-success",
+
+                                        BookingStatus.PendingInspection
+                                            => "bg-warning text-dark",
+
+                                        BookingStatus.AwaitingRefund
+                                            => "bg-warning text-dark",
+
+                                        BookingStatus.Completed
+                                            => "bg-secondary",
+
+                                        _ => "bg-secondary"
+                                    };
+                                }
+
+                                <span class="badge @badgeClass">
+                                    @item.Status.ToVietnamese()
+                                </span>
+                            </td>
+
+                            <td class="text-end">
+
+                                <a class="btn btn-sm btn-outline-primary"
+                                   asp-controller="Staff"
+                                   asp-action="Details"
+                                   asp-route-id="@item.BookingId">
+                                    Xử lý
+                                </a>
+
+                            </td>
+
+                        </tr>
+                    }
+
+                </tbody>
+
+            </table>
+
+        </div>
+    }
+
+</div>

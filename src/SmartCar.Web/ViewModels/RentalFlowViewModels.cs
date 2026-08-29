@@ -153,11 +153,22 @@ public sealed class HandoverViewModel
     [Required(ErrorMessage = "Vui lòng nhập thời gian giao xe.")]
     public DateTime HandoverAt { get; set; } = DateTime.Now;
 
-    [Range(0, int.MaxValue, ErrorMessage = "Số km không hợp lệ.")]
-    public int Mileage { get; set; }
+    [Required(ErrorMessage = "Vui lòng nhập CCCD người nhận xe.")]
+    [RegularExpression(@"^[0-9]{12}$", ErrorMessage = "CCCD phải gồm đúng 12 chữ số.")]
+    [Display(Name = "CCCD người nhận xe")]
+    public string ReceiverCitizenId { get; set; } = string.Empty;
+
+    [MustBeTrue(
+        ErrorMessage = "Nhân viên phải xác nhận đã đối chiếu CCCD gốc và người nhận xe trực tiếp.")]
+    [Display(Name = "Đã đối chiếu người nhận trực tiếp")]
+    public bool ReceiverIdentityCheckedInPerson { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập số km khi giao xe.")]
+    [Range(0, int.MaxValue, ErrorMessage = "Số km phải là số nguyên từ 0 trở lên.")]
+    public int? Mileage { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi giao xe.")]
-    [StringLength(30)]
+    [RegularExpression(@"^(?:100|[0-9]{1,2})$", ErrorMessage = "Mức nhiên liệu phải là số từ 0 đến 100.")]
     public string FuelLevel { get; set; } = string.Empty;
 
     [StringLength(1500)]
@@ -180,6 +191,13 @@ public sealed class HandoverViewModel
 
     [Display(Name = "Ảnh khác")]
     public List<IFormFile> Images { get; set; } = new();
+
+    [Display(Name = "Ảnh mới bổ sung")]
+    public List<IFormFile>? NewImages { get; set; }
+
+    public List<string> ExistingImagePaths { get; set; } = new();
+
+    public List<string>? ImagesToDelete { get; set; }
 
     [Range(0, int.MaxValue)]
     public int IncludedKilometers { get; set; }
@@ -214,6 +232,16 @@ public sealed class ReturnViewModel
 
     [Required(ErrorMessage = "Vui lòng nhập thời gian trả xe.")]
     public DateTime ReturnedAt { get; set; } = DateTime.Now;
+
+    [Required(ErrorMessage = "Vui lòng nhập CCCD người trả xe.")]
+    [RegularExpression(@"^[0-9]{12}$", ErrorMessage = "CCCD phải gồm đúng 12 chữ số.")]
+    [Display(Name = "CCCD người trả xe")]
+    public string ReturnerCitizenId { get; set; } = string.Empty;
+
+    [MustBeTrue(
+        ErrorMessage = "Nhân viên phải xác nhận đã đối chiếu CCCD gốc và người trả xe trực tiếp.")]
+    [Display(Name = "Đã đối chiếu người trả trực tiếp")]
+    public bool ReturnerIdentityCheckedInPerson { get; set; }
 
     [Range(0, int.MaxValue)]
     public int Mileage { get; set; }

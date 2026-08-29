@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -36,6 +36,11 @@ public class HomeController : Controller
         if (User.Identity?.IsAuthenticated == true && User.IsInRole(RoleNames.Admin))
         {
             return RedirectToAction("Index", "Dashboard");
+        }
+        if (User.Identity?.IsAuthenticated == true &&
+    User.IsInRole(RoleNames.Staff))
+        {
+            return RedirectToAction("Index", "StaffDashboard");
         }
 
         var vehicles = await _vehicleService.GetAllAsync(cancellationToken);

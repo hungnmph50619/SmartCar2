@@ -212,6 +212,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(handover => handover.LateReturnFeeMultiplier).HasPrecision(6, 2);
             entity.Property(handover => handover.TrafficFineTerms).HasMaxLength(1500).IsRequired();
             entity.Property(handover => handover.DamageCompensationTerms).HasMaxLength(1500).IsRequired();
+            entity.Property(handover => handover.IdentityVerifiedByStaffId).HasMaxLength(450);
+            entity.Property(handover => handover.SignedDocumentVerifiedByStaffId).HasMaxLength(450);
         });
 
         builder.Entity<VehicleReturn>(entity =>
@@ -224,6 +226,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .WithOne(booking => booking.VehicleReturn)
                 .HasForeignKey<VehicleReturn>(vehicleReturn => vehicleReturn.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(vehicleReturn => vehicleReturn.IdentityVerifiedByStaffId).HasMaxLength(450);
+            entity.Property(vehicleReturn => vehicleReturn.SignedDocumentVerifiedByStaffId).HasMaxLength(450);
         });
 
         builder.Entity<AdditionalCharge>(entity =>

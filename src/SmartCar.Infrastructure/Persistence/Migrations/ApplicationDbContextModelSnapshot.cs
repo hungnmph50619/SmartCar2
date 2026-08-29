@@ -781,6 +781,9 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.Property<int>("BookingId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("CustomerIdentityVerified")
+                        .HasColumnType("bit");
+
                     b.Property<string>("DamageCompensationTerms")
                         .IsRequired()
                         .HasMaxLength(1500)
@@ -800,6 +803,13 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("HandoverAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("IdentityVerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IdentityVerifiedByStaffId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ImagePaths")
                         .HasColumnType("nvarchar(max)");
@@ -822,6 +832,16 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("PenaltyPolicyAccepted")
                         .HasColumnType("bit");
+
+                    b.Property<bool>("SignedDocumentVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("SignedDocumentVerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SignedDocumentVerifiedByStaffId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("TrafficFineTerms")
                         .IsRequired()
@@ -951,6 +971,9 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
                     b.Property<int>("BookingId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("CustomerIdentityVerified")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ExteriorCondition")
                         .HasColumnType("nvarchar(max)");
 
@@ -961,6 +984,13 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("HasDamage")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("IdentityVerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IdentityVerifiedByStaffId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ImagePaths")
                         .HasColumnType("nvarchar(max)");
@@ -986,6 +1016,16 @@ namespace SmartCar.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime>("ReturnedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("SignedDocumentVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("SignedDocumentVerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SignedDocumentVerifiedByStaffId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("VehicleReturnId");
 

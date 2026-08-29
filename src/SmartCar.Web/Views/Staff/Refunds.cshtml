@@ -1,0 +1,27 @@
+﻿@model IReadOnlyList<SmartCar.Web.ViewModels.StaffRefundViewModel>
+@{
+    ViewData["Title"] = "Hoàn tiền đã duyệt";
+}
+<div class="mb-3"><h1 class="h3 mb-1">Hoàn tiền đã được chủ/Admin duyệt</h1><p class="text-muted mb-0">Nhân viên chỉ chuyển tiền cho các khoản đã duyệt và phải nhập mã giao dịch thực tế.</p></div>
+<div class="alert alert-warning"><strong>Không tự ý hoàn khoản đang chờ duyệt.</strong> Hãy đối chiếu đúng tên chủ tài khoản, số tài khoản và tổng tiền trước khi chuyển.</div>
+@if (Model.Count == 0)
+{
+    <div class="card card-body shadow-sm text-muted">Hiện không có khoản hoàn tiền nào đã được duyệt chờ nhân viên thực hiện.</div>
+}
+else
+{
+    <div class="vstack gap-3">@foreach(var item in Model){
+        <div class="card shadow-sm"><div class="card-header bg-white d-flex justify-content-between gap-2 flex-wrap"><div><strong>Đơn #@item.BookingId · @item.CustomerName</strong><div class="small text-muted">@item.VehicleName · @item.LicensePlate</div></div><div class="text-end"><div class="small text-muted">Tổng cần hoàn</div><strong class="fs-5 text-danger">@item.TotalAmount.ToString("N0") đ</strong></div></div><div class="card-body"><div class="row g-3"><div class="col-md-7"><h2 class="h6">Tài khoản nhận tiền</h2>@if(string.IsNullOrWhiteSpace(item.AccountNumber)){
+            <div class="alert alert-danger mb-0">Khách chưa có tài khoản ngân hàng mặc định. Chưa được chuyển tiền.</div>
+        }else
+        {
+
+            <dl class="row mb-0"><dt class="col-sm-4">Ngân hàng</dt><dd class="col-sm-8">@item.BankName</dd><dt class="col-sm-4">Số tài khoản</dt><dd class="col-sm-8"><strong>@item.AccountNumber</strong></dd><dt class="col-sm-4">Chủ tài khoản</dt><dd class="col-sm-8"><strong>@item.AccountHolderName</strong></dd></dl>
+        }
+    </div><div class="col-md-5"><h2 class="h6">Thực hiện hoàn</h2><form asp-action="CompleteRefund" method="post" data-confirm="Xác nhận bạn đã thực sự chuyển đúng số tiền cho đúng tài khoản khách?"><input type="hidden" name="bookingId" value="@item.BookingId" /><label class="form-label">Mã giao dịch ngân hàng *</label><input class="form-control mb-2" name="transactionCode" maxlength="100" required autocomplete="off" placeholder="Nhập mã sau khi đã chuyển tiền" /><button class="btn btn-success w-100" type="submit" disabled="@(string.IsNullOrWhiteSpace(item.AccountNumber))">Xác nhận đã chuyển @item.TotalAmount.ToString("N0") đ</button></form></div></div>@if(item.Lines.Count>1){
+    <hr /><div class="small text-muted">Gồm @item.Lines.Count khoản hoàn: @string.Join(" · ", item.Lines.Select(x => $"#{x.PaymentId}: {x.Amount:N0} đ"))</div>
+}
+</div></div>
+}
+</div>
+}

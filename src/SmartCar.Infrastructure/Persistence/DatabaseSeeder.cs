@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SmartCar.Domain.Constants;
@@ -12,6 +12,7 @@ public static class DatabaseSeeder
 {
     private const string AdminEmail = "admin@smartcar.vn";
     private const string DemoCustomerEmail = "customer@smartcar.vn";
+    private const string StaffEmail = "staff@smartcar.vn";
     private const string DemoPassword = "SmartCar@123";
 
     public static async Task SeedAsync(IServiceProvider services)
@@ -20,7 +21,7 @@ public static class DatabaseSeeder
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var dbContext = services.GetRequiredService<ApplicationDbContext>();
 
-        foreach (var roleName in new[] { RoleNames.Customer, RoleNames.Admin })
+        foreach (var roleName in new[] { RoleNames.Customer, RoleNames.Staff, RoleNames.Admin })
         {
             if (!await roleManager.RoleExistsAsync(roleName))
             {
@@ -35,6 +36,13 @@ public static class DatabaseSeeder
             "Quản trị SmartCar",
             "0900000000",
             RoleNames.Admin);
+
+        _ = await EnsureUserAsync(
+            userManager,
+            StaffEmail,
+            "Nhân viên SmartCar",
+            "0922222222",
+            RoleNames.Staff);
 
         var demoCustomer = await EnsureUserAsync(
             userManager,

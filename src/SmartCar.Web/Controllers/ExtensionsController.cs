@@ -13,6 +13,8 @@ namespace SmartCar.Web.Controllers;
 public sealed class ExtensionsController : Controller
 {
     private const long MaximumEvidenceImageBytes = 5 * 1024 * 1024;
+    private const int MinimumEvidenceImageCount = 2;
+    private const int MaximumEvidenceImageCount = 8;
 
     private readonly IExtensionService _extensionService;
     private readonly IWebHostEnvironment _environment;
@@ -47,6 +49,8 @@ public sealed class ExtensionsController : Controller
         string? evidenceNote,
         string? evidenceLatitude,
         string? evidenceLongitude,
+        string? evidencePlaceName,
+        List<IFormFile>? evidenceImages,
         IFormFile? evidenceImage,
         CancellationToken cancellationToken)
     {
@@ -56,6 +60,7 @@ public sealed class ExtensionsController : Controller
             return Challenge();
         }
 
+        var selectedEvidenceImages = CollectEvidenceImages(evidenceImages, evidenceImage);
         string? liveLocationText = null;
         if (isForceMajeure)
         {
@@ -65,15 +70,16 @@ public sealed class ExtensionsController : Controller
                 return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
             }
 
-            if (evidenceImage is null || evidenceImage.Length == 0)
+            var imageCountError = ValidateEvidenceImageCount(selectedEvidenceImages);
+            if (imageCountError is not null)
             {
-                TempData["ErrorMessage"] = "Trường hợp bất khả kháng bắt buộc phải có ảnh minh chứng tình trạng xe/sự cố.";
+                TempData["ErrorMessage"] = imageCountError;
                 return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
             }
 
             if (!TryParseLiveLocation(evidenceLatitude, evidenceLongitude, out var latitude, out var longitude))
             {
-                TempData["ErrorMessage"] = "Trường hợp bất khả kháng bắt buộc phải lấy vị trí trực tiếp trước khi gửi yêu cầu.";
+                TempData["ErrorMessage"] = "Trường hợp bất khả kháng bắt buộc phải lấy vị trí hiện tại trực tiếp trước khi gửi yêu cầu.";
                 return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
             }
 
@@ -82,9 +88,9 @@ public sealed class ExtensionsController : Controller
                 longitude.ToString("0.000000", CultureInfo.InvariantCulture);
         }
 
-        var (imagePath, imageError) = await SaveEvidenceImageAsync(
+        var (imagePaths, imageError) = await SaveEvidenceImagesAsync(
             model.BookingId,
-            evidenceImage,
+            selectedEvidenceImages,
             cancellationToken);
 
         if (imageError is not null)
@@ -93,7 +99,7 @@ public sealed class ExtensionsController : Controller
             return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
         }
 
-        var composedEvidence = ComposeEvidence(evidenceNote, imagePath, liveLocationText);
+        var composedEvidence = ComposeEvidence(evidenceNote, imagePaths, liveLocationText, evidencePlaceName);
         var result = ModelState.IsValid
             ? await _extensionService.RequestAsync(
                 customerId,
@@ -108,12 +114,12 @@ public sealed class ExtensionsController : Controller
 
         if (!result.Succeeded)
         {
-            DeleteSavedEvidenceImage(imagePath);
+            DeleteSavedEvidenceImages(imagePaths);
         }
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? isForceMajeure
-                ? "Đã gửi yêu cầu gia hạn bất khả kháng kèm ảnh và vị trí trực tiếp. SmartCar sẽ kiểm tra lịch xe và phương án cho khách kế tiếp trước khi quyết định."
+                ? "Đã gửi yêu cầu gia hạn bất khả kháng kèm ảnh, vị trí và địa điểm hiện tại. SmartCar sẽ kiểm tra lịch xe và phương án cho khách kế tiếp trước khi quyết định."
                 : "Đã gửi yêu cầu gia hạn."
             : string.Join("; ", result.Errors);
 
@@ -126,7 +132,11 @@ public sealed class ExtensionsController : Controller
         int extensionId,
         int bookingId,
         string? evidenceNote,
+        string? evidenceLatitude,
+        string? evidenceLongitude,
+        string? evidencePlaceName,
         string? customerNote,
+        List<IFormFile>? evidenceImages,
         IFormFile? evidenceImage,
         CancellationToken cancellationToken)
     {
@@ -136,22 +146,27 @@ public sealed class ExtensionsController : Controller
             return Challenge();
         }
 
-        if (evidenceImage is null || evidenceImage.Length == 0)
+        var selectedEvidenceImages = CollectEvidenceImages(evidenceImages, evidenceImage);
+        var imageCountError = ValidateEvidenceImageCount(selectedEvidenceImages);
+        if (imageCountError is not null)
         {
-            TempData["ErrorMessage"] = "Vui lòng gửi lại ảnh minh chứng theo yêu cầu của SmartCar.";
+            TempData["ErrorMessage"] = imageCountError;
             return RedirectToAction(nameof(Index));
         }
 
-        if (string.IsNullOrWhiteSpace(evidenceNote) ||
-            !evidenceNote.Contains("Vị trí trực tiếp:", StringComparison.OrdinalIgnoreCase))
+        if (!TryParseLiveLocation(evidenceLatitude, evidenceLongitude, out var latitude, out var longitude))
         {
             TempData["ErrorMessage"] = "Vui lòng bấm Lấy vị trí hiện tại và gửi lại vị trí trực tiếp cùng minh chứng.";
             return RedirectToAction(nameof(Index));
         }
 
-        var (imagePath, imageError) = await SaveEvidenceImageAsync(
+        var liveLocationText =
+            $"Vị trí trực tiếp: {latitude.ToString("0.000000", CultureInfo.InvariantCulture)}, " +
+            longitude.ToString("0.000000", CultureInfo.InvariantCulture);
+
+        var (imagePaths, imageError) = await SaveEvidenceImagesAsync(
             bookingId,
-            evidenceImage,
+            selectedEvidenceImages,
             cancellationToken);
 
         if (imageError is not null)
@@ -160,7 +175,7 @@ public sealed class ExtensionsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var composedEvidence = ComposeEvidence(evidenceNote, imagePath, null);
+        var composedEvidence = ComposeEvidence(evidenceNote, imagePaths, liveLocationText, evidencePlaceName);
         var result = await _extensionService.SupplementEvidenceAsync(
             extensionId,
             customerId,
@@ -170,7 +185,7 @@ public sealed class ExtensionsController : Controller
 
         if (!result.Succeeded)
         {
-            DeleteSavedEvidenceImage(imagePath);
+            DeleteSavedEvidenceImages(imagePaths);
         }
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
@@ -178,6 +193,63 @@ public sealed class ExtensionsController : Controller
             : string.Join("; ", result.Errors);
 
         return RedirectToAction(nameof(Index));
+    }
+
+    private static IReadOnlyList<IFormFile> CollectEvidenceImages(
+        List<IFormFile>? evidenceImages,
+        IFormFile? evidenceImage)
+    {
+        var files = new List<IFormFile>();
+        if (evidenceImages is not null)
+        {
+            files.AddRange(evidenceImages.Where(file => file.Length > 0));
+        }
+
+        if (evidenceImage is not null && evidenceImage.Length > 0)
+        {
+            files.Add(evidenceImage);
+        }
+
+        return files;
+    }
+
+    private static string? ValidateEvidenceImageCount(IReadOnlyList<IFormFile> images)
+    {
+        if (images.Count < MinimumEvidenceImageCount)
+        {
+            return $"Trường hợp bất khả kháng phải có tối thiểu {MinimumEvidenceImageCount} ảnh minh chứng.";
+        }
+
+        if (images.Count > MaximumEvidenceImageCount)
+        {
+            return $"Chỉ được gửi tối đa {MaximumEvidenceImageCount} ảnh minh chứng cho một yêu cầu.";
+        }
+
+        return null;
+    }
+
+    private async Task<(IReadOnlyList<string> Paths, string? Error)> SaveEvidenceImagesAsync(
+        int bookingId,
+        IReadOnlyList<IFormFile> images,
+        CancellationToken cancellationToken)
+    {
+        var paths = new List<string>();
+        foreach (var image in images)
+        {
+            var (path, error) = await SaveEvidenceImageAsync(bookingId, image, cancellationToken);
+            if (error is not null)
+            {
+                DeleteSavedEvidenceImages(paths);
+                return (Array.Empty<string>(), error);
+            }
+
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                paths.Add(path);
+            }
+        }
+
+        return (paths, null);
     }
 
     private async Task<(string? Path, string? Error)> SaveEvidenceImageAsync(
@@ -218,6 +290,14 @@ public sealed class ExtensionsController : Controller
         return ($"/{relativeFolder}/{fileName}", null);
     }
 
+    private void DeleteSavedEvidenceImages(IEnumerable<string?> imagePaths)
+    {
+        foreach (var imagePath in imagePaths)
+        {
+            DeleteSavedEvidenceImage(imagePath);
+        }
+    }
+
     private void DeleteSavedEvidenceImage(string? imagePath)
     {
         if (string.IsNullOrWhiteSpace(imagePath) ||
@@ -236,8 +316,9 @@ public sealed class ExtensionsController : Controller
 
     private static string ComposeEvidence(
         string? evidenceNote,
-        string? imagePath,
-        string? liveLocationText)
+        IReadOnlyList<string> imagePaths,
+        string? liveLocationText,
+        string? evidencePlaceName)
     {
         var parts = new List<string>();
 
@@ -247,18 +328,25 @@ public sealed class ExtensionsController : Controller
                 evidenceNote
                     .Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(line => line.Trim())
-                    .Where(line => line.Length > 0));
+                    .Where(line => line.Length > 0)
+                    .Where(line => !line.StartsWith("Vị trí trực tiếp:", StringComparison.OrdinalIgnoreCase))
+                    .Where(line => !line.StartsWith("Địa điểm:", StringComparison.OrdinalIgnoreCase))
+                    .Where(line => !line.StartsWith("Ảnh minh chứng:", StringComparison.OrdinalIgnoreCase)));
         }
 
-        if (!string.IsNullOrWhiteSpace(liveLocationText) &&
-            !parts.Any(part => part.Contains("Vị trí trực tiếp:", StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrWhiteSpace(liveLocationText))
         {
             parts.Add(liveLocationText);
         }
 
-        if (!string.IsNullOrWhiteSpace(imagePath))
+        if (!string.IsNullOrWhiteSpace(evidencePlaceName))
         {
-            parts.Add($"Ảnh minh chứng: {imagePath}");
+            parts.Add($"Địa điểm: {evidencePlaceName.Trim()}");
+        }
+
+        if (imagePaths.Count > 0)
+        {
+            parts.Add($"Ảnh minh chứng: {string.Join("; ", imagePaths)}");
         }
 
         return string.Join(" | ", parts);

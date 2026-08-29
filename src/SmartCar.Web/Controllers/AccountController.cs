@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Accounts;
@@ -112,9 +112,17 @@ public class AccountController : Controller
             return LocalRedirect(model.ReturnUrl);
         }
 
-        return result.IsAdmin
-            ? RedirectToAction("Index", "Dashboard")
-            : RedirectToAction("Index", "Home");
+        if (result.IsAdmin)
+        {
+            return RedirectToAction("Index", "Dashboard");
+        }
+
+        if (result.IsStaff)
+        {
+            return RedirectToAction("Index", "Staff");
+        }
+
+        return RedirectToAction("Index", "Home");
     }
 
     [HttpGet]

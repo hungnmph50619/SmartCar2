@@ -15,31 +15,38 @@
     var missingAccessoryText = accessoryIsMissing
         ? storedAccessoryStatus["Thiếu/mất:".Length..].Trim()
         : string.Empty;
+    var handoverPreviewUrl = Url.Action("Index", "ReturnHandoverPreview", new { bookingId = Model.BookingId }) ?? "#";
     const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
     <div>
         <h1 class="h3 mb-1">Biên bản trả xe · #@Model.BookingId</h1>
-        <p class="text-muted mb-0">Chụp cùng vị trí lúc giao để đối chiếu rõ ràng.</p>
+        <p class="text-muted mb-0">Ghi nhận tình trạng xe khi trả và mở biên bản giao khi cần đối chiếu.</p>
     </div>
-    <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại</a>
+    @if (User.IsInRole(SmartCar.Domain.Constants.RoleNames.Staff))
+    {
+        <a class="btn btn-outline-secondary" asp-controller="Staff" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại</a>
+    }
+    else
+    {
+        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại</a>
+    }
 </div>
 
 @if (handoverMileage.HasValue)
 {
-    <div class="alert alert-info py-2">
-        <div class="d-flex gap-4 flex-wrap align-items-center">
-            <strong>Lúc giao</strong>
-            <span>@handoverMileage.Value.ToString("N0") km</span>
-            @if (!string.IsNullOrWhiteSpace(handoverFuelLevel)) { <span>@handoverFuelLevel nhiên liệu</span> }
-            @if (handoverAt.HasValue) { <span class="text-muted">@handoverAt.Value.ToString("dd/MM/yyyy HH:mm")</span> }
+    <details class="card card-body shadow-sm mb-3">
+        <summary class="fw-semibold" style="cursor:pointer">
+            Xem biên bản giao để đối chiếu
+        </summary>
+        <div class="mt-3">
+            <iframe src="@handoverPreviewUrl"
+                    title="Biên bản giao xe để đối chiếu"
+                    class="w-100 border rounded"
+                    style="height:360px;background:#fff"></iframe>
         </div>
-        @if (!string.IsNullOrWhiteSpace(handoverAccessories))
-        {
-            <div class="small mt-2"><strong>Phụ kiện lúc giao:</strong> @handoverAccessories</div>
-        }
-    </div>
+    </details>
 }
 
 <form asp-action="Create"
@@ -65,16 +72,76 @@
         <div class="col-md-6">
             <label class="form-label fw-semibold">Thời gian trả</label>
             <div class="row g-2">
-                <div class="col-7"><input type="date" id="return-date" value="@returnDate" class="form-control" required /></div>
-                <div class="col-5"><input type="text" id="return-time" value="@returnTime" class="form-control" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Giờ 24h, ví dụ 18:45" required /></div>
+                <div class="col-7">
+                    <input type="date"
+                           id="return-date"
+                           value="@returnDate"
+                           class="form-control"
+                           required
+                           oninvalid="this.setCustomValidity('Vui lòng chọn ngày trả xe.')"
+                           oninput="this.setCustomValidity('')" />
+                </div>
+                <div class="col-5">
+                    <input type="text"
+                           id="return-time"
+                           value="@returnTime"
+                           class="form-control"
+                           inputmode="numeric"
+                           maxlength="5"
+                           pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]"
+                           placeholder="HH:mm"
+                           title="Giờ 24h, ví dụ 18:45"
+                           required
+                           oninvalid="this.setCustomValidity('Vui lòng nhập giờ trả xe theo định dạng HH:mm, ví dụ 18:45.')"
+                           oninput="this.setCustomValidity('')" />
+                </div>
             </div>
             <div class="form-text">Giờ 24h · ví dụ 18:45.</div>
             <span asp-validation-for="ReturnedAt" class="text-danger small"></span>
         </div>
 
         <div class="col-md-6">
+            <label asp-for="ReturnerCitizenId" class="form-label fw-semibold"></label>
+            <input asp-for="ReturnerCitizenId"
+                   class="form-control"
+                   inputmode="numeric"
+                   maxlength="12"
+                   autocomplete="off"
+                   placeholder="Nhập đúng 12 số CCCD của khách đứng tên đơn"
+                   required />
+            <span asp-validation-for="ReturnerCitizenId" class="text-danger small"></span>
+            <div class="form-text">Người trả xe phải là đúng khách đứng tên đơn và CCCD phải trùng hồ sơ đã được xác minh.</div>
+        </div>
+        <div class="col-12">
+            <div class="form-check border rounded p-3 ps-5 bg-light">
+                <input asp-for="ReturnerIdentityCheckedInPerson"
+                       class="form-check-input" />
+
+                <label asp-for="ReturnerIdentityCheckedInPerson"
+                       class="form-check-label fw-semibold">
+                    Tôi đã xem CCCD gốc và đối chiếu trực tiếp người đang trả xe đúng là khách đứng tên đơn
+                </label>
+
+                <span asp-validation-for="ReturnerIdentityCheckedInPerson"
+                      class="text-danger small d-block"></span>
+
+                <div class="form-text">
+                    Nhân viên phải đối chiếu giấy tờ gốc với người có mặt,
+                    không chỉ nhập một số CCCD biết trước.
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
             <label asp-for="Mileage" class="form-label fw-semibold">Km lúc trả</label>
-            <input asp-for="Mileage" type="number" min="@(handoverMileage ?? 0)" step="1" class="form-control" required data-return-mileage />
+            <input asp-for="Mileage"
+                   type="number"
+                   min="@(handoverMileage ?? 0)"
+                   step="1"
+                   class="form-control"
+                   required
+                   data-return-mileage
+                   oninvalid="this.setCustomValidity('Vui lòng nhập số km khi trả xe và không được nhỏ hơn số km lúc giao.')"
+                   oninput="this.setCustomValidity('')" />
             <span asp-validation-for="Mileage" class="text-danger small"></span>
         </div>
 
@@ -101,7 +168,16 @@
         <div class="col-md-6">
             <label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label>
             <div class="input-group">
-                <input asp-for="FuelLevel" type="number" min="0" max="100" step="1" class="form-control" required />
+                <input asp-for="FuelLevel"
+                       type="number"
+                       min="0"
+                       max="100"
+                       step="1"
+                       class="form-control"
+                       placeholder="0 - 100"
+                       required
+                       oninvalid="this.setCustomValidity('Vui lòng nhập mức nhiên liệu từ 0 đến 100%.')"
+                       oninput="this.setCustomValidity('')" />
                 <span class="input-group-text">%</span>
             </div>
             <span asp-validation-for="FuelLevel" class="text-danger small"></span>
@@ -113,12 +189,16 @@
                 <option value="Đủ" selected="@(!accessoryIsMissing)">Đủ như lúc giao</option>
                 <option value="Thiếu" selected="@(accessoryIsMissing)">Thiếu / mất</option>
             </select>
-            <div class="form-text">Đối chiếu với danh sách phụ kiện lúc giao ở phía trên.</div>
+            <div class="form-text">Đối chiếu với danh sách phụ kiện trong biên bản giao phía trên.</div>
         </div>
 
         <div class="col-12 @(accessoryIsMissing ? string.Empty : "d-none")" id="missing-accessories-box">
             <label class="form-label fw-semibold text-danger">Thiếu / mất phụ kiện nào? *</label>
-            <input id="missing-accessories" class="form-control" maxlength="1000" value="@missingAccessoryText" placeholder="Ví dụ: thiếu 1 chìa khóa phụ, cáp sạc..." />
+            <input id="missing-accessories"
+                   class="form-control"
+                   maxlength="1000"
+                   value="@missingAccessoryText"
+                   placeholder="Ví dụ: thiếu 1 chìa khóa phụ, cáp sạc..." />
             <div class="form-text">Thông tin này sẽ xuất hiện trong biên bản trả để khách ký xác nhận.</div>
         </div>
     </div>
@@ -128,7 +208,7 @@
     <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap mb-2">
         <div>
             <h2 class="h5 mb-1">2. Ảnh đối chiếu</h2>
-            <div class="text-muted small">7 ảnh bắt buộc · cùng vị trí với lúc giao.</div>
+            <div class="text-muted small">Chọn nhiều ảnh trong một lần · tối thiểu 7 ảnh · tối đa 25 ảnh · tối đa 5 MB/ảnh.</div>
         </div>
         <div class="form-check">
             <input asp-for="HasDamage" class="form-check-input" id="has-damage" />
@@ -136,22 +216,45 @@
         </div>
     </div>
 
-    <div class="row g-3">
-        <div class="col-6 col-lg-3"><label asp-for="FrontImage" class="form-label">Phía trước *</label><input asp-for="FrontImage" type="file" accept="@imageAccept" class="form-control" required /><span asp-validation-for="FrontImage" class="text-danger small"></span></div>
-        <div class="col-6 col-lg-3"><label asp-for="RearImage" class="form-label">Phía sau *</label><input asp-for="RearImage" type="file" accept="@imageAccept" class="form-control" required /><span asp-validation-for="RearImage" class="text-danger small"></span></div>
-        <div class="col-6 col-lg-3"><label asp-for="LeftImage" class="form-label">Bên trái *</label><input asp-for="LeftImage" type="file" accept="@imageAccept" class="form-control" required /><span asp-validation-for="LeftImage" class="text-danger small"></span></div>
-        <div class="col-6 col-lg-3"><label asp-for="RightImage" class="form-label">Bên phải *</label><input asp-for="RightImage" type="file" accept="@imageAccept" class="form-control" required /><span asp-validation-for="RightImage" class="text-danger small"></span></div>
-        <div class="col-6 col-lg-3"><label asp-for="InteriorImage" class="form-label">Nội thất *</label><input asp-for="InteriorImage" type="file" accept="@imageAccept" class="form-control" required /><span asp-validation-for="InteriorImage" class="text-danger small"></span></div>
-        <div class="col-6 col-lg-3"><label asp-for="OdometerImage" class="form-label">Đồng hồ km *</label><input asp-for="OdometerImage" type="file" accept="@imageAccept" class="form-control" required /><span asp-validation-for="OdometerImage" class="text-danger small"></span></div>
-        <div class="col-6 col-lg-3"><label asp-for="FuelImage" class="form-label">Nhiên liệu *</label><input asp-for="FuelImage" type="file" accept="@imageAccept" class="form-control" required /><span asp-validation-for="FuelImage" class="text-danger small"></span></div>
-        <div class="col-6 col-lg-3"><label asp-for="Images" class="form-label">Ảnh khác</label><input asp-for="Images" type="file" multiple accept="@imageAccept" class="form-control" /><span asp-validation-for="Images" class="text-danger small"></span></div>
+    <div class="border rounded p-3 bg-light">
+        <label class="form-label fw-semibold" for="return-image-picker">Chọn ảnh trả xe *</label>
+        <input id="return-image-picker"
+               type="file"
+               multiple
+               accept="@imageAccept"
+               class="form-control"
+               required
+               oninvalid="this.setCustomValidity('Vui lòng chọn từ 7 đến 25 ảnh trả xe.')"
+               onchange="this.setCustomValidity('')" />
+        <div class="d-flex justify-content-end mt-2">
+            <span id="return-image-count" class="badge text-bg-secondary">Chưa chọn ảnh</span>
+        </div>
+        <div id="return-image-preview" class="d-flex flex-wrap gap-2 mt-3"></div>
+    </div>
+
+    <div class="d-none" aria-hidden="true">
+        <input asp-for="FrontImage" id="return-front-image" type="file" accept="@imageAccept" tabindex="-1" />
+        <input asp-for="RearImage" id="return-rear-image" type="file" accept="@imageAccept" tabindex="-1" />
+        <input asp-for="LeftImage" id="return-left-image" type="file" accept="@imageAccept" tabindex="-1" />
+        <input asp-for="RightImage" id="return-right-image" type="file" accept="@imageAccept" tabindex="-1" />
+        <input asp-for="InteriorImage" id="return-interior-image" type="file" accept="@imageAccept" tabindex="-1" />
+        <input asp-for="OdometerImage" id="return-odometer-image" type="file" accept="@imageAccept" tabindex="-1" />
+        <input asp-for="FuelImage" id="return-fuel-image" type="file" accept="@imageAccept" tabindex="-1" />
+        <input asp-for="Images" id="return-other-images" type="file" multiple accept="@imageAccept" tabindex="-1" />
     </div>
 
     <div id="damage-evidence" class="border border-danger-subtle rounded p-3 mt-3 @(Model.HasDamage ? string.Empty : "d-none")">
         <label asp-for="DamageImages" class="form-label fw-semibold">Ảnh hư hỏng *</label>
-        <input asp-for="DamageImages" id="damage-images" type="file" multiple accept="@imageAccept" class="form-control" />
+        <input asp-for="DamageImages"
+               id="damage-images"
+               type="file"
+               multiple
+               accept="@imageAccept"
+               class="form-control"
+               oninvalid="this.setCustomValidity('Vui lòng chọn ít nhất một ảnh thể hiện rõ hư hỏng mới.')"
+               onchange="this.setCustomValidity('')" />
         <span asp-validation-for="DamageImages" class="text-danger small"></span>
-        <div class="form-text">Nếu có hư hỏng mới, cần ảnh rõ vị trí hư hỏng để làm căn cứ.</div>
+        <div id="damage-image-preview" class="d-flex flex-wrap gap-2 mt-3"></div>
     </div>
 
     @if (!ViewData.ModelState.IsValid)
@@ -162,11 +265,19 @@
     <div class="mt-3">
         <label asp-for="Notes" class="form-label fw-semibold">Ghi chú</label>
         <textarea asp-for="Notes" class="form-control" rows="2" maxlength="1500" placeholder="Điểm cần lưu ý khác khi nhận lại xe"></textarea>
+        <span asp-validation-for="Notes" class="text-danger small"></span>
     </div>
 
     <div class="mt-4 d-flex gap-2 flex-wrap">
         <button class="btn btn-primary" type="submit" data-loading-text="Đang lưu...">Lưu biên bản</button>
-        <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy</a>
+        @if (User.IsInRole(SmartCar.Domain.Constants.RoleNames.Staff))
+        {
+            <a class="btn btn-outline-secondary" asp-controller="Staff" asp-action="Details" asp-route-id="@Model.BookingId">Hủy</a>
+        }
+        else
+        {
+            <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@Model.BookingId">Hủy</a>
+        }
     </div>
 </form>
 
@@ -183,11 +294,31 @@
             const hasDamage = document.getElementById('has-damage');
             const damageBox = document.getElementById('damage-evidence');
             const damageImages = document.getElementById('damage-images');
+            const damagePreview = document.getElementById('damage-image-preview');
             const accessoryStatus = document.getElementById('return-accessories-status');
             const accessoryHidden = document.getElementById('return-accessories-value');
             const missingAccessoriesBox = document.getElementById('missing-accessories-box');
             const missingAccessories = document.getElementById('missing-accessories');
+            const imagePicker = document.getElementById('return-image-picker');
+            const imagePreview = document.getElementById('return-image-preview');
+            const imageCount = document.getElementById('return-image-count');
+            const evidenceInputs = [
+                document.getElementById('return-front-image'),
+                document.getElementById('return-rear-image'),
+                document.getElementById('return-left-image'),
+                document.getElementById('return-right-image'),
+                document.getElementById('return-interior-image'),
+                document.getElementById('return-odometer-image'),
+                document.getElementById('return-fuel-image')
+            ];
+            const otherImages = document.getElementById('return-other-images');
             const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+            const maximumImageBytes = 5 * 1024 * 1024;
+            const maximumImages = 25;
+            const minimumImages = 7;
+            const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+            let previewUrls = [];
+            let damagePreviewUrls = [];
 
             function syncDateTime() {
                 if (!dateInput?.value || !timePattern.test(timeInput?.value || '')) return false;
@@ -220,23 +351,128 @@
             function toggleDamage() {
                 const active = !!hasDamage?.checked;
                 damageBox?.classList.toggle('d-none', !active);
-                if (damageImages) damageImages.required = active;
+                if (damageImages) {
+                    damageImages.required = active;
+                    if (!active) damageImages.setCustomValidity('');
+                }
+                validateReturnImages(false);
+            }
+
+            function assignFiles(input, files) {
+                if (!input) return;
+                const transfer = new DataTransfer();
+                files.forEach(file => transfer.items.add(file));
+                input.files = transfer.files;
+            }
+
+            function fileError(file) {
+                const lowerName = file.name.toLowerCase();
+                if (!allowedExtensions.some(extension => lowerName.endsWith(extension))) {
+                    return `Ảnh ${file.name} không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`;
+                }
+                if (file.size > maximumImageBytes) {
+                    return `Ảnh ${file.name} vượt quá 5 MB.`;
+                }
+                return '';
+            }
+
+            function validateReturnImages(showMessage) {
+                const files = Array.from(imagePicker?.files || []);
+                const damageFiles = hasDamage?.checked ? Array.from(damageImages?.files || []) : [];
+                let message = '';
+
+                if (files.length < minimumImages) {
+                    message = `Vui lòng chọn ít nhất ${minimumImages} ảnh trả xe.`;
+                } else if (files.length + damageFiles.length > maximumImages) {
+                    message = `Tổng số ảnh trả xe và ảnh hư hỏng không được vượt quá ${maximumImages} ảnh.`;
+                } else {
+                    const invalid = [...files, ...damageFiles].map(fileError).find(Boolean);
+                    if (invalid) message = invalid;
+                }
+
+                imagePicker?.setCustomValidity(message);
+                if (showMessage && message) imagePicker?.reportValidity();
+                return !message;
+            }
+
+            function releaseUrls(urls) {
+                urls.forEach(url => URL.revokeObjectURL(url));
+                return [];
+            }
+
+            function appendThumbnail(container, file, url, index) {
+                if (!container) return;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'border rounded bg-white p-1';
+                wrapper.style.width = '116px';
+
+                const image = document.createElement('img');
+                image.src = url;
+                image.alt = `Ảnh ${index + 1}`;
+                image.className = 'rounded d-block w-100';
+                image.style.height = '78px';
+                image.style.objectFit = 'cover';
+                image.style.cursor = 'zoom-in';
+                image.title = 'Bấm để xem ảnh lớn';
+                image.addEventListener('click', () => window.open(url, '_blank'));
+
+                const caption = document.createElement('div');
+                caption.className = 'small text-muted text-center text-truncate mt-1';
+                caption.textContent = `${index + 1}. ${file.name}`;
+                caption.title = file.name;
+
+                wrapper.append(image, caption);
+                container.appendChild(wrapper);
+            }
+
+            function distributeAndPreviewImages() {
+                const files = Array.from(imagePicker?.files || []);
+                previewUrls = releaseUrls(previewUrls);
+                if (imagePreview) imagePreview.innerHTML = '';
+
+                evidenceInputs.forEach((input, index) => assignFiles(input, files[index] ? [files[index]] : []));
+                assignFiles(otherImages, files.slice(7));
+
+                if (imageCount) {
+                    imageCount.textContent = files.length > 0 ? `Đã chọn ${files.length} ảnh` : 'Chưa chọn ảnh';
+                    imageCount.className = `badge ${files.length >= minimumImages ? 'text-bg-success' : 'text-bg-secondary'}`;
+                }
+
+                files.forEach((file, index) => {
+                    const url = URL.createObjectURL(file);
+                    previewUrls.push(url);
+                    appendThumbnail(imagePreview, file, url, index);
+                });
+
+                validateReturnImages(false);
+            }
+
+            function renderDamagePreview() {
+                const files = Array.from(damageImages?.files || []);
+                damagePreviewUrls = releaseUrls(damagePreviewUrls);
+                if (damagePreview) damagePreview.innerHTML = '';
+                files.forEach((file, index) => {
+                    const url = URL.createObjectURL(file);
+                    damagePreviewUrls.push(url);
+                    appendThumbnail(damagePreview, file, url, index);
+                });
+                validateReturnImages(false);
             }
 
             function renderMileage() {
                 if (!preview || !mileage) return;
-                const handoverMileage = Number(preview.dataset.handoverMileage || 0);
-                const handoverTime = new Date(preview.dataset.handoverTime || '');
+                const handoverMileageValue = Number(preview.dataset.handoverMileage || 0);
+                const handoverTimeValue = new Date(preview.dataset.handoverTime || '');
                 const storedIncluded = Number(preview.dataset.includedKm || 0);
                 const feePerKm = Number(preview.dataset.feePerKm || 0);
-                const current = Number(mileage.value || handoverMileage);
-                const driven = Math.max(0, current - handoverMileage);
+                const current = Number(mileage.value || handoverMileageValue);
+                const driven = Math.max(0, current - handoverMileageValue);
                 const number = value => new Intl.NumberFormat('vi-VN').format(value);
 
                 let days = 1;
-                if (hiddenTime?.value && !Number.isNaN(handoverTime.getTime())) {
+                if (hiddenTime?.value && !Number.isNaN(handoverTimeValue.getTime())) {
                     const end = new Date(hiddenTime.value);
-                    const hours = Math.max(0, (end - handoverTime) / 3600000);
+                    const hours = Math.max(0, (end - handoverTimeValue) / 3600000);
                     days = Math.max(1, Math.ceil(hours / 24));
                 }
 
@@ -252,7 +488,7 @@
                 const warning = preview.querySelector('[data-mileage-warning]');
                 const maxReasonable = days * 2500;
                 if (driven > maxReasonable) {
-                    warning.textContent = `Số km tăng ${number(driven)} km trong ${days} ngày là bất thường. Kiểm tra lại công-tơ-mét.`;
+                    warning.textContent = `Số km tăng ${number(driven)} km trong ${days} ngày là bất thường. Vui lòng kiểm tra lại công-tơ-mét.`;
                     warning.classList.remove('d-none');
                 } else {
                     warning.textContent = '';
@@ -264,28 +500,40 @@
             timeInput?.addEventListener('input', () => { syncDateTime(); renderMileage(); });
             mileage?.addEventListener('input', renderMileage);
             hasDamage?.addEventListener('change', toggleDamage);
+            damageImages?.addEventListener('change', renderDamagePreview);
+            imagePicker?.addEventListener('change', distributeAndPreviewImages);
             accessoryStatus?.addEventListener('change', syncAccessories);
             missingAccessories?.addEventListener('input', syncAccessories);
+
             form?.addEventListener('submit', event => {
                 const timeValid = syncDateTime();
                 const accessoriesValid = syncAccessories();
-                if (!timeValid || !accessoriesValid) {
+                const imagesValid = validateReturnImages(true);
+                const damageValid = !hasDamage?.checked || (damageImages?.files?.length || 0) > 0;
+
+                if (!timeValid || !accessoriesValid || !imagesValid || !damageValid) {
                     event.preventDefault();
                     if (!timeValid) {
-                        timeInput?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
+                        timeInput?.setCustomValidity('Vui lòng nhập giờ trả xe theo định dạng HH:mm, ví dụ 18:45.');
                         timeInput?.reportValidity();
-                    } else {
-                        timeInput?.setCustomValidity('');
+                    } else if (!accessoriesValid) {
                         missingAccessories?.reportValidity();
+                    } else if (!damageValid) {
+                        damageImages?.setCustomValidity('Vui lòng chọn ít nhất một ảnh thể hiện rõ hư hỏng mới.');
+                        damageImages?.reportValidity();
                     }
-                } else {
-                    timeInput?.setCustomValidity('');
+                    return;
                 }
+
+                timeInput?.setCustomValidity('');
+                damageImages?.setCustomValidity('');
             });
 
             syncDateTime();
             syncAccessories();
             toggleDamage();
+            distributeAndPreviewImages();
+            renderDamagePreview();
             renderMileage();
             document.getElementById('return-validation-summary')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         })();

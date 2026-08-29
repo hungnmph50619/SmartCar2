@@ -1,0 +1,184 @@
+﻿@model SmartCar.Web.ViewModels.SignedDocumentPagesViewModel
+@using SmartCar.Domain.Constants
+
+@{
+    ViewData["Title"] = Model.DocumentTitle;
+
+    var isStaff = User.IsInRole(RoleNames.Staff);
+
+    var verifiedAtText = Model.VerifiedAt.HasValue
+        ? Model.VerifiedAt.Value
+            .ToLocalTime()
+            .ToString("dd/MM/yyyy HH:mm")
+        : null;
+
+    var uploadAction = Model.IsHandover
+        ? "UploadHandoverSigned"
+        : "UploadReturnSigned";
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+
+    <div>
+        <h1 class="h3 mb-1">
+            @Model.DocumentTitle · đơn #@Model.BookingId
+        </h1>
+
+        <p class="text-muted mb-0">
+            Phải kiểm tra toàn bộ @Model.Paths.Count trang
+            trước khi xác nhận bản ký hợp lệ.
+        </p>
+    </div>
+
+    @if (isStaff)
+    {
+        <a class="btn btn-outline-secondary"
+           asp-controller="Staff"
+           asp-action="Details"
+           asp-route-id="@Model.BookingId">
+            Quay lại xử lý đơn
+        </a>
+    }
+    else
+    {
+        <a class="btn btn-outline-secondary"
+           asp-controller="AdminBookings"
+           asp-action="Details"
+           asp-route-id="@Model.BookingId">
+            Quay lại đơn
+        </a>
+    }
+
+</div>
+
+@if (Model.IsVerified)
+{
+    <div class="alert alert-success">
+
+        <strong>✓ Bản ký đã được xác minh.</strong>
+
+        @if (!string.IsNullOrWhiteSpace(verifiedAtText))
+        {
+            <span>
+                Thời điểm xác minh: @verifiedAtText.
+            </span>
+        }
+
+    </div>
+}
+else
+{
+    <div class="alert alert-warning">
+
+        <strong>
+            File đã tải lên nhưng chưa được công nhận là bản ký hợp lệ.
+        </strong>
+
+        Việc tải một ảnh bất kỳ không tự làm hồ sơ hợp lệ.
+        Nhân viên phải đối chiếu nội dung, thông tin đơn và chữ ký
+        rồi quay lại màn xử lý đơn để xác nhận.
+
+    </div>
+}
+
+<div class="vstack gap-4">
+
+    @for (var index = 0; index < Model.Paths.Count; index++)
+    {
+        var path = Model.Paths[index];
+
+        <section class="card shadow-sm">
+
+            <div class="card-header bg-white
+                d-flex justify-content-between
+                align-items-center gap-2">
+
+                <strong>
+                    Trang @(index + 1) / @Model.Paths.Count
+                </strong>
+
+                <a class="btn btn-sm btn-outline-primary"
+                   href="@path"
+                   target="_blank"
+                   rel="noopener">
+                    Mở ảnh gốc
+                </a>
+
+            </div>
+
+            <div class="card-body text-center bg-light">
+
+                <img src="@path"
+                     alt="@Model.DocumentTitle trang @(index + 1)"
+                     class="img-fluid border rounded bg-white"
+                     style="max-height:1100px;object-fit:contain;" />
+
+            </div>
+
+        </section>
+    }
+
+</div>
+
+@if (isStaff && !Model.IsVerified)
+{
+    <div class="card card-body shadow-sm mt-4">
+
+        <strong>
+            Nếu file vừa kiểm tra không đúng
+        </strong>
+
+        <p class="text-muted mb-3">
+            Có thể thay toàn bộ bản ký trước khi xác minh.
+            Sau khi xác minh, hệ thống sẽ khóa không cho thay file.
+        </p>
+
+        <form asp-controller="AdminRentalDocuments"
+              asp-action="@uploadAction"
+              method="post"
+              enctype="multipart/form-data"
+              class="mb-3"
+              data-confirm="Thay toàn bộ các trang bản ký hiện tại bằng file mới?">
+
+            <input type="hidden"
+                   name="bookingId"
+                   value="@Model.BookingId" />
+
+            <div class="input-group">
+
+                <input class="form-control"
+                       type="file"
+                       name="signedDocuments"
+                       accept="image/jpeg,image/png,image/webp"
+                       multiple
+                       required />
+
+                <button class="btn btn-outline-warning"
+                        type="submit">
+                    Thay bản ký
+                </button>
+
+            </div>
+
+            <div class="form-text">
+                JPG/PNG/WEBP · tối đa 12 trang · 8 MB/trang.
+            </div>
+
+        </form>
+
+        <strong>Bước tiếp theo</strong>
+
+        <p class="mb-2">
+            Nếu tất cả trang đều đúng,
+            quay lại đơn và tick xác nhận bản ký.
+        </p>
+
+        <a class="btn btn-primary align-self-start"
+           asp-controller="Staff"
+           asp-action="Details"
+           asp-route-id="@Model.BookingId">
+            Quay lại để xác minh
+        </a>
+
+    </div>
+}

@@ -1,0 +1,83 @@
+﻿@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using SmartCar.Infrastructure.Identity
+@inject UserManager<ApplicationUser> UserManager
+@{
+    var currentUser = User.Identity?.IsAuthenticated == true ? await UserManager.GetUserAsync(User) : null;
+    var displayName = !string.IsNullOrWhiteSpace(currentUser?.FullName) ? currentUser.FullName : User.Identity?.Name ?? "Nhân viên";
+    var avatarInitial = displayName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
+    var bookingFlowActive = (currentController == "Staff" && (currentAction == "Bookings" || currentAction == "Details")) || currentController is "Handovers" or "Returns" or "AdminRentalDocuments" or "AdminSignedDocuments";
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Nhân viên SmartCar</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/SmartCar.Web.styles.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/admin-layout.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body class="admin-body">
+    <div class="admin-shell">
+        <aside class="admin-sidebar" id="adminSidebar" aria-label="Trình đơn nhân viên">
+            <a class="admin-brand" asp-controller="Staff" asp-action="Index">
+                <span class="admin-brand-mark">S</span>
+                <span class="admin-brand-copy"><strong>SmartCar</strong><small>Khu vực nhân viên</small></span>
+            </a>
+            <div class="admin-sidebar-scroll">
+                <div class="admin-nav-section">
+                    <div class="admin-nav-heading">Công việc</div>
+                    <a class="admin-nav-link @(currentController == "Staff" && currentAction == "Index" ? "active" : string.Empty)" asp-controller="Staff" asp-action="Index"><span class="admin-nav-icon">⌂</span><span>Tổng quan</span></a>
+                    <a class="admin-nav-link @(bookingFlowActive ? "active" : string.Empty)" asp-controller="Staff" asp-action="Bookings"><span class="admin-nav-icon">▤</span><span>Xử lý đơn thuê</span></a>
+                    <a class="admin-nav-link @(currentController == "Staff" && currentAction == "CounterRental" ? "active" : string.Empty)" asp-controller="Staff" asp-action="CounterRental"><span class="admin-nav-icon">＋</span><span>Thuê tại quầy</span></a>
+                    <a class="admin-nav-link @(currentController == "Staff" && currentAction == "Refunds" ? "active" : string.Empty)" asp-controller="Staff" asp-action="Refunds"><span class="admin-nav-icon">₫</span><span>Hoàn tiền đã duyệt</span></a>
+                </div>
+            </div>
+        </aside>
+        <div class="admin-sidebar-backdrop" id="adminSidebarBackdrop"></div>
+        <section class="admin-workspace">
+            <header class="admin-topbar">
+                <div class="admin-topbar-left">
+                    <button class="admin-sidebar-toggle" id="adminSidebarToggle" type="button" aria-label="Mở trình đơn nhân viên">☰</button>
+                    <div class="admin-page-heading"><small>Khu vực nhân viên</small><strong>@(ViewData["Title"] ?? "SmartCar")</strong></div>
+                </div>
+                <div class="admin-topbar-actions">
+                    <div class="dropdown">
+                        <a class="admin-user-toggle dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"><span class="admin-user-avatar">@avatarInitial</span><span class="admin-user-name">@displayName</span></a>
+                        <ul class="dropdown-menu dropdown-menu-end admin-user-menu">
+                            <li class="admin-user-summary"><strong>@displayName</strong><small>@currentUser?.Email</small></li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li><a class="dropdown-item" asp-controller="Profile" asp-action="Index">Hồ sơ tài khoản</a></li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li><form asp-controller="Account" asp-action="Logout" method="post"><button type="submit" class="dropdown-item text-danger">Đăng xuất</button></form></li>
+                        </ul>
+                    </div>
+                </div>
+            </header>
+            <main class="admin-content" role="main">
+                @if (TempData["SuccessMessage"] is string successMessage)
+                {
+                    <div class="alert alert-success alert-dismissible fade show">@successMessage<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+                }
+                @if (TempData["ErrorMessage"] is string errorMessage)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show">@errorMessage<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+                }
+                @RenderBody()
+            </main>
+            <footer class="admin-footer">&copy; 2026 SmartCar — Khu vực nhân viên</footer>
+        </section>
+    </div>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script>(()=>{const sidebar=document.getElementById('adminSidebar'),toggle=document.getElementById('adminSidebarToggle'),backdrop=document.getElementById('adminSidebarBackdrop');const closeSidebar=()=>{sidebar?.classList.remove('open');backdrop?.classList.remove('show')};toggle?.addEventListener('click',()=>{sidebar?.classList.toggle('open');backdrop?.classList.toggle('show')});backdrop?.addEventListener('click',closeSidebar);sidebar?.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>{if(window.innerWidth<992)closeSidebar()}));window.addEventListener('resize',()=>{if(window.innerWidth>=992)closeSidebar()})})();</script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

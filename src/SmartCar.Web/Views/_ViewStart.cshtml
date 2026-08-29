@@ -1,5 +1,6 @@
-@{
+﻿@{
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
+
     var adminControllers = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
         "Dashboard",
@@ -17,14 +18,34 @@
         "Incidents",
         "Brands",
         "Reports",
-        "AuditLogs"
+        "AuditLogs",
+        "AdminRentalDocuments",
+        "AdminSignedDocuments"
+    };
+
+    var staffControllers = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+    {
+        "Staff",
+        "Handovers",
+        "Returns",
+        "AdminRentalDocuments",
+        "AdminSignedDocuments",
+        "ReturnHandoverPreview"
     };
 
     var isAdmin = ViewContext.HttpContext.User.IsInRole(RoleNames.Admin);
+    var isStaff = ViewContext.HttpContext.User.IsInRole(RoleNames.Staff);
+
+    var useStaffLayout = isStaff && staffControllers.Contains(controller);
+
     var useAdminLayout = isAdmin &&
         (adminControllers.Contains(controller) ||
          controller.Equals("Notifications", System.StringComparison.OrdinalIgnoreCase) ||
          controller.Equals("Profile", System.StringComparison.OrdinalIgnoreCase));
 
-    Layout = useAdminLayout ? "_AdminLayout" : "_Layout";
+    Layout = useStaffLayout
+        ? "_StaffLayout"
+        : useAdminLayout
+            ? "_AdminLayout"
+            : "_Layout";
 }

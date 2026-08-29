@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -188,25 +188,10 @@ public sealed class AdminPaymentsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ConfirmRefundBatch(
+    public async Task<IActionResult> ApproveRefundBatch(
         int bookingId,
-        string? transactionCode,
-        string? section,
         CancellationToken cancellationToken)
     {
-        transactionCode = transactionCode?.Trim();
-        if (string.IsNullOrWhiteSpace(transactionCode))
-        {
-            TempData["ErrorMessage"] = "Vui lòng nhập mã giao dịch của lần chuyển hoàn tiền.";
-            return RedirectToAction(nameof(Index), new { section = "refund" });
-        }
-
-        if (transactionCode.Length > 100)
-        {
-            TempData["ErrorMessage"] = "Mã giao dịch hoàn tiền tối đa 100 ký tự.";
-            return RedirectToAction(nameof(Index), new { section = "refund" });
-        }
-
         await RepairLegacyForceMajeureCompensationAsync(cancellationToken);
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -223,77 +208,59 @@ public sealed class AdminPaymentsController : Controller
             return RedirectToAction(nameof(Index), new { section = "refund" });
         }
 
-        var pendingRefunds = booking.Payments
+        var awaitingApproval = booking.Payments
             .Where(item =>
                 item.Type == PaymentType.Refund &&
                 item.Status == PaymentStatus.AwaitingRefund)
             .OrderBy(item => item.PaymentId)
             .ToList();
 
-        if (pendingRefunds.Count == 0)
+        if (awaitingApproval.Count == 0)
         {
-            TempData["ErrorMessage"] = "Đơn này không còn khoản hoàn tiền nào đang chờ xử lý.";
+            TempData["ErrorMessage"] =
+                "Đơn này không còn khoản hoàn tiền nào đang chờ chủ/admin duyệt.";
             return RedirectToAction(nameof(Index), new { section = "refund" });
         }
 
-        if (pendingRefunds.Any(item => item.Amount <= 0))
+        if (awaitingApproval.Any(item => item.Amount <= 0))
         {
-            TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ. Vui lòng kiểm tra lại dữ liệu trước khi xác nhận.";
+            TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ. Vui lòng kiểm tra dữ liệu.";
             return RedirectToAction(nameof(Index), new { section = "refund" });
         }
 
-        var refundedAt = DateTime.UtcNow;
-        var totalRefund = pendingRefunds.Sum(item => item.Amount);
-        var breakdown = pendingRefunds
-            .GroupBy(item => RefundPurposeText(item.Method))
-            .Select(group => $"{group.Key}: {group.Sum(item => item.Amount):N0} đồng")
-            .ToArray();
-
-        foreach (var refund in pendingRefunds)
+        foreach (var refund in awaitingApproval)
         {
-            refund.Status = PaymentStatus.Refunded;
-            refund.PaidAt = refundedAt;
-            refund.TransactionCode = transactionCode;
+            refund.Status = PaymentStatus.RefundApproved;
         }
-
-        var completedAfterRefund = booking.Status == BookingStatus.AwaitingRefund;
-        if (completedAfterRefund)
-        {
-            booking.Status = BookingStatus.Completed;
-        }
-
-        _dbContext.Notifications.Add(new Notification
-        {
-            UserId = booking.CustomerId,
-            Title = "Hoàn tiền thành công",
-            Message =
-                $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {totalRefund:N0} đồng " +
-                $"({string.Join("; ", breakdown)}). Mã giao dịch: {transactionCode}."
-        });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
+        var totalRefund = awaitingApproval.Sum(item => item.Amount);
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         await _auditService.WriteAsync(
             adminId,
-            "RefundBatch",
+            "ApproveRefundBatch",
             nameof(Payment),
             booking.BookingId.ToString(),
-            $"Hoàn tiền theo đơn #{booking.BookingId}: tổng {totalRefund:N0} đồng ({string.Join("; ", breakdown)}). Mã giao dịch: {transactionCode}.",
+            $"Chủ/admin duyệt hoàn tiền cho đơn #{booking.BookingId}: tổng {totalRefund:N0} đồng. Chờ nhân viên thực hiện.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
-        TempData["SuccessMessage"] = completedAfterRefund
-            ? $"Đã hoàn tổng {totalRefund:N0} đ. Chuyến thuê đã hoàn tất."
-            : $"Đã hoàn tổng {totalRefund:N0} đ cho đơn #{booking.BookingId}.";
+        TempData["SuccessMessage"] =
+            $"Đã duyệt hoàn {totalRefund:N0} đ cho đơn #{booking.BookingId}. Nhân viên sẽ thực hiện chuyển tiền.";
 
-        if (completedAfterRefund)
-        {
-            return RedirectToAction("Details", "AdminTripRecords", new { id = booking.BookingId });
-        }
+        return RedirectToAction(nameof(Index), new { section = "refund" });
+    }
 
-        return RedirectToAction(nameof(Index), new { section = section ?? "refund" });
+    // Giữ action cũ để tránh liên kết cũ gây 404; Admin không còn quyền tự đánh dấu đã hoàn.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult ConfirmRefundBatch(int bookingId)
+    {
+        TempData["ErrorMessage"] =
+            "Quy trình mới: chủ/Admin chỉ duyệt khoản hoàn. Nhân viên thực hiện chuyển tiền và nhập mã giao dịch.";
+        return RedirectToAction(nameof(Index), new { section = "refund" });
     }
 
     private async Task RepairLegacyForceMajeureCompensationAsync(
@@ -401,7 +368,7 @@ public sealed class AdminPaymentsController : Controller
                 .Where(payment =>
                     payment.Type == PaymentType.Refund &&
                     payment.Method == PaymentMethods.DepositRefund &&
-                    payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.Refunded)
+                    payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
                 .Sum(payment => payment.Amount);
 
             var validDepositDeductions = currentBooking.Payments

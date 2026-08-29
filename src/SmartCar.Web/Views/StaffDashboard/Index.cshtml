@@ -1,0 +1,60 @@
+﻿@{
+    Layout = "_StaffLayout";
+    ViewData["Title"] = "Tổng quan công việc";
+
+    var staffName = ViewBag.StaffName as string;
+
+    if (string.IsNullOrWhiteSpace(staffName))
+    {
+        staffName = User.Identity?.Name ?? "Nhân viên";
+    }
+}
+
+<div class="mb-4">
+    <p class="text-secondary mb-1">KHU VỰC NHÂN VIÊN</p>
+    <h1 class="h3 mb-2">Xin chào, @staffName</h1>
+    <p class="text-secondary mb-0">
+        Tiếp nhận khách hàng và xử lý công việc thuê xe tại SmartCar.
+    </p>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <section class="staff-panel h-100">
+            <h2 class="h5">Tiếp nhận khách hàng</h2>
+            <p class="text-secondary mb-0">
+                Hỗ trợ hồ sơ khách hàng và tiếp nhận nhu cầu thuê xe
+                trực tiếp tại showroom.
+            </p>
+        </section>
+    </div>
+
+    <div class="col-md-6">
+        <section class="staff-panel h-100">
+            <h2 class="h5">Xử lý đơn thuê</h2>
+            <p class="text-secondary mb-0">
+                Theo dõi đơn thuê, lịch giao nhận và yêu cầu gia hạn.
+            </p>
+        </section>
+    </div>
+
+    <div class="col-md-6">
+        <section class="staff-panel h-100">
+            <h2 class="h5">Giao và nhận trả xe</h2>
+            <p class="text-secondary mb-0">
+                Đối chiếu khách hàng, hồ sơ và tình trạng xe
+                khi bàn giao hoặc nhận trả.
+            </p>
+        </section>
+    </div>
+
+    <div class="col-md-6">
+        <section class="staff-panel h-100">
+            <h2 class="h5">Thanh toán và hoàn tiền</h2>
+            <p class="text-secondary mb-0">
+                Ghi nhận thanh toán và thực hiện các khoản hoàn
+                đã được chủ cửa hàng phê duyệt.
+            </p>
+        </section>
+    </div>
+</div>

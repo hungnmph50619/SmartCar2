@@ -1,4 +1,4 @@
-namespace SmartCar.Domain.Entities;
+﻿namespace SmartCar.Domain.Entities;
 
 public class VehicleReturn
 {
@@ -15,6 +15,13 @@ public class VehicleReturn
     public decimal LateFee { get; set; }
     public string? ImagePaths { get; set; }
     public string? Notes { get; set; }
+
+    public bool CustomerIdentityVerified { get; set; }
+    public string? IdentityVerifiedByStaffId { get; set; }
+    public DateTime? IdentityVerifiedAt { get; set; }
+    public bool SignedDocumentVerified { get; set; }
+    public string? SignedDocumentVerifiedByStaffId { get; set; }
+    public DateTime? SignedDocumentVerifiedAt { get; set; }
 
     public Booking Booking { get; set; } = null!;
     public ICollection<AdditionalCharge> AdditionalCharges { get; set; } = new List<AdditionalCharge>();

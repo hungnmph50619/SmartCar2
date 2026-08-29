@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Reports;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
@@ -166,7 +166,8 @@ internal sealed class ReportService : IReportService
             .AsNoTracking()
             .Where(item =>
                 item.Type == PaymentType.Refund &&
-                item.Status == PaymentStatus.AwaitingRefund)
+                (item.Status == PaymentStatus.AwaitingRefund ||
+                 item.Status == PaymentStatus.RefundApproved))
             .SumAsync(item => (decimal?)item.Amount, cancellationToken)
             ?? 0m;
 
@@ -188,6 +189,7 @@ internal sealed class ReportService : IReportService
             .Where(item =>
                 item.Type == PaymentType.Refund &&
                 (item.Status == PaymentStatus.AwaitingRefund ||
+                 item.Status == PaymentStatus.RefundApproved ||
                  item.Status == PaymentStatus.Refunded))
             .Select(item => new
             {
