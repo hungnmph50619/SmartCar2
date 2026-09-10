@@ -169,6 +169,21 @@ internal sealed class BookingReservationPolicy
         int? excludedBookingId = null,
         CancellationToken cancellationToken = default)
     {
+        var vehicleStatus = await _dbContext.Vehicles
+            .AsNoTracking()
+            .Where(vehicle => vehicle.VehicleId == vehicleId)
+            .Select(vehicle => (VehicleStatus?)vehicle.Status)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // Khoảng 30 phút là buffer dự kiến để không xếp hai lượt thuê quá sát nhau.
+        // Khi xe thực tế đang ở Inspection thì vẫn khóa cho tới khi nhân viên xử lý xong.
+        // Nếu nhân viên đã hoàn tất kiểm tra và chuyển xe sang Available thì không bắt
+        // chờ cho đủ 30 phút theo đồng hồ nữa: trạng thái vận hành mới là nguồn sự thật.
+        if (vehicleStatus != VehicleStatus.Inspection)
+        {
+            return null;
+        }
+
         var latestReturnedAt = await _dbContext.VehicleReturns
             .AsNoTracking()
             .Where(vehicleReturn =>
