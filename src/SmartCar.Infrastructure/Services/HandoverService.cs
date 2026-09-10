@@ -68,7 +68,15 @@ internal sealed class HandoverService : IHandoverService
         var hasOpenSwapPayment = booking.Payments.Any(payment =>
             payment.Type == PaymentType.VehicleSwapAdjustment &&
             payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
+        var paidRentalDays = Math.Max(
+    1,
+    (int)Math.Ceiling(
+        (booking.ReturnDate - booking.PickupDate)
+        .TotalHours / 24d));
 
+        var effectiveIncludedKilometers = Math.Max(
+            booking.Handover.IncludedKilometers,
+            paidRentalDays * RentalPolicy.IncludedKilometersPerDay);
         if (hasOpenSwapPayment)
         {
             return OperationResult.Failure(
@@ -85,13 +93,16 @@ internal sealed class HandoverService : IHandoverService
         {
             return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
-
+        if (request.HandoverAt > DateTime.Now.AddMinutes(5))
+        {
+            return OperationResult.Failure(
+                "Thời gian giao xe không được ở tương lai.");
+        }
         if (request.HandoverAt < booking.PickupDate)
         {
             return OperationResult.Failure(
                 "Thời gian giao xe không được trước thời gian nhận xe đã đặt.");
         }
-
         if (request.HandoverAt >= booking.ReturnDate)
         {
             return OperationResult.Failure(

@@ -63,6 +63,11 @@ internal sealed class ReturnService : IReturnService
         {
             return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
         }
+        if (request.ReturnedAt > DateTime.Now.AddMinutes(5))
+        {
+            return OperationResult.Failure(
+                "Thời gian trả xe không được ở tương lai.");
+        }
 
         if (string.IsNullOrWhiteSpace(request.ImagePaths))
         {

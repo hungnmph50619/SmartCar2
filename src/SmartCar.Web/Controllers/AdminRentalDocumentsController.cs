@@ -124,13 +124,12 @@ public sealed class AdminRentalDocumentsController : Controller
     }
 
     [HttpPost]
-    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UploadHandoverSigned(
-            int bookingId,
-        List<IFormFile>? signedDocuments,
-        IFormFile? signedDocument,
-        CancellationToken cancellationToken)
+    int bookingId,
+    List<IFormFile>? signedDocuments,
+    IFormFile? signedDocument,
+    CancellationToken cancellationToken)
     {
         var booking = await _dbContext.Bookings
             .Include(item => item.Handover)

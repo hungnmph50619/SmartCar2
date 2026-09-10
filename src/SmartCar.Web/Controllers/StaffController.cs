@@ -14,7 +14,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Staff + "," + RoleNames.Admin)]
 public sealed class StaffController : Controller
 {
     private const string HandoverSignedMarker = "signed-handover-";

@@ -42,7 +42,6 @@ public sealed class HandoversController : Controller
     }
 
     [HttpGet]
-    [Authorize(Roles = RoleNames.Staff)]
     public async Task<IActionResult> Create(
      int bookingId,
      CancellationToken cancellationToken)
@@ -93,7 +92,6 @@ public sealed class HandoversController : Controller
     }
 
     [HttpPost]
-    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
     HandoverViewModel model,
