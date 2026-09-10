@@ -13,42 +13,42 @@
         <div class="position-relative" style="z-index:1">
             <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> Nghiệp vụ tại quầy</span>
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                <div style="max-width:760px">
+                <div style="max-width:790px">
                     <h1 class="display-6 fw-bold mb-2">Tạo đơn thuê xe tại quầy</h1>
                     <p class="text-muted mb-0">
-                        Chọn khách đã có KYC hợp lệ, chọn xe và khung giờ. Hệ thống ghi nhận tiền thuê + cọc bằng
-                        <strong>tiền mặt tại quầy</strong> nhưng vẫn giữ nguyên các bước kiểm soát giao xe.
+                        Chọn khách có CCCD/GPLX hợp lệ, chọn xe và khung giờ. Tiền thuê + cọc được ghi nhận
+                        <strong>tiền mặt tại quầy</strong>; giao xe vẫn phải qua đối chiếu người nhận, ảnh xe và bản ký.
                     </p>
                 </div>
-                <a class="btn btn-primary staff-action-button px-4" asp-controller="StaffCustomers" asp-action="Create">＋ Tạo khách mới</a>
+                <a class="btn btn-primary staff-action-button px-4" asp-controller="StaffCustomers" asp-action="Create">＋ Tạo & xác minh khách mới</a>
             </div>
         </div>
     </section>
 
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 staff-stagger">
         <div class="col-sm-6 col-xl-3">
             <div class="staff-step">
                 <span class="staff-step-number">1</span>
                 <div class="fw-bold">Khách + KYC</div>
-                <div class="small text-muted">Tài khoản Customer phải hoạt động; CCCD và GPLX phải được xác minh, còn hiệu lực.</div>
+                <div class="small text-muted">Khách online phải có KYC đã duyệt; khách vãng lai có thể được Staff/Admin đối chiếu bản gốc và xác minh tại quầy.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="staff-step" style="animation-delay:.05s">
+            <div class="staff-step">
                 <span class="staff-step-number">2</span>
                 <div class="fw-bold">Kiểm tra lịch xe</div>
-                <div class="small text-muted">Không cho xếp chuyến sát nhau; cần tối thiểu @RentalPolicy.VehicleTurnaroundMinutes phút để nhận và kiểm tra xe.</div>
+                <div class="small text-muted">Không xếp chuyến sát nhau; cần tối thiểu @RentalPolicy.VehicleTurnaroundMinutes phút để nhận và chuẩn bị xe.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="staff-step" style="animation-delay:.10s">
+            <div class="staff-step">
                 <span class="staff-step-number">3</span>
                 <div class="fw-bold">Thu tiền mặt</div>
-                <div class="small text-muted">Tiền thuê và tiền cọc được ghi nhận Paid tại quầy, có mã giao dịch nội bộ.</div>
+                <div class="small text-muted">Tiền thuê và cọc được ghi nhận Paid tại quầy kèm mã giao dịch nội bộ.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="staff-step" style="animation-delay:.15s">
+            <div class="staff-step">
                 <span class="staff-step-number">4</span>
                 <div class="fw-bold">Bàn giao thực tế</div>
                 <div class="small text-muted">Đối chiếu CCCD gốc, km/nhiên liệu, ảnh xe và bản hợp đồng đã ký trước khi bắt đầu chuyến.</div>
@@ -61,7 +61,9 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
                 <div>
                     <h2 class="h4 mb-1">Thông tin đơn thuê</h2>
-                    <div class="text-muted small">Tạo tài khoản mới không đồng nghĩa với duyệt KYC. Nếu khách chưa đủ giấy tờ, hệ thống sẽ chặn tạo đơn.</div>
+                    <div class="text-muted small">
+                        Tài khoản vừa tạo tại quầy sẽ được tự chọn nếu bộ CCCD/GPLX đã được đối chiếu và xác minh thành công.
+                    </div>
                 </div>
                 <span class="badge rounded-pill text-bg-success px-3 py-2">Thanh toán: Tiền mặt</span>
             </div>
@@ -71,14 +73,16 @@
             <div class="row g-3">
                 <div class="col-lg-7">
                     <label asp-for="CustomerId" class="form-label fw-semibold">Khách hàng *</label>
-                    <select asp-for="CustomerId" class="form-select">
+                    <select asp-for="CustomerId" class="form-select" id="counter-customer">
                         <option value="">-- Chọn khách hàng --</option>
                         @foreach (var item in Model.Customers)
                         {
                             <option value="@item.Value">@item.Text</option>
                         }
                     </select>
-                    <div class="form-text">Không thấy khách? <a asp-controller="StaffCustomers" asp-action="Create">Tạo tài khoản Customer tại quầy</a>.</div>
+                    <div class="form-text">
+                        Không thấy khách? <a asp-controller="StaffCustomers" asp-action="Create">Tạo tài khoản + xác minh giấy tờ tại quầy</a>.
+                    </div>
                     <span asp-validation-for="CustomerId" class="text-danger small"></span>
                 </div>
 
@@ -129,8 +133,25 @@
             </div>
 
             <div class="staff-note p-3 mt-3 small">
-                <strong>Phân biệt thời gian:</strong> PickupDate/ReturnDate là lịch dự kiến. Khi vận hành, hệ thống dùng
-                <strong>HandoverAt</strong> và <strong>ReturnedAt</strong> làm thời gian giao/trả thực tế để xác định trả muộn và khả năng xoay vòng xe.
+                <strong>Hai loại thời gian không được trộn:</strong>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-6">
+                        <span class="badge text-bg-light border me-1">Kế hoạch</span>
+                        <strong>PickupDate / ReturnDate</strong> dùng để giữ lịch và chống đặt trùng có buffer.
+                    </div>
+                    <div class="col-md-6">
+                        <span class="badge text-bg-light border me-1">Thực tế</span>
+                        <strong>HandoverAt / ReturnedAt</strong> dùng để xác định khách thực sự giữ xe đến lúc nào, trả muộn và thời điểm xe được phép quay lại vận hành.
+                    </div>
+                </div>
+            </div>
+
+            <div class="staff-warning-panel mt-3">
+                <div class="staff-warning-icon">30</div>
+                <div class="small">
+                    <strong>Ví dụ:</strong> A dự kiến trả 09:00 thì B không được đặt nhận lúc 09:00; sớm nhất theo lịch là 09:@RentalPolicy.VehicleTurnaroundMinutes.ToString("00").
+                    Nếu A thực tế trả lúc 09:20 thì xe tiếp tục bị khóa vận hành đến 09:@((20 + RentalPolicy.VehicleTurnaroundMinutes).ToString("00")) trước khi có thể giao tiếp.
+                </div>
             </div>
 
             <div class="mt-4 d-flex flex-wrap gap-2">
@@ -145,9 +166,20 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
+            const customer = document.getElementById('counter-customer');
             const pickup = document.getElementById('counter-pickup');
             const returned = document.getElementById('counter-return');
             const output = document.getElementById('counter-duration');
+
+            const customerFromQuery = new URLSearchParams(window.location.search).get('customerId');
+            if (customerFromQuery && customer && !customer.value) {
+                const exists = Array.from(customer.options).some(option => option.value === customerFromQuery);
+                if (exists) {
+                    customer.value = customerFromQuery;
+                    customer.classList.add('staff-attention-flash');
+                    setTimeout(() => customer.classList.remove('staff-attention-flash'), 1500);
+                }
+            }
 
             const render = () => {
                 if (!pickup?.value || !returned?.value || !output) return;
