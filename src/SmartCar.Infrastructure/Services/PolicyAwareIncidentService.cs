@@ -77,6 +77,12 @@ internal sealed class PolicyAwareIncidentService : IIncidentService
                 "Phải lưu đường dẫn ảnh/thông báo chính thức làm bằng chứng trước khi tạo khoản phải thu.");
         }
 
+        if (request.OccurredAt > DateTime.Now.AddMinutes(5))
+        {
+            return OperationResult.Failure(
+                "Thời điểm vi phạm không được ở tương lai.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
@@ -95,8 +101,21 @@ internal sealed class PolicyAwareIncidentService : IIncidentService
             return OperationResult.Failure("Đơn thuê không thuộc xe đã chọn.");
         }
 
-        var actualStart = booking.Handover?.HandoverAt ?? booking.PickupDate;
-        var actualEnd = booking.VehicleReturn?.ReturnedAt ?? booking.ReturnDate;
+        if (booking.Handover is null || booking.VehicleReturn is null)
+        {
+            return OperationResult.Failure(
+                "Chỉ ghi nhận phạt nguội sau khi chuyến đã có thời gian giao và trả xe thực tế. " +
+                "Không dùng PickupDate/ReturnDate dự kiến để quy trách nhiệm vi phạm.");
+        }
+
+        var actualStart = booking.Handover.HandoverAt;
+        var actualEnd = booking.VehicleReturn.ReturnedAt;
+
+        if (actualEnd < actualStart)
+        {
+            return OperationResult.Failure(
+                "Dữ liệu giao/trả thực tế của chuyến không hợp lệ. Vui lòng kiểm tra biên bản trước khi ghi nhận phạt.");
+        }
 
         if (request.OccurredAt < actualStart || request.OccurredAt > actualEnd)
         {
