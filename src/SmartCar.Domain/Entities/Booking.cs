@@ -1,4 +1,4 @@
-﻿using SmartCar.Domain.Enums;
+using SmartCar.Domain.Enums;
 
 namespace SmartCar.Domain.Entities;
 
@@ -16,11 +16,16 @@ public class Booking
     public decimal AdditionalAmount { get; set; }
     public decimal TotalAmount { get; set; }
     public VehiclePickupMethod PickupMethod { get; set; }
-    = VehiclePickupMethod.StorePickup;
+        = VehiclePickupMethod.StorePickup;
     public string? DeliveryAddress { get; set; }
     public decimal? DeliveryLatitude { get; set; }
     public decimal? DeliveryLongitude { get; set; }
     public BookingStatus Status { get; set; } = BookingStatus.PendingConfirmation;
+
+    // Thời điểm hệ thống ngừng giữ lịch xe cho đơn đang chờ xác nhận/chờ thanh toán.
+    // Null khi đơn đã qua giai đoạn giữ chỗ hoặc đang chờ đối soát chuyển khoản.
+    public DateTime? ReservationExpiresAt { get; set; }
+
     public string? CancelReason { get; set; }
     public string? CancelledBy { get; set; }
     public DateTime? CancelledAt { get; set; }
