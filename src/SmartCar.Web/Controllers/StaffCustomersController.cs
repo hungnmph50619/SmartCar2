@@ -20,8 +20,6 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Staff + "," + RoleNames.Admin)]
 public sealed class StaffCustomersController : Controller
 {
-    private const long MaximumKycImageBytes = 5 * 1024 * 1024;
-
     private readonly IAccountService _accountService;
     private readonly ApplicationDbContext _dbContext;
     private readonly IDocumentService _documentService;
@@ -64,6 +62,7 @@ public sealed class StaffCustomersController : Controller
             return View(new StaffCustomerIndexViewModel { Query = query });
         }
 
+        // Dùng đúng cách AdminCustomers đang tra cứu: tên / email / số điện thoại.
         var customerQuery = _dbContext.Users
             .AsNoTracking()
             .Where(user => _dbContext.UserRoles.Any(userRole =>
@@ -110,9 +109,22 @@ public sealed class StaffCustomersController : Controller
         StaffCreateCustomerViewModel model,
         CancellationToken cancellationToken)
     {
-        // Format CCCD/GPLX lấy trực tiếp từ đúng ViewModel mà Customer KYC đang dùng.
-        // Ở đây chỉ thêm các validate liên trường giống KycPackageController.
-        await ValidateKycPackageAsync(model, cancellationToken);
+        // Đây là CHÍNH helper mà KycPackageController của Customer đang dùng.
+        // Không còn một bộ validate file/tuổi/hạn giấy tờ riêng cho Staff.
+        var kycPackage = new KycPackageSubmitViewModel
+        {
+            CitizenIdVerification = model.CitizenIdVerification,
+            DrivingLicenseVerification = model.DrivingLicenseVerification,
+            ConfirmSamePerson = model.ConfirmSamePerson
+        };
+
+        foreach (var validationError in await KycPackageValidator.ValidateAsync(
+                     kycPackage,
+                     requiredValidThrough: null,
+                     cancellationToken))
+        {
+            ModelState.AddModelError(validationError.Key, validationError.Message);
+        }
 
         var accountName = NormalizePersonName(model.FullName);
         var documentName = NormalizePersonName(model.CitizenIdVerification.FullNameOnDocument);
@@ -259,8 +271,8 @@ public sealed class StaffCustomersController : Controller
                 licenseBack);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
-            // Metadata giống KycPackageController của Customer:
-            // CCCD giữ họ tên + ngày sinh + giới tính; GPLX giữ cùng họ tên + hạng bằng.
+            // Metadata cũng giữ đúng cách KycPackageController ghi dữ liệu:
+            // CCCD = họ tên + ngày sinh + giới tính; GPLX = cùng họ tên + hạng bằng.
             foreach (var document in new[] { citizenFront, citizenBack })
             {
                 await UpdateKycMetadataAsync(
@@ -287,8 +299,8 @@ public sealed class StaffCustomersController : Controller
                     cancellationToken: cancellationToken);
             }
 
-            // Không tự set Status=Verified nữa.
-            // Đi qua đúng service xác minh mà Admin KYC đang sử dụng.
+            // Tạo hồ sơ ở Pending trước, sau đó đi qua đúng IDocumentService.VerifyAsync
+            // mà AdminKycController đang dùng. Staff không còn tự set Verified bằng tay.
             var verifierId = User.FindFirstValue(ClaimTypes.NameIdentifier)
                 ?? throw new InvalidOperationException("Không xác định được người đang xác minh hồ sơ.");
 
@@ -313,8 +325,7 @@ public sealed class StaffCustomersController : Controller
                 }
             }
 
-            // VerifyAsync sinh thông báo theo từng mặt giấy tờ. Với nghiệp vụ tại quầy,
-            // gộp lại thành một thông báo để khách không nhận 4 thông báo giống nhau.
+            // VerifyAsync sinh thông báo theo từng mặt. Gộp về một thông báo cho cả bộ KYC.
             var generatedNotifications = await _dbContext.Notifications
                 .Where(notification =>
                     notification.UserId == customer.Id &&
@@ -339,8 +350,7 @@ public sealed class StaffCustomersController : Controller
             await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
-            // Audit tổng hợp là phụ trợ; nếu audit riêng này lỗi sau commit thì không được xóa
-            // ngược tài khoản/hồ sơ đã tạo thành công.
+            // Audit tổng hợp là phụ trợ; lỗi audit sau commit không được xóa ngược khách đã tạo.
             try
             {
                 await _auditService.WriteAsync(
@@ -349,7 +359,7 @@ public sealed class StaffCustomersController : Controller
                     "CustomerKycPackage",
                     customer.Id,
                     $"Tạo Customer tại quầy cho {customer.FullName} ({normalizedEmail}); " +
-                    "hồ sơ dùng cùng cấu trúc KYC Customer và được xác minh qua IDocumentService sau khi đối chiếu bản gốc.",
+                    "hồ sơ dùng cùng KYC validator của Customer và được xác minh qua IDocumentService sau khi đối chiếu bản gốc.",
                     ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                     cancellationToken: cancellationToken);
             }
@@ -381,95 +391,6 @@ public sealed class StaffCustomersController : Controller
                 string.Empty,
                 "Không thể hoàn tất hồ sơ khách tại quầy. Tài khoản tạm tạo đã được thu hồi; vui lòng kiểm tra dữ liệu và thử lại.");
             return View(model);
-        }
-    }
-
-    private async Task ValidateKycPackageAsync(
-        StaffCreateCustomerViewModel model,
-        CancellationToken cancellationToken)
-    {
-        var citizen = model.CitizenIdVerification;
-        var license = model.DrivingLicenseVerification;
-
-        await ValidateImageAsync(
-            "CitizenIdVerification.FrontImage",
-            citizen.FrontImage,
-            cancellationToken);
-        await ValidateImageAsync(
-            "CitizenIdVerification.BackImage",
-            citizen.BackImage,
-            cancellationToken);
-        await ValidateImageAsync(
-            "DrivingLicenseVerification.FrontImage",
-            license.FrontImage,
-            cancellationToken);
-        await ValidateImageAsync(
-            "DrivingLicenseVerification.BackImage",
-            license.BackImage,
-            cancellationToken);
-
-        if (await ImageFileValidator.HaveSameContentAsync(
-                citizen.FrontImage,
-                citizen.BackImage,
-                cancellationToken))
-        {
-            ModelState.AddModelError(
-                "CitizenIdVerification.BackImage",
-                "Ảnh CCCD mặt trước và mặt sau phải là hai ảnh khác nhau.");
-        }
-
-        if (await ImageFileValidator.HaveSameContentAsync(
-                license.FrontImage,
-                license.BackImage,
-                cancellationToken))
-        {
-            ModelState.AddModelError(
-                "DrivingLicenseVerification.BackImage",
-                "Ảnh GPLX mặt trước và mặt sau phải là hai ảnh khác nhau.");
-        }
-
-        if (citizen.DateOfBirth.HasValue &&
-            citizen.DateOfBirth.Value.Date > DateTime.Today.AddYears(-18))
-        {
-            ModelState.AddModelError(
-                "CitizenIdVerification.DateOfBirth",
-                "Khách thuê xe phải đủ 18 tuổi.");
-        }
-
-        ValidateExpiryDate(
-            "CCCD",
-            "CitizenIdVerification.ExpiryDate",
-            citizen.ExpiryDate);
-        ValidateExpiryDate(
-            "GPLX",
-            "DrivingLicenseVerification.ExpiryDate",
-            license.ExpiryDate);
-    }
-
-    private async Task ValidateImageAsync(
-        string key,
-        Microsoft.AspNetCore.Http.IFormFile? file,
-        CancellationToken cancellationToken)
-    {
-        var error = await ImageFileValidator.ValidateAsync(
-            file,
-            MaximumKycImageBytes,
-            cancellationToken);
-
-        if (error is not null)
-        {
-            ModelState.AddModelError(key, error);
-        }
-    }
-
-    private void ValidateExpiryDate(
-        string documentName,
-        string key,
-        DateTime? expiryDate)
-    {
-        if (expiryDate.HasValue && expiryDate.Value.Date < DateTime.Today)
-        {
-            ModelState.AddModelError(key, $"{documentName} đã hết hạn.");
         }
     }
 
