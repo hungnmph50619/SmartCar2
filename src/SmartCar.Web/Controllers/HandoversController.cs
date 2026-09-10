@@ -14,7 +14,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class HandoversController : Controller
 {
     private const int MinimumImages = 7;
