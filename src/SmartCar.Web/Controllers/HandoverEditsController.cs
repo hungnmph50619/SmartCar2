@@ -16,6 +16,7 @@ namespace SmartCar.Web.Controllers;
 public sealed class HandoverEditsController : Controller
 {
     private const string SignedMarker = "signed-handover-";
+    private const int MinimumImages = 7;
     private const int MaximumImages = 25;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
 
@@ -128,7 +129,15 @@ public sealed class HandoverEditsController : Controller
             .Where(file => file.Length > 0)
             .ToList();
 
-        if (vehiclePhotos.Count - deleteSet.Count + newImages.Count > MaximumImages)
+        var finalImageCount = vehiclePhotos.Count - deleteSet.Count + newImages.Count;
+        if (finalImageCount < MinimumImages)
+        {
+            ModelState.AddModelError(
+                nameof(model.NewImages),
+                $"Biên bản giao xe phải giữ tối thiểu {MinimumImages} ảnh đối chiếu.");
+        }
+
+        if (finalImageCount > MaximumImages)
         {
             ModelState.AddModelError(
                 nameof(model.NewImages),
@@ -146,6 +155,11 @@ public sealed class HandoverEditsController : Controller
             {
                 ModelState.AddModelError(nameof(model.NewImages), $"{image.FileName}: {error}");
             }
+        }
+
+        if (model.HandoverAt > DateTime.Now.AddMinutes(5))
+        {
+            ModelState.AddModelError(nameof(model.HandoverAt), "Thời gian giao xe không được ở tương lai.");
         }
 
         if (model.HandoverAt < booking.PickupDate || model.HandoverAt >= booking.ReturnDate)
