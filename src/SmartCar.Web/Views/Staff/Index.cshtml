@@ -1,37 +1,106 @@
-﻿@model SmartCar.Web.ViewModels.StaffDashboardViewModel
+@model SmartCar.Web.ViewModels.StaffDashboardViewModel
 @using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Tổng quan nhân viên";
 }
-<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
-    <div><h1 class="h3 mb-1">Công việc nhân viên</h1><p class="text-muted mb-0">Giao xe, nhận xe, thuê tại quầy và hoàn tiền đã được duyệt.</p></div>
-    <div class="d-flex gap-2"><a class="btn btn-outline-primary" asp-action="Bookings">Tất cả đơn cần xử lý</a><a class="btn btn-primary" asp-action="CounterRental">+ Thuê tại quầy</a></div>
-</div>
-<div class="row g-3 mb-4">
-    <div class="col-md-6 col-xl"><div class="card card-body shadow-sm h-100"><div class="text-muted small">Chờ chuẩn bị xe</div><div class="display-6 fw-semibold">@Model.PaidWaitingPreparation</div></div></div>
-    <div class="col-md-6 col-xl"><div class="card card-body shadow-sm h-100"><div class="text-muted small">Nhận xe hôm nay</div><div class="display-6 fw-semibold">@Model.TodayPickups</div></div></div>
-    <div class="col-md-6 col-xl"><div class="card card-body shadow-sm h-100"><div class="text-muted small">Trả xe hôm nay</div><div class="display-6 fw-semibold">@Model.TodayReturns</div></div></div>
-    <div class="col-md-6 col-xl"><div class="card card-body shadow-sm h-100"><div class="text-muted small">Chờ kiểm tra trả xe</div><div class="display-6 fw-semibold">@Model.PendingInspections</div></div></div>
-    <div class="col-md-6 col-xl"><a class="card card-body shadow-sm h-100 text-decoration-none text-reset" asp-action="Refunds"><div class="text-muted small">Hoàn tiền đã duyệt</div><div class="display-6 fw-semibold">@Model.ApprovedRefundBookings</div></a></div>
-</div>
-<div class="card shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>Việc cần xử lý gần nhất</strong><a asp-action="Bookings" class="small">Xem tất cả</a></div>
-    @if (Model.WorkItems.Count == 0)
-    {
-        <div class="card-body text-muted">Hiện không có đơn nghiệp vụ đang chờ nhân viên.</div>
-    }
-    else
-    {
-        <div class="table-responsive">
-            <table class="table align-middle mb-0">
-                <thead><tr><th>Đơn</th><th>Khách</th><th>Xe</th><th>Nhận / trả</th><th>Trạng thái</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var item in Model.WorkItems)
-                    {
-                        <tr><td><strong>#@item.BookingId</strong></td><td>@item.CustomerName<div class="small text-muted">@item.CustomerPhone</div></td><td>@item.VehicleName<div class="small text-muted">@item.LicensePlate</div></td><td><div>@item.PickupDate.ToString("dd/MM HH:mm")</div><div class="small text-muted">→ @item.ReturnDate.ToString("dd/MM HH:mm")</div></td><td><span class="badge bg-primary">@item.Status.ToVietnamese()</span></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@item.BookingId">Xử lý</a></td></tr>
-                    }
-                </tbody>
-            </table>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/staff-operations.css" asp-append-version="true" />
+}
+
+<div class="staff-op-page">
+    <section class="staff-hero p-4 p-lg-5 mb-4">
+        <div class="position-relative d-flex justify-content-between align-items-start gap-4 flex-wrap" style="z-index:1">
+            <div style="max-width:760px">
+                <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> Staff operations</span>
+                <h1 class="display-6 fw-bold mb-2">Công việc nhân viên</h1>
+                <p class="text-muted mb-0">Theo dõi xe chờ chuẩn bị, giao xe, nhận xe, thuê tại quầy và các khoản hoàn đã được Admin duyệt.</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-outline-primary px-3" asp-controller="StaffCustomers" asp-action="Create">＋ Tạo khách tại quầy</a>
+                <a class="btn btn-primary staff-action-button px-3" asp-action="CounterRental">＋ Thuê tại quầy</a>
+            </div>
         </div>
-    }
+    </section>
+
+    <div class="row g-3 mb-4 staff-stagger">
+        <div class="col-md-6 col-xl">
+            <div class="staff-step">
+                <div class="text-muted small">Chờ chuẩn bị xe</div>
+                <div class="display-6 fw-semibold mt-1">@Model.PaidWaitingPreparation</div>
+                <div class="small text-muted">Đã thanh toán, cần kiểm tra trước giao.</div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl">
+            <div class="staff-step">
+                <div class="text-muted small">Nhận xe hôm nay</div>
+                <div class="display-6 fw-semibold mt-1">@Model.TodayPickups</div>
+                <div class="small text-muted">Lịch dự kiến cần bàn giao hôm nay.</div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl">
+            <div class="staff-step">
+                <div class="text-muted small">Trả xe hôm nay</div>
+                <div class="display-6 fw-semibold mt-1">@Model.TodayReturns</div>
+                <div class="small text-muted">Lịch dự kiến cần nhận xe hôm nay.</div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl">
+            <div class="staff-step">
+                <div class="text-muted small">Chờ kiểm tra trả xe</div>
+                <div class="display-6 fw-semibold mt-1">@Model.PendingInspections</div>
+                <div class="small text-muted">Chờ bản ký, phụ phí hoặc quyết toán.</div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl">
+            <a class="staff-step d-block text-decoration-none text-reset" asp-action="Refunds">
+                <div class="text-muted small">Hoàn tiền đã duyệt</div>
+                <div class="display-6 fw-semibold mt-1">@Model.ApprovedRefundBookings</div>
+                <div class="small text-muted">Admin đã duyệt, Staff thực hiện chuyển.</div>
+            </a>
+        </div>
+    </div>
+
+    <div class="card staff-form-card overflow-hidden">
+        <div class="card-header bg-white border-0 px-4 pt-4 pb-3 d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div>
+                <strong class="d-block">Việc cần xử lý gần nhất</strong>
+                <span class="small text-muted">Ưu tiên các đơn đang ở bước vận hành.</span>
+            </div>
+            <a asp-action="Bookings" class="btn btn-sm btn-outline-primary">Xem tất cả</a>
+        </div>
+
+        @if (Model.WorkItems.Count == 0)
+        {
+            <div class="card-body px-4 pb-4">
+                <div class="staff-summary p-4 text-center">
+                    <div class="h5 mb-1">Hiện không có đơn đang chờ xử lý</div>
+                    <div class="text-muted small">Các đơn mới, lượt giao/trả và refund được duyệt sẽ xuất hiện tại đây.</div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr><th class="ps-4">Đơn</th><th>Khách</th><th>Xe</th><th>Nhận / trả dự kiến</th><th>Trạng thái</th><th class="pe-4"></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.WorkItems)
+                        {
+                            <tr>
+                                <td class="ps-4"><strong>#@item.BookingId</strong></td>
+                                <td>@item.CustomerName<div class="small text-muted">@item.CustomerPhone</div></td>
+                                <td>@item.VehicleName<div class="small text-muted">@item.LicensePlate</div></td>
+                                <td><div>@item.PickupDate.ToString("dd/MM HH:mm")</div><div class="small text-muted">→ @item.ReturnDate.ToString("dd/MM HH:mm")</div></td>
+                                <td><span class="badge bg-primary">@item.Status.ToVietnamese()</span></td>
+                                <td class="text-end pe-4"><a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@item.BookingId">Xử lý →</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 </div>
