@@ -42,9 +42,10 @@ public sealed class HandoversController : Controller
     }
 
     [HttpGet]
+    [Authorize(Roles = RoleNames.Staff)]
     public async Task<IActionResult> Create(
-        int bookingId,
-        CancellationToken cancellationToken)
+     int bookingId,
+     CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(
             bookingId,
@@ -92,10 +93,11 @@ public sealed class HandoversController : Controller
     }
 
     [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
-        HandoverViewModel model,
-        CancellationToken cancellationToken)
+    HandoverViewModel model,
+    CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(
             model.BookingId,

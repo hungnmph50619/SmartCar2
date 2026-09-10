@@ -124,9 +124,10 @@ public sealed class AdminRentalDocumentsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UploadHandoverSigned(
-        int bookingId,
+            int bookingId,
         List<IFormFile>? signedDocuments,
         IFormFile? signedDocument,
         CancellationToken cancellationToken)

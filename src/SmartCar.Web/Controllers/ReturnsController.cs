@@ -44,6 +44,7 @@ public sealed class ReturnsController : Controller
     }
 
     [HttpGet]
+    [Authorize(Roles = RoleNames.Staff)]
     public async Task<IActionResult> Create(
         int bookingId,
         CancellationToken cancellationToken)
@@ -82,6 +83,7 @@ public sealed class ReturnsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
         ReturnViewModel model,
@@ -271,9 +273,10 @@ public sealed class ReturnsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddCharge(
-    AddChargeViewModel model,
+        AddChargeViewModel model,
     CancellationToken cancellationToken)
     {
         if (User.IsInRole(RoleNames.Staff))
@@ -353,11 +356,11 @@ public sealed class ReturnsController : Controller
             nameof(Inspect),
             new { bookingId = model.BookingId });
     }
-
     [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveCharge(
-    int bookingId,
+        int bookingId,
     int additionalChargeId,
     CancellationToken cancellationToken)
     {
@@ -451,6 +454,7 @@ public sealed class ReturnsController : Controller
             new { bookingId });
     }
     [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Complete(
         CompleteBookingViewModel model,
