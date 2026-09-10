@@ -58,7 +58,7 @@ public sealed class ReturnEditsController : Controller
 
         if (!CanEdit(booking))
         {
-            TempData["ErrorMessage"] = "Biên bản trả đã có bản ký, đã quyết toán hoặc đã hoàn tất nên không thể chỉnh sửa.";
+            TempData["ErrorMessage"] = "Biên bản trả đã có bản ký, khoản phụ phí đang/đã thanh toán hoặc đơn đã quyết toán nên không thể chỉnh sửa.";
             return RedirectToAction("Inspect", "Returns", new { bookingId });
         }
 
@@ -100,7 +100,7 @@ public sealed class ReturnEditsController : Controller
 
         if (!CanEdit(booking))
         {
-            TempData["ErrorMessage"] = "Biên bản trả đã có bản ký, đã quyết toán hoặc đã hoàn tất nên không thể chỉnh sửa.";
+            TempData["ErrorMessage"] = "Biên bản trả đã có bản ký, khoản phụ phí đang/đã thanh toán hoặc đơn đã quyết toán nên không thể chỉnh sửa.";
             return RedirectToAction("Inspect", "Returns", new { bookingId = model.BookingId });
         }
 
@@ -208,6 +208,7 @@ public sealed class ReturnEditsController : Controller
             booking.Vehicle.CurrentMileage = model.Mileage.Value;
 
             RecalculateAutomaticCharges(booking);
+            SynchronizePendingAdditionalChargePayment(booking);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
         catch
@@ -228,7 +229,7 @@ public sealed class ReturnEditsController : Controller
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã cập nhật biên bản trả xe. Hãy kiểm tra lại trước khi in và ký.";
+        TempData["SuccessMessage"] = "Đã cập nhật biên bản trả xe và đồng bộ lại phụ phí. Hãy kiểm tra lại trước khi in và ký.";
         return RedirectToAction("Inspect", "Returns", new { bookingId = model.BookingId });
     }
 
@@ -238,7 +239,39 @@ public sealed class ReturnEditsController : Controller
         !SplitPaths(booking.VehicleReturn.ImagePaths).Any(path => path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase)) &&
         !booking.Payments.Any(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
-            payment.Status == PaymentStatus.Paid);
+            payment.Method != PaymentMethods.DepositDeduction &&
+            payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid);
+
+    private void SynchronizePendingAdditionalChargePayment(Booking booking)
+    {
+        var pendingPayment = booking.Payments.FirstOrDefault(payment =>
+            payment.Type == PaymentType.AdditionalCharge &&
+            payment.Method != PaymentMethods.DepositDeduction &&
+            payment.Status == PaymentStatus.Pending);
+
+        if (booking.AdditionalAmount > 0)
+        {
+            if (pendingPayment is null)
+            {
+                booking.Payments.Add(new Payment
+                {
+                    BookingId = booking.BookingId,
+                    Type = PaymentType.AdditionalCharge,
+                    Amount = booking.AdditionalAmount,
+                    Method = PaymentMethods.NotSelected,
+                    Status = PaymentStatus.Pending
+                });
+            }
+            else
+            {
+                pendingPayment.Amount = booking.AdditionalAmount;
+            }
+        }
+        else if (pendingPayment is not null)
+        {
+            _dbContext.Payments.Remove(pendingPayment);
+        }
+    }
 
     private static IReadOnlyList<string> SplitPaths(string? imagePaths) =>
         string.IsNullOrWhiteSpace(imagePaths)
