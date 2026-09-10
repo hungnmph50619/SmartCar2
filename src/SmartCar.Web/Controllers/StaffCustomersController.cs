@@ -271,7 +271,7 @@ public sealed class StaffCustomersController : Controller
                     issuedDate: null,
                     permanentAddress: null,
                     licenseClass: null,
-                    cancellationToken);
+                    cancellationToken: cancellationToken);
             }
 
             foreach (var document in new[] { licenseFront, licenseBack })
@@ -283,8 +283,8 @@ public sealed class StaffCustomersController : Controller
                     gender: null,
                     issuedDate: null,
                     permanentAddress: null,
-                    license.LicenseClass.Trim().ToUpperInvariant(),
-                    cancellationToken);
+                    licenseClass: license.LicenseClass.Trim().ToUpperInvariant(),
+                    cancellationToken: cancellationToken);
             }
 
             // Không tự set Status=Verified nữa.
@@ -339,15 +339,27 @@ public sealed class StaffCustomersController : Controller
             await _dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
-            await _auditService.WriteAsync(
-                verifierId,
-                "StaffCreateWalkInCustomer",
-                "CustomerKycPackage",
-                customer.Id,
-                $"Tạo Customer tại quầy cho {customer.FullName} ({normalizedEmail}); " +
-                "hồ sơ dùng cùng cấu trúc KYC Customer và được xác minh qua IDocumentService sau khi đối chiếu bản gốc.",
-                ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-                cancellationToken: cancellationToken);
+            // Audit tổng hợp là phụ trợ; nếu audit riêng này lỗi sau commit thì không được xóa
+            // ngược tài khoản/hồ sơ đã tạo thành công.
+            try
+            {
+                await _auditService.WriteAsync(
+                    verifierId,
+                    "StaffCreateWalkInCustomer",
+                    "CustomerKycPackage",
+                    customer.Id,
+                    $"Tạo Customer tại quầy cho {customer.FullName} ({normalizedEmail}); " +
+                    "hồ sơ dùng cùng cấu trúc KYC Customer và được xác minh qua IDocumentService sau khi đối chiếu bản gốc.",
+                    ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+                    cancellationToken: cancellationToken);
+            }
+            catch (Exception auditException)
+            {
+                _logger.LogWarning(
+                    auditException,
+                    "Không thể ghi audit tổng hợp khi tạo khách tại quầy {CustomerId}.",
+                    customer.Id);
+            }
 
             TempData["SuccessMessage"] =
                 "Đã tạo khách và xác minh CCCD/GPLX tại quầy. Có thể lập đơn thuê ngay.";
