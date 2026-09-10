@@ -241,27 +241,24 @@ public sealed class AdminCustomersController : Controller
 
         var state = ResolveProfileState(documents);
         var activeTab = NormalizeTab(tab);
-        var paidIn =
-    payments
-        .Where(payment =>
-            payment.Status ==
-                PaymentStatus.Paid &&
-
-            (
-                payment.Type ==
-                    PaymentType.Rental ||
-
-                payment.Type ==
-                    PaymentType.Extension ||
-
-                payment.Type ==
-                    PaymentType.AdditionalCharge
-            ))
-        .Sum(payment =>
-            payment.Amount);
+        var paidIn = payments
+            .Where(payment =>
+                payment.Status == PaymentStatus.Paid &&
+                payment.Type is PaymentType.Rental or
+                    PaymentType.Extension or
+                    PaymentType.AdditionalCharge or
+                    PaymentType.TrafficFine)
+            .Sum(payment => payment.Amount);
         var refunds = payments
             .Where(payment => payment.Type == PaymentType.Refund &&
                               (payment.Status == PaymentStatus.Paid || payment.Status == PaymentStatus.Refunded))
+            .Sum(payment => payment.Amount);
+        var outstandingTrafficFineDebt = payments
+            .Where(payment =>
+                payment.Type == PaymentType.TrafficFine &&
+                payment.Status is PaymentStatus.Pending or
+                    PaymentStatus.AwaitingConfirmation or
+                    PaymentStatus.Failed)
             .Sum(payment => payment.Amount);
 
         return View(new AdminCustomerDetailsViewModel
@@ -276,14 +273,15 @@ public sealed class AdminCustomersController : Controller
             ActiveTab = activeTab,
             ProfileStatusCode = state.Code,
             ProfileStatusText = state.Text,
-            CanRent = customer.IsActive && state.Code == "Verified",
+            CanRent = customer.IsActive && state.Code == "Verified" && outstandingTrafficFineDebt <= 0,
             CompletedBookingCount = bookings.Count(booking => booking.Status == BookingStatus.Completed),
             ActiveBookingCount = bookings.Count(booking => ActiveBookingStatuses.Contains(booking.Status)),
             CancelledBookingCount = bookings.Count(booking =>
-                booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.NoShow),
+                booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.NoShow or BookingStatus.Expired),
             TotalPaidAmount = paidIn - refunds,
             PendingPaymentAmount = payments
-                .Where(payment => payment.Status == PaymentStatus.Pending)
+                .Where(payment =>
+                    payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
                 .Sum(payment => payment.Amount),
             Documents = documents,
             Bookings = bookings,
@@ -316,6 +314,12 @@ public sealed class AdminCustomersController : Controller
         string customerId,
         CancellationToken cancellationToken)
     {
+        var document = await _documentService.GetDocumentAsync(documentId, cancellationToken);
+        if (document is null || document.CustomerId != customerId)
+        {
+            return NotFound();
+        }
+
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var result = await _documentService.VerifyAsync(documentId, adminId, cancellationToken);
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
@@ -449,6 +453,12 @@ public sealed class AdminCustomersController : Controller
         {
             TempData["ErrorMessage"] = "Vui lòng chọn lý do yêu cầu khách hàng gửi lại giấy tờ.";
             return RedirectToAction(nameof(Details), new { id = customerId, tab = "documents" });
+        }
+
+        var document = await _documentService.GetDocumentAsync(model.DocumentId, cancellationToken);
+        if (document is null || document.CustomerId != customerId)
+        {
+            return NotFound();
         }
 
         var reason = model.Reason.Trim();
@@ -590,11 +600,15 @@ public sealed class AdminCustomersController : Controller
             return new ProfileState("Pending", "Chờ xác minh");
         }
 
-        var drivingLicense = requiredDocuments.First(document =>
+        var citizenFront = requiredDocuments.First(document =>
+            document!.DocumentType == DocumentTypes.CitizenId)!;
+        var drivingLicenseFront = requiredDocuments.First(document =>
             document!.DocumentType == DocumentTypes.DrivingLicense)!;
-        if (drivingLicense.Status == DocumentStatus.Verified &&
-            drivingLicense.ExpiryDate.HasValue &&
-            drivingLicense.ExpiryDate.Value.Date < DateTime.Today)
+
+        if (!citizenFront.ExpiryDate.HasValue ||
+            citizenFront.ExpiryDate.Value.Date < DateTime.Today ||
+            !drivingLicenseFront.ExpiryDate.HasValue ||
+            drivingLicenseFront.ExpiryDate.Value.Date < DateTime.Today)
         {
             return new ProfileState("Expired", "Giấy tờ hết hạn");
         }
@@ -609,40 +623,47 @@ public sealed class AdminCustomersController : Controller
     {
         var citizenFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
         var citizenBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
-        var drivingLicense = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+        var drivingLicenseFront = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicense);
+        var drivingLicenseBack = documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.DrivingLicenseBack);
 
-        if (citizenFront is null || citizenBack is null || drivingLicense is null)
+        var requiredDocuments = new[]
+        {
+            citizenFront,
+            citizenBack,
+            drivingLicenseFront,
+            drivingLicenseBack
+        };
+
+        if (requiredDocuments.Any(item => item is null))
         {
             return new ProfileState("Missing", "Chưa hoàn tất");
         }
 
-        if (!citizenFront.HasRequiredData || !citizenBack.HasRequiredData || !drivingLicense.HasRequiredData)
+        if (requiredDocuments.Any(item => !item!.HasRequiredData))
         {
             return new ProfileState("Missing", "Thiếu thông tin xác minh");
         }
 
-        if (documents.Any(item => item.Status == DocumentStatus.Rejected))
+        if (requiredDocuments.Any(item => item!.Status == DocumentStatus.Rejected))
         {
             return new ProfileState("Rejected", "Cần gửi lại");
         }
 
-        if (documents.Any(item => item.Status == DocumentStatus.Pending))
+        if (requiredDocuments.Any(item => item!.Status == DocumentStatus.Pending))
         {
             return new ProfileState("Pending", "Chờ xác minh");
         }
 
-        var cccdExpired = !citizenFront.ExpiryDate.HasValue ||
+        var cccdExpired = !citizenFront!.ExpiryDate.HasValue ||
                           citizenFront.ExpiryDate.Value.Date < DateTime.Today;
-        var licenseExpired = !drivingLicense.ExpiryDate.HasValue ||
-                             drivingLicense.ExpiryDate.Value.Date < DateTime.Today;
+        var licenseExpired = !drivingLicenseFront!.ExpiryDate.HasValue ||
+                             drivingLicenseFront.ExpiryDate.Value.Date < DateTime.Today;
         if (cccdExpired || licenseExpired)
         {
             return new ProfileState("Expired", "Giấy tờ hết hạn");
         }
 
-        return citizenFront.Status == DocumentStatus.Verified &&
-               citizenBack.Status == DocumentStatus.Verified &&
-               drivingLicense.Status == DocumentStatus.Verified
+        return requiredDocuments.All(item => item!.Status == DocumentStatus.Verified)
             ? new ProfileState("Verified", "Đã xác minh")
             : new ProfileState("Missing", "Chưa hoàn tất");
     }
