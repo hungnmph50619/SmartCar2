@@ -20,7 +20,10 @@
                         <strong>tiền mặt tại quầy</strong>; giao xe vẫn phải qua đối chiếu người nhận, ảnh xe và bản ký.
                     </p>
                 </div>
-                <a class="btn btn-primary staff-action-button px-4" asp-controller="StaffCustomers" asp-action="Create">＋ Tạo & xác minh khách mới</a>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a class="btn btn-outline-primary px-4" asp-controller="StaffCustomers" asp-action="Index">⌕ Tìm khách</a>
+                    <a class="btn btn-primary staff-action-button px-4" asp-controller="StaffCustomers" asp-action="Create">＋ Tạo khách mới</a>
+                </div>
             </div>
         </div>
     </section>
@@ -30,7 +33,7 @@
             <div class="staff-step">
                 <span class="staff-step-number">1</span>
                 <div class="fw-bold">Khách + KYC</div>
-                <div class="small text-muted">Khách online phải có KYC đã duyệt; khách vãng lai có thể được Staff/Admin đối chiếu bản gốc và xác minh tại quầy.</div>
+                <div class="small text-muted">Dùng cùng hồ sơ CCCD/GPLX của Customer; BookingService kiểm tra hiệu lực đến ngày trả xe.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
@@ -61,9 +64,7 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
                 <div>
                     <h2 class="h4 mb-1">Thông tin đơn thuê</h2>
-                    <div class="text-muted small">
-                        Tài khoản vừa tạo tại quầy sẽ được tự chọn nếu bộ CCCD/GPLX đã được đối chiếu và xác minh thành công.
-                    </div>
+                    <div class="text-muted small">Core tạo/confirm đơn vẫn gọi IBookingService giống luồng Admin/Customer, Staff không có bộ logic đặt xe riêng.</div>
                 </div>
                 <span class="badge rounded-pill text-bg-success px-3 py-2">Thanh toán: Tiền mặt</span>
             </div>
@@ -71,6 +72,18 @@
             <div asp-validation-summary="All" class="alert alert-danger py-2 mb-4"></div>
 
             <div class="row g-3">
+                <div class="col-12">
+                    <label for="counter-customer-filter" class="form-label fw-semibold">Tìm nhanh khách hàng</label>
+                    <input id="counter-customer-filter"
+                           type="search"
+                           class="form-control"
+                           autocomplete="off"
+                           placeholder="Nhập tên, số điện thoại hoặc email/Gmail..." />
+                    <div class="form-text">
+                        Ô này lọc nhanh danh sách bên dưới. Cần tra cứu đầy đủ? <a asp-controller="StaffCustomers" asp-action="Index">Mở danh sách khách hàng</a>.
+                    </div>
+                </div>
+
                 <div class="col-lg-7">
                     <label asp-for="CustomerId" class="form-label fw-semibold">Khách hàng *</label>
                     <select asp-for="CustomerId" class="form-select" id="counter-customer">
@@ -146,14 +159,6 @@
                 </div>
             </div>
 
-            <div class="staff-warning-panel mt-3">
-                <div class="staff-warning-icon">30</div>
-                <div class="small">
-                    <strong>Ví dụ:</strong> A dự kiến trả 09:00 thì B không được đặt nhận lúc 09:00; sớm nhất theo lịch là 09:@RentalPolicy.VehicleTurnaroundMinutes.ToString("00").
-                    Nếu A thực tế trả lúc 09:20 thì xe tiếp tục bị khóa vận hành đến 09:@((20 + RentalPolicy.VehicleTurnaroundMinutes).ToString("00")) trước khi có thể giao tiếp.
-                </div>
-            </div>
-
             <div class="mt-4 d-flex flex-wrap gap-2">
                 <button class="btn btn-primary staff-action-button px-4" type="submit" data-loading-text="Đang tạo đơn...">Tạo đơn và ghi nhận tiền mặt</button>
                 <a class="btn btn-outline-secondary px-4" asp-action="Index">Hủy</a>
@@ -167,12 +172,46 @@
     <script>
         (() => {
             const customer = document.getElementById('counter-customer');
+            const customerFilter = document.getElementById('counter-customer-filter');
             const pickup = document.getElementById('counter-pickup');
             const returned = document.getElementById('counter-return');
             const output = document.getElementById('counter-duration');
 
+            const originalCustomerOptions = customer
+                ? Array.from(customer.options).map(option => ({
+                    value: option.value,
+                    text: option.text,
+                    selected: option.selected
+                }))
+                : [];
+
+            const filterCustomers = () => {
+                if (!customer) return;
+                const keyword = (customerFilter?.value ?? '').trim().toLocaleLowerCase('vi-VN');
+                const selectedValue = customer.value;
+
+                customer.replaceChildren();
+                originalCustomerOptions.forEach((option, index) => {
+                    if (index !== 0 && keyword && !option.text.toLocaleLowerCase('vi-VN').includes(keyword)) {
+                        return;
+                    }
+
+                    const element = new Option(option.text, option.value);
+                    element.selected = option.value === selectedValue || (!selectedValue && option.selected);
+                    customer.add(element);
+                });
+
+                if (customer.options.length === 1 && keyword) {
+                    const empty = new Option('Không có khách phù hợp', '');
+                    empty.disabled = true;
+                    customer.add(empty);
+                }
+            };
+
+            customerFilter?.addEventListener('input', filterCustomers);
+
             const customerFromQuery = new URLSearchParams(window.location.search).get('customerId');
-            if (customerFromQuery && customer && !customer.value) {
+            if (customerFromQuery && customer) {
                 const exists = Array.from(customer.options).some(option => option.value === customerFromQuery);
                 if (exists) {
                     customer.value = customerFromQuery;
