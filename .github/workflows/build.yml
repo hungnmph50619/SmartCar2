@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - agent/**
+      - hoangquangtruong_Staff
   pull_request:
     branches:
       - master
@@ -60,10 +61,40 @@ jobs:
         run: |
           dotnet ef database update \
             --project src/SmartCar.Infrastructure \
-            --startup-project src/SmartCar.Web
+            --startup-project src/SmartCar.Web \
+            --no-build
 
       - name: Check pending model changes
+        id: pending_model
+        continue-on-error: true
         run: |
           dotnet ef migrations has-pending-model-changes \
             --project src/SmartCar.Infrastructure \
-            --startup-project src/SmartCar.Web
+            --startup-project src/SmartCar.Web \
+            --no-build
+
+      # Tạm tạo snapshot chẩn đoán khi model/snapshot bị lệch. Chỉ upload artifact,
+      # tuyệt đối không commit migration chẩn đoán vào repo.
+      - name: Generate diagnostic EF snapshot
+        if: steps.pending_model.outcome == 'failure'
+        run: |
+          dotnet ef migrations add __SnapshotSyncDiagnostic \
+            --project src/SmartCar.Infrastructure \
+            --startup-project src/SmartCar.Web \
+            --output-dir Persistence/Migrations/__SnapshotDiagnostic \
+            --no-build
+
+      - name: Upload diagnostic model snapshot
+        if: steps.pending_model.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-model-snapshot
+          path: src/SmartCar.Infrastructure/Persistence/Migrations/ApplicationDbContextModelSnapshot.cs
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Fail on pending model changes
+        if: steps.pending_model.outcome == 'failure'
+        run: |
+          echo "EF Core model differs from ApplicationDbContextModelSnapshot.cs."
+          exit 1
