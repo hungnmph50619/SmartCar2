@@ -74,7 +74,10 @@ internal sealed class VehicleService : IVehicleService
                 BlockingBookingStatuses.Contains(booking.Status) &&
                 request.PickupDate < booking.ReturnDate &&
                 request.ReturnDate > booking.PickupDate))
+            // Phạt nguội là nghĩa vụ tài chính gắn với chuyến thuê/khách cũ,
+            // không phải hỏng hóc vật lý của xe nên không được chặn xe tiếp tục cho thuê.
             .Where(vehicle => !vehicle.Incidents.Any(incident =>
+                incident.IncidentType != IncidentType.TrafficFine &&
                 incident.Status != IncidentStatus.Resolved &&
                 incident.Status != IncidentStatus.Cancelled))
             .Where(vehicle => vehicle.Documents.Any(document =>
@@ -292,6 +295,7 @@ internal sealed class VehicleService : IVehicleService
 
             var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(incident =>
                 incident.VehicleId == vehicleId &&
+                incident.IncidentType != IncidentType.TrafficFine &&
                 incident.Status != IncidentStatus.Resolved &&
                 incident.Status != IncidentStatus.Cancelled,
                 cancellationToken);
@@ -299,7 +303,7 @@ internal sealed class VehicleService : IVehicleService
             if (hasOpenIncident)
             {
                 return OperationResult.Failure(
-                    "Không thể mở lại hoạt động cho xe vì xe vẫn còn sự cố chưa được xử lý.");
+                    "Không thể mở lại hoạt động cho xe vì xe vẫn còn sự cố vận hành chưa được xử lý.");
             }
         }
         else if (StatusesRequiringLegalEligibility.Contains(status))
