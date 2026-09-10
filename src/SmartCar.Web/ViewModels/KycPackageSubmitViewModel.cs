@@ -53,7 +53,9 @@ public sealed class KycCitizenIdInputViewModel
 public sealed class KycDrivingLicenseInputViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập số GPLX.")]
-    [RegularExpression(@"^[0-9]{8,12}$", ErrorMessage = "Số GPLX phải gồm từ 8 đến 12 chữ số.")]
+    [RegularExpression(
+        @"^[A-Za-z0-9]{8,12}$",
+        ErrorMessage = "Số GPLX phải gồm từ 8 đến 12 ký tự chữ hoặc số.")]
     [Display(Name = "Số GPLX")]
     public string DocumentNumber { get; set; } = string.Empty;
 
