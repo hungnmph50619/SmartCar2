@@ -16,8 +16,6 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Customer)]
 public sealed class KycPackageController : Controller
 {
-    private const long MaximumDocumentImageBytes = 5 * 1024 * 1024;
-
     private static readonly string[] RequiredKycTypes =
     {
         DocumentTypes.CitizenId,
@@ -58,12 +56,12 @@ public sealed class KycPackageController : Controller
             return Challenge();
         }
 
-        await ValidatePackageAsync(model, returnDate, cancellationToken);
-        if (!model.ConfirmSamePerson)
+        foreach (var validationError in await KycPackageValidator.ValidateAsync(
+                     model,
+                     returnDate,
+                     cancellationToken))
         {
-            ModelState.AddModelError(
-                nameof(KycPackageSubmitViewModel.ConfirmSamePerson),
-                "Bạn cần xác nhận CCCD và GPLX thuộc cùng một người trước khi gửi hồ sơ.");
+            ModelState.AddModelError(validationError.Key, validationError.Message);
         }
 
         if (!ModelState.IsValid)
@@ -206,82 +204,6 @@ public sealed class KycPackageController : Controller
             }
 
             throw;
-        }
-    }
-
-    private async Task ValidatePackageAsync(
-        KycPackageSubmitViewModel model,
-        DateTime? returnDate,
-        CancellationToken cancellationToken)
-    {
-        var citizen = model.CitizenIdVerification;
-        var license = model.DrivingLicenseVerification;
-
-        await ValidateImageAsync("CitizenIdVerification.FrontImage", citizen.FrontImage, cancellationToken);
-        await ValidateImageAsync("CitizenIdVerification.BackImage", citizen.BackImage, cancellationToken);
-        await ValidateImageAsync("DrivingLicenseVerification.FrontImage", license.FrontImage, cancellationToken);
-        await ValidateImageAsync("DrivingLicenseVerification.BackImage", license.BackImage, cancellationToken);
-
-        if (await ImageFileValidator.HaveSameContentAsync(citizen.FrontImage, citizen.BackImage, cancellationToken))
-        {
-            ModelState.AddModelError("CitizenIdVerification.BackImage", "Ảnh CCCD mặt trước và mặt sau phải là hai ảnh khác nhau.");
-        }
-
-        if (await ImageFileValidator.HaveSameContentAsync(license.FrontImage, license.BackImage, cancellationToken))
-        {
-            ModelState.AddModelError("DrivingLicenseVerification.BackImage", "Ảnh GPLX mặt trước và mặt sau phải là hai ảnh khác nhau.");
-        }
-
-        if (citizen.DateOfBirth.HasValue && citizen.DateOfBirth.Value.Date > DateTime.Today.AddYears(-18))
-        {
-            ModelState.AddModelError("CitizenIdVerification.DateOfBirth", "Khách thuê xe phải đủ 18 tuổi.");
-        }
-
-        ValidateExpiryDate(
-            "CCCD",
-            "CitizenIdVerification.ExpiryDate",
-            citizen.ExpiryDate,
-            returnDate);
-
-        ValidateExpiryDate(
-            "GPLX",
-            "DrivingLicenseVerification.ExpiryDate",
-            license.ExpiryDate,
-            returnDate);
-    }
-
-    private async Task ValidateImageAsync(
-        string key,
-        IFormFile? file,
-        CancellationToken cancellationToken)
-    {
-        var error = await ImageFileValidator.ValidateAsync(
-            file,
-            MaximumDocumentImageBytes,
-            cancellationToken);
-
-        if (error is not null)
-        {
-            ModelState.AddModelError(key, error);
-        }
-    }
-
-    private void ValidateExpiryDate(
-        string documentName,
-        string expiryDateKey,
-        DateTime? expiryDate,
-        DateTime? returnDate)
-    {
-        if (expiryDate.HasValue && expiryDate.Value.Date < DateTime.Today)
-        {
-            ModelState.AddModelError(expiryDateKey, $"{documentName} đã hết hạn.");
-        }
-
-        if (returnDate.HasValue && expiryDate.HasValue && expiryDate.Value.Date < returnDate.Value.Date)
-        {
-            ModelState.AddModelError(
-                expiryDateKey,
-                $"{documentName} phải còn hiệu lực ít nhất đến ngày trả xe {returnDate.Value:dd/MM/yyyy}.");
         }
     }
 
