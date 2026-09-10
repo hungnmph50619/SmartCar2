@@ -1,8 +1,8 @@
 @model SmartCar.Web.ViewModels.StaffCreateCustomerViewModel
 @{
     ViewData["Title"] = "Tạo khách tại quầy";
-    var today = DateTime.Today.ToString("yyyy-MM-dd");
-    var adultLatestBirthDate = DateTime.Today.AddYears(-18).ToString("yyyy-MM-dd");
+    var latestDateOfBirth = DateTime.Today.AddYears(-18).ToString("yyyy-MM-dd");
+    var minimumExpiryDate = DateTime.Today.ToString("yyyy-MM-dd");
 }
 
 @section Styles {
@@ -12,58 +12,43 @@
 <div class="staff-op-page">
     <section class="staff-hero p-4 p-lg-5 mb-4">
         <div class="position-relative" style="z-index:1">
-            <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> Onboarding tại quầy</span>
             <div class="d-flex justify-content-between align-items-start gap-4 flex-wrap">
                 <div style="max-width:820px">
-                    <h1 class="display-6 fw-bold mb-2">Tạo khách + xác minh giấy tờ ngay tại quầy</h1>
+                    <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> Khách tại quầy</span>
+                    <h1 class="display-6 fw-bold mb-2">Tạo Customer + xác minh hồ sơ</h1>
                     <p class="text-muted mb-0">
-                        Khách không cần có tài khoản từ trước. Nhân viên tạo tài khoản Customer, trực tiếp đối chiếu
-                        <strong>người thật + CCCD gốc + GPLX gốc</strong>, lưu ảnh hồ sơ và xác minh tại quầy để có thể lập đơn thuê ngay.
+                        Phần CCCD/GPLX bên dưới dùng <strong>đúng model và validate của Customer KYC</strong>.
+                        Khác duy nhất ở quầy là nhân viên phải nhìn người thật và giấy tờ gốc trước khi xác minh ngay.
                     </p>
                 </div>
-                <a class="btn btn-outline-primary px-4" asp-controller="Staff" asp-action="CounterRental">← Thuê xe tại quầy</a>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a class="btn btn-outline-primary" asp-action="Index">⌕ Tìm khách có sẵn</a>
+                    <a class="btn btn-outline-secondary" asp-controller="Staff" asp-action="CounterRental">← Thuê tại quầy</a>
+                </div>
             </div>
         </div>
     </section>
 
     <div class="row g-3 mb-4 staff-stagger">
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-md-4">
             <div class="staff-step">
                 <span class="staff-step-number">1</span>
-                <div class="fw-bold">Tạo Customer</div>
-                <div class="small text-muted">Email, số điện thoại và mật khẩu ban đầu được tạo cho đúng khách đang có mặt.</div>
+                <div class="fw-bold">Tạo tài khoản</div>
+                <div class="small text-muted">Tên, SĐT, email và mật khẩu dùng cùng rule đăng ký Customer.</div>
             </div>
         </div>
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-md-4">
             <div class="staff-step">
                 <span class="staff-step-number">2</span>
-                <div class="fw-bold">Đối chiếu CCCD</div>
-                <div class="small text-muted">Kiểm tra bản gốc, người cầm giấy tờ, số CCCD, ngày sinh và thời hạn.</div>
+                <div class="fw-bold">Nhập đúng KYC Customer</div>
+                <div class="small text-muted">CCCD + GPLX, 4 ảnh, cùng rule tuổi, số giấy tờ, hạng bằng và thời hạn.</div>
             </div>
         </div>
-        <div class="col-sm-6 col-xl-3">
+        <div class="col-md-4">
             <div class="staff-step">
                 <span class="staff-step-number">3</span>
-                <div class="fw-bold">Đối chiếu GPLX</div>
-                <div class="small text-muted">Kiểm tra bản gốc, số bằng, hạng bằng và thời hạn phù hợp với chuyến thuê.</div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <div class="staff-step">
-                <span class="staff-step-number">4</span>
-                <div class="fw-bold">Thuê ngay</div>
-                <div class="small text-muted">Sau khi xác minh đủ 4 mặt giấy tờ, khách xuất hiện ngay ở màn thuê tại quầy.</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="staff-warning-panel mb-4">
-        <div class="staff-warning-icon">!</div>
-        <div>
-            <div class="fw-bold mb-1">Không được xác minh chỉ dựa trên ảnh tải lên</div>
-            <div class="small text-muted">
-                Checkbox xác minh bên dưới là trách nhiệm của người đang đăng nhập. Chỉ tick khi đã trực tiếp nhìn khách,
-                kiểm tra CCCD/GPLX bản gốc và chắc chắn thông tin nhập khớp với giấy tờ. Hệ thống lưu người xác minh và thời điểm xác minh để audit.
+                <div class="fw-bold">Đối chiếu bản gốc</div>
+                <div class="small text-muted">Sau khi xác nhận trực tiếp, hồ sơ mới đi qua service xác minh và được dùng để thuê xe.</div>
             </div>
         </div>
     </div>
@@ -75,36 +60,36 @@
           data-loading-form
           id="walk-in-customer-form">
         <div class="card-body p-4 p-lg-5">
-            <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 mb-4"></div>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4"></div>
 
             <section class="staff-form-section mb-4">
                 <div class="staff-section-heading mb-3">
                     <span class="staff-section-icon">01</span>
                     <div>
-                        <h2 class="h5 mb-1">Tài khoản khách hàng</h2>
-                        <div class="small text-muted">Thông tin liên hệ dùng để đăng nhập, nhận thông báo và truy vết chuyến thuê.</div>
+                        <h2 class="h5 mb-1">Tài khoản Customer</h2>
+                        <div class="small text-muted">Nếu khách đã có tài khoản, không tạo lại; hãy dùng màn Tìm khách.</div>
                     </div>
                 </div>
 
                 <div class="row g-3">
-                    <div class="col-lg-6">
+                    <div class="col-md-6">
                         <label asp-for="FullName" class="form-label fw-semibold"></label>
                         <input asp-for="FullName" class="form-control" autocomplete="name" placeholder="Nguyễn Văn A" />
                         <span asp-validation-for="FullName" class="text-danger small"></span>
                     </div>
-                    <div class="col-lg-6">
+                    <div class="col-md-6">
                         <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
                         <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" inputmode="tel" placeholder="09xxxxxxxx" />
                         <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                     </div>
                     <div class="col-12">
                         <label asp-for="Email" class="form-label fw-semibold"></label>
-                        <input asp-for="Email" class="form-control" autocomplete="email" placeholder="khachhang@example.com" />
+                        <input asp-for="Email" class="form-control" autocomplete="email" placeholder="khachhang@gmail.com" />
                         <span asp-validation-for="Email" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
                         <label asp-for="Password" class="form-label fw-semibold"></label>
-                        <input asp-for="Password" class="form-control" autocomplete="new-password" placeholder="Có chữ hoa, chữ thường, số và ký tự đặc biệt" />
+                        <input asp-for="Password" class="form-control" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự" />
                         <span asp-validation-for="Password" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
@@ -115,165 +100,188 @@
                 </div>
             </section>
 
-            <section class="staff-form-section mb-4">
+            <section class="staff-form-section mb-4" id="staff-citizen-section">
                 <div class="staff-section-heading mb-3">
                     <span class="staff-section-icon">02</span>
                     <div>
-                        <h2 class="h5 mb-1">CCCD bản gốc</h2>
-                        <div class="small text-muted">Khách phải đủ 18 tuổi và CCCD còn hiệu lực.</div>
+                        <h2 class="h5 mb-1">Căn cước công dân</h2>
+                        <div class="small text-muted">Cùng trường dữ liệu và validate với hồ sơ CCCD của Customer.</div>
                     </div>
-                    <span class="staff-verified-chip ms-lg-auto">Đối chiếu trực tiếp</span>
                 </div>
 
                 <div class="row g-3">
-                    <div class="col-lg-5">
-                        <label asp-for="CitizenIdNumber" class="form-label fw-semibold"></label>
-                        <input asp-for="CitizenIdNumber" class="form-control" inputmode="numeric" maxlength="12" placeholder="12 chữ số" />
-                        <span asp-validation-for="CitizenIdNumber" class="text-danger small"></span>
+                    <div class="col-md-7">
+                        <label asp-for="CitizenIdVerification.FullNameOnDocument" class="form-label fw-semibold"></label>
+                        <input asp-for="CitizenIdVerification.FullNameOnDocument" class="form-control" autocomplete="name" maxlength="100" required />
+                        <div class="form-text">Tên này phải trùng tên tài khoản vì nhân viên đang đối chiếu trực tiếp tại quầy.</div>
+                        <span asp-validation-for="CitizenIdVerification.FullNameOnDocument" class="text-danger small"></span>
                     </div>
-                    <div class="col-lg-4">
-                        <label asp-for="CitizenIdDateOfBirth" class="form-label fw-semibold"></label>
-                        <input asp-for="CitizenIdDateOfBirth" type="date" class="form-control" max="@adultLatestBirthDate" />
-                        <span asp-validation-for="CitizenIdDateOfBirth" class="text-danger small"></span>
+                    <div class="col-md-5">
+                        <label asp-for="CitizenIdVerification.DocumentNumber" class="form-label fw-semibold"></label>
+                        <input asp-for="CitizenIdVerification.DocumentNumber" class="form-control" inputmode="numeric" maxlength="12" pattern="[0-9]{12}" autocomplete="off" required />
+                        <span asp-validation-for="CitizenIdVerification.DocumentNumber" class="text-danger small"></span>
                     </div>
-                    <div class="col-lg-3">
-                        <label asp-for="CitizenIdGender" class="form-label fw-semibold"></label>
-                        <select asp-for="CitizenIdGender" class="form-select">
-                            <option value="">-- Chọn --</option>
+                    <div class="col-md-4">
+                        <label asp-for="CitizenIdVerification.DateOfBirth" class="form-label fw-semibold"></label>
+                        <input asp-for="CitizenIdVerification.DateOfBirth" type="date" class="form-control" max="@latestDateOfBirth" required />
+                        <span asp-validation-for="CitizenIdVerification.DateOfBirth" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="CitizenIdVerification.Gender" class="form-label fw-semibold"></label>
+                        <select asp-for="CitizenIdVerification.Gender" class="form-select" required>
+                            <option value="">-- Chọn giới tính --</option>
                             <option value="Nam">Nam</option>
                             <option value="Nữ">Nữ</option>
                             <option value="Khác">Khác</option>
                         </select>
-                        <span asp-validation-for="CitizenIdGender" class="text-danger small"></span>
+                        <span asp-validation-for="CitizenIdVerification.Gender" class="text-danger small"></span>
                     </div>
                     <div class="col-md-4">
-                        <label asp-for="CitizenIdIssuedDate" class="form-label fw-semibold"></label>
-                        <input asp-for="CitizenIdIssuedDate" type="date" class="form-control" max="@today" />
-                        <span asp-validation-for="CitizenIdIssuedDate" class="text-danger small"></span>
-                    </div>
-                    <div class="col-md-4">
-                        <label asp-for="CitizenIdExpiryDate" class="form-label fw-semibold"></label>
-                        <input asp-for="CitizenIdExpiryDate" type="date" class="form-control" min="@today" />
-                        <span asp-validation-for="CitizenIdExpiryDate" class="text-danger small"></span>
-                    </div>
-                    <div class="col-md-4">
-                        <label asp-for="CitizenIdPermanentAddress" class="form-label fw-semibold"></label>
-                        <input asp-for="CitizenIdPermanentAddress" class="form-control" placeholder="Theo CCCD" />
-                        <span asp-validation-for="CitizenIdPermanentAddress" class="text-danger small"></span>
+                        <label asp-for="CitizenIdVerification.ExpiryDate" class="form-label fw-semibold"></label>
+                        <input asp-for="CitizenIdVerification.ExpiryDate" type="date" class="form-control" min="@minimumExpiryDate" required />
+                        <span asp-validation-for="CitizenIdVerification.ExpiryDate" class="text-danger small"></span>
                     </div>
 
                     <div class="col-md-6">
-                        <div class="staff-file-box">
-                            <label asp-for="CitizenIdFrontImage" class="form-label fw-semibold"></label>
-                            <input asp-for="CitizenIdFrontImage" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" data-file-input />
-                            <div class="form-text" data-file-label>JPG/PNG/WEBP, tối đa 5 MB.</div>
-                            <img class="staff-file-preview mt-3" data-preview-for="CitizenIdFrontImage" alt="Xem trước mặt trước CCCD" hidden />
-                            <span asp-validation-for="CitizenIdFrontImage" class="text-danger small"></span>
-                        </div>
+                        <label class="staff-file-box d-block" data-upload-card>
+                            <strong class="d-block mb-2">CCCD mặt trước</strong>
+                            <input asp-for="CitizenIdVerification.FrontImage"
+                                   type="file"
+                                   class="form-control"
+                                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                                   data-file-input
+                                   required />
+                            <img class="staff-file-preview mt-3" data-file-preview alt="Xem trước CCCD mặt trước" hidden />
+                            <small class="text-muted d-block mt-2" data-file-name>JPG, PNG, WEBP · tối đa 5 MB</small>
+                        </label>
+                        <span asp-validation-for="CitizenIdVerification.FrontImage" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
-                        <div class="staff-file-box">
-                            <label asp-for="CitizenIdBackImage" class="form-label fw-semibold"></label>
-                            <input asp-for="CitizenIdBackImage" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" data-file-input />
-                            <div class="form-text" data-file-label>Phải là ảnh khác với mặt trước.</div>
-                            <img class="staff-file-preview mt-3" data-preview-for="CitizenIdBackImage" alt="Xem trước mặt sau CCCD" hidden />
-                            <span asp-validation-for="CitizenIdBackImage" class="text-danger small"></span>
-                        </div>
+                        <label class="staff-file-box d-block" data-upload-card>
+                            <strong class="d-block mb-2">CCCD mặt sau</strong>
+                            <input asp-for="CitizenIdVerification.BackImage"
+                                   type="file"
+                                   class="form-control"
+                                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                                   data-file-input
+                                   required />
+                            <img class="staff-file-preview mt-3" data-file-preview alt="Xem trước CCCD mặt sau" hidden />
+                            <small class="text-muted d-block mt-2" data-file-name>Phải là ảnh khác mặt trước.</small>
+                        </label>
+                        <span asp-validation-for="CitizenIdVerification.BackImage" class="text-danger small"></span>
                     </div>
                 </div>
             </section>
 
-            <section class="staff-form-section mb-4">
+            <section class="staff-form-section mb-4" id="staff-license-section">
                 <div class="staff-section-heading mb-3">
                     <span class="staff-section-icon">03</span>
                     <div>
-                        <h2 class="h5 mb-1">GPLX bản gốc</h2>
-                        <div class="small text-muted">GPLX phải còn hiệu lực; hệ thống vẫn kiểm tra thời hạn đến hết chuyến khi lập booking.</div>
+                        <h2 class="h5 mb-1">Giấy phép lái xe</h2>
+                        <div class="small text-muted">Cùng trường dữ liệu và validate với GPLX của Customer.</div>
                     </div>
-                    <span class="staff-verified-chip ms-lg-auto">Đối chiếu trực tiếp</span>
                 </div>
 
                 <div class="row g-3">
-                    <div class="col-lg-5">
-                        <label asp-for="DrivingLicenseNumber" class="form-label fw-semibold"></label>
-                        <input asp-for="DrivingLicenseNumber" class="form-control" maxlength="20" placeholder="Số GPLX" />
-                        <span asp-validation-for="DrivingLicenseNumber" class="text-danger small"></span>
+                    <div class="col-md-5">
+                        <label asp-for="DrivingLicenseVerification.DocumentNumber" class="form-label fw-semibold"></label>
+                        <input asp-for="DrivingLicenseVerification.DocumentNumber"
+                               class="form-control"
+                               maxlength="12"
+                               pattern="[A-Za-z0-9]{8,12}"
+                               autocomplete="off"
+                               placeholder="8–12 ký tự chữ hoặc số"
+                               required />
+                        <span asp-validation-for="DrivingLicenseVerification.DocumentNumber" class="text-danger small"></span>
                     </div>
-                    <div class="col-lg-3">
-                        <label asp-for="DrivingLicenseClass" class="form-label fw-semibold"></label>
-                        <input asp-for="DrivingLicenseClass" class="form-control" maxlength="20" placeholder="B1, B2, C1..." />
-                        <span asp-validation-for="DrivingLicenseClass" class="text-danger small"></span>
+                    <div class="col-md-3">
+                        <label asp-for="DrivingLicenseVerification.LicenseClass" class="form-label fw-semibold"></label>
+                        <select asp-for="DrivingLicenseVerification.LicenseClass" class="form-select" required>
+                            <option value="">-- Chọn hạng --</option>
+                            <option value="B">B</option>
+                            <option value="C1">C1</option>
+                            <option value="C">C</option>
+                            <option value="D1">D1</option>
+                            <option value="D2">D2</option>
+                            <option value="D">D</option>
+                            <option value="BE">BE</option>
+                            <option value="C1E">C1E</option>
+                            <option value="CE">CE</option>
+                            <option value="D1E">D1E</option>
+                            <option value="D2E">D2E</option>
+                            <option value="DE">DE</option>
+                            <option value="B1">B1</option>
+                            <option value="B2">B2</option>
+                        </select>
+                        <span asp-validation-for="DrivingLicenseVerification.LicenseClass" class="text-danger small"></span>
                     </div>
-                    <div class="col-lg-2 col-md-6">
-                        <label asp-for="DrivingLicenseIssuedDate" class="form-label fw-semibold"></label>
-                        <input asp-for="DrivingLicenseIssuedDate" type="date" class="form-control" max="@today" />
-                        <span asp-validation-for="DrivingLicenseIssuedDate" class="text-danger small"></span>
-                    </div>
-                    <div class="col-lg-2 col-md-6">
-                        <label asp-for="DrivingLicenseExpiryDate" class="form-label fw-semibold"></label>
-                        <input asp-for="DrivingLicenseExpiryDate" type="date" class="form-control" min="@today" />
-                        <span asp-validation-for="DrivingLicenseExpiryDate" class="text-danger small"></span>
+                    <div class="col-md-4">
+                        <label asp-for="DrivingLicenseVerification.ExpiryDate" class="form-label fw-semibold"></label>
+                        <input asp-for="DrivingLicenseVerification.ExpiryDate" type="date" class="form-control" min="@minimumExpiryDate" required />
+                        <span asp-validation-for="DrivingLicenseVerification.ExpiryDate" class="text-danger small"></span>
                     </div>
 
                     <div class="col-md-6">
-                        <div class="staff-file-box">
-                            <label asp-for="DrivingLicenseFrontImage" class="form-label fw-semibold"></label>
-                            <input asp-for="DrivingLicenseFrontImage" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" data-file-input />
-                            <div class="form-text" data-file-label>Chụp rõ số GPLX, họ tên và hạng bằng.</div>
-                            <img class="staff-file-preview mt-3" data-preview-for="DrivingLicenseFrontImage" alt="Xem trước mặt trước GPLX" hidden />
-                            <span asp-validation-for="DrivingLicenseFrontImage" class="text-danger small"></span>
-                        </div>
+                        <label class="staff-file-box d-block" data-upload-card>
+                            <strong class="d-block mb-2">GPLX mặt trước</strong>
+                            <input asp-for="DrivingLicenseVerification.FrontImage"
+                                   type="file"
+                                   class="form-control"
+                                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                                   data-file-input
+                                   required />
+                            <img class="staff-file-preview mt-3" data-file-preview alt="Xem trước GPLX mặt trước" hidden />
+                            <small class="text-muted d-block mt-2" data-file-name>JPG, PNG, WEBP · tối đa 5 MB</small>
+                        </label>
+                        <span asp-validation-for="DrivingLicenseVerification.FrontImage" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
-                        <div class="staff-file-box">
-                            <label asp-for="DrivingLicenseBackImage" class="form-label fw-semibold"></label>
-                            <input asp-for="DrivingLicenseBackImage" class="form-control" type="file" accept="image/jpeg,image/png,image/webp" data-file-input />
-                            <div class="form-text" data-file-label>Phải là ảnh khác với mặt trước.</div>
-                            <img class="staff-file-preview mt-3" data-preview-for="DrivingLicenseBackImage" alt="Xem trước mặt sau GPLX" hidden />
-                            <span asp-validation-for="DrivingLicenseBackImage" class="text-danger small"></span>
-                        </div>
+                        <label class="staff-file-box d-block" data-upload-card>
+                            <strong class="d-block mb-2">GPLX mặt sau</strong>
+                            <input asp-for="DrivingLicenseVerification.BackImage"
+                                   type="file"
+                                   class="form-control"
+                                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                                   data-file-input
+                                   required />
+                            <img class="staff-file-preview mt-3" data-file-preview alt="Xem trước GPLX mặt sau" hidden />
+                            <small class="text-muted d-block mt-2" data-file-name>Phải là ảnh khác mặt trước.</small>
+                        </label>
+                        <span asp-validation-for="DrivingLicenseVerification.BackImage" class="text-danger small"></span>
                     </div>
                 </div>
             </section>
 
             <section class="staff-confirm-panel mb-4">
                 <div class="form-check mb-3">
+                    <input asp-for="ConfirmSamePerson" class="form-check-input" />
+                    <label asp-for="ConfirmSamePerson" class="form-check-label fw-bold"></label>
+                    <div class="small text-muted ms-4">Tương đương xác nhận “CCCD và GPLX thuộc cùng một người” ở Customer KYC.</div>
+                    <span asp-validation-for="ConfirmSamePerson" class="text-danger small ms-4"></span>
+                </div>
+                <div class="form-check mb-3">
                     <input asp-for="OriginalDocumentsChecked" class="form-check-input" />
                     <label asp-for="OriginalDocumentsChecked" class="form-check-label fw-bold"></label>
-                    <div class="small text-muted ms-4 mt-1">
-                        Tôi xác nhận người đang có mặt là người trên giấy tờ; số giấy tờ và dữ liệu nhập ở trên đã được đối chiếu với bản gốc.
-                    </div>
+                    <div class="small text-muted ms-4">Đây là bước riêng của nghiệp vụ tại quầy: phải nhìn khách + giấy tờ gốc trước khi hệ thống xác minh ngay.</div>
                     <span asp-validation-for="OriginalDocumentsChecked" class="text-danger small ms-4"></span>
                 </div>
-
                 <div class="form-check">
                     <input asp-for="CustomerAcceptedTerms" class="form-check-input" />
                     <label asp-for="CustomerAcceptedTerms" class="form-check-label fw-bold"></label>
-                    <div class="small text-muted ms-4 mt-1">
-                        Bao gồm điều khoản về các nghĩa vụ phát sinh sau chuyến thuê như phạt/vi phạm được xác định theo thời gian giao-trả thực tế.
-                    </div>
                     <span asp-validation-for="CustomerAcceptedTerms" class="text-danger small ms-4"></span>
                 </div>
             </section>
 
-            <div class="staff-summary p-3 mb-4">
-                <div class="d-flex gap-3 align-items-start">
-                    <div class="staff-summary-check">✓</div>
-                    <div>
-                        <strong>Sau khi lưu thành công</strong>
-                        <div class="small text-muted mt-1">
-                            4 mặt CCCD/GPLX được lưu ở vùng tài liệu bảo mật, trạng thái Verified gắn với tài khoản nhân viên/Admin đang thao tác.
-                            Hệ thống chuyển thẳng sang màn thuê tại quầy và tự chọn khách vừa tạo.
-                        </div>
-                    </div>
-                </div>
+            <div class="staff-note p-3 mb-4 small">
+                <strong>Lưu ý về thời hạn:</strong> ở bước tạo khách, giấy tờ chỉ cần còn hiệu lực hiện tại. Khi lập đơn thuê,
+                <strong>BookingService tiếp tục kiểm tra CCCD/GPLX phải còn hiệu lực đến đúng ReturnDate</strong>, nên nhân viên không thể dùng hồ sơ sắp hết hạn để lách tạo chuyến dài hơn.
             </div>
 
             <div class="d-flex flex-wrap gap-2">
-                <button class="btn btn-primary staff-action-button px-4" type="submit" data-loading-text="Đang tạo và xác minh hồ sơ...">
+                <button class="btn btn-primary staff-action-button px-4" type="submit" data-loading-text="Đang tạo và xác minh...">
                     Tạo khách & xác minh tại quầy
                 </button>
-                <a class="btn btn-outline-secondary px-4" asp-controller="Staff" asp-action="CounterRental">Hủy</a>
+                <a class="btn btn-outline-secondary px-4" asp-action="Index">Hủy</a>
             </div>
         </div>
     </form>
@@ -285,19 +293,18 @@
         (() => {
             document.querySelectorAll('[data-file-input]').forEach(input => {
                 input.addEventListener('change', () => {
+                    const card = input.closest('[data-upload-card]');
+                    const preview = card?.querySelector('[data-file-preview]');
+                    const name = card?.querySelector('[data-file-name]');
                     const file = input.files?.[0];
-                    const box = input.closest('.staff-file-box');
-                    const label = box?.querySelector('[data-file-label]');
-                    const preview = document.querySelector(`[data-preview-for="${input.id}"]`);
 
-                    if (label) {
-                        label.textContent = file
+                    if (name) {
+                        name.textContent = file
                             ? `${file.name} · ${(file.size / 1024 / 1024).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} MB`
                             : 'Chưa chọn ảnh.';
                     }
 
                     if (!(preview instanceof HTMLImageElement)) return;
-
                     if (preview.dataset.objectUrl) {
                         URL.revokeObjectURL(preview.dataset.objectUrl);
                         delete preview.dataset.objectUrl;
@@ -309,9 +316,9 @@
                         return;
                     }
 
-                    const objectUrl = URL.createObjectURL(file);
-                    preview.dataset.objectUrl = objectUrl;
-                    preview.src = objectUrl;
+                    const url = URL.createObjectURL(file);
+                    preview.dataset.objectUrl = url;
+                    preview.src = url;
                     preview.hidden = false;
                 });
             });
