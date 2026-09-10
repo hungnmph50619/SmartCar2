@@ -12,38 +12,69 @@ public sealed class TrafficFineReceivables : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AddColumn<int>(
-            name: "VehicleIncidentId",
-            table: "Payments",
-            type: "int",
-            nullable: true);
+        // Migration này có thể gặp database đã được chạy/sửa dở trước đó.
+        // Dùng các guard ở SQL Server để tránh lỗi duplicate column/index/FK,
+        // đồng thời vẫn tạo đủ schema còn thiếu trên cả DB sạch và DB hiện hữu.
+        migrationBuilder.Sql("""
+            IF COL_LENGTH(N'dbo.Payments', N'VehicleIncidentId') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[Payments] ADD [VehicleIncidentId] int NULL;
+            END;
 
-        migrationBuilder.CreateIndex(
-            name: "IX_Payments_VehicleIncidentId",
-            table: "Payments",
-            column: "VehicleIncidentId");
+            IF NOT EXISTS (
+                SELECT 1
+                FROM sys.indexes
+                WHERE [name] = N'IX_Payments_VehicleIncidentId'
+                  AND [object_id] = OBJECT_ID(N'dbo.Payments'))
+            BEGIN
+                CREATE INDEX [IX_Payments_VehicleIncidentId]
+                    ON [dbo].[Payments] ([VehicleIncidentId]);
+            END;
 
-        migrationBuilder.AddForeignKey(
-            name: "FK_Payments_VehicleIncidents_VehicleIncidentId",
-            table: "Payments",
-            column: "VehicleIncidentId",
-            principalTable: "VehicleIncidents",
-            principalColumn: "VehicleIncidentId",
-            onDelete: ReferentialAction.Restrict);
+            IF NOT EXISTS (
+                SELECT 1
+                FROM sys.foreign_keys
+                WHERE [name] = N'FK_Payments_VehicleIncidents_VehicleIncidentId'
+                  AND [parent_object_id] = OBJECT_ID(N'dbo.Payments'))
+            BEGIN
+                ALTER TABLE [dbo].[Payments] WITH CHECK
+                ADD CONSTRAINT [FK_Payments_VehicleIncidents_VehicleIncidentId]
+                    FOREIGN KEY ([VehicleIncidentId])
+                    REFERENCES [dbo].[VehicleIncidents] ([VehicleIncidentId])
+                    ON DELETE NO ACTION;
+
+                ALTER TABLE [dbo].[Payments]
+                    CHECK CONSTRAINT [FK_Payments_VehicleIncidents_VehicleIncidentId];
+            END;
+            """);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.DropForeignKey(
-            name: "FK_Payments_VehicleIncidents_VehicleIncidentId",
-            table: "Payments");
+        migrationBuilder.Sql("""
+            IF EXISTS (
+                SELECT 1
+                FROM sys.foreign_keys
+                WHERE [name] = N'FK_Payments_VehicleIncidents_VehicleIncidentId'
+                  AND [parent_object_id] = OBJECT_ID(N'dbo.Payments'))
+            BEGIN
+                ALTER TABLE [dbo].[Payments]
+                    DROP CONSTRAINT [FK_Payments_VehicleIncidents_VehicleIncidentId];
+            END;
 
-        migrationBuilder.DropIndex(
-            name: "IX_Payments_VehicleIncidentId",
-            table: "Payments");
+            IF EXISTS (
+                SELECT 1
+                FROM sys.indexes
+                WHERE [name] = N'IX_Payments_VehicleIncidentId'
+                  AND [object_id] = OBJECT_ID(N'dbo.Payments'))
+            BEGIN
+                DROP INDEX [IX_Payments_VehicleIncidentId] ON [dbo].[Payments];
+            END;
 
-        migrationBuilder.DropColumn(
-            name: "VehicleIncidentId",
-            table: "Payments");
+            IF COL_LENGTH(N'dbo.Payments', N'VehicleIncidentId') IS NOT NULL
+            BEGIN
+                ALTER TABLE [dbo].[Payments] DROP COLUMN [VehicleIncidentId];
+            END;
+            """);
     }
 }
