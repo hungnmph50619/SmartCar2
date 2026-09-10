@@ -23,4 +23,5 @@ public class VehicleIncident
 
     public Vehicle Vehicle { get; set; } = null!;
     public Booking? Booking { get; set; }
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }
