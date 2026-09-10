@@ -8,9 +8,13 @@ namespace SmartCar.Domain.Constants
         // phạt nguội phát sinh sau chuyến được quản lý thành khoản phải thu riêng của khách.
         public const decimal DepositRate = 1.00m;
 
-        // Giữ chỗ: đơn mới chờ xác nhận tối đa 15 phút; sau khi duyệt giữ thêm 30 phút để thanh toán.
-        public const int BookingConfirmationHoldMinutes = 15;
-        public const int BookingPaymentHoldMinutes = 30;
+        // Giữ chỗ:
+        // - Đơn mới chờ Admin xác nhận tối đa 30 phút.
+        // - Sau khi được duyệt, khách có 15 phút để thanh toán/báo đã chuyển khoản.
+        // Khi khách đã báo chuyển khoản và payment ở AwaitingConfirmation thì không tự giải phóng lịch
+        // cho tới khi SmartCar đối soát giao dịch.
+        public const int BookingConfirmationHoldMinutes = 30;
+        public const int BookingPaymentHoldMinutes = 15;
 
         // Khoảng vận hành tối thiểu giữa hai lượt thuê cùng xe: nhận xe trả về, kiểm tra, chụp ảnh,
         // đối chiếu km/nhiên liệu và vệ sinh nhanh trước lượt kế tiếp.
