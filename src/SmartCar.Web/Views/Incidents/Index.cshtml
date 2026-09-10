@@ -12,7 +12,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3 gap-3 flex-wrap">
     <div>
         <h1 class="h3 mb-1">Sự cố và vi phạm</h1>
-        <p class="text-muted mb-0">Đối chiếu theo xe, đơn thuê và bằng chứng.</p>
+        <p class="text-muted mb-0">Đối chiếu theo xe, đơn thuê, thời gian thực tế và bằng chứng.</p>
     </div>
     <a class="btn btn-primary" asp-action="Create">Ghi nhận</a>
 </div>
@@ -37,7 +37,7 @@ else
         var isTrafficFine = item.IncidentType == IncidentType.TrafficFine;
         var evidence = EvidencePaths(item.EvidencePaths);
         <div class="col-12">
-            <div class="card card-body shadow-sm">
+            <div class="card card-body shadow-sm border-0 rounded-4">
                 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                     <div>
                         <h2 class="h5 mb-1">#@item.VehicleIncidentId · @item.IncidentType.ToVietnamese()</h2>
@@ -55,8 +55,15 @@ else
 
                 @if (isTrafficFine)
                 {
-                    <div class="alert alert-info py-2 small mb-3">
-                        <strong>Khách tự xử lý với cơ quan có thẩm quyền.</strong> SmartCar theo dõi hồ sơ và cung cấp thông tin thuê xe khi cần; không tạo khoản phải thu từ mục phạt nguội này.
+                    <div class="alert alert-warning py-2 small mb-3">
+                        <strong>Phạt/vi phạm được quản lý thành khoản phải thu riêng.</strong>
+                        Hệ thống không giữ cọc nhiều tuần chỉ để chờ phạt nguội. Khi có thông báo chính thức,
+                        thời điểm vi phạm phải nằm trong khoảng khách thực tế giữ xe; khoản còn nợ sẽ chặn khách tạo chuyến thuê mới.
+                    </div>
+                    <div class="row g-2 small mb-3">
+                        <div class="col-md-4"><div class="border rounded-3 p-2">Tiền phạt: <strong>@item.FineAmount.ToString("N0") đ</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-2">Khách chịu: <strong>@item.CustomerLiabilityAmount.ToString("N0") đ</strong></div></div>
+                        <div class="col-md-4"><div class="border rounded-3 p-2">Trạng thái hồ sơ: <strong>@item.Status.ToVietnamese()</strong></div></div>
                     </div>
                 }
                 else
@@ -94,18 +101,31 @@ else
                 @if (item.Status is IncidentStatus.Open or IncidentStatus.Investigating)
                 {
                     <details>
-                        <summary class="fw-semibold">Hoàn tất</summary>
+                        <summary class="fw-semibold">Hoàn tất / chốt hồ sơ</summary>
                         <form asp-action="Resolve" method="post" class="row g-2 mt-2">
                             <input type="hidden" name="IncidentId" value="@item.VehicleIncidentId" />
                             @if (isTrafficFine)
                             {
                                 <input type="hidden" name="ActualCost" value="0" />
-                                <input type="hidden" name="FineAmount" value="0" />
-                                <input type="hidden" name="CustomerLiabilityAmount" value="0" />
-                                <div class="col-md-9">
-                                    <input name="Notes" class="form-control" placeholder="VD: Khách đã làm việc với CSGT / đã hoàn tất" />
+                                <input type="hidden" name="RequiresMaintenance" value="false" />
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">Tiền phạt chính thức</label>
+                                    <input name="FineAmount" type="number" min="1" value="@item.FineAmount" class="form-control" required />
                                 </div>
-                                <div class="col-md-3"><button class="btn btn-success w-100" type="submit">Đã xử lý xong</button></div>
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-1">Khách chịu</label>
+                                    <input name="CustomerLiabilityAmount" type="number" min="1" value="@item.CustomerLiabilityAmount" class="form-control" required />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small mb-1">Kết luận</label>
+                                    <input name="Notes" class="form-control" placeholder="VD: đã đối chiếu thông báo chính thức" />
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <button class="btn btn-success w-100" type="submit">Chốt hồ sơ</button>
+                                </div>
+                                <div class="col-12 small text-muted">
+                                    Chốt hồ sơ không xóa khoản nợ. Nếu chưa thanh toán, khoản phải thu vẫn tồn tại độc lập cho đến khi được đối soát Paid.
+                                </div>
                             }
                             else
                             {
