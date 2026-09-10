@@ -152,6 +152,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.CancelReason).HasMaxLength(500);
             entity.Property(booking => booking.CancelledBy).HasMaxLength(30);
             entity.Property(booking => booking.RefundReason).HasMaxLength(500);
+            entity.Property(booking => booking.ReservationExpiresAt).HasColumnType("datetime2");
             entity.Property(booking => booking.RowVersion).IsRowVersion();
             entity.HasIndex(booking => new
             {
@@ -193,10 +194,15 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(payment => payment.Status).HasConversion<string>().HasMaxLength(30);
             entity.Property(payment => payment.TransactionCode).HasMaxLength(100);
             entity.HasIndex(payment => new { payment.BookingId, payment.Type, payment.Status });
+            entity.HasIndex(payment => payment.VehicleIncidentId);
             entity.HasOne(payment => payment.Booking)
                 .WithMany(booking => booking.Payments)
                 .HasForeignKey(payment => payment.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(payment => payment.VehicleIncident)
+                .WithMany(incident => incident.Payments)
+                .HasForeignKey(payment => payment.VehicleIncidentId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<VehicleHandover>(entity =>
