@@ -254,19 +254,19 @@
 
             <section class="staff-confirm-panel mb-4">
                 <div class="form-check mb-3">
-                    <input asp-for="ConfirmSamePerson" class="form-check-input" />
+                    <input asp-for="ConfirmSamePerson" class="form-check-input" required />
                     <label asp-for="ConfirmSamePerson" class="form-check-label fw-bold"></label>
                     <div class="small text-muted ms-4">Tương đương xác nhận “CCCD và GPLX thuộc cùng một người” ở Customer KYC.</div>
                     <span asp-validation-for="ConfirmSamePerson" class="text-danger small ms-4"></span>
                 </div>
                 <div class="form-check mb-3">
-                    <input asp-for="OriginalDocumentsChecked" class="form-check-input" />
+                    <input asp-for="OriginalDocumentsChecked" class="form-check-input" required />
                     <label asp-for="OriginalDocumentsChecked" class="form-check-label fw-bold"></label>
                     <div class="small text-muted ms-4">Đây là bước riêng của nghiệp vụ tại quầy: phải nhìn khách + giấy tờ gốc trước khi hệ thống xác minh ngay.</div>
                     <span asp-validation-for="OriginalDocumentsChecked" class="text-danger small ms-4"></span>
                 </div>
                 <div class="form-check">
-                    <input asp-for="CustomerAcceptedTerms" class="form-check-input" />
+                    <input asp-for="CustomerAcceptedTerms" class="form-check-input" required />
                     <label asp-for="CustomerAcceptedTerms" class="form-check-label fw-bold"></label>
                     <span asp-validation-for="CustomerAcceptedTerms" class="text-danger small ms-4"></span>
                 </div>
