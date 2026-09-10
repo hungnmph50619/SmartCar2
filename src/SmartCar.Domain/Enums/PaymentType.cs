@@ -1,4 +1,4 @@
-﻿namespace SmartCar.Domain.Enums;
+namespace SmartCar.Domain.Enums;
 
 public enum PaymentType
 {
@@ -7,5 +7,6 @@ public enum PaymentType
     Refund = 3,
     Extension = 4,
     Deposit = 5,
-    VehicleSwapAdjustment = 6
+    VehicleSwapAdjustment = 6,
+    TrafficFine = 7
 }
