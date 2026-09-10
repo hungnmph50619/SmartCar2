@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
@@ -15,6 +15,8 @@ internal sealed class ReturnService : IReturnService
     private const string AccessoriesMissingPrefix = "Thiếu/mất:";
     private const string ReturnAccessoriesLabel = "Phụ kiện khi trả:";
     private const string ReturnNoteSeparator = " | Ghi chú: ";
+    private const string HandoverSignedMarker = "signed-handover-";
+    private const string ReturnSignedMarker = "signed-return-";
 
     private readonly ApplicationDbContext _dbContext;
 
@@ -63,10 +65,10 @@ internal sealed class ReturnService : IReturnService
         {
             return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
         }
+
         if (request.ReturnedAt > DateTime.Now.AddMinutes(5))
         {
-            return OperationResult.Failure(
-                "Thời gian trả xe không được ở tương lai.");
+            return OperationResult.Failure("Thời gian trả xe không được ở tương lai.");
         }
 
         if (string.IsNullOrWhiteSpace(request.ImagePaths))
@@ -117,9 +119,12 @@ internal sealed class ReturnService : IReturnService
             : RentalPolicy.LateReturnFeeMultiplier;
         var lateFee = lateDays * booking.DailyPrice * lateReturnMultiplier;
 
+        var paidRentalDays = Math.Max(
+            1,
+            (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
         var effectiveIncludedKilometers = Math.Max(
             booking.Handover.IncludedKilometers,
-            elapsedDays * RentalPolicy.IncludedKilometersPerDay);
+            paidRentalDays * RentalPolicy.IncludedKilometersPerDay);
 
         var vehicleReturn = new VehicleReturn
         {
@@ -136,9 +141,7 @@ internal sealed class ReturnService : IReturnService
             Notes = BuildReturnNotes(accessoryStatus, request.Notes)
         };
 
-        var excessKilometers = Math.Max(
-            0,
-            drivenKilometers - effectiveIncludedKilometers);
+        var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
 
         if (lateFee > 0)
@@ -218,13 +221,19 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Chỉ đơn đang chờ kiểm tra mới được thêm phụ phí.");
         }
 
+        if (!AllStaffChecksCompleted(booking))
+        {
+            return OperationResult.Failure(
+                "Phải xác minh đúng người nhận/trả và bản ký giao/trả trước khi ghi nhận phụ phí.");
+        }
+
         if (HasPaidAdditionalCharge(booking))
         {
             return OperationResult.Failure("Không thể sửa phụ phí sau khi khách đã thanh toán.");
         }
 
         var returnEvidence = SplitImagePaths(booking.VehicleReturn.ImagePaths)
-            .Where(path => !path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
         if (returnEvidence.Length == 0)
@@ -288,6 +297,12 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Chỉ đơn đang chờ kiểm tra mới được xóa phụ phí.");
         }
 
+        if (!AllStaffChecksCompleted(booking))
+        {
+            return OperationResult.Failure(
+                "Phải xác minh đúng người nhận/trả và bản ký giao/trả trước khi thay đổi phụ phí.");
+        }
+
         if (HasPaidAdditionalCharge(booking))
         {
             return OperationResult.Failure("Không thể sửa phụ phí sau khi khách đã thanh toán.");
@@ -317,6 +332,7 @@ internal sealed class ReturnService : IReturnService
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
+            .Include(item => item.Handover)
             .Include(item => item.VehicleReturn)
             .Include(item => item.Payments)
             .Include(item => item.Extensions)
@@ -330,6 +346,12 @@ internal sealed class ReturnService : IReturnService
         if (booking.Status != BookingStatus.PendingInspection)
         {
             return OperationResult.Failure("Đơn chưa ở trạng thái chờ hoàn tất kiểm tra.");
+        }
+
+        if (!AllStaffChecksCompleted(booking))
+        {
+            return OperationResult.Failure(
+                "Chưa đủ hồ sơ: phải xác minh đúng người nhận/trả và bản ký giao/trả trước khi quyết toán.");
         }
 
         var rentalPaid = booking.Payments.Any(payment =>
@@ -538,6 +560,20 @@ internal sealed class ReturnService : IReturnService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    private static bool AllStaffChecksCompleted(Booking booking) =>
+        booking.Handover is not null &&
+        booking.VehicleReturn is not null &&
+        booking.Handover.CustomerIdentityVerified &&
+        booking.Handover.SignedDocumentVerified &&
+        booking.VehicleReturn.CustomerIdentityVerified &&
+        booking.VehicleReturn.SignedDocumentVerified &&
+        HasSignedCopy(booking.Handover.ImagePaths, HandoverSignedMarker) &&
+        HasSignedCopy(booking.VehicleReturn.ImagePaths, ReturnSignedMarker);
+
+    private static bool HasSignedCopy(string? imagePaths, string marker) =>
+        SplitImagePaths(imagePaths)
+            .Any(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
 
     private static bool HasPaidAdditionalCharge(Booking booking) =>
         booking.Payments.Any(payment =>
