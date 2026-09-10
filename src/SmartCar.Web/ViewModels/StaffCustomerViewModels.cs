@@ -48,7 +48,7 @@ public sealed class StaffCreateCustomerViewModel
 
     public KycDrivingLicenseInputViewModel DrivingLicenseVerification { get; set; } = new();
 
-    [MustBeTrue(ErrorMessage = "Phải xác nhận CCCD và GPLX thuộc cùng một khách hàng.")]
+    // Giống KycPackageSubmitViewModel của Customer: rule này được KycPackageValidator xử lý.
     [Display(Name = "CCCD và GPLX thuộc cùng một người")]
     public bool ConfirmSamePerson { get; set; }
 
