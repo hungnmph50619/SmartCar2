@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -164,14 +164,41 @@ public sealed class StaffController : Controller
     public async Task<IActionResult> CounterRental(StaffCounterRentalViewModel model, CancellationToken cancellationToken)
     {
         model.PaymentMethod = PaymentMethods.Cash;
-        if (!ModelState.IsValid) { await PopulateCounterOptionsAsync(model, cancellationToken); return View(model); }
+        if (!ModelState.IsValid)
+        {
+            await PopulateCounterOptionsAsync(model, cancellationToken);
+            return View(model);
+        }
 
-        var createResult = await _bookingService.CreateAsync(model.CustomerId,
-            new CreateBookingRequest(model.VehicleId, model.PickupDate, model.ReturnDate, VehiclePickupMethod.StorePickup, null, null, null), cancellationToken);
+        if (!await IsActiveCustomerAsync(model.CustomerId, cancellationToken))
+        {
+            ModelState.AddModelError(
+                nameof(model.CustomerId),
+                "Khách hàng không hợp lệ, đã bị khóa hoặc không thuộc vai trò Customer.");
+            await PopulateCounterOptionsAsync(model, cancellationToken);
+            return View(model);
+        }
+
+        var createResult = await _bookingService.CreateAsync(
+            model.CustomerId,
+            new CreateBookingRequest(
+                model.VehicleId,
+                model.PickupDate,
+                model.ReturnDate,
+                VehiclePickupMethod.StorePickup,
+                null,
+                null,
+                null),
+            cancellationToken);
+
         if (!createResult.Succeeded || !createResult.BookingId.HasValue)
         {
-            foreach (var error in createResult.Errors) ModelState.AddModelError(string.Empty, error);
-            await PopulateCounterOptionsAsync(model, cancellationToken); return View(model);
+            foreach (var error in createResult.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error);
+            }
+            await PopulateCounterOptionsAsync(model, cancellationToken);
+            return View(model);
         }
 
         var bookingId = createResult.BookingId.Value;
@@ -186,7 +213,8 @@ public sealed class StaffController : Controller
                 await _dbContext.SaveChangesAsync(cancellationToken);
             }
             ModelState.AddModelError(string.Empty, string.Join("; ", confirmResult.Errors));
-            await PopulateCounterOptionsAsync(model, cancellationToken); return View(model);
+            await PopulateCounterOptionsAsync(model, cancellationToken);
+            return View(model);
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -194,7 +222,9 @@ public sealed class StaffController : Controller
         var paidAt = DateTime.UtcNow;
         foreach (var payment in booking.Payments.Where(item => (item.Type is PaymentType.Rental or PaymentType.Deposit) && item.Status == PaymentStatus.Pending))
         {
-            payment.Status = PaymentStatus.Paid; payment.Method = PaymentMethods.Cash; payment.PaidAt = paidAt;
+            payment.Status = PaymentStatus.Paid;
+            payment.Method = PaymentMethods.Cash;
+            payment.PaidAt = paidAt;
             payment.TransactionCode = $"CASH-{bookingId}-{paidAt:yyyyMMddHHmmss}";
         }
         var rentalPaid = booking.Payments.Any(item => item.Type == PaymentType.Rental && item.Status == PaymentStatus.Paid);
@@ -203,11 +233,13 @@ public sealed class StaffController : Controller
         {
             await transaction.RollbackAsync(cancellationToken);
             ModelState.AddModelError(string.Empty, "Không thể ghi nhận đủ tiền thuê và tiền cọc bằng tiền mặt.");
-            await PopulateCounterOptionsAsync(model, cancellationToken); return View(model);
+            await PopulateCounterOptionsAsync(model, cancellationToken);
+            return View(model);
         }
         booking.Status = BookingStatus.Paid;
         _dbContext.Notifications.Add(new Notification { UserId = booking.CustomerId, Title = "Đã thanh toán tại quầy", Message = $"Đơn #{booking.BookingId}: SmartCar đã ghi nhận đủ tiền thuê và cọc bằng tiền mặt tại quầy." });
-        await _dbContext.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         await WriteAuditAsync("StaffCounterRentalCash", nameof(Booking), bookingId, $"Nhân viên tạo đơn thuê tại quầy #{bookingId} và thu tiền mặt.", cancellationToken);
         TempData["SuccessMessage"] = $"Đã tạo đơn #{bookingId} tại quầy và ghi nhận thanh toán tiền mặt. Tiếp tục chuẩn bị xe.";
         return RedirectToAction(nameof(Details), new { id = bookingId });
@@ -284,30 +316,23 @@ public sealed class StaffController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> CompleteRefund(
-    int bookingId,
-    string? transactionCode,
-    CancellationToken cancellationToken)
+        int bookingId,
+        string? transactionCode,
+        CancellationToken cancellationToken)
     {
         transactionCode = transactionCode?.Trim();
 
-
         if (string.IsNullOrWhiteSpace(transactionCode))
         {
-            TempData["ErrorMessage"] =
-                "Vui lòng nhập mã giao dịch hoàn tiền.";
-
+            TempData["ErrorMessage"] = "Vui lòng nhập mã giao dịch hoàn tiền.";
             return RedirectToAction(nameof(Refunds));
         }
-
 
         if (transactionCode.Length > 100)
         {
-            TempData["ErrorMessage"] =
-                "Mã giao dịch tối đa 100 ký tự.";
-
+            TempData["ErrorMessage"] = "Mã giao dịch tối đa 100 ký tự.";
             return RedirectToAction(nameof(Refunds));
         }
-
 
         var customerId = await _dbContext.Bookings
             .AsNoTracking()
@@ -315,35 +340,22 @@ public sealed class StaffController : Controller
             .Select(item => item.CustomerId)
             .FirstOrDefaultAsync(cancellationToken);
 
-
         if (string.IsNullOrWhiteSpace(customerId))
         {
-            TempData["ErrorMessage"] =
-                "Không tìm thấy đơn thuê.";
-
+            TempData["ErrorMessage"] = "Không tìm thấy đơn thuê.";
             return RedirectToAction(nameof(Refunds));
         }
 
-
-        var bank = await _bankAccountService.GetDefaultAsync(
-            customerId,
-            cancellationToken);
-
-
+        var bank = await _bankAccountService.GetDefaultAsync(customerId, cancellationToken);
         if (bank is null)
         {
-            TempData["ErrorMessage"] =
-                "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền.";
-
+            TempData["ErrorMessage"] = "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền.";
             return RedirectToAction(nameof(Refunds));
         }
 
-
-        await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
-
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var duplicateCode = await _dbContext.Payments
             .AsNoTracking()
@@ -354,52 +366,34 @@ public sealed class StaffController : Controller
                     item.TransactionCode == transactionCode,
                 cancellationToken);
 
-
         if (duplicateCode)
         {
             await transaction.RollbackAsync(cancellationToken);
-
-            TempData["ErrorMessage"] =
-                "Mã giao dịch này đã được sử dụng cho một khoản hoàn tiền khác.";
-
+            TempData["ErrorMessage"] = "Mã giao dịch này đã được sử dụng cho một khoản hoàn tiền khác.";
             return RedirectToAction(nameof(Refunds));
         }
 
-
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
-            .FirstOrDefaultAsync(
-                item => item.BookingId == bookingId,
-                cancellationToken);
-
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (booking is null)
         {
             await transaction.RollbackAsync(cancellationToken);
-
-            TempData["ErrorMessage"] =
-                "Không tìm thấy đơn thuê.";
-
+            TempData["ErrorMessage"] = "Không tìm thấy đơn thuê.";
             return RedirectToAction(nameof(Refunds));
         }
 
-
-        var hasWaitingApproval = booking.Payments.Any(
-            item =>
-                item.Type == PaymentType.Refund &&
-                item.Status == PaymentStatus.AwaitingRefund);
-
+        var hasWaitingApproval = booking.Payments.Any(item =>
+            item.Type == PaymentType.Refund &&
+            item.Status == PaymentStatus.AwaitingRefund);
 
         if (hasWaitingApproval)
         {
             await transaction.RollbackAsync(cancellationToken);
-
-            TempData["ErrorMessage"] =
-                "Vẫn còn khoản hoàn chưa được chủ/Admin duyệt. Nhân viên chưa được phép chuyển tiền.";
-
+            TempData["ErrorMessage"] = "Vẫn còn khoản hoàn chưa được chủ/Admin duyệt. Nhân viên chưa được phép chuyển tiền.";
             return RedirectToAction(nameof(Refunds));
         }
-
 
         var approvedRefunds = booking.Payments
             .Where(item =>
@@ -408,96 +402,91 @@ public sealed class StaffController : Controller
             .OrderBy(item => item.PaymentId)
             .ToList();
 
-
         if (approvedRefunds.Count == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
-
-            TempData["ErrorMessage"] =
-                "Đơn không có khoản hoàn nào đã được chủ/Admin duyệt.";
-
+            TempData["ErrorMessage"] = "Đơn không có khoản hoàn nào đã được chủ/Admin duyệt.";
             return RedirectToAction(nameof(Refunds));
         }
-
 
         if (approvedRefunds.Any(item => item.Amount <= 0))
         {
             await transaction.RollbackAsync(cancellationToken);
-
-            TempData["ErrorMessage"] =
-                "Có khoản hoàn tiền không hợp lệ.";
-
+            TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ.";
             return RedirectToAction(nameof(Refunds));
         }
 
-
         var refundedAt = DateTime.UtcNow;
-
-        var total =
-            approvedRefunds.Sum(item => item.Amount);
-
+        var total = approvedRefunds.Sum(item => item.Amount);
 
         foreach (var refund in approvedRefunds)
         {
             refund.Status = PaymentStatus.Refunded;
-
             refund.PaidAt = refundedAt;
-
             refund.TransactionCode = transactionCode;
         }
 
+        var hasOpenRefund = booking.Payments.Any(item =>
+            item.Type == PaymentType.Refund &&
+            (item.Status == PaymentStatus.AwaitingRefund || item.Status == PaymentStatus.RefundApproved));
 
-        var hasOpenRefund = booking.Payments.Any(
-            item =>
-                item.Type == PaymentType.Refund &&
-                (
-                    item.Status == PaymentStatus.AwaitingRefund ||
-                    item.Status == PaymentStatus.RefundApproved
-                ));
-
-
-        if (booking.Status == BookingStatus.AwaitingRefund &&
-            !hasOpenRefund)
+        if (booking.Status == BookingStatus.AwaitingRefund && !hasOpenRefund)
         {
             booking.Status = BookingStatus.Completed;
         }
 
-
-        _dbContext.Notifications.Add(
-            new Notification
-            {
-                UserId = booking.CustomerId,
-
-                Title = "Hoàn tiền thành công",
-
-                Message =
-                    $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng " +
-                    $"{total:N0} đồng vào {bank.BankName} - " +
-                    $"{bank.MaskedAccountNumber}. " +
-                    $"Mã giao dịch: {transactionCode}."
-            });
-
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Hoàn tiền thành công",
+            Message =
+                $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {total:N0} đồng vào " +
+                $"{bank.BankName} - {bank.MaskedAccountNumber}. Mã giao dịch: {transactionCode}."
+        });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-
         await transaction.CommitAsync(cancellationToken);
-
 
         await WriteAuditAsync(
             "StaffExecuteApprovedRefund",
             nameof(Payment),
             bookingId,
-            $"Nhân viên thực hiện khoản hoàn đã được duyệt " +
-            $"cho đơn #{bookingId}: {total:N0} đồng, " +
-            $"mã GD {transactionCode}.",
+            $"Thực hiện khoản hoàn đã được duyệt cho đơn #{bookingId}: {total:N0} đồng, mã GD {transactionCode}.",
             cancellationToken);
 
-
-        TempData["SuccessMessage"] =
-            $"Đã hoàn {total:N0} đ cho đơn #{bookingId}.";
-
-
+        TempData["SuccessMessage"] = $"Đã hoàn {total:N0} đ cho đơn #{bookingId}.";
         return RedirectToAction(nameof(Refunds));
+    }
+
+    private async Task<bool> IsActiveCustomerAsync(
+        string customerId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return false;
+        }
+
+        var customerRoleId = await _dbContext.Roles
+            .AsNoTracking()
+            .Where(role => role.Name == RoleNames.Customer)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(customerRoleId))
+        {
+            return false;
+        }
+
+        return await _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(user =>
+                user.Id == customerId &&
+                user.IsActive &&
+                _dbContext.UserRoles.Any(userRole =>
+                    userRole.UserId == user.Id &&
+                    userRole.RoleId == customerRoleId),
+                cancellationToken);
     }
 
     private async Task PopulateCounterOptionsAsync(StaffCounterRentalViewModel model, CancellationToken cancellationToken)
@@ -511,20 +500,20 @@ public sealed class StaffController : Controller
             model.Customers = customers.Select(user => new StaffOptionViewModel(user.Id, $"{user.FullName} · {user.Email} · {user.PhoneNumber ?? "-"}")).ToList();
         }
         var vehicles = await _dbContext.Vehicles
-    .AsNoTracking()
-    .Where(vehicle =>
-        vehicle.Status == VehicleStatus.Available ||
-        vehicle.Status == VehicleStatus.Rented)
-    .OrderBy(vehicle => vehicle.VehicleName)
-    .Select(vehicle => new
-    {
-        vehicle.VehicleId,
-        vehicle.VehicleName,
-        vehicle.LicensePlate,
-        vehicle.DailyPrice,
-        vehicle.Status
-    })
-    .ToListAsync(cancellationToken);
+            .AsNoTracking()
+            .Where(vehicle =>
+                vehicle.Status == VehicleStatus.Available ||
+                vehicle.Status == VehicleStatus.Rented)
+            .OrderBy(vehicle => vehicle.VehicleName)
+            .Select(vehicle => new
+            {
+                vehicle.VehicleId,
+                vehicle.VehicleName,
+                vehicle.LicensePlate,
+                vehicle.DailyPrice,
+                vehicle.Status
+            })
+            .ToListAsync(cancellationToken);
         model.Vehicles = vehicles.Select(vehicle => new StaffOptionViewModel(vehicle.VehicleId.ToString(), $"{vehicle.VehicleName} · {vehicle.LicensePlate} · {vehicle.DailyPrice:N0} đ/ngày · " + (vehicle.Status == VehicleStatus.Available ? "Có sẵn" : "Đang thuê - chỉ đặt lịch sau"))).ToList();
     }
 
