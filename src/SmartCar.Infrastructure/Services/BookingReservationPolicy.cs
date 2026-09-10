@@ -46,6 +46,8 @@ internal sealed class BookingReservationPolicy
                     payment.Status == PaymentStatus.AwaitingConfirmation))
             {
                 // Khách đã báo chuyển khoản đúng lúc: không tự hết hạn khi SmartCar còn đang đối soát.
+                // Khi Admin từ chối giao dịch, payment trở lại Pending; vòng cleanup tiếp theo sẽ
+                // cấp lại một cửa sổ thanh toán mới thay vì làm đơn hết hạn ngay lập tức.
                 if (booking.ReservationExpiresAt.HasValue)
                 {
                     booking.ReservationExpiresAt = null;
@@ -57,12 +59,21 @@ internal sealed class BookingReservationPolicy
 
             if (!booking.ReservationExpiresAt.HasValue)
             {
-                // Tương thích các đơn cũ tạo trước khi có cột ReservationExpiresAt.
-                booking.ReservationExpiresAt = booking.Status == BookingStatus.PendingConfirmation
-                    ? booking.CreatedAt.AddMinutes(RentalPolicy.BookingConfirmationHoldMinutes)
-                    : booking.CreatedAt.AddMinutes(
-                        RentalPolicy.BookingConfirmationHoldMinutes +
-                        RentalPolicy.BookingPaymentHoldMinutes);
+                if (booking.Status == BookingStatus.PendingConfirmation)
+                {
+                    // Tương thích đơn cũ tạo trước khi có ReservationExpiresAt.
+                    booking.ReservationExpiresAt = booking.CreatedAt
+                        .AddMinutes(RentalPolicy.BookingConfirmationHoldMinutes);
+                }
+                else
+                {
+                    // PendingPayment không có expiry thường là trường hợp vừa rời trạng thái
+                    // AwaitingConfirmation (Admin từ chối QR) hoặc dữ liệu legacy. Cho khách một
+                    // cửa sổ thanh toán đầy đủ mới, không lấy mốc CreatedAt cũ để hết hạn tức thì.
+                    booking.ReservationExpiresAt = now
+                        .AddMinutes(RentalPolicy.BookingPaymentHoldMinutes);
+                }
+
                 changed = true;
             }
 
