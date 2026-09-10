@@ -96,7 +96,8 @@ public static class DependencyInjection
         services.AddScoped<IHandoverService, HandoverService>();
         services.AddScoped<IReturnService, ReturnService>();
         services.AddScoped<IMaintenanceService, MaintenanceService>();
-        services.AddScoped<IIncidentService, IncidentService>();
+        services.AddScoped<IncidentService>();
+        services.AddScoped<IIncidentService, PolicyAwareIncidentService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IReviewService, ReviewService>();
         services.AddScoped<IAuditService, AuditService>();
