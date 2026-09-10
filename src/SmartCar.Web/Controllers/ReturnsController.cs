@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -76,7 +76,7 @@ public sealed class ReturnsController : Controller
         return View(new ReturnViewModel
         {
             BookingId = bookingId,
-            ReturnedAt = DateTime.Now > booking.ReturnDate ? DateTime.Now : booking.ReturnDate,
+            ReturnedAt = DateTime.Now,
             Mileage = handover.Mileage
         });
     }
@@ -197,10 +197,9 @@ public sealed class ReturnsController : Controller
                 "Cần có cả biên bản giao xe và biên bản trả xe để đối chiếu.";
             return RedirectToBookingDetails(bookingId);
         }
+
         if (User.IsInRole(RoleNames.Staff) &&
-    !AllStaffChecksCompleted(
-        records.Handover,
-        records.VehicleReturn))
+            !AllStaffChecksCompleted(records.Handover, records.VehicleReturn))
         {
             TempData["ErrorMessage"] =
                 "Chưa đủ điều kiện đối chiếu quyết toán. " +
@@ -230,19 +229,10 @@ public sealed class ReturnsController : Controller
             RefundStatus = refundPayment?.Status,
             RefundAmount = refundPayment?.Amount ?? 0m,
             AdditionalCharges = booking.AdditionalCharges,
-
-            HandoverIdentityVerified =
-    records.Handover.CustomerIdentityVerified,
-
-            HandoverSignedDocumentVerified =
-    records.Handover.SignedDocumentVerified,
-
-            ReturnIdentityVerified =
-    records.VehicleReturn.CustomerIdentityVerified,
-
-            ReturnSignedDocumentVerified =
-    records.VehicleReturn.SignedDocumentVerified,
-
+            HandoverIdentityVerified = records.Handover.CustomerIdentityVerified,
+            HandoverSignedDocumentVerified = records.Handover.SignedDocumentVerified,
+            ReturnIdentityVerified = records.VehicleReturn.CustomerIdentityVerified,
+            ReturnSignedDocumentVerified = records.VehicleReturn.SignedDocumentVerified,
             Handover = new InspectionSnapshotViewModel
             {
                 RecordedAt = records.Handover.HandoverAt,
@@ -274,14 +264,13 @@ public sealed class ReturnsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddCharge(
         AddChargeViewModel model,
-    CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
         if (User.IsInRole(RoleNames.Staff))
         {
-            var verified =
-                await StaffDocumentChecksCompletedAsync(
-                    model.BookingId,
-                    cancellationToken);
+            var verified = await StaffDocumentChecksCompletedAsync(
+                model.BookingId,
+                cancellationToken);
 
             if (!verified)
             {
@@ -295,23 +284,18 @@ public sealed class ReturnsController : Controller
             }
         }
 
-
-        // Hai khoản này hệ thống tự tính.
-        // Nhân viên không được tự thêm để tránh tính tiền 2 lần.
         if (model.ChargeType == AdditionalChargeType.LateReturn ||
             model.ChargeType == AdditionalChargeType.ExcessMileage)
         {
             TempData["ErrorMessage"] =
-                "Phí trả muộn và phí vượt km được hệ thống tự động tính, nhân viên không được thêm thủ công.";
+                "Phí trả muộn và phí vượt km được hệ thống tự động tính, không được thêm thủ công.";
 
             return RedirectToAction(
                 nameof(Inspect),
                 new { bookingId = model.BookingId });
         }
 
-
         var result = ModelState.IsValid
-
             ? await _returnService.AddChargeAsync(
                 new AddChargeRequest(
                     model.BookingId,
@@ -319,23 +303,11 @@ public sealed class ReturnsController : Controller
                     model.Description,
                     model.Amount),
                 cancellationToken)
+            : OperationResult.Failure("Thông tin phụ phí không hợp lệ.");
 
-            : OperationResult.Failure(
-                "Thông tin phụ phí không hợp lệ.");
-
-
-        TempData[
-            result.Succeeded
-                ? "SuccessMessage"
-                : "ErrorMessage"
-        ] = result.Succeeded
-
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã thêm phụ phí và cập nhật tổng tiền."
-
-            : string.Join(
-                "; ",
-                result.Errors);
-
+            : string.Join("; ", result.Errors);
 
         if (result.Succeeded)
         {
@@ -343,29 +315,25 @@ public sealed class ReturnsController : Controller
                 "AddCharge",
                 nameof(AdditionalCharge),
                 model.BookingId,
-                $"Thêm phụ phí {model.ChargeType} cho đơn #{model.BookingId}: " +
-                $"{model.Amount:N0} đồng. {model.Description}",
+                $"Thêm phụ phí {model.ChargeType} cho đơn #{model.BookingId}: {model.Amount:N0} đồng. {model.Description}",
                 cancellationToken);
         }
 
-
-        return RedirectToAction(
-            nameof(Inspect),
-            new { bookingId = model.BookingId });
+        return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveCharge(
         int bookingId,
-    int additionalChargeId,
-    CancellationToken cancellationToken)
+        int additionalChargeId,
+        CancellationToken cancellationToken)
     {
         if (User.IsInRole(RoleNames.Staff))
         {
-            var verified =
-                await StaffDocumentChecksCompletedAsync(
-                    bookingId,
-                    cancellationToken);
+            var verified = await StaffDocumentChecksCompletedAsync(
+                bookingId,
+                cancellationToken);
 
             if (!verified)
             {
@@ -379,60 +347,37 @@ public sealed class ReturnsController : Controller
             }
         }
 
-
         var chargeType = await _dbContext.AdditionalCharges
             .AsNoTracking()
             .Where(item =>
                 item.AdditionalChargeId == additionalChargeId &&
                 item.VehicleReturn.BookingId == bookingId)
-            .Select(item =>
-                (AdditionalChargeType?)item.ChargeType)
+            .Select(item => (AdditionalChargeType?)item.ChargeType)
             .FirstOrDefaultAsync(cancellationToken);
-
 
         if (chargeType == null)
         {
-            TempData["ErrorMessage"] =
-                "Không tìm thấy phụ phí.";
-
-            return RedirectToAction(
-                nameof(Inspect),
-                new { bookingId });
+            TempData["ErrorMessage"] = "Không tìm thấy phụ phí.";
+            return RedirectToAction(nameof(Inspect), new { bookingId });
         }
 
-
-        // Không cho xóa phí tự động của hệ thống.
         if (chargeType == AdditionalChargeType.LateReturn ||
             chargeType == AdditionalChargeType.ExcessMileage)
         {
             TempData["ErrorMessage"] =
                 "Phí trả muộn và phí vượt km do hệ thống tự tính nên không thể xóa thủ công.";
 
-            return RedirectToAction(
-                nameof(Inspect),
-                new { bookingId });
+            return RedirectToAction(nameof(Inspect), new { bookingId });
         }
 
+        var result = await _returnService.RemoveChargeAsync(
+            bookingId,
+            additionalChargeId,
+            cancellationToken);
 
-        var result =
-            await _returnService.RemoveChargeAsync(
-                bookingId,
-                additionalChargeId,
-                cancellationToken);
-
-
-        TempData[
-            result.Succeeded
-                ? "SuccessMessage"
-                : "ErrorMessage"
-        ] = result.Succeeded
-
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã xóa phụ phí."
-
-            : string.Join(
-                "; ",
-                result.Errors);
-
+            : string.Join("; ", result.Errors);
 
         if (result.Succeeded)
         {
@@ -444,11 +389,9 @@ public sealed class ReturnsController : Controller
                 cancellationToken);
         }
 
-
-        return RedirectToAction(
-            nameof(Inspect),
-            new { bookingId });
+        return RedirectToAction(nameof(Inspect), new { bookingId });
     }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Complete(
@@ -475,15 +418,10 @@ public sealed class ReturnsController : Controller
             return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
         }
 
-        if (!HasSignedCopy(records.Handover.ImagePaths, HandoverSignedMarker) ||
-            !HasSignedCopy(records.VehicleReturn.ImagePaths, ReturnSignedMarker) ||
-            !records.Handover.CustomerIdentityVerified ||
-            !records.VehicleReturn.CustomerIdentityVerified ||
-            !records.Handover.SignedDocumentVerified ||
-            !records.VehicleReturn.SignedDocumentVerified)
+        if (!AllStaffChecksCompleted(records.Handover, records.VehicleReturn))
         {
             TempData["ErrorMessage"] =
-                "Chưa đủ điều kiện kết thúc: phải đối chiếu đúng người nhận/trả và nhân viên phải xác nhận bản ký giao + trả là hợp lệ.";
+                "Chưa đủ điều kiện kết thúc: phải đối chiếu đúng người nhận/trả và xác nhận bản ký giao + trả là hợp lệ.";
             return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
         }
 
@@ -499,50 +437,41 @@ public sealed class ReturnsController : Controller
             return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
         }
 
-        var booking = await _dbContext.Bookings
-            .Include(item => item.Payments)
-            .FirstOrDefaultAsync(item => item.BookingId == model.BookingId, cancellationToken);
-
-        var awaitingRefund = booking?.Payments
-            .Where(payment =>
-                payment.Type == PaymentType.Refund &&
-                payment.Status == PaymentStatus.AwaitingRefund)
-            .OrderByDescending(payment => payment.PaymentId)
-            .FirstOrDefault();
-
-        if (booking is not null && awaitingRefund is not null)
-        {
-            booking.Status = BookingStatus.AwaitingRefund;
-
-            var completionNotification = await _dbContext.Notifications
-                .Where(notification =>
-                    notification.UserId == booking.CustomerId &&
-                    notification.Title == "Đơn thuê đã hoàn tất" &&
-                    notification.Message.Contains($"#{booking.BookingId}"))
-                .OrderByDescending(notification => notification.NotificationId)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (completionNotification is not null)
+        var completionState = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.BookingId == model.BookingId)
+            .Select(item => new
             {
-                completionNotification.Title = "Đã kiểm tra xe - chờ hoàn cọc";
-                completionNotification.Message =
-                    $"Đơn #{booking.BookingId} đã kiểm tra xong. Đang chờ hoàn cọc {awaitingRefund.Amount:N0} đồng.";
-            }
+                item.Status,
+                AwaitingRefundAmount = item.Payments
+                    .Where(payment =>
+                        payment.Type == PaymentType.Refund &&
+                        payment.Status == PaymentStatus.AwaitingRefund)
+                    .Sum(payment => (decimal?)payment.Amount) ?? 0m
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            TempData["SuccessMessage"] = $"Đã đối chiếu hồ sơ. Chờ hoàn cọc {awaitingRefund.Amount:N0} đ.";
-        }
-        else
+        if (completionState is null)
         {
-            TempData["SuccessMessage"] = "Đã đối chiếu và hoàn tất chuyến thuê.";
+            TempData["ErrorMessage"] =
+                "Không tìm thấy trạng thái đơn sau khi quyết toán.";
+            return RedirectToBookingDetails(model.BookingId);
         }
+
+        var awaitingRefund =
+            completionState.Status == BookingStatus.AwaitingRefund &&
+            completionState.AwaitingRefundAmount > 0;
+
+        TempData["SuccessMessage"] = awaitingRefund
+            ? $"Đã đối chiếu hồ sơ. Chờ chủ/Admin duyệt hoàn {completionState.AwaitingRefundAmount:N0} đ."
+            : "Đã đối chiếu và hoàn tất chuyến thuê.";
 
         await WriteAuditAsync(
             "CompleteBooking",
             nameof(Booking),
             model.BookingId,
-            awaitingRefund is not null
-                ? $"Kết thúc kiểm tra đơn #{model.BookingId}; chuyển sang chờ hoàn cọc."
+            awaitingRefund
+                ? $"Kết thúc kiểm tra đơn #{model.BookingId}; chờ duyệt hoàn {completionState.AwaitingRefundAmount:N0} đồng."
                 : $"Hoàn tất đơn #{model.BookingId} sau khi đủ hồ sơ giao-trả có chữ ký.",
             cancellationToken);
 
@@ -551,7 +480,7 @@ public sealed class ReturnsController : Controller
             return RedirectToAction("Details", "Staff", new { id = model.BookingId });
         }
 
-        if (awaitingRefund is not null)
+        if (awaitingRefund)
         {
             return RedirectToAction(
                 "Index",
@@ -601,22 +530,18 @@ public sealed class ReturnsController : Controller
                 document.DocumentNumber == normalized,
                 cancellationToken);
     }
+
     private static bool AllStaffChecksCompleted(
-    VehicleHandover handover,
-    VehicleReturn vehicleReturn)
+        VehicleHandover handover,
+        VehicleReturn vehicleReturn)
     {
         return handover.CustomerIdentityVerified &&
                handover.SignedDocumentVerified &&
                vehicleReturn.CustomerIdentityVerified &&
                vehicleReturn.SignedDocumentVerified &&
-               HasSignedCopy(
-                   handover.ImagePaths,
-                   HandoverSignedMarker) &&
-               HasSignedCopy(
-                   vehicleReturn.ImagePaths,
-                   ReturnSignedMarker);
+               HasSignedCopy(handover.ImagePaths, HandoverSignedMarker) &&
+               HasSignedCopy(vehicleReturn.ImagePaths, ReturnSignedMarker);
     }
-
 
     private async Task<bool> StaffDocumentChecksCompletedAsync(
         int bookingId,
@@ -630,16 +555,14 @@ public sealed class ReturnsController : Controller
                 item => item.BookingId == bookingId,
                 cancellationToken);
 
-        if (booking?.Handover == null ||
-            booking.VehicleReturn == null)
+        if (booking?.Handover == null || booking.VehicleReturn == null)
         {
             return false;
         }
 
-        return AllStaffChecksCompleted(
-            booking.Handover,
-            booking.VehicleReturn);
+        return AllStaffChecksCompleted(booking.Handover, booking.VehicleReturn);
     }
+
     private IActionResult RedirectToBookingDetails(int bookingId) =>
         User.IsInRole(RoleNames.Staff)
             ? RedirectToAction("Details", "Staff", new { id = bookingId })
@@ -825,9 +748,9 @@ public sealed class ReturnsController : Controller
         string description,
         CancellationToken cancellationToken)
     {
-        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var actorId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return _auditService.WriteAsync(
-            adminId,
+            actorId,
             action,
             entityName,
             entityId.ToString(),
