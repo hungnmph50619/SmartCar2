@@ -1,27 +1,171 @@
-﻿@model SmartCar.Web.ViewModels.StaffCounterRentalViewModel
+@model SmartCar.Web.ViewModels.StaffCounterRentalViewModel
+@using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Thuê xe tại quầy";
 }
-<div class="mb-3"><h1 class="h3 mb-1">Tạo đơn thuê tại quầy</h1><p class="text-muted mb-0">Chọn tài khoản khách đã có trên hệ thống. Thanh toán được ghi nhận bằng <strong>tiền mặt tại quầy</strong>.</p></div>
-<form asp-action="CounterRental" method="post" class="card card-body shadow-sm" data-loading-form>
-    <div asp-validation-summary="All" class="text-danger mb-3"></div>
-    <div class="alert alert-info">Sau khi tạo, đơn chuyển sang <strong>Đã thanh toán</strong>. Nhân viên vẫn phải chuẩn bị xe, xác minh CCCD người nhận, lập biên bản và kiểm tra bản ký trước khi giao xe.</div>
-    <div class="row g-3">
-        <div class="col-12"><label asp-for="CustomerId" class="form-label fw-semibold">Khách hàng *</label><select asp-for="CustomerId" class="form-select"><option value="">-- Chọn khách hàng --</option>@foreach(var item in Model.Customers){
-            <option value="@item.Value">@item.Text</option>
-        }
-    </select><span asp-validation-for="CustomerId" class="text-danger small"></span></div>
-    <div class="col-12"><label asp-for="VehicleId" class="form-label fw-semibold">Xe *</label><select asp-for="VehicleId" class="form-select"><option value="0">-- Chọn xe --</option>@foreach(var item in Model.Vehicles){
-        <option value="@item.Value">@item.Text</option>
-    }
-</select><span asp-validation-for="VehicleId" class="text-danger small"></span></div>
-<div class="col-md-6"><label asp-for="PickupDate" class="form-label fw-semibold">Thời gian nhận *</label><input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" /><span asp-validation-for="PickupDate" class="text-danger small"></span></div>
-<div class="col-md-6"><label asp-for="ReturnDate" class="form-label fw-semibold">Thời gian trả *</label><input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" /><span asp-validation-for="ReturnDate" class="text-danger small"></span></div>
-<div class="col-md-6"><label class="form-label fw-semibold">Hình thức nhận xe</label><input class="form-control" value="Nhận tại cửa hàng" disabled /></div>
-<div class="col-md-6"><label class="form-label fw-semibold">Thanh toán</label><input class="form-control" value="@Model.PaymentMethod" disabled /></div>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/staff-operations.css" asp-append-version="true" />
+}
+
+<div class="staff-op-page">
+    <section class="staff-hero p-4 p-lg-5 mb-4">
+        <div class="position-relative" style="z-index:1">
+            <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> Nghiệp vụ tại quầy</span>
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div style="max-width:760px">
+                    <h1 class="display-6 fw-bold mb-2">Tạo đơn thuê xe tại quầy</h1>
+                    <p class="text-muted mb-0">
+                        Chọn khách đã có KYC hợp lệ, chọn xe và khung giờ. Hệ thống ghi nhận tiền thuê + cọc bằng
+                        <strong>tiền mặt tại quầy</strong> nhưng vẫn giữ nguyên các bước kiểm soát giao xe.
+                    </p>
+                </div>
+                <a class="btn btn-primary staff-action-button px-4" asp-controller="StaffCustomers" asp-action="Create">＋ Tạo khách mới</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="staff-step">
+                <span class="staff-step-number">1</span>
+                <div class="fw-bold">Khách + KYC</div>
+                <div class="small text-muted">Tài khoản Customer phải hoạt động; CCCD và GPLX phải được xác minh, còn hiệu lực.</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="staff-step" style="animation-delay:.05s">
+                <span class="staff-step-number">2</span>
+                <div class="fw-bold">Kiểm tra lịch xe</div>
+                <div class="small text-muted">Không cho xếp chuyến sát nhau; cần tối thiểu @RentalPolicy.VehicleTurnaroundMinutes phút để nhận và kiểm tra xe.</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="staff-step" style="animation-delay:.10s">
+                <span class="staff-step-number">3</span>
+                <div class="fw-bold">Thu tiền mặt</div>
+                <div class="small text-muted">Tiền thuê và tiền cọc được ghi nhận Paid tại quầy, có mã giao dịch nội bộ.</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="staff-step" style="animation-delay:.15s">
+                <span class="staff-step-number">4</span>
+                <div class="fw-bold">Bàn giao thực tế</div>
+                <div class="small text-muted">Đối chiếu CCCD gốc, km/nhiên liệu, ảnh xe và bản hợp đồng đã ký trước khi bắt đầu chuyến.</div>
+            </div>
+        </div>
+    </div>
+
+    <form asp-action="CounterRental" method="post" class="card staff-form-card" data-loading-form id="counter-rental-form">
+        <div class="card-body p-4 p-lg-5">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+                <div>
+                    <h2 class="h4 mb-1">Thông tin đơn thuê</h2>
+                    <div class="text-muted small">Tạo tài khoản mới không đồng nghĩa với duyệt KYC. Nếu khách chưa đủ giấy tờ, hệ thống sẽ chặn tạo đơn.</div>
+                </div>
+                <span class="badge rounded-pill text-bg-success px-3 py-2">Thanh toán: Tiền mặt</span>
+            </div>
+
+            <div asp-validation-summary="All" class="alert alert-danger py-2 mb-4"></div>
+
+            <div class="row g-3">
+                <div class="col-lg-7">
+                    <label asp-for="CustomerId" class="form-label fw-semibold">Khách hàng *</label>
+                    <select asp-for="CustomerId" class="form-select">
+                        <option value="">-- Chọn khách hàng --</option>
+                        @foreach (var item in Model.Customers)
+                        {
+                            <option value="@item.Value">@item.Text</option>
+                        }
+                    </select>
+                    <div class="form-text">Không thấy khách? <a asp-controller="StaffCustomers" asp-action="Create">Tạo tài khoản Customer tại quầy</a>.</div>
+                    <span asp-validation-for="CustomerId" class="text-danger small"></span>
+                </div>
+
+                <div class="col-lg-5">
+                    <label asp-for="VehicleId" class="form-label fw-semibold">Xe *</label>
+                    <select asp-for="VehicleId" class="form-select">
+                        <option value="0">-- Chọn xe --</option>
+                        @foreach (var item in Model.Vehicles)
+                        {
+                            <option value="@item.Value">@item.Text</option>
+                        }
+                    </select>
+                    <span asp-validation-for="VehicleId" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="PickupDate" class="form-label fw-semibold">Thời gian nhận dự kiến *</label>
+                    <input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-pickup" />
+                    <span asp-validation-for="PickupDate" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="ReturnDate" class="form-label fw-semibold">Thời gian trả dự kiến *</label>
+                    <input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-return" />
+                    <span asp-validation-for="ReturnDate" class="text-danger small"></span>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Hình thức nhận xe</label>
+                    <input class="form-control" value="Nhận tại cửa hàng" disabled />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Thanh toán</label>
+                    <input class="form-control" value="Tiền mặt tại quầy" disabled />
+                </div>
+            </div>
+
+            <div class="staff-summary p-3 mt-4" aria-live="polite">
+                <div class="d-flex justify-content-between gap-3 flex-wrap">
+                    <div>
+                        <div class="small text-muted">Khoảng thuê dự kiến</div>
+                        <strong id="counter-duration">Đang tính...</strong>
+                    </div>
+                    <div class="text-md-end">
+                        <div class="small text-muted">Khoảng xoay vòng bắt buộc</div>
+                        <strong>≥ @RentalPolicy.VehicleTurnaroundMinutes phút giữa hai chuyến</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="staff-note p-3 mt-3 small">
+                <strong>Phân biệt thời gian:</strong> PickupDate/ReturnDate là lịch dự kiến. Khi vận hành, hệ thống dùng
+                <strong>HandoverAt</strong> và <strong>ReturnedAt</strong> làm thời gian giao/trả thực tế để xác định trả muộn và khả năng xoay vòng xe.
+            </div>
+
+            <div class="mt-4 d-flex flex-wrap gap-2">
+                <button class="btn btn-primary staff-action-button px-4" type="submit" data-loading-text="Đang tạo đơn...">Tạo đơn và ghi nhận tiền mặt</button>
+                <a class="btn btn-outline-secondary px-4" asp-action="Index">Hủy</a>
+            </div>
+        </div>
+    </form>
 </div>
-<div class="mt-4 d-flex gap-2"><button class="btn btn-primary" type="submit" data-loading-text="Đang tạo đơn...">Tạo đơn và ghi nhận tiền mặt</button><a class="btn btn-outline-secondary" asp-action="Index">Hủy</a></div>
-</form>
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const pickup = document.getElementById('counter-pickup');
+            const returned = document.getElementById('counter-return');
+            const output = document.getElementById('counter-duration');
+
+            const render = () => {
+                if (!pickup?.value || !returned?.value || !output) return;
+                const start = new Date(pickup.value);
+                const end = new Date(returned.value);
+                const diff = end - start;
+                if (!Number.isFinite(diff) || diff <= 0) {
+                    output.textContent = 'Thời gian trả phải sau thời gian nhận.';
+                    return;
+                }
+                const hours = diff / 3600000;
+                const billableDays = Math.max(1, Math.ceil(hours / 24));
+                output.textContent = `${hours.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} giờ · ${billableDays} ngày tính phí`;
+            };
+
+            pickup?.addEventListener('change', render);
+            returned?.addEventListener('change', render);
+            render();
+        })();
+    </script>
 }
