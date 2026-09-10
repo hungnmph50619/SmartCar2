@@ -1,4 +1,4 @@
-﻿@{
+@{
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
 
     var adminControllers = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
@@ -22,12 +22,14 @@
         "AdminRentalDocuments",
         "AdminSignedDocuments",
         "Staff",
+        "StaffCustomers",
         "ReturnHandoverPreview"
     };
 
     var staffControllers = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
     {
         "Staff",
+        "StaffCustomers",
         "Handovers",
         "Returns",
         "AdminRentalDocuments",
