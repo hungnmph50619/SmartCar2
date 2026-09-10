@@ -1,0 +1,142 @@
+@model SmartCar.Web.ViewModels.StaffCustomerIndexViewModel
+@{
+    ViewData["Title"] = "Khách hàng";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/staff-operations.css" asp-append-version="true" />
+}
+
+<div class="staff-op-page">
+    <section class="staff-hero p-4 p-lg-5 mb-4">
+        <div class="position-relative" style="z-index:1">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div style="max-width:780px">
+                    <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> Tra cứu khách hàng</span>
+                    <h1 class="display-6 fw-bold mb-2">Tìm khách trước khi lập đơn</h1>
+                    <p class="text-muted mb-0">
+                        Tìm theo <strong>họ tên, số điện thoại hoặc email/Gmail</strong>. Nếu khách chưa có tài khoản,
+                        tạo mới và xác minh CCCD/GPLX tại quầy rồi quay lại lập đơn thuê.
+                    </p>
+                </div>
+                <a class="btn btn-primary staff-action-button px-4"
+                   asp-action="Create">＋ Tạo khách mới</a>
+            </div>
+        </div>
+    </section>
+
+    <form method="get" asp-action="Index" class="card staff-form-card mb-4">
+        <div class="card-body p-3 p-lg-4">
+            <div class="row g-2 align-items-end">
+                <div class="col-lg-9">
+                    <label for="customer-search" class="form-label fw-semibold">Tên / số điện thoại / email</label>
+                    <div class="position-relative">
+                        <input id="customer-search"
+                               type="search"
+                               name="query"
+                               value="@Model.Query"
+                               class="form-control"
+                               autocomplete="off"
+                               placeholder="VD: Nguyễn Văn A, 098..., abc@gmail.com"
+                               autofocus />
+                    </div>
+                </div>
+                <div class="col-lg-3 d-flex gap-2">
+                    <button class="btn btn-primary staff-action-button flex-fill" type="submit">Tìm khách</button>
+                    @if (!string.IsNullOrWhiteSpace(Model.Query))
+                    {
+                        <a class="btn btn-outline-secondary" asp-action="Index">Xóa</a>
+                    }
+                </div>
+            </div>
+            <div class="form-text mt-2">Hiển thị tối đa 100 kết quả gần nhất theo tên. Tài khoản bị khóa chỉ được xem, không thể chọn để thuê xe.</div>
+        </div>
+    </form>
+
+    <div class="card staff-form-card overflow-hidden">
+        <div class="card-header bg-white border-0 px-4 pt-4 pb-3 d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div>
+                <h2 class="h5 mb-1">Kết quả khách hàng</h2>
+                <div class="small text-muted">
+                    @if (string.IsNullOrWhiteSpace(Model.Query))
+                    {
+                        <span>Danh sách Customer trong hệ thống.</span>
+                    }
+                    else
+                    {
+                        <span>Kết quả cho “@Model.Query”.</span>
+                    }
+                </div>
+            </div>
+            <span class="badge rounded-pill text-bg-light border px-3 py-2">@Model.Customers.Count khách</span>
+        </div>
+
+        @if (Model.Customers.Count == 0)
+        {
+            <div class="card-body text-center py-5">
+                <div class="staff-empty-icon mb-3">⌕</div>
+                <h3 class="h5">Không tìm thấy khách phù hợp</h3>
+                <p class="text-muted mb-3">Kiểm tra lại tên, số điện thoại hoặc email. Nếu là khách mới, tạo tài khoản tại quầy.</p>
+                <a class="btn btn-primary" asp-action="Create">Tạo khách mới</a>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Khách hàng</th>
+                            <th>Liên hệ</th>
+                            <th>Tài khoản</th>
+                            <th>Ngày tạo</th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var customer in Model.Customers)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@customer.FullName</strong>
+                                    <div class="small text-muted text-break">@customer.Email</div>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(customer.PhoneNumber))
+                                    {
+                                        <a class="text-decoration-none" href="tel:@customer.PhoneNumber">@customer.PhoneNumber</a>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">Chưa có SĐT</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge @(customer.IsActive ? "bg-success" : "bg-danger")">
+                                        @(customer.IsActive ? "Đang hoạt động" : "Đã khóa")
+                                    </span>
+                                </td>
+                                <td class="text-nowrap">@customer.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                <td class="text-end text-nowrap">
+                                    @if (customer.IsActive)
+                                    {
+                                        <a class="btn btn-sm btn-primary"
+                                           asp-controller="Staff"
+                                           asp-action="CounterRental"
+                                           asp-route-customerId="@customer.CustomerId">
+                                            Chọn để thuê xe
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Không thể thuê</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
