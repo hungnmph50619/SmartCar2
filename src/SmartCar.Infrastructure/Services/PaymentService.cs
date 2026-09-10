@@ -83,7 +83,7 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Không xác định được khách hàng.");
         }
 
-        if (!Enum.IsDefined(paymentType) || paymentType == PaymentType.Refund)
+        if (!Enum.IsDefined(paymentType) || paymentType is PaymentType.Refund or PaymentType.Deposit)
         {
             return OperationResult.Failure("Loại thanh toán không hợp lệ.");
         }
@@ -94,6 +94,7 @@ internal sealed class PaymentService : IPaymentService
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
+                .ThenInclude(payment => payment.VehicleIncident)
             .Include(item => item.Extensions)
             .FirstOrDefaultAsync(
                 item => item.BookingId == bookingId && item.CustomerId == customerId,
@@ -102,12 +103,6 @@ internal sealed class PaymentService : IPaymentService
         if (booking is null)
         {
             return OperationResult.Failure("Không tìm thấy đơn thuê của bạn.");
-        }
-
-        if (paymentType == PaymentType.Deposit)
-        {
-            return OperationResult.Failure(
-                "Tiền cọc không chuyển riêng. Vui lòng chuyển cùng khoản tiền hệ thống yêu cầu.");
         }
 
         var stateError = ValidateCustomerPaymentState(booking, paymentType);
@@ -154,6 +149,24 @@ internal sealed class PaymentService : IPaymentService
             return alreadyPaid
                 ? OperationResult.Failure("Khoản tiền này đã được thanh toán.")
                 : OperationResult.Failure("Không tìm thấy khoản thanh toán phù hợp.");
+        }
+
+        if (payment.Amount <= 0)
+        {
+            return OperationResult.Failure("Số tiền thanh toán phải lớn hơn 0.");
+        }
+
+        if (paymentType == PaymentType.TrafficFine)
+        {
+            if (payment.VehicleIncidentId is null ||
+                payment.VehicleIncident is null ||
+                payment.VehicleIncident.BookingId != booking.BookingId ||
+                payment.VehicleIncident.IncidentType != IncidentType.TrafficFine ||
+                payment.VehicleIncident.Status == IncidentStatus.Cancelled)
+            {
+                return OperationResult.Failure(
+                    "Khoản phạt/vi phạm không còn gắn với hồ sơ hợp lệ của chuyến thuê này.");
+            }
         }
 
         if (paymentType == PaymentType.Rental &&
@@ -249,6 +262,7 @@ internal sealed class PaymentService : IPaymentService
             cancellationToken);
 
         var payment = await _dbContext.Payments
+            .Include(item => item.VehicleIncident)
             .Include(item => item.Booking)
                 .ThenInclude(booking => booking.Payments)
             .Include(item => item.Booking)
@@ -266,6 +280,11 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Giao dịch không ở trạng thái chờ xác nhận QR.");
         }
 
+        if (payment.Amount <= 0)
+        {
+            return OperationResult.Failure("Không thể xác nhận giao dịch có số tiền không hợp lệ.");
+        }
+
         var booking = payment.Booking;
         var originalType = payment.Type;
         var confirmedAmount = payment.Amount;
@@ -274,6 +293,17 @@ internal sealed class PaymentService : IPaymentService
         if (stateError is not null)
         {
             return OperationResult.Failure(stateError);
+        }
+
+        if (originalType == PaymentType.TrafficFine &&
+            (payment.VehicleIncidentId is null ||
+             payment.VehicleIncident is null ||
+             payment.VehicleIncident.BookingId != booking.BookingId ||
+             payment.VehicleIncident.IncidentType != IncidentType.TrafficFine ||
+             payment.VehicleIncident.Status == IncidentStatus.Cancelled))
+        {
+            return OperationResult.Failure(
+                "Không thể xác nhận vì khoản phạt không còn gắn với hồ sơ vi phạm hợp lệ.");
         }
 
         var paidAt = DateTime.UtcNow;
@@ -302,6 +332,7 @@ internal sealed class PaymentService : IPaymentService
             }
 
             booking.Status = BookingStatus.Paid;
+            booking.ReservationExpiresAt = null;
         }
         else if (originalType == PaymentType.Extension)
         {
@@ -315,6 +346,27 @@ internal sealed class PaymentService : IPaymentService
                 return OperationResult.Failure("Không còn yêu cầu gia hạn chờ thanh toán.");
             }
 
+            if (extension.AdditionalAmount != confirmedAmount)
+            {
+                return OperationResult.Failure(
+                    $"Số tiền giao dịch ({confirmedAmount:N0} đồng) không khớp khoản gia hạn đã duyệt ({extension.AdditionalAmount:N0} đồng). " +
+                    "Không xác nhận để tránh sai lệch quyết toán.");
+            }
+
+            if (extension.RequestedReturnDate <= booking.ReturnDate)
+            {
+                return OperationResult.Failure(
+                    "Ngày trả của gia hạn không còn lớn hơn ngày trả hiện tại. Vui lòng kiểm tra lại dữ liệu gia hạn.");
+            }
+
+            // Cập nhật hợp đồng trong CÙNG transaction với xác nhận tiền.
+            // Như vậy không thể có trạng thái payment=Paid nhưng ngày trả chưa được gia hạn.
+            booking.ReturnDate = extension.RequestedReturnDate;
+            booking.NumberOfDays = Math.Max(
+                1,
+                (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
+            booking.RentalAmount += extension.AdditionalAmount;
+            booking.TotalAmount += extension.AdditionalAmount;
             extension.Status = BookingExtensionStatus.Paid;
             extension.PaidAt = paidAt;
         }
@@ -362,11 +414,13 @@ internal sealed class PaymentService : IPaymentService
                 PaymentType.Rental =>
                     $"Đơn #{booking.BookingId}: đã xác nhận {(payment.Amount + (bundledDeposit?.Amount ?? 0m)):N0} đồng tiền thuê/phí giao và cọc.",
                 PaymentType.Extension =>
-                    $"Đơn #{booking.BookingId}: đã xác nhận tiền gia hạn {confirmedAmount:N0} đồng.",
+                    $"Đơn #{booking.BookingId}: đã xác nhận tiền gia hạn {confirmedAmount:N0} đồng; ngày trả mới {booking.ReturnDate:dd/MM/yyyy HH:mm}.",
                 PaymentType.VehicleSwapAdjustment =>
                     $"Đơn #{booking.BookingId}: đã xác nhận chênh lệch đổi xe {confirmedAmount:N0} đồng.",
                 PaymentType.AdditionalCharge =>
                     $"Đơn #{booking.BookingId}: đã xác nhận phụ phí {confirmedAmount:N0} đồng.",
+                PaymentType.TrafficFine =>
+                    $"Đơn #{booking.BookingId}: đã xác nhận thanh toán nghĩa vụ phạt/vi phạm {confirmedAmount:N0} đồng.",
                 _ =>
                     $"Đơn #{booking.BookingId}: đã xác nhận {confirmedAmount:N0} đồng."
             }
@@ -561,6 +615,13 @@ internal sealed class PaymentService : IPaymentService
                      booking.AdditionalAmount <= 0 =>
                 "Đơn không có phụ phí đang chờ thanh toán.",
 
+            PaymentType.TrafficFine
+                when !booking.Payments.Any(payment =>
+                    payment.Type == PaymentType.TrafficFine &&
+                    payment.Status == PaymentStatus.Pending &&
+                    payment.Amount > 0) =>
+                "Không có nghĩa vụ phạt/vi phạm hợp lệ đang chờ thanh toán.",
+
             _ => null
         };
 
@@ -591,6 +652,13 @@ internal sealed class PaymentService : IPaymentService
             PaymentType.AdditionalCharge
                 when booking.Status != BookingStatus.PendingInspection =>
                 "Đơn không còn ở trạng thái chờ thanh toán phụ phí.",
+
+            PaymentType.TrafficFine
+                when !booking.Payments.Any(payment =>
+                    payment.Type == PaymentType.TrafficFine &&
+                    payment.Status == PaymentStatus.AwaitingConfirmation &&
+                    payment.Amount > 0) =>
+                "Không còn nghĩa vụ phạt/vi phạm chờ đối soát.",
 
             _ => null
         };
@@ -633,6 +701,7 @@ internal sealed class PaymentService : IPaymentService
         PaymentType.Extension => "tiền gia hạn",
         PaymentType.VehicleSwapAdjustment => "chênh lệch đổi xe",
         PaymentType.AdditionalCharge => "phụ phí",
+        PaymentType.TrafficFine => "nghĩa vụ phạt/vi phạm",
         PaymentType.Refund => "hoàn tiền",
         _ => "thanh toán"
     };
