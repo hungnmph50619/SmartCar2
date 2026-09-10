@@ -19,6 +19,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ISecureDocumentStorage, SecureDocumentStorage>();
 builder.Services.AddScoped<IUserBankAccountService, UserBankAccountService>();
+builder.Services.AddHostedService<BookingReservationCleanupService>();
 builder.Services.AddScoped<KycAdminNotificationConsolidationFilter>();
 builder.Services.AddScoped<AdminWorkNotificationFilter>();
 builder.Services.AddControllersWithViews(options =>
