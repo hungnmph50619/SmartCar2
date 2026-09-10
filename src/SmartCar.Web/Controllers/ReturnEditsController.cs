@@ -144,6 +144,11 @@ public sealed class ReturnEditsController : Controller
             ModelState.AddModelError(nameof(model.ReturnedAt), "Thời gian trả không được trước thời gian giao xe.");
         }
 
+        if (model.ReturnedAt > DateTime.Now.AddMinutes(5))
+        {
+            ModelState.AddModelError(nameof(model.ReturnedAt), "Thời gian trả xe không được ở tương lai.");
+        }
+
         if (model.Mileage.HasValue && model.ReturnedAt >= booking.Handover.HandoverAt)
         {
             var elapsedDays = Math.Max(
@@ -368,12 +373,12 @@ public sealed class ReturnEditsController : Controller
         }
 
         var drivenKilometers = Math.Max(0, vehicleReturn.Mileage - booking.Handover.Mileage);
-        var elapsedDays = Math.Max(
+        var paidRentalDays = Math.Max(
             1,
-            (int)Math.Ceiling((vehicleReturn.ReturnedAt - booking.Handover.HandoverAt).TotalHours / 24d));
+            (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
         var effectiveIncludedKilometers = Math.Max(
             booking.Handover.IncludedKilometers,
-            elapsedDays * RentalPolicy.IncludedKilometersPerDay);
+            paidRentalDays * RentalPolicy.IncludedKilometersPerDay);
         var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
 
