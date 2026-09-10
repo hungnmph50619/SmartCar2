@@ -16,6 +16,7 @@ namespace SmartCar.Web.Controllers;
 public sealed class ReturnEditsController : Controller
 {
     private const string SignedMarker = "signed-return-";
+    private const int MinimumImages = 7;
     private const int MaximumImages = 25;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
     private const int MaximumReasonableKilometersPerDay = 2500;
@@ -118,7 +119,15 @@ public sealed class ReturnEditsController : Controller
             .Where(file => file.Length > 0)
             .ToList();
 
-        if (returnPhotos.Count - deleteSet.Count + newImages.Count > MaximumImages)
+        var finalImageCount = returnPhotos.Count - deleteSet.Count + newImages.Count;
+        if (finalImageCount < MinimumImages)
+        {
+            ModelState.AddModelError(
+                nameof(model.NewImages),
+                $"Biên bản trả xe phải giữ tối thiểu {MinimumImages} ảnh đối chiếu.");
+        }
+
+        if (finalImageCount > MaximumImages)
         {
             ModelState.AddModelError(
                 nameof(model.NewImages),
@@ -172,11 +181,6 @@ public sealed class ReturnEditsController : Controller
         if (model.AccessoryStatus == AccessoriesMissingValue && string.IsNullOrWhiteSpace(model.MissingAccessories))
         {
             ModelState.AddModelError(nameof(model.MissingAccessories), "Vui lòng ghi rõ phụ kiện bị thiếu hoặc mất.");
-        }
-
-        if (returnPhotos.Count - deleteSet.Count + newImages.Count == 0)
-        {
-            ModelState.AddModelError(nameof(model.NewImages), "Biên bản trả xe phải có ít nhất một ảnh đối chiếu.");
         }
 
         if (!ModelState.IsValid)
