@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Returns;
@@ -10,7 +11,10 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class ReturnService : IReturnService
 {
+    private const int MinimumEvidenceImages = 7;
+    private const int MaximumEvidenceImages = 25;
     private const int MaximumReasonableKilometersPerDay = 2500;
+    private const int MaximumChargeDescriptionLength = 250;
     private const string AccessoriesComplete = "Đủ";
     private const string AccessoriesMissingPrefix = "Thiếu/mất:";
     private const string ReturnAccessoriesLabel = "Phụ kiện khi trả:";
@@ -29,8 +33,9 @@ internal sealed class ReturnService : IReturnService
         CreateReturnRequest request,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -71,9 +76,27 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Thời gian trả xe không được ở tương lai.");
         }
 
-        if (string.IsNullOrWhiteSpace(request.ImagePaths))
+        var evidencePaths = SplitImagePaths(request.ImagePaths)
+            .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (evidencePaths.Length < MinimumEvidenceImages)
         {
-            return OperationResult.Failure("Biên bản trả xe phải có ảnh đối chiếu tình trạng xe.");
+            return OperationResult.Failure(
+                $"Biên bản trả xe phải có ít nhất {MinimumEvidenceImages} ảnh đối chiếu bắt buộc.");
+        }
+
+        if (evidencePaths.Length > MaximumEvidenceImages)
+        {
+            return OperationResult.Failure(
+                $"Biên bản trả xe chỉ được có tối đa {MaximumEvidenceImages} ảnh chứng cứ.");
+        }
+
+        if (request.HasDamage &&
+            !evidencePaths.Any(path => path.Contains("damage-", StringComparison.OrdinalIgnoreCase)))
+        {
+            return OperationResult.Failure(
+                "Đã ghi nhận hư hỏng mới thì biên bản trả xe phải có ít nhất một ảnh hư hỏng.");
         }
 
         var accessoryStatus = Normalize(request.InteriorCondition);
@@ -137,7 +160,7 @@ internal sealed class ReturnService : IReturnService
             IsLateReturn = lateMinutes > 0,
             LateMinutes = lateMinutes,
             LateFee = lateFee,
-            ImagePaths = Normalize(request.ImagePaths),
+            ImagePaths = string.Join(';', evidencePaths),
             Notes = BuildReturnNotes(accessoryStatus, request.Notes)
         };
 
@@ -203,10 +226,32 @@ internal sealed class ReturnService : IReturnService
         AddChargeRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (request.Amount <= 0 || string.IsNullOrWhiteSpace(request.Description))
+        if (!Enum.IsDefined(request.ChargeType))
+        {
+            return OperationResult.Failure("Loại phụ phí không hợp lệ.");
+        }
+
+        if (request.ChargeType is AdditionalChargeType.LateReturn or AdditionalChargeType.ExcessMileage)
+        {
+            return OperationResult.Failure(
+                "Phí trả muộn và phí vượt km do hệ thống tự động tính, không được tạo thủ công.");
+        }
+
+        var description = request.Description?.Trim() ?? string.Empty;
+        if (request.Amount <= 0 || string.IsNullOrWhiteSpace(description))
         {
             return OperationResult.Failure("Cần mô tả căn cứ và số tiền phụ phí hợp lệ.");
         }
+
+        if (description.Length > MaximumChargeDescriptionLength)
+        {
+            return OperationResult.Failure(
+                $"Mô tả phụ phí tối đa {MaximumChargeDescriptionLength} ký tự.");
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await ChargeQuery()
             .FirstOrDefaultAsync(item => item.BookingId == request.BookingId, cancellationToken);
@@ -227,18 +272,19 @@ internal sealed class ReturnService : IReturnService
                 "Phải xác minh đúng người nhận/trả và bản ký giao/trả trước khi ghi nhận phụ phí.");
         }
 
-        if (HasPaidAdditionalCharge(booking))
+        if (HasLockedAdditionalChargePayment(booking))
         {
-            return OperationResult.Failure("Không thể sửa phụ phí sau khi khách đã thanh toán.");
+            return OperationResult.Failure(
+                "Không thể sửa phụ phí sau khi khách đã báo chuyển khoản hoặc khoản phụ phí đã được thanh toán.");
         }
 
         var returnEvidence = SplitImagePaths(booking.VehicleReturn.ImagePaths)
             .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
-        if (returnEvidence.Length == 0)
+        if (returnEvidence.Length < MinimumEvidenceImages)
         {
-            return OperationResult.Failure("Không có ảnh trả xe làm căn cứ. Chưa thể tạo phụ phí.");
+            return OperationResult.Failure("Không đủ ảnh trả xe làm căn cứ. Chưa thể tạo phụ phí.");
         }
 
         if (request.ChargeType == AdditionalChargeType.Damage)
@@ -270,12 +316,13 @@ internal sealed class ReturnService : IReturnService
         booking.VehicleReturn.AdditionalCharges.Add(new AdditionalCharge
         {
             ChargeType = request.ChargeType,
-            Description = request.Description.Trim(),
+            Description = description,
             Amount = request.Amount
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -284,6 +331,10 @@ internal sealed class ReturnService : IReturnService
         int additionalChargeId,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var booking = await ChargeQuery()
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
@@ -303,9 +354,10 @@ internal sealed class ReturnService : IReturnService
                 "Phải xác minh đúng người nhận/trả và bản ký giao/trả trước khi thay đổi phụ phí.");
         }
 
-        if (HasPaidAdditionalCharge(booking))
+        if (HasLockedAdditionalChargePayment(booking))
         {
-            return OperationResult.Failure("Không thể sửa phụ phí sau khi khách đã thanh toán.");
+            return OperationResult.Failure(
+                "Không thể sửa phụ phí sau khi khách đã báo chuyển khoản hoặc khoản phụ phí đã được thanh toán.");
         }
 
         var charge = booking.VehicleReturn.AdditionalCharges
@@ -316,9 +368,16 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Không tìm thấy phụ phí.");
         }
 
+        if (charge.ChargeType is AdditionalChargeType.LateReturn or AdditionalChargeType.ExcessMileage)
+        {
+            return OperationResult.Failure(
+                "Phí trả muộn và phí vượt km do hệ thống tự động tính nên không thể xóa thủ công.");
+        }
+
         _dbContext.AdditionalCharges.Remove(charge);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -328,7 +387,9 @@ internal sealed class ReturnService : IReturnService
         string? maintenanceNote,
         CancellationToken cancellationToken = default)
     {
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -391,14 +452,24 @@ internal sealed class ReturnService : IReturnService
             .Sum(payment => payment.Amount);
         var additionalPaid = booking.AdditionalAmount <= 0 || cashAdditionalPaid >= booking.AdditionalAmount;
 
+        var hasOpenAdditionalPayment = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.AdditionalCharge &&
+            payment.Method != PaymentMethods.DepositDeduction &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
+
         var swapAdjustmentPaid = booking.Payments.All(payment =>
             payment.Type != PaymentType.VehicleSwapAdjustment ||
             payment.Status == PaymentStatus.Paid);
 
-        if (!rentalPaid || !depositSatisfied || !extensionPaid || !additionalPaid || !swapAdjustmentPaid)
+        if (!rentalPaid ||
+            !depositSatisfied ||
+            !extensionPaid ||
+            !additionalPaid ||
+            hasOpenAdditionalPayment ||
+            !swapAdjustmentPaid)
         {
             return OperationResult.Failure(
-                "Đơn vẫn còn khoản tiền chưa thanh toán hoặc chưa ghi nhận đủ tiền cọc.");
+                "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền cọc.");
         }
 
         foreach (var extension in booking.Extensions.Where(extension =>
@@ -531,10 +602,19 @@ internal sealed class ReturnService : IReturnService
             0,
             booking.RentalAmount + storedDeliveryFee + booking.AdditionalAmount);
 
-        var pendingPayment = booking.Payments.FirstOrDefault(payment =>
-            payment.Type == PaymentType.AdditionalCharge &&
-            payment.Method != PaymentMethods.DepositDeduction &&
-            payment.Status == PaymentStatus.Pending);
+        var pendingPayments = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Pending)
+            .OrderBy(payment => payment.PaymentId)
+            .ToList();
+
+        var pendingPayment = pendingPayments.FirstOrDefault();
+        foreach (var duplicate in pendingPayments.Skip(1))
+        {
+            _dbContext.Payments.Remove(duplicate);
+        }
 
         if (booking.AdditionalAmount > 0)
         {
@@ -575,11 +655,11 @@ internal sealed class ReturnService : IReturnService
         SplitImagePaths(imagePaths)
             .Any(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase));
 
-    private static bool HasPaidAdditionalCharge(Booking booking) =>
+    private static bool HasLockedAdditionalChargePayment(Booking booking) =>
         booking.Payments.Any(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
             payment.Method != PaymentMethods.DepositDeduction &&
-            payment.Status == PaymentStatus.Paid);
+            payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid);
 
     private static bool HasMissingAccessories(string? notes) =>
         !string.IsNullOrWhiteSpace(notes) &&
