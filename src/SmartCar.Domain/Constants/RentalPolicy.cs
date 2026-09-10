@@ -1,11 +1,20 @@
-﻿using SmartCar.Domain.Enums;
+using SmartCar.Domain.Enums;
 
 namespace SmartCar.Domain.Constants
 {
     public static class RentalPolicy
     {
-        // Tiền cọc = 300% tiền thuê ban đầu
-        public const decimal DepositRate = 3.00m;
+        // Tiền cọc = 100% tiền thuê ban đầu. Không tăng cọc lên mức quá lớn chỉ để phòng phạt nguội;
+        // phạt nguội phát sinh sau chuyến được quản lý thành khoản phải thu riêng của khách.
+        public const decimal DepositRate = 1.00m;
+
+        // Giữ chỗ: đơn mới chờ xác nhận tối đa 15 phút; sau khi duyệt giữ thêm 30 phút để thanh toán.
+        public const int BookingConfirmationHoldMinutes = 15;
+        public const int BookingPaymentHoldMinutes = 30;
+
+        // Khoảng vận hành tối thiểu giữa hai lượt thuê cùng xe: nhận xe trả về, kiểm tra, chụp ảnh,
+        // đối chiếu km/nhiên liệu và vệ sinh nhanh trước lượt kế tiếp.
+        public const int VehicleTurnaroundMinutes = 30;
 
         // No-show: sau 30 phút, giữ 70% tiền thuê và hoàn 30% tiền thuê còn lại.
         // Tiền cọc được hoàn theo số cọc còn lại thực tế của đơn.
@@ -44,12 +53,27 @@ namespace SmartCar.Domain.Constants
         public const decimal LateReturnFeeMultiplier = 1.50m;
 
         public const string TrafficFineTerms =
-            "Vi phạm giao thông/phạt nguội phát sinh trong thời gian thuê do Bên B chịu trách nhiệm. Khi SmartCar thông báo, Bên B trực tiếp làm việc với cơ quan có thẩm quyền; Bên A cung cấp hồ sơ thuê xe cần thiết để xác định người điều khiển. Bên B có trách nhiệm phối hợp xử lý.";
+            "Vi phạm giao thông/phạt nguội phát sinh trong thời gian khách thực tế giữ xe do Bên B chịu trách nhiệm. " +
+            "Phạt nguội có thể được cơ quan có thẩm quyền thông báo sau khi chuyến thuê đã kết thúc; khi có thông báo chính thức, " +
+            "SmartCar gắn vi phạm với đúng đơn thuê dựa trên thời gian giao xe thực tế và trả xe thực tế, lưu bằng chứng và tạo khoản phải thu tương ứng. " +
+            "Bên B có trách nhiệm thanh toán phần nghĩa vụ của mình theo thông báo hợp lệ. Khoản còn nợ không làm tăng tiền cọc ban đầu, " +
+            "nhưng tài khoản sẽ không được tạo chuyến thuê mới cho đến khi khoản phải thu được thanh toán hoặc được xác nhận đã xử lý. " +
+            "Nếu khách không tiếp tục sử dụng dịch vụ, SmartCar vẫn lưu hồ sơ, hợp đồng và bằng chứng để thực hiện việc thu hồi nghĩa vụ theo quy định áp dụng.";
 
         public const string DamageCompensationTerms =
             "Hư hỏng, mất mát hoặc thiếu phụ kiện do Bên B gây ra được bồi thường theo thiệt hại thực tế, hợp lý, có ảnh đối chiếu và chứng từ/báo giá hợp lệ. " +
             "Nếu yêu cầu gia hạn thông thường bị từ chối vì xe đã có đơn kế tiếp, Bên B phải trả xe đúng hạn; trường hợp đã được thông báo từ chối nhưng vẫn cố tình không giao/trả xe đúng hạn làm ảnh hưởng đơn kế tiếp, Bên B chịu phí trả muộn và khoản bồi thường bằng giá hợp đồng của đơn thuê bị ảnh hưởng. " +
             "Trường hợp bất khả kháng phải có minh chứng và vị trí hiện tại; SmartCar ưu tiên xử lý đổi xe cho khách kế tiếp. Nếu khách kế tiếp không chấp nhận phương án đổi xe và phải hủy đơn, các khoản khách đó đã thanh toán được hoàn theo chính sách; khoản bồi thường (nếu có) được xác định theo thiệt hại thực tế có căn cứ và khấu trừ từ tiền cọc của khách đang thuê. Khoản bồi thường này được thông báo rõ trước khi duyệt/thanh toán gia hạn và không tự động lấy bằng giá hợp đồng của đơn kế tiếp.";
+
+        public static bool HasTurnaroundConflict(
+            DateTime pickupA,
+            DateTime returnA,
+            DateTime pickupB,
+            DateTime returnB)
+        {
+            var buffer = TimeSpan.FromMinutes(VehicleTurnaroundMinutes);
+            return pickupA < returnB.Add(buffer) && returnA.Add(buffer) > pickupB;
+        }
 
         // ============================================================
         // TÍNH KHOẢNG CÁCH
