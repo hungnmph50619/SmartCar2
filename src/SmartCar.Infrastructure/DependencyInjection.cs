@@ -77,10 +77,18 @@ public static class DependencyInjection
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IEmailService, SmtpEmailService>();
         services.AddScoped<IBrandService, BrandService>();
-        services.AddScoped<IVehicleService, VehicleService>();
+
+        // Chính sách đặt xe dùng chung cho tìm xe, tạo đơn và giữ chỗ.
+        services.AddScoped<BookingReservationPolicy>();
+        services.AddScoped<VehicleService>();
+        services.AddScoped<IVehicleService, PolicyAwareVehicleService>();
+
         services.AddScoped<IDocumentService, DocumentService>();
         services.AddScoped<IVehicleDocumentService, VehicleDocumentService>();
-        services.AddScoped<IBookingService, BookingService>();
+
+        services.AddScoped<BookingService>();
+        services.AddScoped<IBookingService, PolicyAwareBookingService>();
+
         services.AddScoped<IBookingOperationService, BookingOperationService>();
         services.AddScoped<IExtensionService, ExtensionService>();
         services.AddScoped<IPaymentService, PaymentService>();
