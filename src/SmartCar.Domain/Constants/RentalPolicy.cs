@@ -4,9 +4,8 @@ namespace SmartCar.Domain.Constants
 {
     public static class RentalPolicy
     {
-        // Tiền cọc = 100% tiền thuê ban đầu. Không tăng cọc lên mức quá lớn chỉ để phòng phạt nguội;
-        // phạt nguội phát sinh sau chuyến được quản lý thành khoản phải thu riêng của khách.
-        public const decimal DepositRate = 1.00m;
+        // Tiền cọc = 300% tiền thuê ban đầu.
+        public const decimal DepositRate = 3.00m;
 
         // Giữ chỗ:
         // - Đơn mới chờ Admin xác nhận tối đa 30 phút.
