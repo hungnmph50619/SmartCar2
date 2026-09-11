@@ -46,6 +46,19 @@ public sealed class AdminStaffCreateViewModel
     [RegularExpression(@"^\d{12}$", ErrorMessage = "Số CCCD phải gồm đúng 12 chữ số và không được chứa chữ hoặc ký tự đặc biệt.")]
     [Display(Name = "Số CCCD")]
     public string CitizenIdNumber { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập mật khẩu tạm cho nhân viên.")]
+    [StringLength(100, MinimumLength = 8, ErrorMessage = "Mật khẩu tạm phải có ít nhất 8 ký tự.")]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100}$", ErrorMessage = "Mật khẩu tạm phải có chữ hoa, chữ thường, số và ký tự đặc biệt.")]
+    [DataType(DataType.Password)]
+    [Display(Name = "Mật khẩu tạm")]
+    public string TemporaryPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập lại mật khẩu tạm.")]
+    [DataType(DataType.Password)]
+    [Compare(nameof(TemporaryPassword), ErrorMessage = "Mật khẩu nhập lại không khớp.")]
+    [Display(Name = "Nhập lại mật khẩu tạm")]
+    public string ConfirmTemporaryPassword { get; set; } = string.Empty;
 }
 
 public sealed class AdminStaffEditViewModel
