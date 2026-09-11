@@ -1,0 +1,126 @@
+@model SmartCar.Web.ViewModels.AdminStaffIndexViewModel
+@{
+    ViewData["Title"] = "Quản lý nhân viên";
+    string MaskCitizenId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "-";
+        return value.Length <= 4 ? value : new string('•', value.Length - 4) + value[^4..];
+    }
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 mb-1">Quản lý nhân viên</h1>
+        <p class="text-muted mb-0">Admin tạo, xác minh, sửa và khóa/kích hoạt tài khoản Staff. Không xóa cứng để giữ lịch sử thao tác.</p>
+    </div>
+    <a class="btn btn-primary" asp-action="Create">+ Thêm nhân viên</a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="text-muted small">Tổng nhân viên</div>
+            <div class="fs-3 fw-bold">@Model.Staff.Count</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="text-muted small">Đang hoạt động</div>
+            <div class="fs-3 fw-bold text-success">@Model.Staff.Count(item => item.IsActive)</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100"><div class="card-body">
+            <div class="text-muted small">Chưa thiết lập mật khẩu</div>
+            <div class="fs-3 fw-bold text-warning">@Model.Staff.Count(item => !item.HasPassword)</div>
+        </div></div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body border-bottom">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-lg-7">
+                <label class="form-label">Tìm nhân viên</label>
+                <input class="form-control" name="query" value="@Model.Query" placeholder="Mã NV, họ tên, email, SĐT hoặc CCCD" />
+            </div>
+            <div class="col-lg-3">
+                <label class="form-label">Trạng thái</label>
+                <select class="form-select" name="status">
+                    <option value="all" selected="@(Model.Status == "all")">Tất cả</option>
+                    <option value="active" selected="@(Model.Status == "active")">Đang hoạt động</option>
+                    <option value="inactive" selected="@(Model.Status == "inactive")">Ngừng hoạt động / bị khóa</option>
+                </select>
+            </div>
+            <div class="col-lg-2 d-grid">
+                <button class="btn btn-outline-primary" type="submit">Lọc</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Mã NV</th>
+                    <th>Nhân viên</th>
+                    <th>Liên hệ</th>
+                    <th>CCCD</th>
+                    <th>Tài khoản</th>
+                    <th>Trạng thái</th>
+                    <th>Ngày tạo</th>
+                    <th class="text-end">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+            @if (Model.Staff.Count == 0)
+            {
+                <tr><td colspan="8" class="text-center text-muted py-5">Không có nhân viên phù hợp bộ lọc.</td></tr>
+            }
+            else
+            {
+                foreach (var item in Model.Staff)
+                {
+                    <tr>
+                        <td class="fw-semibold">@(string.IsNullOrWhiteSpace(item.EmployeeCode) ? "Chưa cập nhật" : item.EmployeeCode)</td>
+                        <td>
+                            <div class="fw-semibold">@item.FullName</div>
+                            <div class="small text-muted">Role: Staff</div>
+                        </td>
+                        <td>
+                            <div>@item.Email</div>
+                            <div class="small text-muted">@(item.PhoneNumber ?? "-")</div>
+                        </td>
+                        <td>@MaskCitizenId(item.CitizenIdNumber)</td>
+                        <td>
+                            @if (item.HasPassword)
+                            {
+                                <span class="badge text-bg-success">Đã thiết lập mật khẩu</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-warning">Chờ kích hoạt</span>
+                            }
+                        </td>
+                        <td>
+                            @if (item.IsActive)
+                            {
+                                <span class="badge text-bg-success">Đang hoạt động</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Ngừng hoạt động</span>
+                            }
+                        </td>
+                        <td>@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@item.UserId">Xem</a>
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@item.UserId">Sửa</a>
+                        </td>
+                    </tr>
+                }
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

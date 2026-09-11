@@ -17,6 +17,7 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
         BuildPart2(modelBuilder);
         BuildPart3(modelBuilder);
         BuildPart4(modelBuilder);
+        BuildPart5(modelBuilder);
 #pragma warning restore 612, 618
     }
 }

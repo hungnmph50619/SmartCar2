@@ -1,0 +1,67 @@
+@model SmartCar.Web.ViewModels.AdminStaffEditViewModel
+@{
+    ViewData["Title"] = "Sửa nhân viên";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Sửa thông tin nhân viên</h1>
+        <p class="text-muted mb-0">Mỗi lần cập nhật hồ sơ sẽ ghi lại Quản trị viên xác minh và thời điểm xác minh mới nhất.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.UserId">← Chi tiết nhân viên</a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-xl-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form asp-action="Edit" method="post" novalidate>
+                    <input asp-for="UserId" type="hidden" />
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="EmployeeCode" class="form-label"></label>
+                            <input asp-for="EmployeeCode" class="form-control" />
+                            <span asp-validation-for="EmployeeCode" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="FullName" class="form-label"></label>
+                            <input asp-for="FullName" class="form-control" />
+                            <span asp-validation-for="FullName" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Email" class="form-label"></label>
+                            <input asp-for="Email" class="form-control" />
+                            <span asp-validation-for="Email" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="PhoneNumber" class="form-label"></label>
+                            <input asp-for="PhoneNumber" class="form-control" />
+                            <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="CitizenIdNumber" class="form-label"></label>
+                            <input asp-for="CitizenIdNumber" class="form-control" inputmode="numeric" />
+                            <span asp-validation-for="CitizenIdNumber" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phân quyền</label>
+                            <input class="form-control" value="Staff / Nhân viên" readonly />
+                            <div class="form-text">Role không thay đổi tại màn hình này.</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+                        <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.UserId">Hủy</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
