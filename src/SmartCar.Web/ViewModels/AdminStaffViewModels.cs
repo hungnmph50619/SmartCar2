@@ -19,6 +19,7 @@ public sealed class AdminStaffListItemViewModel
     public string? CitizenIdNumber { get; set; }
     public bool IsActive { get; set; }
     public bool HasPassword { get; set; }
+    public bool MustChangePassword { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -87,6 +88,7 @@ public sealed class AdminStaffDetailsViewModel
     public string? CitizenIdNumber { get; set; }
     public bool IsActive { get; set; }
     public bool HasPassword { get; set; }
+    public bool MustChangePassword { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? CreatedByName { get; set; }
     public DateTime? VerifiedAt { get; set; }
