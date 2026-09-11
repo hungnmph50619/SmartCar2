@@ -84,6 +84,21 @@
             </div>
         </div>
 
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white fw-semibold">Lịch sử thao tác</div>
+            <div class="card-body">
+                <p class="small text-muted mb-3">
+                    Admin có thể xem các thao tác đã được ghi nhận trong Nhật ký hệ thống của riêng nhân viên này.
+                </p>
+                <a class="btn btn-outline-primary w-100"
+                   asp-controller="AuditLogs"
+                   asp-action="Index"
+                   asp-route-userId="@Model.UserId">
+                    Xem lịch sử thao tác
+                </a>
+            </div>
+        </div>
+
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">Quản lý tài khoản</div>
             <div class="card-body d-grid gap-2">
