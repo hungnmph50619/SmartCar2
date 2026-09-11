@@ -11,7 +11,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
     <div>
         <h1 class="h3 mb-1">Quản lý nhân viên</h1>
-        <p class="text-muted mb-0">Admin tạo, xác minh, sửa và khóa/kích hoạt tài khoản Staff. Không xóa cứng để giữ lịch sử thao tác.</p>
+        <p class="text-muted mb-0">Admin tạo, sửa và khóa/kích hoạt tài khoản Nhân viên. Không xóa cứng để giữ lịch sử thao tác.</p>
     </div>
     <a class="btn btn-primary" asp-action="Create">+ Thêm nhân viên</a>
 </div>
@@ -31,8 +31,8 @@
     </div>
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100"><div class="card-body">
-            <div class="text-muted small">Chưa thiết lập mật khẩu</div>
-            <div class="fs-3 fw-bold text-warning">@Model.Staff.Count(item => !item.HasPassword)</div>
+            <div class="text-muted small">Chờ đổi mật khẩu lần đầu</div>
+            <div class="fs-3 fw-bold text-warning">@Model.Staff.Count(item => item.MustChangePassword)</div>
         </div></div>
     </div>
 </div>
@@ -87,7 +87,7 @@
                     <th>Nhân viên</th>
                     <th>Liên hệ</th>
                     <th>CCCD</th>
-                    <th>Tài khoản</th>
+                    <th>Mật khẩu</th>
                     <th>Trạng thái</th>
                     <th>Ngày tạo</th>
                     <th class="text-end">Thao tác</th>
@@ -104,33 +104,34 @@
                 {
                     <tr>
                         <td class="fw-semibold">@(string.IsNullOrWhiteSpace(item.EmployeeCode) ? "Chưa cập nhật" : item.EmployeeCode)</td>
-                        <td>
-                            <div class="fw-semibold">@item.FullName</div>
-                            <div class="small text-muted">Role: Staff</div>
-                        </td>
+                        <td><div class="fw-semibold">@item.FullName</div></td>
                         <td>
                             <div>@item.Email</div>
                             <div class="small text-muted">@(item.PhoneNumber ?? "-")</div>
                         </td>
                         <td>@MaskCitizenId(item.CitizenIdNumber)</td>
                         <td>
-                            @if (item.HasPassword)
+                            @if (item.MustChangePassword)
                             {
-                                <span class="badge text-bg-success">Đã thiết lập mật khẩu</span>
+                                <span class="badge bg-warning text-dark">Mật khẩu tạm</span>
+                            }
+                            else if (item.HasPassword)
+                            {
+                                <span class="badge bg-success text-white">Đã đổi mật khẩu</span>
                             }
                             else
                             {
-                                <span class="badge text-bg-warning">Chờ kích hoạt</span>
+                                <span class="badge bg-secondary text-white">Chưa thiết lập</span>
                             }
                         </td>
                         <td>
                             @if (item.IsActive)
                             {
-                                <span class="badge text-bg-success">Đang hoạt động</span>
+                                <span class="badge bg-success text-white">Đang hoạt động</span>
                             }
                             else
                             {
-                                <span class="badge text-bg-secondary">Ngừng hoạt động</span>
+                                <span class="badge bg-secondary text-white">Ngừng hoạt động</span>
                             }
                         </td>
                         <td>@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
