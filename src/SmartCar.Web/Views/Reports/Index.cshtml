@@ -1,6 +1,6 @@
 @model SmartCar.Application.Features.Reports.FleetReportDto
 @{
-    ViewData["Title"] = "Hiệu suất và lợi nhuận";
+    ViewData["Title"] = "Báo cáo kinh doanh";
     var today = DateTime.Today;
     var sevenDaysStart = today.AddDays(-6);
     var thirtyDaysStart = today.AddDays(-29);
@@ -8,6 +8,10 @@
     var periodDays = Math.Max(1, (Model.ToDate.Date - Model.FromDate.Date).Days + 1);
     var totalOutstanding = Model.OutstandingReceivables + Model.OutstandingDeposits;
     var totalExpense = Model.TotalOperatingCost + Model.TotalRevenueRefunds;
+    var cashRevenue = Convert.ToDecimal(ViewBag.CashRevenue ?? 0m);
+    var bankQrRevenue = Convert.ToDecimal(ViewBag.BankQrRevenue ?? 0m);
+    var otherRevenue = Convert.ToDecimal(ViewBag.OtherRevenue ?? 0m);
+    var paymentMethodTotal = cashRevenue + bankQrRevenue + otherRevenue;
     var vehicleRows = Model.Vehicles.OrderByDescending(x => x.NetOperatingProfit).ThenBy(x => x.VehicleName).ToList();
 }
 
@@ -55,8 +59,8 @@
 <div class="profit-page">
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div>
-            <h1 class="h3 mb-1">Hiệu suất và lợi nhuận</h1>
-            <div class="text-muted">Theo dõi nhanh doanh thu, lợi nhuận và từng đơn thuê.</div>
+            <h1 class="h3 mb-1">Báo cáo kinh doanh</h1>
+            <div class="text-muted">Theo dõi doanh thu theo phương thức thanh toán, lợi nhuận và hiệu quả từng xe.</div>
         </div>
         <div class="text-end small text-muted">
             <strong>@Model.FromDate.ToString("dd/MM/yyyy") – @Model.ToDate.ToString("dd/MM/yyyy")</strong>
@@ -80,12 +84,23 @@
     </form>
 
     <div class="row g-3 mb-3">
-        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div></div></div>
-        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">CHI PHÍ & HOÀN</div><div class="kpi-number text-danger">@totalExpense.ToString("N0") đ</div></div></div>
-        <div class="col-md-4"><div class="panel kpi"><div class="kpi-label">LỢI NHUẬN ƯỚC TÍNH</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TỔNG DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">QR / CHUYỂN KHOẢN</div><div class="kpi-number text-info">@bankQrRevenue.ToString("N0") đ</div><div class="tiny mt-1">Thanh toán online qua QR ngân hàng</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TIỀN MẶT TẠI QUẦY</div><div class="kpi-number text-success">@cashRevenue.ToString("N0") đ</div><div class="tiny mt-1">Đơn do nhân viên tạo và thu tại quầy</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">LỢI NHUẬN ƯỚC TÍNH</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div></div></div>
     </div>
 
     <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="panel p-3 h-100">
+                <h2 class="section-title mb-2">Doanh thu theo phương thức thanh toán</h2>
+                <div class="finance-line"><span>QR / chuyển khoản</span><strong class="text-info">@bankQrRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Tiền mặt tại quầy</span><strong class="text-success">@cashRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Khác / khấu trừ cọc</span><strong>@otherRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span><strong>Tổng theo phương thức</strong></span><strong>@paymentMethodTotal.ToString("N0") đ</strong></div>
+                <div class="tiny mt-2">Tiền cọc không được tính là doanh thu; cọc đang giữ được theo dõi riêng ở mục tiền đang xử lý.</div>
+            </div>
+        </div>
         <div class="col-lg-6">
             <div class="panel p-3 h-100">
                 <h2 class="section-title mb-2">Nguồn doanh thu</h2>
@@ -93,6 +108,17 @@
                 <div class="finance-line"><span>Gia hạn</span><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Phụ phí</span><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Khấu trừ cọc</span><strong>@Model.TotalDepositDeductionRecovery.ToString("N0") đ</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="panel p-3 h-100">
+                <h2 class="section-title mb-2">Chi phí và hoàn tiền</h2>
+                <div class="finance-line"><span>Hoàn doanh thu</span><strong class="text-danger">@Model.TotalRevenueRefunds.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Chi phí vận hành</span><strong class="text-danger">@Model.TotalOperatingCost.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span><strong>Tổng chi phí & hoàn</strong></span><strong class="text-danger">@totalExpense.ToString("N0") đ</strong></div>
             </div>
         </div>
         <div class="col-lg-6">
@@ -197,6 +223,11 @@
 @section Scripts {
 <script>
 (() => {
+    const reportLink = Array.from(document.querySelectorAll('.admin-sidebar a.admin-nav-link'))
+        .find(link => (link.getAttribute('href') || '').toLowerCase().includes('/reports'));
+    const reportLabel = reportLink?.querySelector('span:last-child');
+    if (reportLabel) reportLabel.textContent = 'Báo cáo kinh doanh';
+
     const input = document.getElementById('vehicle-search');
     const rows = Array.from(document.querySelectorAll('.vehicle-wrapper'));
     const empty = document.getElementById('vehicle-empty');
