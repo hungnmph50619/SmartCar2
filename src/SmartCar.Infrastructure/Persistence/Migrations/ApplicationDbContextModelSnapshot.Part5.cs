@@ -31,6 +31,9 @@ partial class ApplicationDbContextModelSnapshot
             b.Property<DateTime?>("VerifiedAt")
                 .HasColumnType("datetime2");
 
+            b.Property<bool>("MustChangePassword")
+                .HasColumnType("bit");
+
             b.HasIndex("EmployeeCode")
                 .IsUnique()
                 .HasFilter("[EmployeeCode] IS NOT NULL");
