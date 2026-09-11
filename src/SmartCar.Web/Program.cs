@@ -1,9 +1,11 @@
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure;
+using SmartCar.Infrastructure.Identity;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Filters;
 using SmartCar.Web.Services;
@@ -57,6 +59,28 @@ app.Use(async (context, next) =>
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+
+// Nhân viên dùng mật khẩu tạm không được đi thẳng vào các màn hình nghiệp vụ.
+// Chỉ sau khi đổi mật khẩu lần đầu và đăng nhập lại mới được sử dụng khu vực Staff.
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true &&
+        context.User.IsInRole(RoleNames.Staff) &&
+        !context.Request.Path.StartsWithSegments("/Account/FirstLoginPassword", StringComparison.OrdinalIgnoreCase) &&
+        !context.Request.Path.StartsWithSegments("/Account/Logout", StringComparison.OrdinalIgnoreCase))
+    {
+        var userManager = context.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+        var staff = await userManager.GetUserAsync(context.User);
+        if (staff?.MustChangePassword == true)
+        {
+            context.Response.Redirect("/Account/FirstLoginPassword");
+            return;
+        }
+    }
+
+    await next();
+});
+
 app.UseAuthorization();
 
 // Ảnh CCCD/GPLX là dữ liệu nhạy cảm. Khi Quản trị viên xem ảnh thông qua
