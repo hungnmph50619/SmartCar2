@@ -12,6 +12,9 @@ public sealed class AdminStaffManagement : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
+        // Tạo cột trước trong một batch riêng. SQL Server biên dịch cả batch trước khi
+        // thực thi, nên nếu CREATE INDEX tham chiếu ngay các cột vừa ALTER TABLE thêm
+        // trong cùng batch thì có thể báo "Invalid column name".
         migrationBuilder.Sql("""
             IF COL_LENGTH(N'dbo.AspNetUsers', N'EmployeeCode') IS NULL
                 ALTER TABLE [dbo].[AspNetUsers] ADD [EmployeeCode] nvarchar(30) NULL;
@@ -27,7 +30,10 @@ public sealed class AdminStaffManagement : Migration
 
             IF COL_LENGTH(N'dbo.AspNetUsers', N'VerifiedAt') IS NULL
                 ALTER TABLE [dbo].[AspNetUsers] ADD [VerifiedAt] datetime2 NULL;
+            """);
 
+        // Tạo index ở batch thứ hai, sau khi SQL Server đã thấy các cột mới tồn tại.
+        migrationBuilder.Sql("""
             IF NOT EXISTS (
                 SELECT 1 FROM sys.indexes
                 WHERE [name] = N'IX_AspNetUsers_EmployeeCode'
@@ -64,7 +70,9 @@ public sealed class AdminStaffManagement : Migration
                 WHERE [name] = N'IX_AspNetUsers_CitizenIdNumber'
                   AND [object_id] = OBJECT_ID(N'dbo.AspNetUsers'))
                 DROP INDEX [IX_AspNetUsers_CitizenIdNumber] ON [dbo].[AspNetUsers];
+            """);
 
+        migrationBuilder.Sql("""
             IF COL_LENGTH(N'dbo.AspNetUsers', N'VerifiedAt') IS NOT NULL
                 ALTER TABLE [dbo].[AspNetUsers] DROP COLUMN [VerifiedAt];
 
