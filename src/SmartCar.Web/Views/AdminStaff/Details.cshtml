@@ -1,7 +1,6 @@
 @model SmartCar.Web.ViewModels.AdminStaffDetailsViewModel
 @{
     ViewData["Title"] = "Chi tiết nhân viên";
-    var temporaryPassword = TempData["StaffTemporaryPassword"] as string;
 }
 
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -17,28 +16,6 @@
         <a class="btn btn-primary" asp-action="Edit" asp-route-id="@Model.UserId">Sửa thông tin</a>
     </div>
 </div>
-
-@if (!string.IsNullOrWhiteSpace(temporaryPassword))
-{
-    <div class="alert alert-warning shadow-sm mb-4">
-        <div class="fw-semibold mb-2">Thông tin đăng nhập tạm thời</div>
-        <p class="mb-3">Hãy gửi đúng thông tin dưới đây cho nhân viên. Mật khẩu tạm chỉ hiển thị ở lần này.</p>
-        <div class="row g-3 align-items-end">
-            <div class="col-md-5">
-                <label class="form-label small text-muted">Email đăng nhập</label>
-                <input class="form-control" value="@Model.Email" readonly />
-            </div>
-            <div class="col-md-5">
-                <label class="form-label small text-muted">Mật khẩu tạm</label>
-                <input id="temporaryPassword" class="form-control fw-semibold" value="@temporaryPassword" readonly />
-            </div>
-            <div class="col-md-2 d-grid">
-                <button class="btn btn-dark" type="button" id="copyTemporaryPassword">Sao chép</button>
-            </div>
-        </div>
-        <div class="small mt-3">Nhân viên phải đổi mật khẩu ngay ở lần đăng nhập đầu tiên rồi đăng nhập lại mới được vào khu vực Nhân viên.</div>
-    </div>
-}
 
 <div class="row g-4">
     <div class="col-lg-7">
@@ -86,7 +63,7 @@
                     <dd class="col-7">
                         @if (Model.MustChangePassword)
                         {
-                            <span class="badge bg-warning text-dark">Đang dùng mật khẩu tạm</span>
+                            <span class="badge bg-warning text-dark">Chờ đổi mật khẩu lần đầu</span>
                         }
                         else if (Model.HasPassword)
                         {
@@ -124,23 +101,3 @@
         </div>
     </div>
 </div>
-
-@section Scripts {
-<script>
-(() => {
-    const button = document.getElementById('copyTemporaryPassword');
-    const input = document.getElementById('temporaryPassword');
-    if (!button || !input) return;
-    button.addEventListener('click', async () => {
-        try {
-            await navigator.clipboard.writeText(input.value);
-            button.textContent = 'Đã sao chép';
-        } catch {
-            input.select();
-            document.execCommand('copy');
-            button.textContent = 'Đã sao chép';
-        }
-    });
-})();
-</script>
-}
