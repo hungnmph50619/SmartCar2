@@ -6,7 +6,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h3 mb-1">Sửa thông tin nhân viên</h1>
-        <p class="text-muted mb-0">Mỗi lần cập nhật hồ sơ sẽ ghi lại Quản trị viên xác minh và thời điểm xác minh mới nhất.</p>
+        <p class="text-muted mb-0">Mã nhân viên là định danh nội bộ do hệ thống cấp và không thay đổi sau khi tạo.</p>
     </div>
     <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.UserId">← Chi tiết nhân viên</a>
 </div>
@@ -22,33 +22,28 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label asp-for="EmployeeCode" class="form-label"></label>
-                            <input asp-for="EmployeeCode" class="form-control" />
-                            <span asp-validation-for="EmployeeCode" class="text-danger small"></span>
+                            <input asp-for="EmployeeCode" class="form-control" readonly />
+                            <div class="form-text">Mã nhân viên được hệ thống tự sinh và không thể sửa.</div>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="FullName" class="form-label"></label>
-                            <input asp-for="FullName" class="form-control" />
+                            <input asp-for="FullName" class="form-control" maxlength="100" autocomplete="name" />
                             <span asp-validation-for="FullName" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="Email" class="form-label"></label>
-                            <input asp-for="Email" class="form-control" />
+                            <input asp-for="Email" class="form-control" maxlength="256" autocomplete="email" />
                             <span asp-validation-for="Email" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="PhoneNumber" class="form-label"></label>
-                            <input asp-for="PhoneNumber" class="form-control" />
+                            <input asp-for="PhoneNumber" class="form-control" inputmode="numeric" maxlength="10" autocomplete="tel" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
                             <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="CitizenIdNumber" class="form-label"></label>
-                            <input asp-for="CitizenIdNumber" class="form-control" inputmode="numeric" />
+                            <input asp-for="CitizenIdNumber" class="form-control" inputmode="numeric" maxlength="12" autocomplete="off" oninput="this.value=this.value.replace(/\D/g,'').slice(0,12)" />
                             <span asp-validation-for="CitizenIdNumber" class="text-danger small"></span>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Phân quyền</label>
-                            <input class="form-control" value="Staff / Nhân viên" readonly />
-                            <div class="form-text">Role không thay đổi tại màn hình này.</div>
                         </div>
                     </div>
 
