@@ -1,9 +1,9 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SmartCar.Application.Features.Accounts;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure.Identity;
@@ -20,21 +20,15 @@ public sealed class AdminStaffController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
-    private readonly IEmailService _emailService;
-    private readonly ILogger<AdminStaffController> _logger;
 
     public AdminStaffController(
         UserManager<ApplicationUser> userManager,
         ApplicationDbContext dbContext,
-        IAuditService auditService,
-        IEmailService emailService,
-        ILogger<AdminStaffController> logger)
+        IAuditService auditService)
     {
         _userManager = userManager;
         _dbContext = dbContext;
         _auditService = auditService;
-        _emailService = emailService;
-        _logger = logger;
     }
 
     [HttpGet]
@@ -90,6 +84,7 @@ public sealed class AdminStaffController : Controller
                 CitizenIdNumber = user.CitizenIdNumber,
                 IsActive = user.IsActive,
                 HasPassword = await _userManager.HasPasswordAsync(user),
+                MustChangePassword = user.MustChangePassword,
                 CreatedAt = user.CreatedAt
             });
         }
@@ -130,6 +125,7 @@ public sealed class AdminStaffController : Controller
         }
 
         var employeeCode = await GenerateEmployeeCodeAsync(cancellationToken);
+        var temporaryPassword = GenerateTemporaryPassword();
         var adminId = CurrentUserId();
         var now = DateTime.UtcNow;
         var user = new ApplicationUser
@@ -145,10 +141,11 @@ public sealed class AdminStaffController : Controller
             CreatedAt = now,
             CreatedByUserId = adminId,
             VerifiedByUserId = adminId,
-            VerifiedAt = now
+            VerifiedAt = now,
+            MustChangePassword = true
         };
 
-        var createResult = await _userManager.CreateAsync(user);
+        var createResult = await _userManager.CreateAsync(user, temporaryPassword);
         if (!createResult.Succeeded)
         {
             AddIdentityErrors(createResult);
@@ -166,21 +163,13 @@ public sealed class AdminStaffController : Controller
         await WriteAuditAsync(
             "CreateStaffAccount",
             user.Id,
-            $"Tạo nhân viên {employeeCode} - {fullName}, tự động gán role Staff và kích hoạt tài khoản.",
+            $"Tạo nhân viên {employeeCode} - {fullName}, gán role Staff và yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên.",
             cancellationToken);
 
-        var activationUrl = await BuildActivationUrlAsync(user, cancellationToken);
-        var emailSent = activationUrl is not null &&
-                        await TrySendActivationEmailAsync(user, activationUrl, cancellationToken);
-
-        if (!string.IsNullOrWhiteSpace(activationUrl))
-        {
-            TempData["StaffActivationUrl"] = activationUrl;
-        }
-
-        TempData["SuccessMessage"] = emailSent
-            ? $"Đã tạo nhân viên {employeeCode} và gửi email kích hoạt để nhân viên tự đặt mật khẩu."
-            : $"Đã tạo nhân viên {employeeCode}. Chưa gửi được email kích hoạt; Quản trị viên có thể sao chép liên kết kích hoạt ở trang chi tiết.";
+        // Chỉ hiển thị mật khẩu tạm một lần sau khi tạo, không lưu plaintext vào database/audit log.
+        TempData["StaffTemporaryPassword"] = temporaryPassword;
+        TempData["SuccessMessage"] =
+            $"Đã tạo nhân viên {employeeCode}. Hãy bàn giao email và mật khẩu tạm cho nhân viên; lần đăng nhập đầu tiên sẽ bắt buộc đổi mật khẩu.";
 
         return RedirectToAction(nameof(Details), new { id = user.Id });
     }
@@ -312,52 +301,6 @@ public sealed class AdminStaffController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ResendActivation(
-        string id,
-        CancellationToken cancellationToken)
-    {
-        var user = await GetStaffAsync(id);
-        if (user is null)
-        {
-            return NotFound();
-        }
-
-        if (!user.IsActive)
-        {
-            TempData["ErrorMessage"] = "Tài khoản đang bị khóa. Hãy kích hoạt lại trước khi gửi liên kết thiết lập mật khẩu.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        if (await _userManager.HasPasswordAsync(user))
-        {
-            TempData["ErrorMessage"] = "Nhân viên đã thiết lập mật khẩu. Có thể dùng chức năng Quên mật khẩu nếu cần đặt lại.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var activationUrl = await BuildActivationUrlAsync(user, cancellationToken);
-        if (string.IsNullOrWhiteSpace(activationUrl))
-        {
-            TempData["ErrorMessage"] = "Không thể tạo liên kết kích hoạt tài khoản.";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var emailSent = await TrySendActivationEmailAsync(user, activationUrl, cancellationToken);
-        TempData["StaffActivationUrl"] = activationUrl;
-        TempData[emailSent ? "SuccessMessage" : "ErrorMessage"] = emailSent
-            ? "Đã gửi lại email kích hoạt cho nhân viên."
-            : "Không gửi được email kích hoạt. Bạn vẫn có thể sao chép liên kết kích hoạt bên dưới và gửi cho nhân viên.";
-
-        await WriteAuditAsync(
-            "ResendStaffActivation",
-            user.Id,
-            $"Tạo lại liên kết thiết lập mật khẩu cho nhân viên {user.EmployeeCode ?? user.Email}.",
-            cancellationToken);
-
-        return RedirectToAction(nameof(Details), new { id });
-    }
-
     private async Task<ApplicationUser?> GetStaffAsync(string id)
     {
         if (string.IsNullOrWhiteSpace(id))
@@ -398,6 +341,7 @@ public sealed class AdminStaffController : Controller
             CitizenIdNumber = user.CitizenIdNumber,
             IsActive = user.IsActive,
             HasPassword = await _userManager.HasPasswordAsync(user),
+            MustChangePassword = user.MustChangePassword,
             CreatedAt = user.CreatedAt,
             CreatedByName = user.CreatedByUserId is not null && names.TryGetValue(user.CreatedByUserId, out var creator)
                 ? creator
@@ -484,51 +428,10 @@ public sealed class AdminStaffController : Controller
         return nextCode;
     }
 
-    private async Task<string?> BuildActivationUrlAsync(
-        ApplicationUser user,
-        CancellationToken cancellationToken)
+    private static string GenerateTemporaryPassword()
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-        return Url.Action(
-            "ResetPassword",
-            "Account",
-            new { email = user.Email, token },
-            Request.Scheme);
-    }
-
-    private async Task<bool> TrySendActivationEmailAsync(
-        ApplicationUser user,
-        string activationUrl,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(user.Email))
-        {
-            return false;
-        }
-
-        try
-        {
-            await _emailService.SendStaffActivationEmailAsync(
-                user.Email,
-                user.FullName,
-                activationUrl,
-                cancellationToken);
-            return true;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "Không thể gửi email kích hoạt tài khoản Staff {StaffId} tới {Email}.",
-                user.Id,
-                user.Email);
-            return false;
-        }
+        var number = RandomNumberGenerator.GetInt32(100000, 1000000);
+        return $"Sc@{number}!";
     }
 
     private async Task WriteAuditAsync(
@@ -561,6 +464,11 @@ public sealed class AdminStaffController : Controller
         "DuplicateUserName" => "Email đăng nhập này đã được sử dụng.",
         "InvalidEmail" => "Email không đúng định dạng.",
         "InvalidUserName" => "Email đăng nhập chứa ký tự không hợp lệ.",
+        "PasswordTooShort" => "Mật khẩu phải có ít nhất 8 ký tự.",
+        "PasswordRequiresDigit" => "Mật khẩu phải có ít nhất một chữ số.",
+        "PasswordRequiresUpper" => "Mật khẩu phải có ít nhất một chữ hoa.",
+        "PasswordRequiresLower" => "Mật khẩu phải có ít nhất một chữ thường.",
+        "PasswordRequiresNonAlphanumeric" => "Mật khẩu phải có ít nhất một ký tự đặc biệt.",
         "UserAlreadyInRole" => "Tài khoản này đã có quyền Nhân viên.",
         "UserNotInRole" => "Tài khoản không có quyền Nhân viên.",
         _ => "Không thể lưu tài khoản nhân viên. Vui lòng kiểm tra lại thông tin và thử lại."
