@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SmartCar.Application.Features.Accounts;
+using SmartCar.Domain.Constants;
+using SmartCar.Infrastructure.Identity;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -10,17 +13,20 @@ public class AccountController : Controller
 {
     private readonly IAccountService _accountService;
     private readonly IEmailService _emailService;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         IAccountService accountService,
         IEmailService emailService,
+        UserManager<ApplicationUser> userManager,
         IWebHostEnvironment environment,
         ILogger<AccountController> logger)
     {
         _accountService = accountService;
         _emailService = emailService;
+        _userManager = userManager;
         _environment = environment;
         _logger = logger;
     }
@@ -107,11 +113,6 @@ public class AccountController : Controller
             return View(model);
         }
 
-        if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
-        {
-            return LocalRedirect(model.ReturnUrl);
-        }
-
         if (result.IsAdmin)
         {
             return RedirectToAction("Index", "Dashboard");
@@ -119,10 +120,90 @@ public class AccountController : Controller
 
         if (result.IsStaff)
         {
+            var staff = await _userManager.FindByEmailAsync(model.Email.Trim());
+            if (staff?.MustChangePassword == true)
+            {
+                return RedirectToAction(nameof(FirstLoginPassword));
+            }
+
             return RedirectToAction("Index", "Staff");
         }
 
+        if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
+        {
+            return LocalRedirect(model.ReturnUrl);
+        }
+
         return RedirectToAction("Index", "Home");
+    }
+
+    [HttpGet]
+    [Authorize(Roles = RoleNames.Staff)]
+    public async Task<IActionResult> FirstLoginPassword()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            await _accountService.LogoutAsync();
+            return RedirectToAction(nameof(Login));
+        }
+
+        if (!user.MustChangePassword)
+        {
+            return RedirectToAction("Index", "Staff");
+        }
+
+        return View(new ChangePasswordViewModel());
+    }
+
+    [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> FirstLoginPassword(ChangePasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+        {
+            await _accountService.LogoutAsync();
+            return RedirectToAction(nameof(Login));
+        }
+
+        if (!user.MustChangePassword)
+        {
+            return RedirectToAction("Index", "Staff");
+        }
+
+        var result = await _userManager.ChangePasswordAsync(
+            user,
+            model.CurrentPassword,
+            model.NewPassword);
+
+        if (!result.Succeeded)
+        {
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error.Description);
+            }
+
+            return View(model);
+        }
+
+        user.MustChangePassword = false;
+        var updateResult = await _userManager.UpdateAsync(user);
+        if (!updateResult.Succeeded)
+        {
+            ModelState.AddModelError(string.Empty, "Đã đổi mật khẩu nhưng không thể cập nhật trạng thái tài khoản. Vui lòng thử lại.");
+            return View(model);
+        }
+
+        await _accountService.LogoutAsync();
+        TempData["SuccessMessage"] = "Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới để vào hệ thống Nhân viên.";
+        return RedirectToAction(nameof(Login));
     }
 
     [HttpGet]
