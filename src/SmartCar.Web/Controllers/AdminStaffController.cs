@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -125,7 +124,7 @@ public sealed class AdminStaffController : Controller
         }
 
         var employeeCode = await GenerateEmployeeCodeAsync(cancellationToken);
-        var temporaryPassword = GenerateTemporaryPassword();
+        var temporaryPassword = model.TemporaryPassword;
         var adminId = CurrentUserId();
         var now = DateTime.UtcNow;
         var user = new ApplicationUser
@@ -166,10 +165,8 @@ public sealed class AdminStaffController : Controller
             $"Tạo nhân viên {employeeCode} - {fullName}, gán role Staff và yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên.",
             cancellationToken);
 
-        // Chỉ hiển thị mật khẩu tạm một lần sau khi tạo, không lưu plaintext vào database/audit log.
-        TempData["StaffTemporaryPassword"] = temporaryPassword;
         TempData["SuccessMessage"] =
-            $"Đã tạo nhân viên {employeeCode}. Hãy bàn giao email và mật khẩu tạm cho nhân viên; lần đăng nhập đầu tiên sẽ bắt buộc đổi mật khẩu.";
+            $"Đã tạo nhân viên {employeeCode}. Nhân viên đăng nhập bằng email và mật khẩu tạm do Quản trị viên vừa đặt; hệ thống sẽ bắt buộc đổi mật khẩu ở lần đăng nhập đầu tiên.";
 
         return RedirectToAction(nameof(Details), new { id = user.Id });
     }
@@ -426,12 +423,6 @@ public sealed class AdminStaffController : Controller
         while (await _dbContext.Users.AsNoTracking().AnyAsync(user => user.EmployeeCode == nextCode, cancellationToken));
 
         return nextCode;
-    }
-
-    private static string GenerateTemporaryPassword()
-    {
-        var number = RandomNumberGenerator.GetInt32(100000, 1000000);
-        return $"Sc@{number}!";
     }
 
     private async Task WriteAuditAsync(
