@@ -47,17 +47,17 @@ public sealed class AdminStaffCreateViewModel
     [Display(Name = "Số CCCD")]
     public string CitizenIdNumber { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng nhập mật khẩu tạm cho nhân viên.")]
-    [StringLength(100, MinimumLength = 8, ErrorMessage = "Mật khẩu tạm phải có ít nhất 8 ký tự.")]
-    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100}$", ErrorMessage = "Mật khẩu tạm phải có chữ hoa, chữ thường, số và ký tự đặc biệt.")]
+    [Required(ErrorMessage = "Vui lòng nhập mật khẩu cho nhân viên.")]
+    [StringLength(100, MinimumLength = 8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự.")]
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100}$", ErrorMessage = "Mật khẩu phải có chữ hoa, chữ thường, số và ký tự đặc biệt.")]
     [DataType(DataType.Password)]
-    [Display(Name = "Mật khẩu tạm")]
+    [Display(Name = "Mật khẩu")]
     public string TemporaryPassword { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng nhập lại mật khẩu tạm.")]
+    [Required(ErrorMessage = "Vui lòng nhập lại mật khẩu.")]
     [DataType(DataType.Password)]
     [Compare(nameof(TemporaryPassword), ErrorMessage = "Mật khẩu nhập lại không khớp.")]
-    [Display(Name = "Nhập lại mật khẩu tạm")]
+    [Display(Name = "Nhập lại mật khẩu")]
     public string ConfirmTemporaryPassword { get; set; } = string.Empty;
 }
 
