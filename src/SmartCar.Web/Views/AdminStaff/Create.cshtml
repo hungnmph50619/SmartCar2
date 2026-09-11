@@ -41,19 +41,47 @@
                         </div>
                         <div class="col-md-6">
                             <label asp-for="TemporaryPassword" class="form-label"></label>
-                            <input asp-for="TemporaryPassword" class="form-control" placeholder="Nhập mật khẩu tạm" autocomplete="new-password" />
+                            <div class="input-group">
+                                <input asp-for="TemporaryPassword" id="staffPassword" class="form-control" placeholder="Nhập mật khẩu" autocomplete="new-password" />
+                                <button class="btn btn-outline-secondary password-toggle" type="button" data-target="staffPassword" aria-label="Hiển thị mật khẩu" title="Hiển thị mật khẩu">
+                                    <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                    <svg class="eye-closed d-none" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M3 3l18 18"></path>
+                                        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+                                        <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c6.5 0 10 8 10 8a18.4 18.4 0 0 1-2.1 3.2"></path>
+                                        <path d="M6.6 6.6C3.7 8.5 2 12 2 12s3.5 8 10 8a10.7 10.7 0 0 0 4.1-.8"></path>
+                                    </svg>
+                                </button>
+                            </div>
                             <div class="form-text">Ít nhất 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.</div>
                             <span asp-validation-for="TemporaryPassword" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="ConfirmTemporaryPassword" class="form-label"></label>
-                            <input asp-for="ConfirmTemporaryPassword" class="form-control" placeholder="Nhập lại mật khẩu tạm" autocomplete="new-password" />
+                            <div class="input-group">
+                                <input asp-for="ConfirmTemporaryPassword" id="confirmStaffPassword" class="form-control" placeholder="Nhập lại mật khẩu" autocomplete="new-password" />
+                                <button class="btn btn-outline-secondary password-toggle" type="button" data-target="confirmStaffPassword" aria-label="Hiển thị mật khẩu" title="Hiển thị mật khẩu">
+                                    <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                    <svg class="eye-closed d-none" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M3 3l18 18"></path>
+                                        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
+                                        <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c6.5 0 10 8 10 8a18.4 18.4 0 0 1-2.1 3.2"></path>
+                                        <path d="M6.6 6.6C3.7 8.5 2 12 2 12s3.5 8 10 8a10.7 10.7 0 0 0 4.1-.8"></path>
+                                    </svg>
+                                </button>
+                            </div>
                             <span asp-validation-for="ConfirmTemporaryPassword" class="text-danger small"></span>
                         </div>
                     </div>
 
                     <div class="alert alert-info mt-4 mb-3">
-                        <strong>Quy trình tài khoản:</strong> hệ thống tự cấp mã nhân viên dạng <strong>SC-NV001</strong> và tự gán quyền Nhân viên. Admin đặt mật khẩu tạm tại đây; nhân viên dùng email + mật khẩu tạm để đăng nhập lần đầu, sau đó bắt buộc đổi mật khẩu mới rồi đăng nhập lại mới được vào hệ thống.
+                        <strong>Quy trình tài khoản:</strong> hệ thống tự cấp mã nhân viên dạng <strong>SC-NV001</strong> và tự gán quyền Nhân viên. Admin đặt mật khẩu ban đầu tại đây; nhân viên dùng email + mật khẩu này để đăng nhập lần đầu, sau đó bắt buộc đổi mật khẩu mới rồi đăng nhập lại mới được vào hệ thống.
                     </div>
 
                     <div class="d-flex gap-2">
@@ -68,4 +96,26 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            document.querySelectorAll('.password-toggle').forEach(button => {
+                button.addEventListener('click', () => {
+                    const input = document.getElementById(button.dataset.target);
+                    if (!input) return;
+
+                    const showPassword = input.type === 'password';
+                    input.type = showPassword ? 'text' : 'password';
+
+                    const eyeOpen = button.querySelector('.eye-open');
+                    const eyeClosed = button.querySelector('.eye-closed');
+                    eyeOpen?.classList.toggle('d-none', showPassword);
+                    eyeClosed?.classList.toggle('d-none', !showPassword);
+
+                    const label = showPassword ? 'Ẩn mật khẩu' : 'Hiển thị mật khẩu';
+                    button.setAttribute('aria-label', label);
+                    button.setAttribute('title', label);
+                });
+            });
+        })();
+    </script>
 }
