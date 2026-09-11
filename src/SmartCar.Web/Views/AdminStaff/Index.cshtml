@@ -19,7 +19,7 @@
 <div class="row g-3 mb-4">
     <div class="col-md-4">
         <div class="card border-0 shadow-sm h-100"><div class="card-body">
-            <div class="text-muted small">Tổng nhân viên</div>
+            <div class="text-muted small">Nhân viên trong kết quả</div>
             <div class="fs-3 fw-bold">@Model.Staff.Count</div>
         </div></div>
     </div>
@@ -47,9 +47,30 @@
             <div class="col-lg-3">
                 <label class="form-label">Trạng thái</label>
                 <select class="form-select" name="status">
-                    <option value="all" selected="@(Model.Status == "all")">Tất cả</option>
-                    <option value="active" selected="@(Model.Status == "active")">Đang hoạt động</option>
-                    <option value="inactive" selected="@(Model.Status == "inactive")">Ngừng hoạt động / bị khóa</option>
+                    @if (Model.Status == "all")
+                    {
+                        <option value="all" selected>Tất cả</option>
+                    }
+                    else
+                    {
+                        <option value="all">Tất cả</option>
+                    }
+                    @if (Model.Status == "active")
+                    {
+                        <option value="active" selected>Đang hoạt động</option>
+                    }
+                    else
+                    {
+                        <option value="active">Đang hoạt động</option>
+                    }
+                    @if (Model.Status == "inactive")
+                    {
+                        <option value="inactive" selected>Ngừng hoạt động / bị khóa</option>
+                    }
+                    else
+                    {
+                        <option value="inactive">Ngừng hoạt động / bị khóa</option>
+                    }
                 </select>
             </div>
             <div class="col-lg-2 d-grid">
