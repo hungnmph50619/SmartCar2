@@ -3,6 +3,16 @@
     ViewData["Title"] = "Thêm nhân viên";
 }
 
+<style>
+    /* Edge/IE có nút hiện mật khẩu mặc định. Ẩn nút mặc định để chỉ giữ một nút mắt của SmartCar. */
+    #staffPassword::-ms-reveal,
+    #staffPassword::-ms-clear,
+    #confirmStaffPassword::-ms-reveal,
+    #confirmStaffPassword::-ms-clear {
+        display: none;
+    }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h3 mb-1">Thêm nhân viên</h1>
