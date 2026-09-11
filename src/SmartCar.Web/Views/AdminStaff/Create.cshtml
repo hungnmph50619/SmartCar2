@@ -6,7 +6,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h3 mb-1">Thêm nhân viên</h1>
-        <p class="text-muted mb-0">Admin tạo tài khoản Staff; nhân viên tự thiết lập mật khẩu qua liên kết kích hoạt.</p>
+        <p class="text-muted mb-0">Admin tạo tài khoản nhân viên; mã nhân viên được hệ thống tự sinh và nhân viên tự thiết lập mật khẩu qua liên kết kích hoạt.</p>
     </div>
     <a class="btn btn-outline-secondary" asp-action="Index">← Danh sách nhân viên</a>
 </div>
@@ -20,51 +20,33 @@
 
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label asp-for="EmployeeCode" class="form-label"></label>
-                            <input asp-for="EmployeeCode" class="form-control" placeholder="Ví dụ: NV001" autocomplete="off" />
-                            <span asp-validation-for="EmployeeCode" class="text-danger small"></span>
-                        </div>
-                        <div class="col-md-6">
                             <label asp-for="FullName" class="form-label"></label>
-                            <input asp-for="FullName" class="form-control" placeholder="Họ và tên nhân viên" autocomplete="name" />
+                            <input asp-for="FullName" class="form-control" placeholder="Họ và tên nhân viên" autocomplete="name" maxlength="100" />
                             <span asp-validation-for="FullName" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="Email" class="form-label"></label>
-                            <input asp-for="Email" class="form-control" placeholder="nhanvien@smartcar.vn" autocomplete="email" />
+                            <input asp-for="Email" class="form-control" placeholder="nhanvien@smartcar.vn" autocomplete="email" maxlength="256" />
                             <span asp-validation-for="Email" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="PhoneNumber" class="form-label"></label>
-                            <input asp-for="PhoneNumber" class="form-control" placeholder="09xxxxxxxx" autocomplete="tel" />
+                            <input asp-for="PhoneNumber" class="form-control" placeholder="09xxxxxxxx" autocomplete="tel" inputmode="numeric" maxlength="10" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
                             <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="CitizenIdNumber" class="form-label"></label>
-                            <input asp-for="CitizenIdNumber" class="form-control" placeholder="12 chữ số" inputmode="numeric" autocomplete="off" />
+                            <input asp-for="CitizenIdNumber" class="form-control" placeholder="12 chữ số" inputmode="numeric" maxlength="12" autocomplete="off" oninput="this.value=this.value.replace(/\D/g,'').slice(0,12)" />
                             <span asp-validation-for="CitizenIdNumber" class="text-danger small"></span>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Phân quyền</label>
-                            <input class="form-control" value="Staff / Nhân viên" readonly />
-                            <div class="form-text">Nhân viên không được tự chọn hoặc tự nâng quyền.</div>
                         </div>
                     </div>
 
                     <div class="alert alert-info mt-4 mb-3">
-                        <strong>Quy trình an toàn:</strong> hệ thống không tạo mật khẩu mặc định. Sau khi tài khoản được tạo, nhân viên dùng email kích hoạt để tự đặt mật khẩu.
-                    </div>
-
-                    <div class="form-check mb-4">
-                        <input asp-for="ConfirmInformation" class="form-check-input" />
-                        <label asp-for="ConfirmInformation" class="form-check-label">
-                            Tôi xác nhận đã kiểm tra thông tin nhân viên và đối chiếu số CCCD trước khi cấp tài khoản Staff.
-                        </label>
-                        <div><span asp-validation-for="ConfirmInformation" class="text-danger small"></span></div>
+                        <strong>Quy trình tài khoản:</strong> hệ thống tự cấp mã nhân viên dạng <strong>SC-NV001</strong>, <strong>SC-NV002</strong>... và tự gán quyền Nhân viên. Sau khi tài khoản được tạo, nhân viên dùng email kích hoạt để tự đặt mật khẩu.
                     </div>
 
                     <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">Tạo và kích hoạt tài khoản</button>
+                        <button type="submit" class="btn btn-primary">Tạo tài khoản nhân viên</button>
                         <a class="btn btn-outline-secondary" asp-action="Index">Hủy</a>
                     </div>
                 </form>
