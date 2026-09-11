@@ -17,4 +17,7 @@ public class ApplicationUser : IdentityUser
     public string? CreatedByUserId { get; set; }
     public string? VerifiedByUserId { get; set; }
     public DateTime? VerifiedAt { get; set; }
+
+    // Staff mới do Admin tạo sẽ phải đổi mật khẩu tạm ở lần đăng nhập đầu tiên.
+    public bool MustChangePassword { get; set; }
 }
