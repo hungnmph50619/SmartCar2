@@ -6,6 +6,10 @@ public sealed class AdminStaffIndexViewModel
 {
     public string? Query { get; set; }
     public string Status { get; set; } = "all";
+    public int TotalStaffCount { get; set; }
+    public int ActiveStaffCount { get; set; }
+    public int InactiveStaffCount { get; set; }
+    public int PendingFirstPasswordChangeCount { get; set; }
     public IReadOnlyList<AdminStaffListItemViewModel> Staff { get; set; } = Array.Empty<AdminStaffListItemViewModel>();
 }
 
