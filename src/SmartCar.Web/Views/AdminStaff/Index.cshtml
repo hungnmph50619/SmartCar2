@@ -1,9 +1,7 @@
 @model SmartCar.Web.ViewModels.AdminStaffIndexViewModel
 @{
     ViewData["Title"] = "Quản lý nhân viên";
-    var activeCount = Model.Staff.Count(item => item.IsActive);
-    var inactiveCount = Model.Staff.Count - activeCount;
-    var pendingPasswordCount = Model.Staff.Count(item => item.MustChangePassword);
+    var pendingPasswordCount = Model.PendingFirstPasswordChangeCount;
 }
 
 <style>
@@ -15,6 +13,7 @@
     .staff-page .staff-kpi-value { margin-top:.2rem; font-size:1.65rem; line-height:1.2; font-weight:800; color:#102a43; }
     .staff-page .staff-panel { border:1px solid var(--staff-line); border-radius:16px; overflow:hidden; background:#fff; box-shadow:0 4px 14px rgba(15,35,60,.04); }
     .staff-page .staff-filter { padding:1rem; border-bottom:1px solid var(--staff-line); background:#fff; }
+    .staff-page .staff-result-count { padding:.65rem 1rem; border-bottom:1px solid var(--staff-line); background:#fbfcfe; color:var(--staff-muted); font-size:.86rem; }
     .staff-page .staff-table thead th { background:#f8fafc; color:#64748b; border-bottom:1px solid #d8e0ea; font-size:.78rem; font-weight:700; white-space:nowrap; }
     .staff-page .staff-table tbody td { padding-top:.9rem; padding-bottom:.9rem; border-color:#edf1f5; }
     .staff-page .staff-person { min-width:160px; }
@@ -47,22 +46,22 @@
     <div class="row g-3 mb-3">
         <div class="col-md-4">
             <div class="staff-kpi">
-                <div class="staff-kpi-label">KẾT QUẢ HIỆN TẠI</div>
-                <div class="staff-kpi-value">@Model.Staff.Count</div>
-                <div class="small text-muted mt-1">Nhân viên phù hợp bộ lọc</div>
+                <div class="staff-kpi-label">TỔNG NHÂN VIÊN</div>
+                <div class="staff-kpi-value">@Model.TotalStaffCount</div>
+                <div class="small text-muted mt-1">Tổng tài khoản nhân viên trong hệ thống</div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="staff-kpi">
                 <div class="staff-kpi-label">ĐANG HOẠT ĐỘNG</div>
-                <div class="staff-kpi-value text-success">@activeCount</div>
+                <div class="staff-kpi-value text-success">@Model.ActiveStaffCount</div>
                 <div class="small text-muted mt-1">Có thể đăng nhập và làm việc</div>
             </div>
         </div>
         <div class="col-md-4">
             <div class="staff-kpi">
                 <div class="staff-kpi-label">NGỪNG HOẠT ĐỘNG</div>
-                <div class="staff-kpi-value text-secondary">@inactiveCount</div>
+                <div class="staff-kpi-value text-secondary">@Model.InactiveStaffCount</div>
                 <div class="small text-muted mt-1">Đã khóa nhưng vẫn giữ lịch sử</div>
             </div>
         </div>
@@ -71,8 +70,8 @@
     @if (pendingPasswordCount > 0)
     {
         <div class="staff-warning d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <span><strong>@pendingPasswordCount tài khoản</strong> đang chờ nhân viên đổi mật khẩu ở lần đăng nhập đầu tiên.</span>
-            <span class="small">Trạng thái được hiển thị trực tiếp trong cột Tài khoản.</span>
+            <span><strong>@pendingPasswordCount tài khoản</strong> đang chờ đổi mật khẩu ở lần đăng nhập đầu tiên.</span>
+            <span class="small">Xem trạng thái trong cột Tài khoản.</span>
         </div>
     }
 
@@ -116,6 +115,14 @@
                     <button class="btn btn-outline-primary" type="submit">Lọc danh sách</button>
                 </div>
             </form>
+        </div>
+
+        <div class="staff-result-count">
+            Hiển thị <strong class="text-dark">@Model.Staff.Count</strong> nhân viên
+            @if (!string.IsNullOrWhiteSpace(Model.Query) || Model.Status != "all")
+            {
+                <span> phù hợp bộ lọc</span>
+            }
         </div>
 
         <div class="table-responsive">
