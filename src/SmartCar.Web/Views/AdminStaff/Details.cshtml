@@ -1,118 +1,215 @@
 @model SmartCar.Web.ViewModels.AdminStaffDetailsViewModel
 @{
     ViewData["Title"] = "Chi tiết nhân viên";
+    var employeeCode = string.IsNullOrWhiteSpace(Model.EmployeeCode) ? "Chưa cập nhật mã" : Model.EmployeeCode;
+    var maskedCitizenId = string.IsNullOrWhiteSpace(Model.CitizenIdNumber)
+        ? "Chưa cập nhật"
+        : (Model.CitizenIdNumber.Length <= 4
+            ? Model.CitizenIdNumber
+            : new string('•', Model.CitizenIdNumber.Length - 4) + Model.CitizenIdNumber[^4..]);
+    var initial = string.IsNullOrWhiteSpace(Model.FullName)
+        ? "N"
+        : Model.FullName.Trim().Substring(0, 1).ToUpperInvariant();
 }
 
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div>
-        <h1 class="h3 mb-1">@Model.FullName</h1>
-        <p class="text-muted mb-0">
-            @(string.IsNullOrWhiteSpace(Model.EmployeeCode) ? "Chưa cập nhật mã nhân viên" : Model.EmployeeCode)
-            · @(Model.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")
-        </p>
+<style>
+    .staff-detail-page { --line:#e5eaf1; --muted:#64748b; --ink:#102a43; }
+    .staff-detail-page .detail-hero { display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; margin-bottom:1.2rem; }
+    .staff-detail-page .identity { display:flex; align-items:center; gap:14px; }
+    .staff-detail-page .avatar { width:54px; height:54px; border-radius:16px; background:#e7f0ff; color:#1769d2; display:flex; align-items:center; justify-content:center; font-size:1.25rem; font-weight:800; flex-shrink:0; }
+    .staff-detail-page .identity h1 { margin:0; font-size:1.75rem; font-weight:800; color:var(--ink); }
+    .staff-detail-page .identity-meta { color:var(--muted); margin-top:.2rem; display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; }
+    .staff-detail-page .status-pill { display:inline-flex; align-items:center; gap:.4rem; border-radius:999px; padding:.28rem .65rem; font-size:.78rem; font-weight:700; }
+    .staff-detail-page .status-pill.active { color:#146c43; background:#e7f7ef; }
+    .staff-detail-page .status-pill.inactive { color:#5c636a; background:#eef1f4; }
+    .staff-detail-page .dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
+    .staff-detail-page .panel { background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 4px 14px rgba(15,35,60,.04); overflow:hidden; }
+    .staff-detail-page .panel-head { padding:.95rem 1.1rem; border-bottom:1px solid var(--line); font-weight:800; color:var(--ink); }
+    .staff-detail-page .panel-body { padding:1.1rem; }
+    .staff-detail-page .info-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; }
+    .staff-detail-page .info-item { padding:.9rem 1rem; border-bottom:1px solid #eef2f6; }
+    .staff-detail-page .info-item:nth-last-child(-n+2) { border-bottom:0; }
+    .staff-detail-page .info-item:nth-child(odd) { border-right:1px solid #eef2f6; }
+    .staff-detail-page .info-label { font-size:.78rem; font-weight:700; color:var(--muted); margin-bottom:.25rem; }
+    .staff-detail-page .info-value { color:#183153; font-weight:600; word-break:break-word; }
+    .staff-detail-page .account-row { display:flex; justify-content:space-between; gap:18px; padding:.72rem 0; border-bottom:1px solid #eef2f6; }
+    .staff-detail-page .account-row:last-child { border-bottom:0; }
+    .staff-detail-page .account-row .label { color:var(--muted); }
+    .staff-detail-page .account-row .value { text-align:right; font-weight:600; color:#183153; }
+    .staff-detail-page .activity-icon { width:42px; height:42px; border-radius:12px; background:#eef5ff; color:#1769d2; display:flex; align-items:center; justify-content:center; font-weight:800; }
+    .staff-detail-page .danger-panel { border-color:#f2c5c9; }
+    .staff-detail-page .danger-panel .panel-head { color:#b42318; background:#fffafa; }
+    .staff-detail-page .masked-value { display:inline-flex; align-items:center; gap:.55rem; }
+    .staff-detail-page .reveal-button { border:0; background:transparent; color:#64748b; padding:0; font-size:.82rem; font-weight:700; }
+    @@media(max-width:767.98px) {
+        .staff-detail-page .info-grid { grid-template-columns:1fr; }
+        .staff-detail-page .info-item { border-right:0 !important; }
+        .staff-detail-page .info-item:nth-last-child(-n+2) { border-bottom:1px solid #eef2f6; }
+        .staff-detail-page .info-item:last-child { border-bottom:0; }
+        .staff-detail-page .detail-actions { width:100%; }
+        .staff-detail-page .detail-actions .btn { flex:1; }
+    }
+</style>
+
+<div class="staff-detail-page">
+    <div class="detail-hero">
+        <div class="identity">
+            <div class="avatar">@initial</div>
+            <div>
+                <h1>@Model.FullName</h1>
+                <div class="identity-meta">
+                    <span>@employeeCode</span>
+                    <span class="status-pill @(Model.IsActive ? "active" : "inactive")">
+                        <span class="dot"></span>
+                        @(Model.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="detail-actions d-flex gap-2">
+            <a class="btn btn-outline-secondary" asp-action="Index">← Danh sách</a>
+            <a class="btn btn-primary" asp-action="Edit" asp-route-id="@Model.UserId">Sửa thông tin</a>
+        </div>
     </div>
-    <div class="d-flex gap-2">
-        <a class="btn btn-outline-secondary" asp-action="Index">← Danh sách</a>
-        <a class="btn btn-primary" asp-action="Edit" asp-route-id="@Model.UserId">Sửa thông tin</a>
-    </div>
-</div>
 
-<div class="row g-4">
-    <div class="col-lg-7">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white fw-semibold">Thông tin nhân viên</div>
-            <div class="card-body">
-                <dl class="row mb-0">
-                    <dt class="col-sm-4">Mã nhân viên</dt>
-                    <dd class="col-sm-8">@(string.IsNullOrWhiteSpace(Model.EmployeeCode) ? "Chưa cập nhật" : Model.EmployeeCode)</dd>
-
-                    <dt class="col-sm-4">Họ và tên</dt>
-                    <dd class="col-sm-8">@Model.FullName</dd>
-
-                    <dt class="col-sm-4">Email đăng nhập</dt>
-                    <dd class="col-sm-8">@Model.Email</dd>
-
-                    <dt class="col-sm-4">Số điện thoại</dt>
-                    <dd class="col-sm-8">@(Model.PhoneNumber ?? "-")</dd>
-
-                    <dt class="col-sm-4">Số CCCD</dt>
-                    <dd class="col-sm-8">@(Model.CitizenIdNumber ?? "Chưa cập nhật")</dd>
-                </dl>
+    <div class="panel mb-3">
+        <div class="panel-head">Thông tin nhân viên</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Mã nhân viên</div>
+                <div class="info-value">@employeeCode</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Họ và tên</div>
+                <div class="info-value">@Model.FullName</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Email đăng nhập</div>
+                <div class="info-value">@Model.Email</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Số điện thoại</div>
+                <div class="info-value">@(Model.PhoneNumber ?? "Chưa cập nhật")</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Số CCCD</div>
+                <div class="info-value masked-value">
+                    <span id="staff-citizen-id"
+                          data-masked="@maskedCitizenId"
+                          data-full="@(Model.CitizenIdNumber ?? string.Empty)">@maskedCitizenId</span>
+                    @if (!string.IsNullOrWhiteSpace(Model.CitizenIdNumber))
+                    {
+                        <button type="button" class="reveal-button" id="toggle-staff-citizen-id" aria-label="Hiện số CCCD">Hiện</button>
+                    }
+                </div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Ngày tạo hồ sơ</div>
+                <div class="info-value">@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
             </div>
         </div>
     </div>
 
-    <div class="col-lg-5">
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white fw-semibold">Tài khoản nhân viên</div>
-            <div class="card-body">
-                <dl class="row small mb-0">
-                    <dt class="col-5">Trạng thái</dt>
-                    <dd class="col-7">
-                        @if (Model.IsActive)
-                        {
-                            <span class="badge bg-success text-white">Đang hoạt động</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary text-white">Ngừng hoạt động</span>
-                        }
-                    </dd>
-
-                    <dt class="col-5">Mật khẩu</dt>
-                    <dd class="col-7">
-                        @if (Model.MustChangePassword)
-                        {
-                            <span class="badge bg-warning text-dark">Chờ đổi mật khẩu lần đầu</span>
-                        }
-                        else if (Model.HasPassword)
-                        {
-                            <span class="badge bg-success text-white">Đã đổi mật khẩu</span>
-                        }
-                        else
-                        {
-                            <span class="badge bg-secondary text-white">Chưa thiết lập</span>
-                        }
-                    </dd>
-
-                    <dt class="col-5">Người tạo</dt>
-                    <dd class="col-7">@(Model.CreatedByName ?? "Dữ liệu cũ / chưa ghi nhận")</dd>
-
-                    <dt class="col-5">Ngày tạo</dt>
-                    <dd class="col-7">@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</dd>
-                </dl>
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="panel h-100">
+                <div class="panel-head">Tài khoản</div>
+                <div class="panel-body">
+                    <div class="account-row">
+                        <span class="label">Trạng thái</span>
+                        <span class="value">
+                            <span class="status-pill @(Model.IsActive ? "active" : "inactive")">
+                                <span class="dot"></span>
+                                @(Model.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")
+                            </span>
+                        </span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Mật khẩu</span>
+                        <span class="value">
+                            @if (Model.MustChangePassword)
+                            {
+                                <span class="text-warning">Chờ đổi ở lần đăng nhập đầu</span>
+                            }
+                            else if (Model.HasPassword)
+                            {
+                                <span class="text-success">Đã thiết lập</span>
+                            }
+                            else
+                            {
+                                <span class="text-secondary">Chưa thiết lập</span>
+                            }
+                        </span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Người tạo</span>
+                        <span class="value">@(Model.CreatedByName ?? "Dữ liệu cũ / chưa ghi nhận")</span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Ngày tạo</span>
+                        <span class="value">@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-header bg-white fw-semibold">Lịch sử thao tác</div>
-            <div class="card-body">
-                <p class="small text-muted mb-3">
-                    Admin có thể xem các thao tác đã được ghi nhận trong Nhật ký hệ thống của riêng nhân viên này.
-                </p>
-                <a class="btn btn-outline-primary w-100"
-                   asp-controller="AuditLogs"
-                   asp-action="Index"
-                   asp-route-userId="@Model.UserId">
-                    Xem lịch sử thao tác
-                </a>
-            </div>
-        </div>
-
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white fw-semibold">Quản lý tài khoản</div>
-            <div class="card-body d-grid gap-2">
-                <form asp-action="ToggleStatus" method="post" onsubmit="return confirm('@(Model.IsActive ? "Khóa tài khoản nhân viên này? Dữ liệu lịch sử vẫn được giữ lại." : "Kích hoạt lại tài khoản nhân viên này?")');">
-                    <input type="hidden" name="id" value="@Model.UserId" />
-                    <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-outline-success") w-100" type="submit">
-                        @(Model.IsActive ? "Khóa tài khoản" : "Kích hoạt lại")
-                    </button>
-                </form>
-
-                <div class="small text-muted mt-2">
-                    SmartCar không xóa cứng tài khoản nhân viên để vẫn truy vết được các thao tác giao xe, nhận xe và nghiệp vụ đã thực hiện.
+        <div class="col-lg-6">
+            <div class="panel h-100">
+                <div class="panel-head">Hoạt động</div>
+                <div class="panel-body">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <div class="activity-icon">≡</div>
+                        <div>
+                            <div class="fw-semibold text-dark">Lịch sử thao tác</div>
+                            <div class="small text-muted mt-1">Xem các nghiệp vụ và thay đổi do nhân viên này thực hiện.</div>
+                        </div>
+                    </div>
+                    <a class="btn btn-outline-primary w-100"
+                       asp-controller="AuditLogs"
+                       asp-action="Index"
+                       asp-route-userId="@Model.UserId">
+                        Xem lịch sử thao tác →
+                    </a>
                 </div>
             </div>
         </div>
     </div>
+
+    <div class="panel danger-panel">
+        <div class="panel-head">Quản lý tài khoản</div>
+        <div class="panel-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+            <div>
+                <div class="fw-semibold text-dark">@(Model.IsActive ? "Khóa quyền truy cập của nhân viên" : "Kích hoạt lại tài khoản nhân viên")</div>
+                <div class="small text-muted mt-1">
+                    @(Model.IsActive
+                        ? "Nhân viên sẽ không thể đăng nhập, nhưng lịch sử giao xe, nhận xe và các thao tác trước đó vẫn được giữ nguyên."
+                        : "Sau khi kích hoạt, nhân viên có thể đăng nhập và tiếp tục sử dụng các chức năng được phân quyền.")
+                </div>
+            </div>
+            <form asp-action="ToggleStatus" method="post" class="flex-shrink-0" onsubmit="return confirm('@(Model.IsActive ? "Khóa tài khoản nhân viên này? Dữ liệu lịch sử vẫn được giữ lại." : "Kích hoạt lại tài khoản nhân viên này?")');">
+                <input type="hidden" name="id" value="@Model.UserId" />
+                <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-success") px-4" type="submit">
+                    @(Model.IsActive ? "Khóa tài khoản" : "Kích hoạt lại")
+                </button>
+            </form>
+        </div>
+    </div>
 </div>
+
+@section Scripts {
+<script>
+(() => {
+    const value = document.getElementById('staff-citizen-id');
+    const button = document.getElementById('toggle-staff-citizen-id');
+    if (!value || !button) return;
+
+    let visible = false;
+    button.addEventListener('click', () => {
+        visible = !visible;
+        value.textContent = visible ? (value.dataset.full || '') : (value.dataset.masked || '');
+        button.textContent = visible ? 'Ẩn' : 'Hiện';
+        button.setAttribute('aria-label', visible ? 'Ẩn số CCCD' : 'Hiện số CCCD');
+    });
+})();
+</script>
+}
