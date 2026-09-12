@@ -46,6 +46,11 @@ public sealed class AdminStaffController : Controller
         }
 
         var users = await _userManager.GetUsersInRoleAsync(RoleNames.Staff);
+        var totalStaffCount = users.Count;
+        var activeStaffCount = users.Count(user => user.IsActive);
+        var inactiveStaffCount = totalStaffCount - activeStaffCount;
+        var pendingFirstPasswordChangeCount = users.Count(user => user.MustChangePassword);
+
         IEnumerable<ApplicationUser> filtered = users;
 
         if (!string.IsNullOrWhiteSpace(query))
@@ -92,6 +97,10 @@ public sealed class AdminStaffController : Controller
         {
             Query = query,
             Status = normalizedStatus,
+            TotalStaffCount = totalStaffCount,
+            ActiveStaffCount = activeStaffCount,
+            InactiveStaffCount = inactiveStaffCount,
+            PendingFirstPasswordChangeCount = pendingFirstPasswordChangeCount,
             Staff = items
         });
     }
