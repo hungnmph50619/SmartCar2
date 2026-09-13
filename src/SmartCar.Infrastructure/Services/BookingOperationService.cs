@@ -38,8 +38,6 @@ internal sealed class BookingOperationService : IBookingOperationService
         string staffId,
         CancelBookingRequest request,
         CancellationToken cancellationToken = default) =>
-        // Nhân viên chỉ thao tác hủy hộ theo yêu cầu của khách. Việc người bấm nút là Staff
-        // không được biến yêu cầu của khách thành "SmartCar chủ động hủy" để hoàn 100%.
         CancelAsync(
             staffId,
             isSmartCarCancellation: false,
@@ -125,7 +123,7 @@ internal sealed class BookingOperationService : IBookingOperationService
         booking.RefundAmount = existingRefundTotal + newRefundAmount;
         booking.RefundReason = AppendText(
             booking.RefundReason,
-            $"Không hoàn tiền thuê do khách không đến nhận xe."
+            "Không hoàn tiền thuê do khách không đến nhận xe."
             + (deliveryPaid > 0 ? $" Hoàn phí giao chưa thực hiện {deliveryPaid:N0} đồng." : string.Empty)
             + (remainingDeposit > 0 ? $" Hoàn phần cọc còn lại {remainingDeposit:N0} đồng." : string.Empty));
 
@@ -191,10 +189,9 @@ internal sealed class BookingOperationService : IBookingOperationService
         var query = _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
+            .Include(item => item.Handover)
             .AsQueryable();
 
-        // Chỉ khách tự thao tác mới bị giới hạn theo CustomerId. Nhân viên có quyền xử lý yêu cầu
-        // của khách trên đơn bất kỳ, nhưng vẫn áp dụng chính sách khách hủy (không phải SmartCar hủy).
         if (auditAction == "CustomerCancel")
             query = query.Where(item => item.CustomerId == actorId);
 
@@ -205,15 +202,14 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (booking is null)
             return RefundResult.Failure("Không tìm thấy đơn thuê.");
 
-        if (booking.Status is BookingStatus.Rented
-            or BookingStatus.PendingInspection
-            or BookingStatus.Completed
-            or BookingStatus.Cancelled
-            or BookingStatus.NoShow
-            or BookingStatus.Rejected
-            or BookingStatus.Expired)
+        if (!BookingWorkflowRules.CanCancelBeforeHandover(
+                booking.Status,
+                booking.Handover is not null))
         {
-            return RefundResult.Failure("Trạng thái hiện tại không cho phép hủy đơn.");
+            return RefundResult.Failure(
+                booking.Handover is not null
+                    ? "Đơn đã lập biên bản giao xe nên không thể hủy. Nếu giao xe chưa hoàn tất, hãy xử lý hồ sơ bàn giao thay vì hủy đơn."
+                    : "Trạng thái hiện tại không cho phép hủy đơn.");
         }
 
         var grossRevenuePaid = booking.Payments
