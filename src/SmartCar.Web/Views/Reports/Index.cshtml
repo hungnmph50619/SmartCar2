@@ -30,7 +30,7 @@
     {
         PaymentMethods.BankQr => "QR ngân hàng",
         PaymentMethods.Cash => "Tiền mặt tại quầy",
-        PaymentMethods.DepositDeduction => "Khấu trừ từ cọc",
+        PaymentMethods.DepositDeduction => "Thu phụ phí từ cọc",
         _ => "Chưa xác định"
     };
 
@@ -148,7 +148,10 @@
                     <option value="">Tất cả</option>
                     <option value="@PaymentMethods.BankQr">QR ngân hàng</option>
                     <option value="@PaymentMethods.Cash">Tiền mặt tại quầy</option>
-                    <option value="@PaymentMethods.DepositDeduction">Khấu trừ từ cọc</option>
+                    @if (Model.TotalDepositDeductionRevenue > 0)
+                    {
+                        <option value="@PaymentMethods.DepositDeduction">Thu phụ phí từ cọc</option>
+                    }
                     @if (Model.TotalUnknownPaymentMethodRevenue > 0)
                     {
                         <option value="@unknownPaymentMethodFilter">Chưa xác định</option>
@@ -160,10 +163,10 @@
     </form>
 
     <div class="row g-3 mb-3">
-        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TỔNG DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div><div class="tiny mt-1">Không gồm tiền cọc khách nộp</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TỔNG DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div><div class="tiny mt-1">Không gồm cọc và bồi thường A → B</div></div></div>
         <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">QR NGÂN HÀNG</div><div class="kpi-number text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</div><div class="tiny mt-1">Đã xác nhận thanh toán online</div></div></div>
         <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TIỀN MẶT TẠI QUẦY</div><div class="kpi-number text-success">@Model.TotalCashRevenue.ToString("N0") đ</div><div class="tiny mt-1">Thu trực tiếp tại quầy</div></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">KẾT QUẢ RÒNG TRONG KỲ</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div><div class="tiny mt-1">Doanh thu − hoàn tiền − chi phí</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">KẾT QUẢ RÒNG TRONG KỲ</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div><div class="tiny mt-1">Doanh thu − hoàn tiền − chi phí SmartCar</div></div></div>
     </div>
 
     @if (Model.TotalUnknownPaymentMethodRevenue > 0)
@@ -179,13 +182,16 @@
                 <h2 class="section-title mb-2">Cách ghi nhận tiền</h2>
                 <div class="finance-line"><span>QR ngân hàng</span><strong class="text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Tiền mặt tại quầy</span><strong class="text-success">@Model.TotalCashRevenue.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Khấu trừ từ cọc</span><strong>@Model.TotalDepositDeductionRevenue.ToString("N0") đ</strong></div>
+                @if (Model.TotalDepositDeductionRevenue > 0)
+                {
+                    <div class="finance-line"><span>Thu phụ phí từ cọc</span><strong>@Model.TotalDepositDeductionRevenue.ToString("N0") đ</strong></div>
+                }
                 @if (Model.TotalUnknownPaymentMethodRevenue > 0)
                 {
                     <div class="finance-line"><span>Chưa xác định</span><strong class="text-warning">@Model.TotalUnknownPaymentMethodRevenue.ToString("N0") đ</strong></div>
                 }
                 <div class="finance-line"><span><strong>Tổng doanh thu</strong></span><strong>@paymentMethodTotal.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Cọc gốc không phải doanh thu. Chỉ khoản cọc dùng để thanh toán nghĩa vụ phát sinh mới được ghi nhận.</div>
+                <div class="tiny mt-2">Cọc A dùng bồi thường B được theo dõi riêng, không tính doanh thu.</div>
             </div>
         </div>
         <div class="col-lg-6">
@@ -194,7 +200,10 @@
                 <div class="finance-line"><span>Tiền thuê / giao xe</span><strong>@Model.TotalRentalRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Gia hạn</span><strong>@Model.TotalExtensionRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Phụ phí</span><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Thu bù từ cọc</span><strong>@Model.TotalDepositDeductionRecovery.ToString("N0") đ</strong></div>
+                @if (Model.TotalDepositDeductionRecovery > 0)
+                {
+                    <div class="finance-line"><span>Phụ phí thu từ cọc</span><strong>@Model.TotalDepositDeductionRecovery.ToString("N0") đ</strong></div>
+                }
             </div>
         </div>
     </div>
@@ -207,7 +216,7 @@
                 <div class="finance-line"><span>Chi phí vận hành</span><strong class="text-danger">@Model.TotalOperatingCost.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span><strong>Tổng giảm trừ</strong></span><strong class="text-danger">@totalExpense.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span><strong>Kết quả ròng</strong></span><strong class="@(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Hoàn cọc không tính vào chi phí vì đó là tiền SmartCar giữ hộ khách.</div>
+                <div class="tiny mt-2">Hoàn cọc và bồi thường lấy từ cọc khách không phải chi phí SmartCar.</div>
 
                 @if (refundTransactionRows.Count > 0)
                 {
@@ -238,7 +247,12 @@
                 </div>
                 <div class="finance-line"><span>Cần thu</span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Cọc đang giữ</span><strong>@Model.DepositsHeld.ToString("N0") đ</strong></div>
+                @if (Model.PendingCompensationTransfers > 0)
+                {
+                    <div class="finance-line"><span>Bồi thường từ cọc chờ chuyển</span><strong class="text-warning">@Model.PendingCompensationTransfers.ToString("N0") đ</strong></div>
+                }
                 <div class="finance-line"><span>Chờ hoàn</span><strong class="text-warning">@Model.PendingRefunds.ToString("N0") đ</strong></div>
+                <div class="tiny mt-2">Bồi thường A → B không làm tăng doanh thu hoặc giảm kết quả ròng.</div>
             </div>
         </div>
     </div>
@@ -353,7 +367,7 @@
                             var revenueCollected = booking.Where(t => !t.IsOutflow).Sum(t => t.Amount);
                             var depositRefund = booking.Where(t => t.IsOutflow && t.Category == "Hoàn cọc").Sum(t => t.Amount);
                             var revenueRefund = booking.Where(t => t.IsOutflow && (t.Category == "Hoàn doanh thu" || t.Category == "Hoàn chênh lệch đổi xe")).Sum(t => t.Amount);
-                            var directCost = booking.Where(t => t.IsOutflow && t.Category != "Hoàn cọc" && t.Category != "Hoàn doanh thu" && t.Category != "Hoàn chênh lệch đổi xe" && t.Category != "Hỗ trợ/bồi thường").Sum(t => t.Amount);
+                            var directCost = booking.Where(t => t.IsOutflow && t.Category != "Hoàn cọc" && t.Category != "Hoàn doanh thu" && t.Category != "Hoàn chênh lệch đổi xe").Sum(t => t.Amount);
                             var result = revenueCollected - revenueRefund - directCost;
                             var lastDate = booking.Max(t => t.OccurredAt);
 
