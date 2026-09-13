@@ -51,6 +51,9 @@ public sealed class AdminStaffCreateViewModel
     [Display(Name = "Số CCCD")]
     public string CitizenIdNumber { get; set; } = string.Empty;
 
+    [Display(Name = "Đã đối chiếu CCCD bản gốc")]
+    public bool IdentityDocumentChecked { get; set; }
+
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu cho nhân viên.")]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Mật khẩu phải có ít nhất 8 ký tự.")]
     [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,100}$", ErrorMessage = "Mật khẩu phải có chữ hoa, chữ thường, số và ký tự đặc biệt.")]
@@ -93,6 +96,9 @@ public sealed class AdminStaffEditViewModel
     [RegularExpression(@"^\d{12}$", ErrorMessage = "Số CCCD phải gồm đúng 12 chữ số và không được chứa chữ hoặc ký tự đặc biệt.")]
     [Display(Name = "Số CCCD")]
     public string CitizenIdNumber { get; set; } = string.Empty;
+
+    [Display(Name = "Đã đối chiếu lại CCCD bản gốc")]
+    public bool IdentityDocumentChecked { get; set; }
 }
 
 public sealed class AdminStaffDetailsViewModel
@@ -102,7 +108,8 @@ public sealed class AdminStaffDetailsViewModel
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
-    public string? CitizenIdNumber { get; set; }
+    public string MaskedCitizenIdNumber { get; set; } = "Chưa cập nhật";
+    public bool HasCitizenIdNumber { get; set; }
     public bool IsActive { get; set; }
     public bool HasPassword { get; set; }
     public bool MustChangePassword { get; set; }
