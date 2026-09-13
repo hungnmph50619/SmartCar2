@@ -17,7 +17,7 @@ public sealed class KycCitizenIdInputViewModel
     [Required(ErrorMessage = "Vui lòng nhập họ và tên trên CCCD.")]
     [StringLength(100, MinimumLength = 2, ErrorMessage = "Họ và tên phải có từ 2 đến 100 ký tự.")]
     [RegularExpression(
-        @"^ *[\p{L}\p{M}]+(?: +[\p{L}\p{M}]+)* *$",
+        @"^ *[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ]+(?: +[A-Za-zÀ-ÖØ-öø-ÿĂăĐđĨĩŨũƠơƯưẠ-ỹ]+)* *$",
         ErrorMessage = "Họ và tên chỉ được chứa chữ cái và khoảng trắng.")]
     [Display(Name = "Họ và tên trên CCCD")]
     public string FullNameOnDocument { get; set; } = string.Empty;
