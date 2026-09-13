@@ -1,18 +1,53 @@
 @model SmartCar.Application.Features.Reports.FleetReportDto
+@using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Báo cáo kinh doanh";
-    var today = DateTime.Today;
+    var today = DateTime.UtcNow.AddHours(7).Date;
     var sevenDaysStart = today.AddDays(-6);
     var thirtyDaysStart = today.AddDays(-29);
     var monthStart = new DateTime(today.Year, today.Month, 1);
     var periodDays = Math.Max(1, (Model.ToDate.Date - Model.FromDate.Date).Days + 1);
     var totalOutstanding = Model.OutstandingReceivables + Model.OutstandingDeposits;
     var totalExpense = Model.TotalOperatingCost + Model.TotalRevenueRefunds;
-    var cashRevenue = Convert.ToDecimal(ViewBag.CashRevenue ?? 0m);
-    var bankQrRevenue = Convert.ToDecimal(ViewBag.BankQrRevenue ?? 0m);
-    var otherRevenue = Convert.ToDecimal(ViewBag.OtherRevenue ?? 0m);
-    var paymentMethodTotal = cashRevenue + bankQrRevenue + otherRevenue;
+    var paymentMethodTotal = Model.TotalBankQrRevenue + Model.TotalCashRevenue + Model.TotalDepositDeductionRevenue + Model.TotalUnknownPaymentMethodRevenue;
     var vehicleRows = Model.Vehicles.OrderByDescending(x => x.NetOperatingProfit).ThenBy(x => x.VehicleName).ToList();
+    var selectedPaymentMethod = ViewBag.SelectedPaymentMethod as string;
+    var unknownPaymentMethodFilter = ViewBag.UnknownPaymentMethodFilter as string ?? "__UNKNOWN__";
+
+    bool IsKnownRevenueMethod(string? method) =>
+        method == PaymentMethods.BankQr ||
+        method == PaymentMethods.Cash ||
+        method == PaymentMethods.DepositDeduction;
+
+    bool MatchesPaymentFilter(string? method)
+    {
+        if (string.IsNullOrWhiteSpace(selectedPaymentMethod)) return true;
+        if (selectedPaymentMethod == unknownPaymentMethodFilter) return !IsKnownRevenueMethod(method);
+        return method == selectedPaymentMethod;
+    }
+
+    string PaymentMethodLabel(string? method) => method switch
+    {
+        PaymentMethods.BankQr => "QR ngân hàng",
+        PaymentMethods.Cash => "Tiền mặt tại quầy",
+        PaymentMethods.DepositDeduction => "Khấu trừ tiền cọc",
+        _ => "Không xác định"
+    };
+
+    var revenueTransactionRows = Model.Vehicles
+        .SelectMany(vehicle => vehicle.Transactions
+            .Where(transaction => !transaction.IsOutflow && !string.IsNullOrWhiteSpace(transaction.PaymentMethod))
+            .Select(transaction => new
+            {
+                vehicle.VehicleName,
+                vehicle.LicensePlate,
+                Transaction = transaction
+            }))
+        .Where(row => MatchesPaymentFilter(row.Transaction.PaymentMethod))
+        .OrderByDescending(row => row.Transaction.OccurredAt)
+        .ThenByDescending(row => row.Transaction.Amount)
+        .Take(100)
+        .ToList();
 }
 
 <style>
@@ -44,15 +79,20 @@
     .profit-page .booking-summary { list-style:none; cursor:pointer; padding:.75rem; }
     .profit-page .booking-summary::-webkit-details-marker { display:none; }
     .profit-page .booking-transactions { border-top:1px solid var(--line); padding:.35rem .75rem .75rem; }
-    .profit-page .transaction-line { display:grid; grid-template-columns:100px 1fr auto; gap:12px; padding:.5rem 0; border-bottom:1px solid #edf1f5; font-size:.85rem; }
+    .profit-page .transaction-line { display:grid; grid-template-columns:125px minmax(140px,1fr) minmax(160px,1fr) auto; gap:12px; padding:.55rem 0; border-bottom:1px solid #edf1f5; font-size:.85rem; align-items:center; }
     .profit-page .transaction-line:last-child { border-bottom:0; }
     .profit-page .result-line { display:flex; justify-content:space-between; gap:16px; margin-top:.65rem; padding:.65rem .75rem; background:#f6f8fb; border-radius:8px; }
+    .profit-page .method-badge { display:inline-flex; align-items:center; border:1px solid #dbe3ed; border-radius:999px; padding:.2rem .55rem; font-size:.75rem; background:#f8fafc; white-space:nowrap; }
+    .profit-page .revenue-table th { color:#64748b; font-size:.76rem; font-weight:700; white-space:nowrap; }
+    .profit-page .revenue-table td { vertical-align:middle; }
     @@media(max-width:992px){
         .profit-page .vehicle-head,.profit-page .booking-head{display:none}
         .profit-page .vehicle-summary{grid-template-columns:1fr 1fr}
         .profit-page .vehicle-summary .vehicle-main,.profit-page .vehicle-summary .open-cell{grid-column:1/-1}
         .profit-page .booking-summary{grid-template-columns:1fr 1fr}
         .profit-page .booking-summary .booking-main,.profit-page .booking-summary .booking-open{grid-column:1/-1}
+        .profit-page .transaction-line{grid-template-columns:1fr auto}
+        .profit-page .transaction-line .transaction-method{grid-column:1/-1}
     }
 </style>
 
@@ -60,11 +100,11 @@
     <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
         <div>
             <h1 class="h3 mb-1">Báo cáo kinh doanh</h1>
-            <div class="text-muted">Theo dõi doanh thu theo phương thức thanh toán, lợi nhuận và hiệu quả từng xe.</div>
+            <div class="text-muted">Theo dõi doanh thu theo đúng phương thức thanh toán, truy ngược giao dịch và hiệu quả từng xe.</div>
         </div>
         <div class="text-end small text-muted">
             <strong>@Model.FromDate.ToString("dd/MM/yyyy") – @Model.ToDate.ToString("dd/MM/yyyy")</strong>
-            <div>@periodDays ngày</div>
+            <div>@periodDays ngày · giờ Việt Nam</div>
         </div>
     </div>
 
@@ -72,33 +112,51 @@
         <div class="row g-2 align-items-end">
             <div class="col-lg-auto">
                 <div class="d-flex gap-2">
-                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@sevenDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">7 ngày</a>
-                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@thirtyDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">30 ngày</a>
-                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@monthStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")">Tháng này</a>
+                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@sevenDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")" asp-route-paymentMethod="@selectedPaymentMethod">7 ngày</a>
+                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@thirtyDaysStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")" asp-route-paymentMethod="@selectedPaymentMethod">30 ngày</a>
+                    <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@monthStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")" asp-route-paymentMethod="@selectedPaymentMethod">Tháng này</a>
                 </div>
             </div>
             <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Từ ngày</label><input name="fromDate" type="date" value="@Model.FromDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
             <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Đến ngày</label><input name="toDate" type="date" value="@Model.ToDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+            <div class="col-sm-4 col-lg">
+                <label class="form-label small mb-1">Lọc giao dịch</label>
+                <select name="paymentMethod" id="payment-method-filter" data-selected="@selectedPaymentMethod" class="form-select form-select-sm">
+                    <option value="">Tất cả phương thức</option>
+                    <option value="@PaymentMethods.BankQr">QR ngân hàng</option>
+                    <option value="@PaymentMethods.Cash">Tiền mặt tại quầy</option>
+                    <option value="@PaymentMethods.DepositDeduction">Khấu trừ tiền cọc</option>
+                    <option value="@unknownPaymentMethodFilter">Không xác định</option>
+                </select>
+            </div>
             <div class="col-sm-4 col-lg-auto"><button class="btn btn-primary btn-sm px-4 w-100" type="submit">Xem báo cáo</button></div>
         </div>
     </form>
 
     <div class="row g-3 mb-3">
         <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TỔNG DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">QR / CHUYỂN KHOẢN</div><div class="kpi-number text-info">@bankQrRevenue.ToString("N0") đ</div><div class="tiny mt-1">Thanh toán online qua QR ngân hàng</div></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TIỀN MẶT TẠI QUẦY</div><div class="kpi-number text-success">@cashRevenue.ToString("N0") đ</div><div class="tiny mt-1">Đơn do nhân viên tạo và thu tại quầy</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">QR NGÂN HÀNG</div><div class="kpi-number text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</div><div class="tiny mt-1">Đơn online đã được xác nhận thanh toán</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TIỀN MẶT TẠI QUẦY</div><div class="kpi-number text-success">@Model.TotalCashRevenue.ToString("N0") đ</div><div class="tiny mt-1">Doanh thu thực thu tại quầy, không gồm tiền cọc</div></div></div>
         <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">LỢI NHUẬN ƯỚC TÍNH</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div></div></div>
     </div>
+
+    @if (Model.TotalUnknownPaymentMethodRevenue > 0)
+    {
+        <div class="alert alert-warning mb-3">
+            <strong>Cần kiểm tra dữ liệu:</strong> có @Model.TotalUnknownPaymentMethodRevenue.ToString("N0") đ doanh thu đang dùng phương thức thanh toán không chuẩn/legacy. Khoản này được tách riêng, không gộp vào tiền mặt hoặc QR.
+        </div>
+    }
 
     <div class="row g-3 mb-3">
         <div class="col-lg-6">
             <div class="panel p-3 h-100">
                 <h2 class="section-title mb-2">Doanh thu theo phương thức thanh toán</h2>
-                <div class="finance-line"><span>QR / chuyển khoản</span><strong class="text-info">@bankQrRevenue.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Tiền mặt tại quầy</span><strong class="text-success">@cashRevenue.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span>Khác / khấu trừ cọc</span><strong>@otherRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>QR ngân hàng</span><strong class="text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Tiền mặt tại quầy</span><strong class="text-success">@Model.TotalCashRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Khấu trừ tiền cọc</span><strong>@Model.TotalDepositDeductionRevenue.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Không xác định / dữ liệu cũ</span><strong class="@(Model.TotalUnknownPaymentMethodRevenue > 0 ? "text-warning" : string.Empty)">@Model.TotalUnknownPaymentMethodRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span><strong>Tổng theo phương thức</strong></span><strong>@paymentMethodTotal.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Tiền cọc không được tính là doanh thu; cọc đang giữ được theo dõi riêng ở mục tiền đang xử lý.</div>
+                <div class="tiny mt-2">Tiền cọc khách nộp không phải doanh thu. Chỉ phần thực sự bị khấu trừ để thanh toán phụ phí mới được ghi nhận là doanh thu.</div>
             </div>
         </div>
         <div class="col-lg-6">
@@ -109,6 +167,67 @@
                 <div class="finance-line"><span>Phụ phí</span><strong>@Model.TotalAdditionalChargeRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Khấu trừ cọc</span><strong>@Model.TotalDepositDeductionRecovery.ToString("N0") đ</strong></div>
             </div>
+        </div>
+    </div>
+
+    <div class="panel p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
+            <div>
+                <h2 class="section-title">Chi tiết giao dịch doanh thu</h2>
+                <div class="tiny mt-1">Dùng để truy ngược số tiền QR/tiền mặt đến từ đơn nào. Hiển thị tối đa 100 giao dịch mới nhất trong kỳ.</div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(selectedPaymentMethod))
+            {
+                <span class="method-badge">Đang lọc: @(selectedPaymentMethod == unknownPaymentMethodFilter ? "Không xác định" : selectedPaymentMethod)</span>
+            }
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm revenue-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Thời gian</th>
+                        <th>Đơn</th>
+                        <th>Xe</th>
+                        <th>Loại khoản</th>
+                        <th>Phương thức</th>
+                        <th>Mã giao dịch</th>
+                        <th>Người thu</th>
+                        <th class="text-end">Số tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (revenueTransactionRows.Count == 0)
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">Không có giao dịch doanh thu phù hợp bộ lọc.</td></tr>
+                }
+                else
+                {
+                    @foreach (var row in revenueTransactionRows)
+                    {
+                        var transaction = row.Transaction;
+                        <tr>
+                            <td class="text-nowrap">@transaction.OccurredAt.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@transaction.BookingId">#@transaction.BookingId</a></td>
+                            <td><strong>@row.VehicleName</strong><div class="tiny">@row.LicensePlate</div></td>
+                            <td>@transaction.Category</td>
+                            <td><span class="method-badge">@PaymentMethodLabel(transaction.PaymentMethod)</span></td>
+                            <td><span class="small">@(string.IsNullOrWhiteSpace(transaction.TransactionCode) ? "—" : transaction.TransactionCode)</span></td>
+                            <td>
+                                @if (transaction.PaymentMethod == PaymentMethods.Cash)
+                                {
+                                    <span>@(string.IsNullOrWhiteSpace(transaction.RecordedBy) ? "Chưa xác định (dữ liệu cũ)" : transaction.RecordedBy)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td class="text-end fw-bold text-success">@transaction.Amount.ToString("N0") đ</td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -198,8 +317,18 @@
                                     {
                                         var label = transaction.Category == "Hỗ trợ/bồi thường" ? "Hỗ trợ/bồi thường" : transaction.Category;
                                         <div class="transaction-line">
-                                            <span class="tiny">@transaction.OccurredAt.ToString("dd/MM/yyyy")</span>
+                                            <span class="tiny">@transaction.OccurredAt.ToString("dd/MM/yyyy HH:mm")</span>
                                             <span>@label</span>
+                                            <span class="transaction-method">
+                                                @if (!string.IsNullOrWhiteSpace(transaction.PaymentMethod))
+                                                {
+                                                    <span class="method-badge">@PaymentMethodLabel(transaction.PaymentMethod)</span>
+                                                    @if (transaction.PaymentMethod == PaymentMethods.Cash && !string.IsNullOrWhiteSpace(transaction.RecordedBy))
+                                                    {
+                                                        <span class="tiny ms-1">· @transaction.RecordedBy</span>
+                                                    }
+                                                }
+                                            </span>
                                             <strong class="@(transaction.IsOutflow ? "money-bad" : "money-good")">@(transaction.IsOutflow ? "−" : "+")@transaction.Amount.ToString("N0") đ</strong>
                                         </div>
                                     }
@@ -223,10 +352,8 @@
 @section Scripts {
 <script>
 (() => {
-    const reportLink = Array.from(document.querySelectorAll('.admin-sidebar a.admin-nav-link'))
-        .find(link => (link.getAttribute('href') || '').toLowerCase().includes('/reports'));
-    const reportLabel = reportLink?.querySelector('span:last-child');
-    if (reportLabel) reportLabel.textContent = 'Báo cáo kinh doanh';
+    const methodFilter = document.getElementById('payment-method-filter');
+    if (methodFilter) methodFilter.value = methodFilter.dataset.selected || '';
 
     const input = document.getElementById('vehicle-search');
     const rows = Array.from(document.querySelectorAll('.vehicle-wrapper'));
