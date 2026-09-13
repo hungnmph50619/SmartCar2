@@ -2,11 +2,6 @@
 @{
     ViewData["Title"] = "Chi tiết nhân viên";
     var employeeCode = string.IsNullOrWhiteSpace(Model.EmployeeCode) ? "Chưa cập nhật mã" : Model.EmployeeCode;
-    var maskedCitizenId = string.IsNullOrWhiteSpace(Model.CitizenIdNumber)
-        ? "Chưa cập nhật"
-        : (Model.CitizenIdNumber.Length <= 4
-            ? Model.CitizenIdNumber
-            : new string('•', Model.CitizenIdNumber.Length - 4) + Model.CitizenIdNumber[^4..]);
     var initial = string.IsNullOrWhiteSpace(Model.FullName)
         ? "N"
         : Model.FullName.Trim().Substring(0, 1).ToUpperInvariant();
@@ -40,7 +35,7 @@
     .staff-detail-page .danger-panel { border-color:#f2c5c9; }
     .staff-detail-page .danger-panel .panel-head { color:#b42318; background:#fffafa; }
     .staff-detail-page .masked-value { display:inline-flex; align-items:center; gap:.55rem; }
-    .staff-detail-page .reveal-button { border:0; background:transparent; color:#64748b; padding:0; font-size:.82rem; font-weight:700; }
+    .staff-detail-page .reveal-button { border:0; background:transparent; color:#1769d2; padding:0; font-size:.82rem; font-weight:700; }
     @@media(max-width:767.98px) {
         .staff-detail-page .info-grid { grid-template-columns:1fr; }
         .staff-detail-page .info-item { border-right:0 !important; }
@@ -94,10 +89,8 @@
             <div class="info-item">
                 <div class="info-label">Số CCCD</div>
                 <div class="info-value masked-value">
-                    <span id="staff-citizen-id"
-                          data-masked="@maskedCitizenId"
-                          data-full="@(Model.CitizenIdNumber ?? string.Empty)">@maskedCitizenId</span>
-                    @if (!string.IsNullOrWhiteSpace(Model.CitizenIdNumber))
+                    <span id="staff-citizen-id" data-masked="@Model.MaskedCitizenIdNumber">@Model.MaskedCitizenIdNumber</span>
+                    @if (Model.HasCitizenIdNumber)
                     {
                         <button type="button" class="reveal-button" id="toggle-staff-citizen-id" aria-label="Hiện số CCCD">Hiện</button>
                     }
@@ -110,10 +103,17 @@
         </div>
     </div>
 
+    @if (Model.HasCitizenIdNumber)
+    {
+        <form id="reveal-citizen-id-form" asp-action="RevealCitizenId" method="post" class="d-none">
+            <input type="hidden" name="id" value="@Model.UserId" />
+        </form>
+    }
+
     <div class="row g-3 mb-3">
         <div class="col-lg-6">
             <div class="panel h-100">
-                <div class="panel-head">Tài khoản</div>
+                <div class="panel-head">Tài khoản & xác minh</div>
                 <div class="panel-body">
                     <div class="account-row">
                         <span class="label">Trạng thái</span>
@@ -142,12 +142,29 @@
                         </span>
                     </div>
                     <div class="account-row">
-                        <span class="label">Người tạo</span>
-                        <span class="value">@(Model.CreatedByName ?? "Dữ liệu cũ / chưa ghi nhận")</span>
+                        <span class="label">CCCD</span>
+                        <span class="value">
+                            @if (Model.VerifiedAt.HasValue)
+                            {
+                                <span class="text-success">Đã đối chiếu bản gốc</span>
+                            }
+                            else
+                            {
+                                <span class="text-secondary">Chưa ghi nhận đối chiếu</span>
+                            }
+                        </span>
                     </div>
                     <div class="account-row">
-                        <span class="label">Ngày tạo</span>
-                        <span class="value">@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                        <span class="label">Người đối chiếu</span>
+                        <span class="value">@(Model.VerifiedByName ?? "Dữ liệu cũ / chưa ghi nhận")</span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Thời gian đối chiếu</span>
+                        <span class="value">@(Model.VerifiedAt.HasValue ? Model.VerifiedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "—")</span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Người tạo</span>
+                        <span class="value">@(Model.CreatedByName ?? "Dữ liệu cũ / chưa ghi nhận")</span>
                     </div>
                 </div>
             </div>
@@ -182,11 +199,11 @@
                 <div class="fw-semibold text-dark">@(Model.IsActive ? "Khóa quyền truy cập của nhân viên" : "Kích hoạt lại tài khoản nhân viên")</div>
                 <div class="small text-muted mt-1">
                     @(Model.IsActive
-                        ? "Nhân viên sẽ không thể đăng nhập, nhưng lịch sử giao xe, nhận xe và các thao tác trước đó vẫn được giữ nguyên."
+                        ? "Nhân viên sẽ bị đăng xuất ở thao tác tiếp theo, nhưng lịch sử giao xe, nhận xe và các thao tác trước đó vẫn được giữ nguyên."
                         : "Sau khi kích hoạt, nhân viên có thể đăng nhập và tiếp tục sử dụng các chức năng được phân quyền.")
                 </div>
             </div>
-            <form asp-action="ToggleStatus" method="post" class="flex-shrink-0" onsubmit="return confirm('@(Model.IsActive ? "Khóa tài khoản nhân viên này? Dữ liệu lịch sử vẫn được giữ lại." : "Kích hoạt lại tài khoản nhân viên này?")');">
+            <form asp-action="ToggleStatus" method="post" class="flex-shrink-0" onsubmit="return confirm('@(Model.IsActive ? "Khóa tài khoản nhân viên này? Phiên đang đăng nhập sẽ bị kết thúc và dữ liệu lịch sử vẫn được giữ lại." : "Kích hoạt lại tài khoản nhân viên này?")');">
                 <input type="hidden" name="id" value="@Model.UserId" />
                 <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-success") px-4" type="submit">
                     @(Model.IsActive ? "Khóa tài khoản" : "Kích hoạt lại")
@@ -201,14 +218,45 @@
 (() => {
     const value = document.getElementById('staff-citizen-id');
     const button = document.getElementById('toggle-staff-citizen-id');
-    if (!value || !button) return;
+    const form = document.getElementById('reveal-citizen-id-form');
+    if (!value || !button || !form) return;
 
     let visible = false;
-    button.addEventListener('click', () => {
-        visible = !visible;
-        value.textContent = visible ? (value.dataset.full || '') : (value.dataset.masked || '');
-        button.textContent = visible ? 'Ẩn' : 'Hiện';
-        button.setAttribute('aria-label', visible ? 'Ẩn số CCCD' : 'Hiện số CCCD');
+    let revealedValue = null;
+
+    button.addEventListener('click', async () => {
+        if (visible) {
+            visible = false;
+            value.textContent = value.dataset.masked || '';
+            button.textContent = 'Hiện';
+            button.setAttribute('aria-label', 'Hiện số CCCD');
+            return;
+        }
+
+        try {
+            if (!revealedValue) {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Không thể xem CCCD.');
+                }
+
+                const data = await response.json();
+                revealedValue = data.citizenId;
+            }
+
+            visible = true;
+            value.textContent = revealedValue || '';
+            button.textContent = 'Ẩn';
+            button.setAttribute('aria-label', 'Ẩn số CCCD');
+        } catch {
+            alert('Không thể hiển thị CCCD. Vui lòng thử lại.');
+        }
     });
 })();
 </script>
