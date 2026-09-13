@@ -15,7 +15,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class ReturnsController : Controller
 {
     private const int MaximumImages = 25;
@@ -113,6 +113,12 @@ public sealed class ReturnsController : Controller
             return View(model);
         }
 
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(staffId))
+        {
+            return Challenge();
+        }
+
         IReadOnlyList<string> imagePaths;
         try
         {
@@ -125,7 +131,9 @@ public sealed class ReturnsController : Controller
         }
         catch
         {
-            ModelState.AddModelError(nameof(ReturnViewModel.Images), "Không thể lưu ảnh trả xe. Vui lòng thử lại.");
+            ModelState.AddModelError(
+                nameof(ReturnViewModel.Images),
+                "Không thể lưu ảnh trả xe. Vui lòng thử lại.");
             await PopulateHandoverBaselineAsync(model.BookingId, cancellationToken);
             return View(model);
         }
@@ -140,7 +148,8 @@ public sealed class ReturnsController : Controller
                 model.InteriorCondition,
                 model.HasDamage,
                 string.Join(';', imagePaths),
-                model.Notes),
+                model.Notes,
+                staffId),
             cancellationToken);
 
         if (!result.Succeeded)
@@ -151,27 +160,18 @@ public sealed class ReturnsController : Controller
             return View(model);
         }
 
-        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var vehicleReturn = await _dbContext.VehicleReturns
-            .FirstAsync(item => item.BookingId == model.BookingId, cancellationToken);
-        vehicleReturn.CustomerIdentityVerified = true;
-        vehicleReturn.IdentityVerifiedByStaffId = staffId;
-        vehicleReturn.IdentityVerifiedAt = DateTime.UtcNow;
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
         await WriteAuditAsync(
             "CreateReturn",
             nameof(VehicleReturn),
             model.BookingId,
-            $"Lập biên bản trả xe đơn #{model.BookingId}, {model.Mileage:N0} km, {imagePaths.Count} ảnh chứng cứ, hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
+            $"Lập biên bản trả xe đơn #{model.BookingId}, {model.Mileage:N0} km, {imagePaths.Count} ảnh chứng cứ; " +
+            $"đã đối chiếu trực tiếp người trả và lưu xác minh trong cùng transaction; hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
             cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã lưu biên bản trả xe. Hãy in, ký và tải bản ký trước khi kết thúc kiểm tra.";
+            "Đã lưu biên bản trả xe và kết quả xác minh người trả trong cùng một giao dịch. Hãy in, ký và tải bản ký trước khi quyết toán.";
 
-        return User.IsInRole(RoleNames.Staff)
-            ? RedirectToAction("Details", "Staff", new { id = model.BookingId })
-            : RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
+        return RedirectToAction("Details", "Staff", new { id = model.BookingId });
     }
 
     [HttpGet]
@@ -198,17 +198,11 @@ public sealed class ReturnsController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        if (User.IsInRole(RoleNames.Staff) &&
-            !AllStaffChecksCompleted(records.Handover, records.VehicleReturn))
+        if (!AllStaffChecksCompleted(records.Handover, records.VehicleReturn))
         {
             TempData["ErrorMessage"] =
-                "Chưa đủ điều kiện đối chiếu quyết toán. " +
-                "Phải xác minh đúng người nhận, người trả và bản ký giao + trả trước.";
-
-            return RedirectToAction(
-                "Details",
-                "Staff",
-                new { id = bookingId });
+                "Chưa đủ điều kiện đối chiếu quyết toán. Phải xác minh đúng người nhận, người trả và bản ký giao + trả trước.";
+            return RedirectToBookingDetails(bookingId);
         }
 
         var refundPayment = booking.Payments
@@ -266,22 +260,15 @@ public sealed class ReturnsController : Controller
         AddChargeViewModel model,
         CancellationToken cancellationToken)
     {
-        if (User.IsInRole(RoleNames.Staff))
+        var verified = await StaffDocumentChecksCompletedAsync(
+            model.BookingId,
+            cancellationToken);
+
+        if (!verified)
         {
-            var verified = await StaffDocumentChecksCompletedAsync(
-                model.BookingId,
-                cancellationToken);
-
-            if (!verified)
-            {
-                TempData["ErrorMessage"] =
-                    "Nhân viên chỉ được thêm phụ phí sau khi đã xác minh đầy đủ người nhận/trả và bản ký giao/trả.";
-
-                return RedirectToAction(
-                    "Details",
-                    "Staff",
-                    new { id = model.BookingId });
-            }
+            TempData["ErrorMessage"] =
+                "Chỉ được thêm phụ phí sau khi đã xác minh đầy đủ người nhận/trả và bản ký giao/trả.";
+            return RedirectToBookingDetails(model.BookingId);
         }
 
         if (model.ChargeType == AdditionalChargeType.LateReturn ||
@@ -289,10 +276,7 @@ public sealed class ReturnsController : Controller
         {
             TempData["ErrorMessage"] =
                 "Phí trả muộn và phí vượt km được hệ thống tự động tính, không được thêm thủ công.";
-
-            return RedirectToAction(
-                nameof(Inspect),
-                new { bookingId = model.BookingId });
+            return RedirectToAction(nameof(Inspect), new { bookingId = model.BookingId });
         }
 
         var result = ModelState.IsValid
@@ -329,22 +313,15 @@ public sealed class ReturnsController : Controller
         int additionalChargeId,
         CancellationToken cancellationToken)
     {
-        if (User.IsInRole(RoleNames.Staff))
+        var verified = await StaffDocumentChecksCompletedAsync(
+            bookingId,
+            cancellationToken);
+
+        if (!verified)
         {
-            var verified = await StaffDocumentChecksCompletedAsync(
-                bookingId,
-                cancellationToken);
-
-            if (!verified)
-            {
-                TempData["ErrorMessage"] =
-                    "Nhân viên chưa hoàn thành đủ bước xác minh nên không được sửa phụ phí.";
-
-                return RedirectToAction(
-                    "Details",
-                    "Staff",
-                    new { id = bookingId });
-            }
+            TempData["ErrorMessage"] =
+                "Chưa hoàn thành đủ bước xác minh nên không được sửa phụ phí.";
+            return RedirectToBookingDetails(bookingId);
         }
 
         var chargeType = await _dbContext.AdditionalCharges
@@ -366,7 +343,6 @@ public sealed class ReturnsController : Controller
         {
             TempData["ErrorMessage"] =
                 "Phí trả muộn và phí vượt km do hệ thống tự tính nên không thể xóa thủ công.";
-
             return RedirectToAction(nameof(Inspect), new { bookingId });
         }
 
@@ -463,7 +439,7 @@ public sealed class ReturnsController : Controller
             completionState.AwaitingRefundAmount > 0;
 
         TempData["SuccessMessage"] = awaitingRefund
-            ? $"Đã đối chiếu hồ sơ. Chờ chủ/Admin duyệt hoàn {completionState.AwaitingRefundAmount:N0} đ."
+            ? $"Đã đối chiếu hồ sơ. Chờ Admin duyệt hoàn {completionState.AwaitingRefundAmount:N0} đ."
             : "Đã đối chiếu và hoàn tất chuyến thuê.";
 
         await WriteAuditAsync(
@@ -475,25 +451,7 @@ public sealed class ReturnsController : Controller
                 : $"Hoàn tất đơn #{model.BookingId} sau khi đủ hồ sơ giao-trả có chữ ký.",
             cancellationToken);
 
-        if (User.IsInRole(RoleNames.Staff))
-        {
-            return RedirectToAction("Details", "Staff", new { id = model.BookingId });
-        }
-
-        if (awaitingRefund)
-        {
-            return RedirectToAction(
-                "Index",
-                "AdminPayments",
-                new
-                {
-                    section = "refund",
-                    status = PaymentStatus.AwaitingRefund,
-                    type = PaymentType.Refund
-                });
-        }
-
-        return RedirectToAction("Details", "AdminTripRecords", new { id = model.BookingId });
+        return RedirectToBookingDetails(model.BookingId);
     }
 
     private async Task<bool> CustomerCitizenIdMatchesAsync(
@@ -533,15 +491,13 @@ public sealed class ReturnsController : Controller
 
     private static bool AllStaffChecksCompleted(
         VehicleHandover handover,
-        VehicleReturn vehicleReturn)
-    {
-        return handover.CustomerIdentityVerified &&
-               handover.SignedDocumentVerified &&
-               vehicleReturn.CustomerIdentityVerified &&
-               vehicleReturn.SignedDocumentVerified &&
-               HasSignedCopy(handover.ImagePaths, HandoverSignedMarker) &&
-               HasSignedCopy(vehicleReturn.ImagePaths, ReturnSignedMarker);
-    }
+        VehicleReturn vehicleReturn) =>
+        handover.CustomerIdentityVerified &&
+        handover.SignedDocumentVerified &&
+        vehicleReturn.CustomerIdentityVerified &&
+        vehicleReturn.SignedDocumentVerified &&
+        HasSignedCopy(handover.ImagePaths, HandoverSignedMarker) &&
+        HasSignedCopy(vehicleReturn.ImagePaths, ReturnSignedMarker);
 
     private async Task<bool> StaffDocumentChecksCompletedAsync(
         int bookingId,
@@ -555,7 +511,7 @@ public sealed class ReturnsController : Controller
                 item => item.BookingId == bookingId,
                 cancellationToken);
 
-        if (booking?.Handover == null || booking.VehicleReturn == null)
+        if (booking?.Handover is null || booking.VehicleReturn is null)
         {
             return false;
         }
@@ -564,9 +520,7 @@ public sealed class ReturnsController : Controller
     }
 
     private IActionResult RedirectToBookingDetails(int bookingId) =>
-        User.IsInRole(RoleNames.Staff)
-            ? RedirectToAction("Details", "Staff", new { id = bookingId })
-            : RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        RedirectToAction("Details", "Staff", new { id = bookingId });
 
     private async Task PopulateHandoverBaselineAsync(
         int bookingId,
@@ -630,12 +584,16 @@ public sealed class ReturnsController : Controller
 
         if (hasDamage && selectedDamageImages.Count == 0)
         {
-            ModelState.AddModelError(nameof(ReturnViewModel.DamageImages), "Đã đánh dấu hư hỏng thì phải có ảnh hư hỏng.");
+            ModelState.AddModelError(
+                nameof(ReturnViewModel.DamageImages),
+                "Đã đánh dấu hư hỏng thì phải có ảnh hư hỏng.");
         }
 
         if (evidenceFiles.Count + selectedDamageImages.Count + selectedOtherImages.Count > MaximumImages)
         {
-            ModelState.AddModelError(nameof(ReturnViewModel.Images), $"Tổng số ảnh tối đa là {MaximumImages}.");
+            ModelState.AddModelError(
+                nameof(ReturnViewModel.Images),
+                $"Tổng số ảnh tối đa là {MaximumImages}.");
         }
 
         foreach (var image in selectedDamageImages)
@@ -654,7 +612,10 @@ public sealed class ReturnsController : Controller
         string fieldName,
         CancellationToken cancellationToken)
     {
-        var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
+        var error = await ImageFileValidator.ValidateAsync(
+            image,
+            MaximumImageBytes,
+            cancellationToken);
         if (error is not null)
         {
             ModelState.AddModelError(fieldName, $"{image.FileName}: {error}");
@@ -677,17 +638,32 @@ public sealed class ReturnsController : Controller
         {
             foreach (var evidence in evidenceFiles.Where(item => item.File is { Length: > 0 }))
             {
-                paths.Add(await SaveOneImageAsync(folder, relativeFolder, evidence.Label, evidence.File!, cancellationToken));
+                paths.Add(await SaveOneImageAsync(
+                    folder,
+                    relativeFolder,
+                    evidence.Label,
+                    evidence.File!,
+                    cancellationToken));
             }
 
             foreach (var image in damageImages.Where(file => file.Length > 0))
             {
-                paths.Add(await SaveOneImageAsync(folder, relativeFolder, "damage", image, cancellationToken));
+                paths.Add(await SaveOneImageAsync(
+                    folder,
+                    relativeFolder,
+                    "damage",
+                    image,
+                    cancellationToken));
             }
 
             foreach (var image in otherImages.Where(file => file.Length > 0))
             {
-                paths.Add(await SaveOneImageAsync(folder, relativeFolder, "other", image, cancellationToken));
+                paths.Add(await SaveOneImageAsync(
+                    folder,
+                    relativeFolder,
+                    "other",
+                    image,
+                    cancellationToken));
             }
 
             return paths;
