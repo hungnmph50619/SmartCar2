@@ -61,6 +61,7 @@ public sealed record FleetReportDto(
     decimal OutstandingDeposits,
     decimal DepositsHeld,
     decimal PendingRefunds,
+    decimal PendingCompensationTransfers,
     IReadOnlyList<VehiclePerformanceDto> Vehicles);
 
 public interface IReportService
