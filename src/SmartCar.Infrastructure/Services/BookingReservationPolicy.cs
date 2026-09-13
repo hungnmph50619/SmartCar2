@@ -45,9 +45,6 @@ internal sealed class BookingReservationPolicy
                     payment.Type == PaymentType.Rental &&
                     payment.Status == PaymentStatus.AwaitingConfirmation))
             {
-                // Khách đã báo chuyển khoản đúng lúc: không tự hết hạn khi SmartCar còn đang đối soát.
-                // Khi Admin từ chối giao dịch, payment trở lại Pending; vòng cleanup tiếp theo sẽ
-                // cấp lại một cửa sổ thanh toán mới thay vì làm đơn hết hạn ngay lập tức.
                 if (booking.ReservationExpiresAt.HasValue)
                 {
                     booking.ReservationExpiresAt = null;
@@ -59,21 +56,9 @@ internal sealed class BookingReservationPolicy
 
             if (!booking.ReservationExpiresAt.HasValue)
             {
-                if (booking.Status == BookingStatus.PendingConfirmation)
-                {
-                    // Tương thích đơn cũ tạo trước khi có ReservationExpiresAt.
-                    booking.ReservationExpiresAt = booking.CreatedAt
-                        .AddMinutes(RentalPolicy.BookingConfirmationHoldMinutes);
-                }
-                else
-                {
-                    // PendingPayment không có expiry thường là trường hợp vừa rời trạng thái
-                    // AwaitingConfirmation (Admin từ chối QR) hoặc dữ liệu legacy. Cho khách một
-                    // cửa sổ thanh toán đầy đủ mới, không lấy mốc CreatedAt cũ để hết hạn tức thì.
-                    booking.ReservationExpiresAt = now
-                        .AddMinutes(RentalPolicy.BookingPaymentHoldMinutes);
-                }
-
+                booking.ReservationExpiresAt = booking.Status == BookingStatus.PendingConfirmation
+                    ? booking.CreatedAt.AddMinutes(RentalPolicy.BookingConfirmationHoldMinutes)
+                    : now.AddMinutes(RentalPolicy.BookingPaymentHoldMinutes);
                 changed = true;
             }
 
@@ -147,19 +132,30 @@ internal sealed class BookingReservationPolicy
         int vehicleId,
         DateTime pickupDate,
         DateTime returnDate,
+        VehiclePickupMethod pickupMethod,
         int? excludedBookingId,
         CancellationToken cancellationToken = default)
     {
-        var bufferMinutes = RentalPolicy.VehicleTurnaroundMinutes;
+        var turnaroundMinutes = RentalPolicy.VehicleTurnaroundMinutes;
+        var requestedLeadMinutes = pickupMethod == VehiclePickupMethod.Delivery
+            ? RentalPolicy.DeliveryLeadMinutes
+            : 0;
 
+        // Trước chuyến đang xét phải có đủ thời gian nhận/kiểm tra xe và, nếu giao tận nơi,
+        // thêm thời gian chuẩn bị di chuyển. Sau chuyến đang xét, buffer phụ thuộc phương thức
+        // nhận xe của chính chuyến kế tiếp đã tồn tại trong DB.
         return _dbContext.Bookings
             .AsNoTracking()
             .AnyAsync(booking =>
                 booking.VehicleId == vehicleId &&
                 (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
                 BlockingStatuses.Contains(booking.Status) &&
-                pickupDate < booking.ReturnDate.AddMinutes(bufferMinutes) &&
-                returnDate.AddMinutes(bufferMinutes) > booking.PickupDate,
+                pickupDate < booking.ReturnDate.AddMinutes(turnaroundMinutes + requestedLeadMinutes) &&
+                returnDate.AddMinutes(
+                    turnaroundMinutes +
+                    (booking.PickupMethod == VehiclePickupMethod.Delivery
+                        ? RentalPolicy.DeliveryLeadMinutes
+                        : 0)) > booking.PickupDate,
                 cancellationToken);
     }
 
@@ -175,10 +171,9 @@ internal sealed class BookingReservationPolicy
             .Select(vehicle => (VehicleStatus?)vehicle.Status)
             .FirstOrDefaultAsync(cancellationToken);
 
-        // Khoảng 30 phút là buffer dự kiến để không xếp hai lượt thuê quá sát nhau.
-        // Khi xe thực tế đang ở Inspection thì vẫn khóa cho tới khi nhân viên xử lý xong.
-        // Nếu nhân viên đã hoàn tất kiểm tra và chuyển xe sang Available thì không bắt
-        // chờ cho đủ 30 phút theo đồng hồ nữa: trạng thái vận hành mới là nguồn sự thật.
+        // Buffer kế hoạch là 60 phút. Khi xe thực tế đang ở Inspection thì nguồn sự thật là
+        // ReturnedAt + thời gian xoay vòng; nếu nhân viên đã hoàn tất kiểm tra và xe Available
+        // thì không giữ xe chỉ vì đồng hồ chưa đủ buffer kế hoạch.
         if (vehicleStatus != VehicleStatus.Inspection)
         {
             return null;

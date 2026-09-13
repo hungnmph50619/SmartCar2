@@ -1,12 +1,14 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -16,13 +18,16 @@ public sealed class AdminBookingsController : Controller
 {
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
+    private readonly ApplicationDbContext _dbContext;
 
     public AdminBookingsController(
         IBookingService bookingService,
-        IAuditService auditService)
+        IAuditService auditService,
+        ApplicationDbContext dbContext)
     {
         _bookingService = bookingService;
         _auditService = auditService;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -64,15 +69,30 @@ public sealed class AdminBookingsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Confirm(int id, CancellationToken cancellationToken)
     {
+        var staffReviewed = await _dbContext.AuditLogs
+            .AsNoTracking()
+            .AnyAsync(log =>
+                log.Action == "StaffReviewedBooking" &&
+                log.EntityName == "Booking" &&
+                log.EntityId == id.ToString(),
+                cancellationToken);
+
+        if (!staffReviewed)
+        {
+            TempData["ErrorMessage"] =
+                "Đơn chưa có bước kiểm tra của nhân viên. Nhân viên phải kiểm tra KYC, xe và lịch thuê trước khi quản trị viên duyệt.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var result = await _bookingService.ConfirmAsync(id, cancellationToken);
         SetMessage(result, "Đã duyệt đơn thuê và tạo khoản thanh toán cho khách.");
 
         if (result.Succeeded)
         {
             await WriteAuditAsync(
-                "Confirm",
+                "AdminApproveBooking",
                 id,
-                $"Admin duyệt đơn thuê #{id} và chuyển sang chờ thanh toán.",
+                $"Quản trị viên duyệt đơn thuê #{id} sau bước kiểm tra của nhân viên và chuyển sang Chờ thanh toán.",
                 cancellationToken);
         }
 
@@ -101,9 +121,9 @@ public sealed class AdminBookingsController : Controller
         if (result.Succeeded)
         {
             await WriteAuditAsync(
-                "Reject",
+                "AdminRejectBooking",
                 model.BookingId,
-                $"Admin từ chối đơn thuê #{model.BookingId}. Lý do: {model.Reason.Trim()}",
+                $"Quản trị viên từ chối đơn thuê #{model.BookingId}. Lý do: {model.Reason.Trim()}",
                 cancellationToken);
         }
 

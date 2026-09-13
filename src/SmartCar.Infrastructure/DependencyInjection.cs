@@ -78,7 +78,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailService, SmtpEmailService>();
         services.AddScoped<IBrandService, BrandService>();
 
-        // Chính sách đặt xe dùng chung cho tìm xe, tạo đơn, giữ chỗ và gia hạn.
+        // Chính sách đặt xe dùng chung cho tìm xe, tạo đơn, giữ chỗ, kiểm tra đơn và gia hạn.
         services.AddScoped<BookingReservationPolicy>();
         services.AddScoped<VehicleService>();
         services.AddScoped<IVehicleService, PolicyAwareVehicleService>();
@@ -88,6 +88,7 @@ public static class DependencyInjection
 
         services.AddScoped<BookingService>();
         services.AddScoped<IBookingService, PolicyAwareBookingService>();
+        services.AddScoped<IBookingReviewService, BookingReviewService>();
 
         services.AddScoped<IBookingOperationService, BookingOperationService>();
         services.AddScoped<ExtensionService>();
