@@ -90,7 +90,18 @@
                         </div>
                     </div>
 
-                    <div class="alert alert-info mt-4 mb-3">
+                    <div class="border rounded-3 p-3 mt-4 bg-light">
+                        <div class="form-check">
+                            <input asp-for="IdentityDocumentChecked" class="form-check-input" />
+                            <label asp-for="IdentityDocumentChecked" class="form-check-label fw-semibold">
+                                Tôi đã đối chiếu CCCD bản gốc của nhân viên
+                            </label>
+                        </div>
+                        <div class="small text-muted mt-1">Hệ thống lưu người xác minh và thời gian đối chiếu để truy vết; không lưu ảnh CCCD nhân viên.</div>
+                        <span asp-validation-for="IdentityDocumentChecked" class="text-danger small d-block mt-1"></span>
+                    </div>
+
+                    <div class="alert alert-info mt-3 mb-3">
                         <strong>Sau khi tạo:</strong> hệ thống tự cấp mã nhân viên và quyền Nhân viên. Nhân viên đăng nhập bằng email + mật khẩu trên và bắt buộc đổi mật khẩu ở lần đầu.
                     </div>
 
