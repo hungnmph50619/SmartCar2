@@ -445,48 +445,46 @@ public sealed class AdminStaffController : Controller
             ModelState.AddModelError(nameof(AdminStaffCreateViewModel.Email), "Email này đã được sử dụng bởi tài khoản khác.");
         }
 
-        if (IsValidNormalizedPhoneNumber(phoneNumber))
+        var staffRoleId = await _dbContext.Roles
+            .AsNoTracking()
+            .Where(role => role.Name == RoleNames.Staff)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (IsValidNormalizedPhoneNumber(phoneNumber) && !string.IsNullOrWhiteSpace(staffRoleId))
         {
             var internationalPhoneNumber = $"+84{phoneNumber[1..]}";
             var phoneExists = await _userManager.Users.AnyAsync(
                 user => user.Id != excludedUserId &&
-                        (user.PhoneNumber == phoneNumber || user.PhoneNumber == internationalPhoneNumber),
+                        (user.PhoneNumber == phoneNumber || user.PhoneNumber == internationalPhoneNumber) &&
+                        _dbContext.UserRoles.Any(userRole =>
+                            userRole.UserId == user.Id &&
+                            userRole.RoleId == staffRoleId),
                 cancellationToken);
 
             if (phoneExists)
             {
                 ModelState.AddModelError(
                     nameof(AdminStaffCreateViewModel.PhoneNumber),
-                    "Số điện thoại này đã được sử dụng bởi tài khoản Customer, Staff hoặc Admin khác.");
+                    "Số điện thoại này đã được sử dụng bởi tài khoản nhân viên khác.");
             }
         }
 
-        if (citizenIdNumber.Length == 12 && citizenIdNumber.All(char.IsDigit))
+        if (citizenIdNumber.Length == 12 && citizenIdNumber.All(char.IsDigit) && !string.IsNullOrWhiteSpace(staffRoleId))
         {
             var staffCitizenExists = await _userManager.Users.AnyAsync(
-                user => user.Id != excludedUserId && user.CitizenIdNumber == citizenIdNumber,
+                user => user.Id != excludedUserId &&
+                        user.CitizenIdNumber == citizenIdNumber &&
+                        _dbContext.UserRoles.Any(userRole =>
+                            userRole.UserId == user.Id &&
+                            userRole.RoleId == staffRoleId),
                 cancellationToken);
 
             if (staffCitizenExists)
             {
                 ModelState.AddModelError(
                     nameof(AdminStaffCreateViewModel.CitizenIdNumber),
-                    "Số CCCD này đã được gán cho tài khoản nội bộ khác.");
-            }
-
-            var customerCitizenExists = await _dbContext.CustomerDocuments
-                .AsNoTracking()
-                .AnyAsync(document =>
-                    (document.DocumentType == DocumentTypes.CitizenId ||
-                     document.DocumentType == DocumentTypes.CitizenIdBack) &&
-                    document.DocumentNumber == citizenIdNumber,
-                    cancellationToken);
-
-            if (customerCitizenExists)
-            {
-                ModelState.AddModelError(
-                    nameof(AdminStaffCreateViewModel.CitizenIdNumber),
-                    "Số CCCD này đã thuộc hồ sơ khách hàng. SmartCar không dùng cùng một danh tính cho Customer và Staff.");
+                    "Số CCCD này đã được gán cho tài khoản nhân viên khác.");
             }
         }
     }
