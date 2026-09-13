@@ -17,15 +17,18 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminBookingsController : Controller
 {
     private readonly IBookingService _bookingService;
+    private readonly IBookingReviewService _bookingReviewService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
 
     public AdminBookingsController(
         IBookingService bookingService,
+        IBookingReviewService bookingReviewService,
         IAuditService auditService,
         ApplicationDbContext dbContext)
     {
         _bookingService = bookingService;
+        _bookingReviewService = bookingReviewService;
         _auditService = auditService;
         _dbContext = dbContext;
     }
@@ -84,6 +87,20 @@ public sealed class AdminBookingsController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        // AuditLog chỉ chứng minh nhân viên từng kiểm tra. Trước khi Admin duyệt phải
+        // kiểm tra lại dữ liệu HIỆN TẠI để không duyệt dựa trên một kết quả đã cũ.
+        var reviewResult = await _bookingReviewService.ValidateForStaffReviewAsync(
+            id,
+            cancellationToken);
+        if (!reviewResult.Succeeded)
+        {
+            TempData["ErrorMessage"] =
+                "Điều kiện đơn đã thay đổi sau lần nhân viên kiểm tra: " +
+                string.Join("; ", reviewResult.Errors) +
+                " Nhân viên cần kiểm tra lại trước khi duyệt.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var result = await _bookingService.ConfirmAsync(id, cancellationToken);
         SetMessage(result, "Đã duyệt đơn thuê và tạo khoản thanh toán cho khách.");
 
@@ -92,7 +109,7 @@ public sealed class AdminBookingsController : Controller
             await WriteAuditAsync(
                 "AdminApproveBooking",
                 id,
-                $"Quản trị viên duyệt đơn thuê #{id} sau bước kiểm tra của nhân viên và chuyển sang Chờ thanh toán.",
+                $"Quản trị viên duyệt đơn thuê #{id} sau khi xác nhận lại điều kiện hiện tại và chuyển sang Chờ thanh toán.",
                 cancellationToken);
         }
 
