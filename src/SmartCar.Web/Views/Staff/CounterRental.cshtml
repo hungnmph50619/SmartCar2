@@ -13,15 +13,15 @@
         <div class="position-relative" style="z-index:1">
             <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> Nghiệp vụ tại quầy</span>
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                <div style="max-width:790px">
+                <div style="max-width:800px">
                     <h1 class="display-6 fw-bold mb-2">Lập đơn thuê xe tại quầy</h1>
                     <p class="text-muted mb-0">
-                        Nhân viên hỗ trợ khách đã có tài khoản và hồ sơ CCCD/GPLX hợp lệ lập đơn tại quầy.
-                        <strong>Nhân viên không tự duyệt đơn của mình.</strong> Sau khi quản trị viên duyệt, nhân viên mới được thu và ghi nhận tiền mặt.
+                        Tìm đúng khách, chọn thời gian rồi hệ thống chỉ trả về các xe thực sự còn khả dụng theo cùng quy tắc lịch với website khách hàng.
+                        Đơn sau khi lập phải qua bước nhân viên kiểm tra và Admin duyệt trước khi thu tiền.
                     </p>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
-                    <a class="btn btn-outline-primary px-4" asp-controller="StaffCustomers" asp-action="Index">⌕ Tìm khách</a>
+                    <a class="btn btn-outline-primary px-4" asp-controller="StaffCustomers" asp-action="Index">Tìm trong danh sách khách</a>
                     <a class="btn btn-primary staff-action-button px-4" asp-controller="StaffCustomers" asp-action="Create">＋ Tạo khách mới</a>
                 </div>
             </div>
@@ -30,31 +30,31 @@
 
     <div class="row g-3 mb-4 staff-stagger">
         <div class="col-sm-6 col-xl-3">
-            <div class="staff-step">
+            <div class="staff-step h-100">
                 <span class="staff-step-number">1</span>
-                <div class="fw-bold">Khách + hồ sơ</div>
-                <div class="small text-muted">Chọn khách có CCCD/GPLX đã được quản trị viên xác minh và còn hiệu lực đến ngày trả xe.</div>
+                <div class="fw-bold">Chọn khách</div>
+                <div class="small text-muted">Tìm theo tên, số điện thoại hoặc email. Không tải toàn bộ khách vào dropdown.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="staff-step">
+            <div class="staff-step h-100">
                 <span class="staff-step-number">2</span>
-                <div class="fw-bold">Kiểm tra lịch xe</div>
-                <div class="small text-muted">Hệ thống kiểm tra xung đột và cần tối thiểu @RentalPolicy.VehicleTurnaroundMinutes phút xoay vòng giữa hai chuyến.</div>
+                <div class="fw-bold">Chọn thời gian</div>
+                <div class="small text-muted">Khoảng thuê quyết định xe nào thực sự có thể nhận đơn.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="staff-step">
+            <div class="staff-step h-100">
                 <span class="staff-step-number">3</span>
-                <div class="fw-bold">Quản trị viên duyệt</div>
-                <div class="small text-muted">Đơn được giữ lịch ở trạng thái Chờ xác nhận; quản trị viên là người duyệt hoặc từ chối.</div>
+                <div class="fw-bold">Tìm xe khả dụng</div>
+                <div class="small text-muted">Có xét lịch trùng, buffer @RentalPolicy.VehicleTurnaroundMinutes phút, tình trạng và giấy tờ xe.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
-            <div class="staff-step">
+            <div class="staff-step h-100">
                 <span class="staff-step-number">4</span>
-                <div class="fw-bold">Thu tiền & bàn giao</div>
-                <div class="small text-muted">Sau khi duyệt, nhân viên thu tiền mặt, chuẩn bị xe rồi thực hiện đối chiếu giấy tờ và bàn giao.</div>
+                <div class="fw-bold">Duyệt rồi thanh toán</div>
+                <div class="small text-muted">Sau Admin duyệt mới chọn thu tiền mặt hoặc xác nhận khách đã chuyển khoản/QR.</div>
             </div>
         </div>
     </div>
@@ -64,103 +64,111 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
                 <div>
                     <h2 class="h4 mb-1">Thông tin đơn thuê</h2>
-                    <div class="text-muted small">Đơn tạo tại quầy dùng cùng BookingService và cùng quy tắc lịch xe như đơn khách tự tạo.</div>
+                    <div class="text-muted small">Kết quả tìm xe dùng trực tiếp nguồn khả dụng của hệ thống; POST vẫn kiểm tra lại lần cuối để chống tranh chấp lịch.</div>
                 </div>
-                <span class="badge rounded-pill text-bg-warning px-3 py-2">Chờ quản trị viên duyệt</span>
+                <span class="badge rounded-pill text-bg-warning px-3 py-2">Chưa tạo đơn</span>
             </div>
 
             <div asp-validation-summary="All" class="alert alert-danger py-2 mb-4"></div>
 
-            <div class="row g-3">
-                <div class="col-12">
-                    <label for="counter-customer-filter" class="form-label fw-semibold">Tìm nhanh khách hàng</label>
-                    <input id="counter-customer-filter"
-                           type="search"
-                           class="form-control"
-                           autocomplete="off"
-                           placeholder="Nhập tên, số điện thoại hoặc email..." />
-                    <div class="form-text">
-                        Ô này lọc nhanh danh sách bên dưới. Cần tra cứu đầy đủ? <a asp-controller="StaffCustomers" asp-action="Index">Mở danh sách khách hàng</a>.
+            <input asp-for="CustomerId" type="hidden" id="counter-customer-id" />
+            <input asp-for="VehicleId" type="hidden" id="counter-vehicle-id" />
+
+            <section class="staff-work-section mb-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="staff-step-number">1</span>
+                    <div>
+                        <h3 class="h5 mb-0">Khách hàng</h3>
+                        <div class="small text-muted">Nhập ít nhất 2 ký tự để tìm trên hệ thống.</div>
                     </div>
                 </div>
 
-                <div class="col-lg-7">
-                    <label asp-for="CustomerId" class="form-label fw-semibold">Khách hàng *</label>
-                    <select asp-for="CustomerId" class="form-select" id="counter-customer">
-                        <option value="">-- Chọn khách hàng --</option>
-                        @foreach (var item in Model.Customers)
-                        {
-                            <option value="@item.Value">@item.Text</option>
-                        }
-                    </select>
-                    <div class="form-text">
-                        Không thấy khách? <a asp-controller="StaffCustomers" asp-action="Create">Tạo tài khoản/hỗ trợ khách bổ sung hồ sơ tại quầy</a>.
-                    </div>
+                <div class="staff-autocomplete" data-autocomplete="customer">
+                    <label for="counter-customer-search" class="form-label fw-semibold">Tên / SĐT / email *</label>
+                    <input id="counter-customer-search"
+                           type="search"
+                           class="form-control form-control-lg"
+                           autocomplete="off"
+                           placeholder="Ví dụ: Nguyễn Văn A, 098..., a@gmail.com"
+                           aria-autocomplete="list"
+                           aria-controls="counter-customer-results" />
+                    <div id="counter-customer-results" class="staff-search-results d-none" role="listbox"></div>
+                    <div id="counter-customer-selected" class="staff-selected-result d-none mt-2"></div>
+                    <div id="counter-customer-status" class="form-text">Không dùng dropdown toàn bộ khách hàng nữa.</div>
                     <span asp-validation-for="CustomerId" class="text-danger small"></span>
                 </div>
+            </section>
 
-                <div class="col-lg-5">
-                    <label asp-for="VehicleId" class="form-label fw-semibold">Xe *</label>
-                    <select asp-for="VehicleId" class="form-select">
-                        <option value="0">-- Chọn xe --</option>
-                        @foreach (var item in Model.Vehicles)
-                        {
-                            <option value="@item.Value">@item.Text</option>
-                        }
-                    </select>
+            <section class="staff-work-section mb-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="staff-step-number">2</span>
+                    <div>
+                        <h3 class="h5 mb-0">Thời gian thuê</h3>
+                        <div class="small text-muted">Đổi thời gian sẽ tự bỏ xe đã chọn vì tính khả dụng có thể thay đổi.</div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="PickupDate" class="form-label fw-semibold">Thời gian nhận *</label>
+                        <input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-pickup" />
+                        <span asp-validation-for="PickupDate" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="ReturnDate" class="form-label fw-semibold">Thời gian trả dự kiến *</label>
+                        <input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-return" />
+                        <span asp-validation-for="ReturnDate" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="staff-summary p-3 mt-3" aria-live="polite">
+                    <div class="d-flex justify-content-between gap-3 flex-wrap">
+                        <div>
+                            <div class="small text-muted">Khoảng thuê dự kiến</div>
+                            <strong id="counter-duration">Đang tính...</strong>
+                        </div>
+                        <div class="text-md-end">
+                            <div class="small text-muted">Buffer vận hành</div>
+                            <strong>≥ @RentalPolicy.VehicleTurnaroundMinutes phút giữa hai chuyến</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="staff-work-section mb-4">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="staff-step-number">3</span>
+                    <div>
+                        <h3 class="h5 mb-0">Xe khả dụng</h3>
+                        <div class="small text-muted">Chỉ tìm sau khi khoảng thuê hợp lệ.</div>
+                    </div>
+                </div>
+
+                <div class="staff-autocomplete" data-autocomplete="vehicle">
+                    <label for="counter-vehicle-search" class="form-label fw-semibold">Tên xe / biển số / hãng *</label>
+                    <input id="counter-vehicle-search"
+                           type="search"
+                           class="form-control form-control-lg"
+                           autocomplete="off"
+                           placeholder="Chọn thời gian trước, sau đó nhập tên xe hoặc biển số"
+                           aria-autocomplete="list"
+                           aria-controls="counter-vehicle-results" />
+                    <div id="counter-vehicle-results" class="staff-search-results d-none" role="listbox"></div>
+                    <div id="counter-vehicle-selected" class="staff-selected-result d-none mt-2"></div>
+                    <div id="counter-vehicle-status" class="form-text">Hệ thống sẽ kiểm tra lịch và chỉ trả xe còn nhận được đơn này.</div>
                     <span asp-validation-for="VehicleId" class="text-danger small"></span>
                 </div>
+            </section>
 
-                <div class="col-md-6">
-                    <label asp-for="PickupDate" class="form-label fw-semibold">Thời gian nhận dự kiến *</label>
-                    <input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-pickup" />
-                    <span asp-validation-for="PickupDate" class="text-danger small"></span>
+            <section class="staff-note p-3 mb-4 small">
+                <strong>Thanh toán chưa được chọn ở bước này.</strong>
+                <div class="mt-1">
+                    Sau khi Staff kiểm tra và Admin duyệt, đơn chuyển sang <strong>Chờ thanh toán</strong>. Khi đó màn xử lý đơn mới cho phép nhân viên chọn thao tác thực tế: <strong>thu tiền mặt</strong> hoặc <strong>ghi nhận khách đã chuyển khoản/QR để Admin đối soát</strong>.
                 </div>
-                <div class="col-md-6">
-                    <label asp-for="ReturnDate" class="form-label fw-semibold">Thời gian trả dự kiến *</label>
-                    <input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-return" />
-                    <span asp-validation-for="ReturnDate" class="text-danger small"></span>
-                </div>
+            </section>
 
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Hình thức nhận xe</label>
-                    <input class="form-control" value="Nhận tại cửa hàng" disabled />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Dự kiến thanh toán</label>
-                    <input class="form-control" value="Tiền mặt tại quầy sau khi quản trị viên duyệt" disabled />
-                </div>
-            </div>
-
-            <div class="staff-summary p-3 mt-4" aria-live="polite">
-                <div class="d-flex justify-content-between gap-3 flex-wrap">
-                    <div>
-                        <div class="small text-muted">Khoảng thuê dự kiến</div>
-                        <strong id="counter-duration">Đang tính...</strong>
-                    </div>
-                    <div class="text-md-end">
-                        <div class="small text-muted">Khoảng xoay vòng bắt buộc</div>
-                        <strong>≥ @RentalPolicy.VehicleTurnaroundMinutes phút giữa hai chuyến</strong>
-                    </div>
-                </div>
-            </div>
-
-            <div class="staff-note p-3 mt-3 small">
-                <strong>Hai loại thời gian không được trộn:</strong>
-                <div class="row g-2 mt-1">
-                    <div class="col-md-6">
-                        <span class="badge text-bg-light border me-1">Kế hoạch</span>
-                        <strong>PickupDate / ReturnDate</strong> dùng để giữ lịch và chống đặt trùng có buffer.
-                    </div>
-                    <div class="col-md-6">
-                        <span class="badge text-bg-light border me-1">Thực tế</span>
-                        <strong>HandoverAt / ReturnedAt</strong> dùng để xác định khách thực sự giữ xe đến lúc nào, trả muộn và thời điểm xe được phép quay lại vận hành.
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-4 d-flex flex-wrap gap-2">
-                <button class="btn btn-primary staff-action-button px-4" type="submit" data-loading-text="Đang lập đơn...">Lập đơn chờ quản trị viên duyệt</button>
+            <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-primary staff-action-button px-4" type="submit" data-loading-text="Đang lập đơn...">Lập đơn thuê tại quầy</button>
                 <a class="btn btn-outline-secondary px-4" asp-action="Index">Hủy</a>
             </div>
         </div>
@@ -171,72 +179,197 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
-            const customer = document.getElementById('counter-customer');
-            const customerFilter = document.getElementById('counter-customer-filter');
+            const customerSearch = document.getElementById('counter-customer-search');
+            const customerId = document.getElementById('counter-customer-id');
+            const customerResults = document.getElementById('counter-customer-results');
+            const customerSelected = document.getElementById('counter-customer-selected');
+            const customerStatus = document.getElementById('counter-customer-status');
+
+            const vehicleSearch = document.getElementById('counter-vehicle-search');
+            const vehicleId = document.getElementById('counter-vehicle-id');
+            const vehicleResults = document.getElementById('counter-vehicle-results');
+            const vehicleSelected = document.getElementById('counter-vehicle-selected');
+            const vehicleStatus = document.getElementById('counter-vehicle-status');
+
             const pickup = document.getElementById('counter-pickup');
             const returned = document.getElementById('counter-return');
-            const output = document.getElementById('counter-duration');
+            const duration = document.getElementById('counter-duration');
 
-            const originalCustomerOptions = customer
-                ? Array.from(customer.options).map(option => ({
-                    value: option.value,
-                    text: option.text,
-                    selected: option.selected
-                }))
-                : [];
+            let customerTimer;
+            let vehicleTimer;
+            let customerRequest = 0;
+            let vehicleRequest = 0;
 
-            const filterCustomers = () => {
-                if (!customer) return;
-                const keyword = (customerFilter?.value ?? '').trim().toLocaleLowerCase('vi-VN');
-                const selectedValue = customer.value;
+            const escapeHtml = value => String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
 
-                customer.replaceChildren();
-                originalCustomerOptions.forEach((option, index) => {
-                    if (index !== 0 && keyword && !option.text.toLocaleLowerCase('vi-VN').includes(keyword)) {
-                        return;
-                    }
-
-                    const element = new Option(option.text, option.value);
-                    element.selected = option.value === selectedValue || (!selectedValue && option.selected);
-                    customer.add(element);
-                });
-
-                if (customer.options.length === 1 && keyword) {
-                    const empty = new Option('Không có khách phù hợp', '');
-                    empty.disabled = true;
-                    customer.add(empty);
-                }
+            const hideResults = container => {
+                container.replaceChildren();
+                container.classList.add('d-none');
             };
 
-            customerFilter?.addEventListener('input', filterCustomers);
-
-            const customerFromQuery = new URLSearchParams(window.location.search).get('customerId');
-            if (customerFromQuery && customer) {
-                const exists = Array.from(customer.options).some(option => option.value === customerFromQuery);
-                if (exists) {
-                    customer.value = customerFromQuery;
-                    customer.classList.add('staff-attention-flash');
-                    setTimeout(() => customer.classList.remove('staff-attention-flash'), 1500);
+            const renderResults = (container, items, onSelect, emptyText) => {
+                container.replaceChildren();
+                if (!items.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'staff-search-empty';
+                    empty.textContent = emptyText;
+                    container.appendChild(empty);
+                } else {
+                    items.forEach(item => {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'staff-search-option';
+                        button.setAttribute('role', 'option');
+                        button.innerHTML = `<span class="fw-semibold">${escapeHtml(item.label)}</span><span class="small text-muted">${escapeHtml(item.detail)}</span>`;
+                        button.addEventListener('click', () => onSelect(item));
+                        container.appendChild(button);
+                    });
                 }
-            }
+                container.classList.remove('d-none');
+            };
 
-            const render = () => {
-                if (!pickup?.value || !returned?.value || !output) return;
+            const clearCustomer = () => {
+                customerId.value = '';
+                customerSelected.replaceChildren();
+                customerSelected.classList.add('d-none');
+            };
+
+            const clearVehicle = (message = 'Hãy tìm lại xe phù hợp với khoảng thời gian mới.') => {
+                vehicleId.value = '0';
+                vehicleSelected.replaceChildren();
+                vehicleSelected.classList.add('d-none');
+                vehicleSearch.value = '';
+                vehicleStatus.textContent = message;
+                hideResults(vehicleResults);
+            };
+
+            const selectCustomer = item => {
+                customerId.value = item.value;
+                customerSearch.value = item.label;
+                customerSelected.innerHTML = `<strong>${escapeHtml(item.label)}</strong><span class="small text-muted ms-2">${escapeHtml(item.detail)}</span>`;
+                customerSelected.classList.remove('d-none');
+                customerStatus.textContent = 'Đã chọn khách hàng.';
+                hideResults(customerResults);
+            };
+
+            const selectVehicle = item => {
+                vehicleId.value = item.value;
+                vehicleSearch.value = item.label;
+                vehicleSelected.innerHTML = `<strong>${escapeHtml(item.label)}</strong><span class="small text-muted ms-2">${escapeHtml(item.detail)}</span>`;
+                vehicleSelected.classList.remove('d-none');
+                vehicleStatus.textContent = 'Đã chọn xe còn khả dụng trong khoảng thời gian này.';
+                hideResults(vehicleResults);
+            };
+
+            customerSearch.addEventListener('input', () => {
+                clearCustomer();
+                clearTimeout(customerTimer);
+                const term = customerSearch.value.trim();
+                if (term.length < 2) {
+                    hideResults(customerResults);
+                    customerStatus.textContent = 'Nhập ít nhất 2 ký tự để tìm khách.';
+                    return;
+                }
+
+                customerStatus.textContent = 'Đang tìm khách...';
+                const requestId = ++customerRequest;
+                customerTimer = setTimeout(async () => {
+                    try {
+                        const response = await fetch(`@Url.Action("Customers", "StaffLookups")?term=${encodeURIComponent(term)}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        if (!response.ok) throw new Error('lookup-failed');
+                        const items = await response.json();
+                        if (requestId !== customerRequest) return;
+                        renderResults(customerResults, items, selectCustomer, 'Không tìm thấy khách đang hoạt động phù hợp.');
+                        customerStatus.textContent = items.length ? `Tìm thấy ${items.length} kết quả.` : 'Không tìm thấy khách phù hợp.';
+                    } catch {
+                        if (requestId === customerRequest) customerStatus.textContent = 'Không thể tìm khách lúc này. Hãy thử lại.';
+                    }
+                }, 250);
+            });
+
+            const validRange = () => {
+                if (!pickup.value || !returned.value) return false;
+                const start = new Date(pickup.value);
+                const end = new Date(returned.value);
+                return Number.isFinite(start.valueOf()) && Number.isFinite(end.valueOf()) && end > start && start >= new Date(Date.now() + 4 * 60000);
+            };
+
+            const renderDuration = () => {
+                if (!pickup.value || !returned.value) {
+                    duration.textContent = 'Chọn đủ thời gian nhận và trả.';
+                    return;
+                }
                 const start = new Date(pickup.value);
                 const end = new Date(returned.value);
                 const diff = end - start;
                 if (!Number.isFinite(diff) || diff <= 0) {
-                    output.textContent = 'Thời gian trả phải sau thời gian nhận.';
+                    duration.textContent = 'Thời gian trả phải sau thời gian nhận.';
                     return;
                 }
                 const hours = diff / 3600000;
                 const billableDays = Math.max(1, Math.ceil(hours / 24));
-                output.textContent = `${hours.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} giờ · ${billableDays} ngày tính phí`;
+                duration.textContent = `${hours.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} giờ · ${billableDays} ngày tính phí`;
             };
 
-            pickup?.addEventListener('change', render);
-            returned?.addEventListener('change', render);
-            render();
+            const onTimeChanged = () => {
+                renderDuration();
+                clearVehicle(validRange()
+                    ? 'Thời gian đã thay đổi. Hãy tìm và chọn lại xe khả dụng.'
+                    : 'Khoảng thời gian chưa hợp lệ nên chưa thể tìm xe.');
+                vehicleSearch.disabled = !validRange();
+            };
+
+            pickup.addEventListener('change', onTimeChanged);
+            returned.addEventListener('change', onTimeChanged);
+
+            vehicleSearch.addEventListener('input', () => {
+                vehicleId.value = '0';
+                vehicleSelected.classList.add('d-none');
+                clearTimeout(vehicleTimer);
+                hideResults(vehicleResults);
+
+                if (!validRange()) {
+                    vehicleStatus.textContent = 'Hãy chọn thời gian nhận/trả hợp lệ trước khi tìm xe.';
+                    return;
+                }
+
+                const term = vehicleSearch.value.trim();
+                vehicleStatus.textContent = 'Đang kiểm tra xe khả dụng...';
+                const requestId = ++vehicleRequest;
+                vehicleTimer = setTimeout(async () => {
+                    const query = new URLSearchParams({
+                        pickupDate: pickup.value,
+                        returnDate: returned.value,
+                        term
+                    });
+                    try {
+                        const response = await fetch(`@Url.Action("Vehicles", "StaffLookups")?${query}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        if (!response.ok) {
+                            const error = await response.json().catch(() => null);
+                            throw new Error(error?.message ?? 'lookup-failed');
+                        }
+                        const items = await response.json();
+                        if (requestId !== vehicleRequest) return;
+                        renderResults(vehicleResults, items, selectVehicle, 'Không có xe phù hợp còn khả dụng trong khoảng này.');
+                        vehicleStatus.textContent = items.length ? `Có ${items.length} xe phù hợp để chọn.` : 'Không có xe phù hợp còn khả dụng.';
+                    } catch (error) {
+                        if (requestId === vehicleRequest) vehicleStatus.textContent = error.message === 'lookup-failed' ? 'Không thể kiểm tra xe lúc này.' : error.message;
+                    }
+                }, 250);
+            });
+
+            document.addEventListener('click', event => {
+                if (!event.target.closest('[data-autocomplete="customer"]')) hideResults(customerResults);
+                if (!event.target.closest('[data-autocomplete="vehicle"]')) hideResults(vehicleResults);
+            });
+
+            renderDuration();
+            vehicleSearch.disabled = !validRange();
         })();
     </script>
 }
