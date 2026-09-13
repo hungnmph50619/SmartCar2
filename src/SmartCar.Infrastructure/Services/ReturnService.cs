@@ -33,6 +33,12 @@ internal sealed class ReturnService : IReturnService
         CreateReturnRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.IdentityVerifiedByStaffId))
+        {
+            return OperationResult.Failure(
+                "Không xác định được nhân viên đã trực tiếp kiểm tra người trả xe.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
@@ -149,6 +155,7 @@ internal sealed class ReturnService : IReturnService
             booking.Handover.IncludedKilometers,
             paidRentalDays * RentalPolicy.IncludedKilometersPerDay);
 
+        var identityVerifiedAt = DateTime.UtcNow;
         var vehicleReturn = new VehicleReturn
         {
             ReturnedAt = request.ReturnedAt,
@@ -161,7 +168,10 @@ internal sealed class ReturnService : IReturnService
             LateMinutes = lateMinutes,
             LateFee = lateFee,
             ImagePaths = string.Join(';', evidencePaths),
-            Notes = BuildReturnNotes(accessoryStatus, request.Notes)
+            Notes = BuildReturnNotes(accessoryStatus, request.Notes),
+            CustomerIdentityVerified = true,
+            IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
+            IdentityVerifiedAt = identityVerifiedAt
         };
 
         var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
@@ -216,6 +226,7 @@ internal sealed class ReturnService : IReturnService
             });
         }
 
+        // Biên bản trả + kết quả đối chiếu đúng người được lưu cùng một transaction.
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
