@@ -134,7 +134,20 @@ internal sealed class DocumentService : IDocumentService
 
         if (duplicate)
         {
-            return OperationResult.Failure("Số CCCD đã được sử dụng bởi tài khoản khác.");
+            return OperationResult.Failure("Số CCCD đã được sử dụng bởi tài khoản khách hàng khác.");
+        }
+
+        var staffCitizenDuplicate = await _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(account =>
+                account.Id != customerId &&
+                account.CitizenIdNumber == normalizedNumber,
+                cancellationToken);
+
+        if (staffCitizenDuplicate)
+        {
+            return OperationResult.Failure(
+                "Số CCCD này đang thuộc hồ sơ nhân viên. SmartCar không dùng cùng một danh tính cho Customer và Staff.");
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
