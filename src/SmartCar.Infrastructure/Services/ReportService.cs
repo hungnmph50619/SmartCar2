@@ -8,6 +8,8 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class ReportService : IReportService
 {
+    private const int VietnamUtcOffsetHours = 7;
+
     private static readonly BookingStatus[] UtilizedStatuses =
     {
         BookingStatus.Rented,
@@ -56,6 +58,11 @@ internal sealed class ReportService : IReportService
         var endExclusive = to.AddDays(1);
         var periodDays = Math.Max(1, (endExclusive - from).Days);
 
+        // PaidAt được lưu UTC. Khoảng ngày trên màn hình báo cáo là ngày Việt Nam (UTC+7),
+        // nên phải đổi mốc 00:00 Việt Nam sang UTC trước khi query.
+        var paymentFromUtc = DateTime.SpecifyKind(from.AddHours(-VietnamUtcOffsetHours), DateTimeKind.Utc);
+        var paymentEndUtc = DateTime.SpecifyKind(endExclusive.AddHours(-VietnamUtcOffsetHours), DateTimeKind.Utc);
+
         var vehicles = await _dbContext.Vehicles
             .AsNoTracking()
             .Select(item => new
@@ -86,8 +93,8 @@ internal sealed class ReportService : IReportService
             .AsNoTracking()
             .Where(item =>
                 item.PaidAt.HasValue &&
-                item.PaidAt.Value >= from &&
-                item.PaidAt.Value < endExclusive &&
+                item.PaidAt.Value >= paymentFromUtc &&
+                item.PaidAt.Value < paymentEndUtc &&
                 ((item.Status == PaymentStatus.Paid && RevenueTypes.Contains(item.Type)) ||
                  (item.Status == PaymentStatus.Refunded && item.Type == PaymentType.Refund)))
             .Select(item => new
@@ -96,13 +103,55 @@ internal sealed class ReportService : IReportService
                 item.BookingId,
                 item.Booking.VehicleId,
                 HasVehicleReturn = item.Booking.VehicleReturn != null,
-                item.Booking.Status,
+                BookingStatus = item.Booking.Status,
+                PaymentStatus = item.Status,
                 item.Type,
                 item.Amount,
                 item.Method,
-                OccurredAt = item.PaidAt!.Value
+                item.TransactionCode,
+                OccurredAtUtc = item.PaidAt!.Value
             })
             .ToListAsync(cancellationToken);
+
+        // Thu tiền mặt tại quầy đã có Audit Log StaffCounterRentalCash.
+        // Tận dụng log hiện có để báo cáo hiển thị nhân viên đã thu tiền mà không cần thêm cột DB mới.
+        var cashEntityIds = periodPayments
+            .Where(item => item.Type != PaymentType.Refund && item.Method == PaymentMethods.Cash)
+            .Select(item => item.BookingId.ToString())
+            .Distinct()
+            .ToArray();
+
+        var cashAudits = cashEntityIds.Length == 0
+            ? new List<CashAuditRow>()
+            : await _dbContext.AuditLogs
+                .AsNoTracking()
+                .Where(log =>
+                    log.Action == "StaffCounterRentalCash" &&
+                    log.EntityName == "Booking" &&
+                    cashEntityIds.Contains(log.EntityId))
+                .Select(log => new CashAuditRow(log.EntityId, log.UserId, log.CreatedAt))
+                .ToListAsync(cancellationToken);
+
+        var collectorUserByBooking = new Dictionary<int, string>();
+        foreach (var audit in cashAudits.OrderByDescending(item => item.CreatedAt))
+        {
+            if (string.IsNullOrWhiteSpace(audit.UserId) ||
+                !int.TryParse(audit.EntityId, out var bookingId) ||
+                collectorUserByBooking.ContainsKey(bookingId))
+            {
+                continue;
+            }
+
+            collectorUserByBooking[bookingId] = audit.UserId;
+        }
+
+        var collectorUserIds = collectorUserByBooking.Values.Distinct().ToArray();
+        var collectorNames = collectorUserIds.Length == 0
+            ? new Dictionary<string, string>()
+            : await _dbContext.Users
+                .AsNoTracking()
+                .Where(user => collectorUserIds.Contains(user.Id))
+                .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
 
         var maintenanceRecords = await _dbContext.MaintenanceRecords
             .AsNoTracking()
@@ -269,6 +318,26 @@ internal sealed class ReportService : IReportService
                 return Math.Max(0m, paid - refundedOrReservedDeposit - unavailableDeposit);
             });
 
+        var collectedRevenuePayments = periodPayments
+            .Where(item => item.Type != PaymentType.Refund)
+            .ToList();
+
+        var totalCashRevenue = collectedRevenuePayments
+            .Where(item => item.Method == PaymentMethods.Cash)
+            .Sum(item => item.Amount);
+        var totalBankQrRevenue = collectedRevenuePayments
+            .Where(item => item.Method == PaymentMethods.BankQr)
+            .Sum(item => item.Amount);
+        var totalDepositDeductionRevenue = collectedRevenuePayments
+            .Where(item => item.Method == PaymentMethods.DepositDeduction)
+            .Sum(item => item.Amount);
+        var totalUnknownPaymentMethodRevenue = collectedRevenuePayments
+            .Where(item =>
+                item.Method != PaymentMethods.Cash &&
+                item.Method != PaymentMethods.BankQr &&
+                item.Method != PaymentMethods.DepositDeduction)
+            .Sum(item => item.Amount);
+
         var rows = new List<VehiclePerformanceDto>(vehicles.Count);
 
         foreach (var vehicle in vehicles)
@@ -384,6 +453,11 @@ internal sealed class ReportService : IReportService
 
             foreach (var payment in vehiclePayments)
             {
+                var recordedBy = payment.Method == PaymentMethods.Cash &&
+                    collectorUserByBooking.TryGetValue(payment.BookingId, out var collectorUserId)
+                    ? collectorNames.GetValueOrDefault(collectorUserId)
+                    : null;
+
                 if (payment.Type == PaymentType.Refund)
                 {
                     var refundCategory = payment.Method switch
@@ -396,12 +470,15 @@ internal sealed class ReportService : IReportService
                     };
 
                     transactions.Add(new ReportTransactionDto(
-                        payment.OccurredAt,
+                        ToVietnamTime(payment.OccurredAtUtc),
                         payment.BookingId,
                         refundCategory,
                         refundCategory,
                         payment.Amount,
-                        true));
+                        true,
+                        payment.Method,
+                        payment.TransactionCode,
+                        recordedBy));
                     continue;
                 }
 
@@ -416,12 +493,15 @@ internal sealed class ReportService : IReportService
                 };
 
                 transactions.Add(new ReportTransactionDto(
-                    payment.OccurredAt,
+                    ToVietnamTime(payment.OccurredAtUtc),
                     payment.BookingId,
                     category,
                     category,
                     payment.Amount,
-                    false));
+                    false,
+                    payment.Method,
+                    payment.TransactionCode,
+                    recordedBy));
             }
 
             foreach (var maintenance in vehicleMaintenance)
@@ -440,7 +520,10 @@ internal sealed class ReportService : IReportService
                         ? $"Chi phí bảo trì #{maintenance.MaintenanceRecordId}"
                         : maintenance.Content,
                     maintenance.Cost,
-                    true));
+                    true,
+                    null,
+                    null,
+                    null));
             }
 
             foreach (var incident in vehicleIncidents)
@@ -459,7 +542,10 @@ internal sealed class ReportService : IReportService
                         ? $"Sự cố #{incident.VehicleIncidentId}"
                         : incident.Description,
                     cost,
-                    true));
+                    true,
+                    null,
+                    null,
+                    null));
             }
 
             transactions = transactions
@@ -511,6 +597,10 @@ internal sealed class ReportService : IReportService
             rows.Sum(item => item.AdditionalChargeRevenue),
             rows.Sum(item => item.DepositDeductionRecovery),
             rows.Sum(item => item.Revenue),
+            totalCashRevenue,
+            totalBankQrRevenue,
+            totalDepositDeductionRevenue,
+            totalUnknownPaymentMethodRevenue,
             totalRevenueRefunds,
             totalDepositRefunds,
             totalRevenueRefunds + totalDepositRefunds + totalCompensationCost,
@@ -531,6 +621,8 @@ internal sealed class ReportService : IReportService
             pendingRefunds,
             rows);
     }
+
+    private static DateTime ToVietnamTime(DateTime utcValue) => utcValue.AddHours(VietnamUtcOffsetHours);
 
     private static int CalculateCoveredDays(
         IEnumerable<(DateTime Start, DateTime End)> sourceRanges,
@@ -581,4 +673,6 @@ internal sealed class ReportService : IReportService
             periodDays,
             Math.Max(0, (int)Math.Ceiling(total.TotalHours / 24d)));
     }
+
+    private sealed record CashAuditRow(string EntityId, string? UserId, DateTime CreatedAt);
 }
