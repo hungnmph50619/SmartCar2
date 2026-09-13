@@ -6,7 +6,10 @@ public sealed record ReportTransactionDto(
     string Category,
     string Description,
     decimal Amount,
-    bool IsOutflow);
+    bool IsOutflow,
+    string? PaymentMethod,
+    string? TransactionCode,
+    string? RecordedBy);
 
 public sealed record VehiclePerformanceDto(
     int VehicleId,
@@ -40,6 +43,10 @@ public sealed record FleetReportDto(
     decimal TotalAdditionalChargeRevenue,
     decimal TotalDepositDeductionRecovery,
     decimal TotalRevenue,
+    decimal TotalCashRevenue,
+    decimal TotalBankQrRevenue,
+    decimal TotalDepositDeductionRevenue,
+    decimal TotalUnknownPaymentMethodRevenue,
     decimal TotalRevenueRefunds,
     decimal TotalDepositRefunds,
     decimal TotalCashRefunds,
