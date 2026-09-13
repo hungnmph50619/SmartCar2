@@ -25,6 +25,7 @@ builder.Services.AddScoped<AdminWorkNotificationFilter>();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
+    options.Filters.Add(new StaffOperationsAuthorizationFilter());
     options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
     options.Filters.AddService<AdminWorkNotificationFilter>();
 });

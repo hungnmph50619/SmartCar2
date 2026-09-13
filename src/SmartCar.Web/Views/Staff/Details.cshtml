@@ -1,16 +1,67 @@
-﻿@model SmartCar.Web.ViewModels.StaffBookingDetailsViewModel
+@model SmartCar.Web.ViewModels.StaffBookingDetailsViewModel
 @using SmartCar.Domain.Enums
+@using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = $"Xử lý đơn #{Model.Booking.BookingId}";
     var b = Model.Booking;
-    var canInspect = b.Status == BookingStatus.PendingInspection && Model.HandoverIdentityVerified && Model.HandoverSignedDocumentVerified && Model.ReturnIdentityVerified && Model.ReturnSignedDocumentVerified;
+    var canInspect = b.Status == BookingStatus.PendingInspection
+        && Model.HandoverIdentityVerified
+        && Model.HandoverSignedDocumentVerified
+        && Model.ReturnIdentityVerified
+        && Model.ReturnSignedDocumentVerified;
+    var canCancelBeforeHandover = b.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var canMarkNoShow = b.Status == BookingStatus.ReadyForPickup
+        && !b.HasHandover
+        && DateTime.Now >= b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes);
 }
-<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3"><div><h1 class="h3 mb-1">Xử lý đơn #@b.BookingId</h1><p class="text-muted mb-0">@b.CustomerName · @b.VehicleName · @b.LicensePlate</p></div><div class="d-flex gap-2"><span class="badge bg-primary fs-6 align-self-center">@b.Status.ToVietnamese()</span><a class="btn btn-outline-secondary" asp-action="Bookings">Danh sách đơn</a></div></div>
-<div class="row g-3 mb-3"><div class="col-lg-7"><div class="card card-body shadow-sm h-100"><h2 class="h5">Thông tin chuyến</h2><dl class="row mb-0"><dt class="col-sm-4">Khách</dt><dd class="col-sm-8">@b.CustomerName · @b.CustomerPhone</dd><dt class="col-sm-4">Xe</dt><dd class="col-sm-8">@b.VehicleName · @b.LicensePlate</dd><dt class="col-sm-4">Nhận</dt><dd class="col-sm-8">@b.PickupDate.ToString("dd/MM/yyyy HH:mm")</dd><dt class="col-sm-4">Trả dự kiến</dt><dd class="col-sm-8">@b.ReturnDate.ToString("dd/MM/yyyy HH:mm")</dd><dt class="col-sm-4">Tiền thuê + phí</dt><dd class="col-sm-8">@b.TotalAmount.ToString("N0") đ</dd><dt class="col-sm-4">Tiền cọc</dt><dd class="col-sm-8">@b.DepositAmount.ToString("N0") đ</dd></dl></div></div><div class="col-lg-5"><div class="card card-body shadow-sm h-100"><h2 class="h5">Nguyên tắc bắt buộc</h2><div class="small"><div class="mb-2">✓ Người nhận/trả phải nhập <strong>đúng CCCD đã được xác minh của khách trong đơn</strong>.</div><div class="mb-2">✓ Ảnh tải lên <strong>không tự được coi là hợp đồng đã ký</strong>.</div><div>✓ Nhân viên phải mở bản ký, đối chiếu chữ ký rồi xác nhận trên hệ thống.</div></div></div></div></div>
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+    <div>
+        <h1 class="h3 mb-1">Xử lý đơn #@b.BookingId</h1>
+        <p class="text-muted mb-0">@b.CustomerName · @b.VehicleName · @b.LicensePlate</p>
+    </div>
+    <div class="d-flex gap-2">
+        <span class="badge bg-primary fs-6 align-self-center">@b.Status.ToVietnamese()</span>
+        <a class="btn btn-outline-secondary" asp-action="Bookings">Danh sách đơn</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-lg-7">
+        <div class="card card-body shadow-sm h-100">
+            <h2 class="h5">Thông tin chuyến</h2>
+            <dl class="row mb-0">
+                <dt class="col-sm-4">Khách</dt><dd class="col-sm-8">@b.CustomerName · @b.CustomerPhone</dd>
+                <dt class="col-sm-4">Xe</dt><dd class="col-sm-8">@b.VehicleName · @b.LicensePlate</dd>
+                <dt class="col-sm-4">Nhận</dt><dd class="col-sm-8">@b.PickupDate.ToString("dd/MM/yyyy HH:mm")</dd>
+                <dt class="col-sm-4">Trả dự kiến</dt><dd class="col-sm-8">@b.ReturnDate.ToString("dd/MM/yyyy HH:mm")</dd>
+                <dt class="col-sm-4">Tiền thuê + phí</dt><dd class="col-sm-8">@b.TotalAmount.ToString("N0") đ</dd>
+                <dt class="col-sm-4">Tiền cọc</dt><dd class="col-sm-8">@b.DepositAmount.ToString("N0") đ</dd>
+            </dl>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card card-body shadow-sm h-100">
+            <h2 class="h5">Nguyên tắc bắt buộc</h2>
+            <div class="small">
+                <div class="mb-2">✓ Người nhận/trả phải nhập <strong>đúng CCCD đã được xác minh của khách trong đơn</strong>.</div>
+                <div class="mb-2">✓ Ảnh tải lên <strong>không tự được coi là hợp đồng đã ký</strong>.</div>
+                <div>✓ Nhân viên phải mở bản ký, đối chiếu chữ ký rồi xác nhận trên hệ thống.</div>
+            </div>
+        </div>
+    </div>
+</div>
 
 @if (b.Status == BookingStatus.Paid)
 {
-    <div class="card card-body shadow-sm mb-3"><h2 class="h5">1. Chuẩn bị xe</h2><p>Đơn đã thanh toán. Kiểm tra xe thực tế trước khi xác nhận sẵn sàng giao.</p><form asp-action="MarkReady" method="post" data-confirm="Xác nhận xe đã sẵn sàng để giao cho khách?"><input type="hidden" name="bookingId" value="@b.BookingId" /><button class="btn btn-primary">Xác nhận xe sẵn sàng</button></form></div>
+    <div class="card card-body shadow-sm mb-3">
+        <h2 class="h5">1. Chuẩn bị xe</h2>
+        <p>Đơn đã thanh toán. Kiểm tra xe thực tế trước khi xác nhận sẵn sàng giao.</p>
+        <form asp-action="MarkReady" method="post" data-confirm="Xác nhận xe đã sẵn sàng để giao cho khách?">
+            <input type="hidden" name="bookingId" value="@b.BookingId" />
+            <button class="btn btn-primary">Xác nhận xe sẵn sàng</button>
+        </form>
+    </div>
 }
 
 @if (b.Status == BookingStatus.ReadyForPickup)
@@ -19,119 +70,229 @@
         <h2 class="h5">2. Bàn giao xe</h2>
         @if (!b.HasHandover)
         {
-            <div class="alert alert-info">Chưa có biên bản giao. Khi lập biên bản, hệ thống sẽ yêu cầu CCCD người nhận và chỉ chấp nhận nếu trùng CCCD đã xác minh của khách.</div><a class="btn btn-primary align-self-start" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@b.BookingId">Lập biên bản giao xe</a>
+            <div class="alert alert-info">Chưa có biên bản giao. Khi lập biên bản, hệ thống sẽ yêu cầu CCCD người nhận và chỉ chấp nhận nếu trùng CCCD đã xác minh của khách.</div>
+            <a class="btn btn-primary align-self-start" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@b.BookingId">Lập biên bản giao xe</a>
         }
         else
         {
-            <div class="row g-3"><div class="col-md-6"><div class="border rounded p-3 h-100"><div class="fw-semibold">Xác minh người nhận</div>@if(Model.HandoverIdentityVerified){
-                <div class="text-success">✓ Đúng CCCD khách trong đơn</div><div class="small text-muted">@(Model.HandoverIdentityVerifiedBy ?? "Nhân viên") · @Model.HandoverIdentityVerifiedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
-            }else
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="border rounded p-3 h-100">
+                        <div class="fw-semibold">Xác minh người nhận</div>
+                        @if (Model.HandoverIdentityVerified)
+                        {
+                            <div class="text-success">✓ Đúng CCCD khách trong đơn</div>
+                            <div class="small text-muted">@(Model.HandoverIdentityVerifiedBy ?? "Nhân viên") · @Model.HandoverIdentityVerifiedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                        }
+                        else
+                        {
+                            <div class="text-danger">Chưa xác minh danh tính người nhận.</div>
+                        }
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="border rounded p-3 h-100">
+                        <div class="fw-semibold">Bản giao xe đã ký</div>
+                        @if (Model.HandoverSignedDocumentVerified)
+                        {
+                            <div class="text-success">✓ Đã đối chiếu và xác minh chữ ký</div>
+                            <div class="small text-muted">@(Model.HandoverSignedVerifiedBy ?? "Nhân viên") · @Model.HandoverSignedVerifiedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                        }
+                        else if (Model.HandoverSignedPaths.Count > 0)
+                        {
+                            <div class="text-warning">Đã tải @Model.HandoverSignedPaths.Count trang nhưng chưa xác minh.</div>
+                        }
+                        else
+                        {
+                            <div class="text-danger">Chưa tải bản ký.</div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap mt-3">
+                <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản giao</a>
+                @if (Model.HandoverSignedPaths.Count > 0)
+                {
+                    <a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Handover" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
+                }
+            </div>
+
+            @if (Model.HandoverSignedPaths.Count == 0)
             {
-
-                <div class="text-danger">Chưa xác minh danh tính người nhận.</div>
+                <div class="alert alert-warning mt-3 mb-0">Hãy in biên bản, cho đúng khách ký rồi tải ảnh/scan bản ký tại màn <strong>In / xem biên bản giao</strong>. Tải file xong vẫn chưa bắt đầu chuyến.</div>
             }
-        </div></div><div class="col-md-6"><div class="border rounded p-3 h-100"><div class="fw-semibold">Bản giao xe đã ký</div>@if(Model.HandoverSignedDocumentVerified){
-        <div class="text-success">✓ Đã đối chiếu và xác minh chữ ký</div><div class="small text-muted">@(Model.HandoverSignedVerifiedBy ?? "Nhân viên") · @Model.HandoverSignedVerifiedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
-    }else if (Model.HandoverSignedPaths.Count > 0)
-    {
-
-        <div class="text-warning">Đã tải @Model.HandoverSignedPaths.Count trang nhưng chưa xác minh.</div>
-    }
-    else
-    {
-
-        <div class="text-danger">Chưa tải bản ký.</div>
-    }
-</div></div></div>
-<div class="d-flex gap-2 flex-wrap mt-3"><a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản giao</a>@if(Model.HandoverSignedPaths.Count>0){
-    <a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Handover" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
+            else if (!Model.HandoverSignedDocumentVerified)
+            {
+                <form asp-action="VerifyHandoverSigned" method="post" class="border rounded p-3 mt-3" data-confirm="Bạn đã mở và đối chiếu bản ký với đúng khách? Xác nhận này sẽ bắt đầu chuyến thuê.">
+                    <input type="hidden" name="bookingId" value="@b.BookingId" />
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="signedCopyConfirmed" value="true" id="handover-confirm" required />
+                        <label class="form-check-label" for="handover-confirm">Tôi đã mở các trang bản ký, đối chiếu chữ ký và xác nhận đây là biên bản của đúng khách trong đơn.</label>
+                    </div>
+                    <button class="btn btn-success" @(Model.HandoverIdentityVerified ? null : "disabled")>Xác minh bản ký & bắt đầu chuyến</button>
+                    @if (!Model.HandoverIdentityVerified)
+                    {
+                        <div class="small text-danger mt-2">Không thể bắt đầu vì danh tính người nhận chưa hợp lệ.</div>
+                    }
+                </form>
+            }
+        }
+    </div>
 }
-</div>
-@if (Model.HandoverSignedPaths.Count == 0)
+
+@if (canCancelBeforeHandover)
 {
-    <div class="alert alert-warning mt-3 mb-0">Hãy in biên bản, cho đúng khách ký rồi tải ảnh/scan bản ký tại màn <strong>In / xem biên bản giao</strong>. Tải file xong vẫn chưa bắt đầu chuyến.</div>
-}
-else if (!Model.HandoverSignedDocumentVerified)
-{
+    <div class="card card-body shadow-sm mb-3 border-danger-subtle">
+        <h2 class="h5">Xử lý ngoại lệ trước khi giao xe</h2>
+        <p class="text-muted">Đây là nghiệp vụ của Staff. Nếu phát sinh hoàn tiền, hệ thống chỉ tạo khoản <strong>chờ Admin duyệt</strong>; nhân viên chưa được chuyển tiền ở bước này.</p>
 
-    <form asp-action="VerifyHandoverSigned" method="post" class="border rounded p-3 mt-3" data-confirm="Bạn đã mở và đối chiếu bản ký với đúng khách? Xác nhận này sẽ bắt đầu chuyến thuê."><input type="hidden" name="bookingId" value="@b.BookingId" /><div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="signedCopyConfirmed" value="true" id="handover-confirm" required /><label class="form-check-label" for="handover-confirm">Tôi đã mở các trang bản ký, đối chiếu chữ ký và xác nhận đây là biên bản của đúng khách trong đơn.</label></div><button class="btn btn-success" @(Model.HandoverIdentityVerified ? null : "disabled")>Xác minh bản ký & bắt đầu chuyến</button>@if(!Model.HandoverIdentityVerified){
-        <div class="small text-danger mt-2">Không thể bắt đầu vì danh tính người nhận chưa hợp lệ.</div>
-    }
-</form>
-}
-}
-</div>
+        <details class="mb-3">
+            <summary class="text-danger fw-semibold">Hủy đơn do SmartCar / cửa hàng</summary>
+            <form asp-controller="StaffBookingOperations" asp-action="Cancel" method="post" class="row g-2 mt-2" data-confirm="Xác nhận hủy đơn này? Khoản hoàn phát sinh sẽ chuyển sang chờ Admin duyệt.">
+                <input type="hidden" name="BookingId" value="@b.BookingId" />
+                <div class="col-md-9">
+                    <input class="form-control" name="Reason" required maxlength="500" placeholder="Nhập lý do hủy đơn" />
+                </div>
+                <div class="col-md-3 d-grid">
+                    <button class="btn btn-outline-danger">Hủy đơn</button>
+                </div>
+            </form>
+        </details>
+
+        @if (b.Status == BookingStatus.ReadyForPickup)
+        {
+            <hr />
+            <div class="fw-semibold mb-2">Khách không đến nhận xe</div>
+            @if (b.HasHandover)
+            {
+                <div class="alert alert-secondary mb-0">Đơn đã có biên bản giao xe nên không thể đánh dấu no-show.</div>
+            }
+            else if (canMarkNoShow)
+            {
+                <form asp-controller="StaffBookingOperations" asp-action="MarkNoShow" method="post" data-confirm="Bạn đã liên hệ khách và xác nhận ghi nhận no-show?">
+                    <input type="hidden" name="bookingId" value="@b.BookingId" />
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="customerContacted" value="true" id="customer-contacted" required />
+                        <label class="form-check-label" for="customer-contacted">Tôi xác nhận nhân viên đã liên hệ khách nhưng khách không đến nhận xe.</label>
+                    </div>
+                    <button class="btn btn-dark">Ghi nhận khách không đến</button>
+                </form>
+            }
+            else
+            {
+                <div class="alert alert-secondary mb-0">Chỉ được ghi nhận no-show sau giờ nhận xe ít nhất <strong>@RentalPolicy.NoShowGraceMinutes phút</strong>. Mốc sớm nhất: @b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm").</div>
+            }
+        }
+    </div>
 }
 
 @if (b.Status == BookingStatus.Rented)
 {
-    <div class="card card-body shadow-sm mb-3"><h2 class="h5">3. Nhận xe trả</h2><p>Xe đang trong chuyến. Khi khách trả xe, phải xác minh CCCD người trả trước khi lưu biên bản.</p>@if(!b.HasReturn){
-        <a class="btn btn-primary align-self-start" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@b.BookingId">Lập biên bản trả xe</a>
-    }else
-    {
-
-        <div class="alert alert-warning mb-0">Đã có biên bản trả nhưng trạng thái đơn chưa chuyển đúng. Kiểm tra lại luồng trả xe.</div>
-    }
-</div>
+    <div class="card card-body shadow-sm mb-3">
+        <h2 class="h5">3. Nhận xe trả</h2>
+        <p>Xe đang trong chuyến. Khi khách trả xe, phải xác minh CCCD người trả trước khi lưu biên bản.</p>
+        @if (!b.HasReturn)
+        {
+            <a class="btn btn-primary align-self-start" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@b.BookingId">Lập biên bản trả xe</a>
+        }
+        else
+        {
+            <div class="alert alert-warning mb-0">Đã có biên bản trả nhưng trạng thái đơn chưa chuyển đúng. Kiểm tra lại luồng trả xe.</div>
+        }
+    </div>
 }
 
 @if (b.Status == BookingStatus.PendingInspection)
 {
     <div class="card card-body shadow-sm mb-3">
-        <h2 class="h5">4. Đối chiếu xe trả & quyết toán</h2><div class="row g-3"><div class="col-md-6"><div class="border rounded p-3 h-100"><div class="fw-semibold">Người trả xe</div>@if(Model.ReturnIdentityVerified){
-        <div class="text-success">✓ CCCD trùng khách trong đơn</div><div class="small text-muted">@(Model.ReturnIdentityVerifiedBy ?? "Nhân viên") · @Model.ReturnIdentityVerifiedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
-    }else
-    {
+        <h2 class="h5">4. Đối chiếu xe trả & quyết toán</h2>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <div class="fw-semibold">Người trả xe</div>
+                    @if (Model.ReturnIdentityVerified)
+                    {
+                        <div class="text-success">✓ CCCD trùng khách trong đơn</div>
+                        <div class="small text-muted">@(Model.ReturnIdentityVerifiedBy ?? "Nhân viên") · @Model.ReturnIdentityVerifiedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                    }
+                    else
+                    {
+                        <div class="text-danger">Chưa xác minh người trả.</div>
+                    }
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <div class="fw-semibold">Biên bản trả đã ký</div>
+                    @if (Model.ReturnSignedDocumentVerified)
+                    {
+                        <div class="text-success">✓ Đã xác minh chữ ký</div>
+                        <div class="small text-muted">@(Model.ReturnSignedVerifiedBy ?? "Nhân viên") · @Model.ReturnSignedVerifiedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                    }
+                    else if (Model.ReturnSignedPaths.Count > 0)
+                    {
+                        <div class="text-warning">Đã tải @Model.ReturnSignedPaths.Count trang, chưa xác minh.</div>
+                    }
+                    else
+                    {
+                        <div class="text-danger">Chưa tải bản ký.</div>
+                    }
+                </div>
+            </div>
+        </div>
 
-        <div class="text-danger">Chưa xác minh người trả.</div>
-    }
-</div></div><div class="col-md-6"><div class="border rounded p-3 h-100"><div class="fw-semibold">Biên bản trả đã ký</div>@if(Model.ReturnSignedDocumentVerified){
-<div class="text-success">✓ Đã xác minh chữ ký</div><div class="small text-muted">@(Model.ReturnSignedVerifiedBy ?? "Nhân viên") · @Model.ReturnSignedVerifiedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
-    }else if (Model.ReturnSignedPaths.Count > 0)
-{
+        <div class="d-flex gap-2 flex-wrap mt-3">
+            <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản trả</a>
+            @if (Model.ReturnSignedPaths.Count > 0)
+            {
+                <a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Return" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
+            }
+        </div>
 
-    <div class="text-warning">Đã tải @Model.ReturnSignedPaths.Count trang, chưa xác minh.</div>
-}
-else
-{
+        @if (Model.ReturnSignedPaths.Count == 0)
+        {
+            <div class="alert alert-warning mt-3 mb-0">In biên bản trả, để đúng khách ký và tải ảnh/scan bản ký. File tải lên chưa được hệ thống tự công nhận.</div>
+        }
+        else if (!Model.ReturnSignedDocumentVerified)
+        {
+            <form asp-action="VerifyReturnSigned" method="post" class="border rounded p-3 mt-3">
+                <input type="hidden" name="bookingId" value="@b.BookingId" />
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" name="signedCopyConfirmed" value="true" id="return-confirm" required />
+                    <label class="form-check-label" for="return-confirm">Tôi đã mở bản ký trả xe, đối chiếu chữ ký và xác nhận đúng khách trong đơn.</label>
+                </div>
+                <button class="btn btn-success" @(Model.ReturnIdentityVerified ? null : "disabled")>Xác minh bản ký trả xe</button>
+            </form>
+        }
 
-    <div class="text-danger">Chưa tải bản ký.</div>
-}
-</div></div></div><div class="d-flex gap-2 flex-wrap mt-3"><a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản trả</a>@if(Model.ReturnSignedPaths.Count>0){
-<a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Return" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
-    }
-</div>
-@if (Model.ReturnSignedPaths.Count == 0)
-{
-    <div class="alert alert-warning mt-3 mb-0">In biên bản trả, để đúng khách ký và tải ảnh/scan bản ký. File tải lên chưa được hệ thống tự công nhận.</div>
-}
-else if (!Model.ReturnSignedDocumentVerified)
-{
-
-    <form asp-action="VerifyReturnSigned" method="post" class="border rounded p-3 mt-3"><input type="hidden" name="bookingId" value="@b.BookingId" /><div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="signedCopyConfirmed" value="true" id="return-confirm" required /><label class="form-check-label" for="return-confirm">Tôi đã mở bản ký trả xe, đối chiếu chữ ký và xác nhận đúng khách trong đơn.</label></div><button class="btn btn-success" @(Model.ReturnIdentityVerified ? null : "disabled")>Xác minh bản ký trả xe</button></form>
-}
-@if (canInspect)
-{
-    <hr /><a class="btn btn-primary align-self-start" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@b.BookingId">Đối chiếu, thêm phí và quyết toán</a>
-}
-else
-{
-
-    <div class="small text-danger mt-3">Chỉ mở quyết toán sau khi cả giao xe và trả xe đều đã xác minh đúng danh tính + bản ký.</div>
-}
-</div>
+        @if (canInspect)
+        {
+            <hr />
+            <a class="btn btn-primary align-self-start" asp-controller="Returns" asp-action="Inspect" asp-route-bookingId="@b.BookingId">Đối chiếu, thêm phí và quyết toán</a>
+        }
+        else
+        {
+            <div class="small text-danger mt-3">Chỉ mở quyết toán sau khi cả giao xe và trả xe đều đã xác minh đúng danh tính + bản ký.</div>
+        }
+    </div>
 }
 
 @if (b.Status == BookingStatus.AwaitingRefund)
 {
-    <div class="card card-body shadow-sm mb-3"><h2 class="h5">5. Hoàn tiền</h2><div class="fs-5 mb-2">Số tiền đang xử lý: <strong>@Model.RefundAmount.ToString("N0") đ</strong></div>@if(Model.HasUnapprovedRefund){
-        <div class="alert alert-warning mb-0">Khoản hoàn đang chờ chủ/Admin duyệt. Nhân viên <strong>không được chuyển tiền</strong> trước bước duyệt.</div>
-    }else if (Model.HasApprovedRefund)
-    {
-
-        <div class="alert alert-success">Chủ/Admin đã duyệt. Nhân viên có thể thực hiện chuyển khoản và nhập mã giao dịch.</div><a class="btn btn-success align-self-start" asp-action="Refunds">Mở danh sách hoàn tiền đã duyệt</a>
-    }
-</div>
+    <div class="card card-body shadow-sm mb-3">
+        <h2 class="h5">5. Hoàn tiền</h2>
+        <div class="fs-5 mb-2">Số tiền đang xử lý: <strong>@Model.RefundAmount.ToString("N0") đ</strong></div>
+        @if (Model.HasUnapprovedRefund)
+        {
+            <div class="alert alert-warning mb-0">Khoản hoàn đang chờ chủ/Admin duyệt. Nhân viên <strong>không được chuyển tiền</strong> trước bước duyệt.</div>
+        }
+        else if (Model.HasApprovedRefund)
+        {
+            <div class="alert alert-success">Chủ/Admin đã duyệt. Nhân viên có thể thực hiện chuyển khoản và nhập mã giao dịch.</div>
+            <a class="btn btn-success align-self-start" asp-action="Refunds">Mở danh sách hoàn tiền đã duyệt</a>
+        }
+    </div>
 }
 
 @if (b.Status == BookingStatus.Completed)

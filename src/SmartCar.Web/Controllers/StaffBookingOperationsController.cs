@@ -7,12 +7,12 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin)]
-public sealed class AdminBookingOperationsController : Controller
+[Authorize(Roles = RoleNames.Staff)]
+public sealed class StaffBookingOperationsController : Controller
 {
     private readonly IBookingOperationService _operationService;
 
-    public AdminBookingOperationsController(IBookingOperationService operationService)
+    public StaffBookingOperationsController(IBookingOperationService operationService)
     {
         _operationService = operationService;
     }
@@ -23,19 +23,23 @@ public sealed class AdminBookingOperationsController : Controller
         CancelBookingViewModel model,
         CancellationToken cancellationToken)
     {
-        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var result = ModelState.IsValid
-            ? await _operationService.CancelByAdminAsync(
-                adminId,
+            ? await _operationService.CancelByStaffAsync(
+                staffId,
                 new CancelBookingRequest(model.BookingId, model.Reason),
                 cancellationToken)
             : RefundResult.Failure("Vui lòng nhập lý do hủy đơn.");
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? $"Đã hủy đơn và hoàn {result.RefundAmount:N0} đồng cho khách."
+            ? result.RefundAmount > 0
+                ? $"Đã hủy đơn. Hệ thống đã tạo {result.RefundAmount:N0} đồng chờ Admin duyệt hoàn tiền."
+                : "Đã hủy đơn và không phát sinh khoản hoàn mới."
             : string.Join("; ", result.Errors);
 
-        return RedirectToAction("Details", "AdminBookings", new { id = model.BookingId });
+        return result.Succeeded
+            ? RedirectToAction("Bookings", "Staff")
+            : RedirectToAction("Details", "Staff", new { id = model.BookingId });
     }
 
     [HttpPost]
@@ -45,17 +49,19 @@ public sealed class AdminBookingOperationsController : Controller
         bool customerContacted,
         CancellationToken cancellationToken)
     {
-        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var result = await _operationService.MarkNoShowAsync(
             bookingId,
-            adminId,
+            staffId,
             customerContacted,
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã ghi nhận không đến và tạo các khoản hoàn theo chính sách."
+            ? "Đã ghi nhận khách không đến. Các khoản hoàn phát sinh đang chờ Admin duyệt trước khi nhân viên chuyển tiền."
             : string.Join("; ", result.Errors);
 
-        return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+        return result.Succeeded
+            ? RedirectToAction("Bookings", "Staff")
+            : RedirectToAction("Details", "Staff", new { id = bookingId });
     }
 }

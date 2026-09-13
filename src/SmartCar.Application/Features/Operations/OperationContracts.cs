@@ -24,13 +24,22 @@ public interface IBookingOperationService
         string customerId,
         CancelBookingRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<RefundResult> CancelByStaffAsync(
+        string staffId,
+        CancelBookingRequest request,
+        CancellationToken cancellationToken = default);
+
+    // Admin vẫn cần API này cho các quyết định cấp quản trị như xử lý xung đột/gia hạn.
+    // Luồng xử lý đơn thông thường không gọi phương thức này nữa.
     Task<RefundResult> CancelByAdminAsync(
         string adminId,
         CancelBookingRequest request,
         CancellationToken cancellationToken = default);
+
     Task<OperationResult> MarkNoShowAsync(
         int bookingId,
-        string adminId,
+        string staffId,
         bool customerContacted,
         CancellationToken cancellationToken = default);
 }
