@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Accounts;
 using SmartCar.Application.Features.Audits;
-using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -22,7 +21,6 @@ public sealed class StaffCustomersController : Controller
 {
     private readonly IAccountService _accountService;
     private readonly ApplicationDbContext _dbContext;
-    private readonly IDocumentService _documentService;
     private readonly IAuditService _auditService;
     private readonly ISecureDocumentStorage _secureDocumentStorage;
     private readonly UserManager<ApplicationUser> _userManager;
@@ -31,7 +29,6 @@ public sealed class StaffCustomersController : Controller
     public StaffCustomersController(
         IAccountService accountService,
         ApplicationDbContext dbContext,
-        IDocumentService documentService,
         IAuditService auditService,
         ISecureDocumentStorage secureDocumentStorage,
         UserManager<ApplicationUser> userManager,
@@ -39,7 +36,6 @@ public sealed class StaffCustomersController : Controller
     {
         _accountService = accountService;
         _dbContext = dbContext;
-        _documentService = documentService;
         _auditService = auditService;
         _secureDocumentStorage = secureDocumentStorage;
         _userManager = userManager;
@@ -62,7 +58,6 @@ public sealed class StaffCustomersController : Controller
             return View(new StaffCustomerIndexViewModel { Query = query });
         }
 
-        // Dùng đúng cách AdminCustomers đang tra cứu: tên / email / số điện thoại.
         var customerQuery = _dbContext.Users
             .AsNoTracking()
             .Where(user => _dbContext.UserRoles.Any(userRole =>
@@ -109,8 +104,8 @@ public sealed class StaffCustomersController : Controller
         StaffCreateCustomerViewModel model,
         CancellationToken cancellationToken)
     {
-        // Đây là CHÍNH helper mà KycPackageController của Customer đang dùng.
-        // Không còn một bộ validate file/tuổi/hạn giấy tờ riêng cho Staff.
+        // Dùng cùng validator với gói KYC do khách tự gửi để tránh hai bộ quy tắc khác nhau.
+        // Nhân viên chỉ hỗ trợ nhập và đối chiếu bản gốc; quyền duyệt KYC thuộc quản trị viên.
         var kycPackage = new KycPackageSubmitViewModel
         {
             CitizenIdVerification = model.CitizenIdVerification,
@@ -271,8 +266,7 @@ public sealed class StaffCustomersController : Controller
                 licenseBack);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
-            // Metadata cũng giữ đúng cách KycPackageController ghi dữ liệu:
-            // CCCD = họ tên + ngày sinh + giới tính; GPLX = cùng họ tên + hạng bằng.
+            // Metadata dùng cùng cấu trúc với luồng khách tự gửi KYC.
             foreach (var document in new[] { citizenFront, citizenBack })
             {
                 await UpdateKycMetadataAsync(
@@ -299,52 +293,19 @@ public sealed class StaffCustomersController : Controller
                     cancellationToken: cancellationToken);
             }
 
-            // Tạo hồ sơ ở Pending trước, sau đó đi qua đúng IDocumentService.VerifyAsync
-            // mà AdminKycController đang dùng. Staff không còn tự set Verified bằng tay.
-            var verifierId = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                ?? throw new InvalidOperationException("Không xác định được người đang xác minh hồ sơ.");
-
-            foreach (var documentId in new[]
-                     {
-                         citizenFront.CustomerDocumentId,
-                         citizenBack.CustomerDocumentId,
-                         licenseFront.CustomerDocumentId,
-                         licenseBack.CustomerDocumentId
-                     })
-            {
-                var verifyResult = await _documentService.VerifyAsync(
-                    documentId,
-                    verifierId,
-                    cancellationToken);
-
-                if (!verifyResult.Succeeded)
-                {
-                    throw new InvalidOperationException(
-                        "Không thể xác minh hồ sơ tại quầy: " +
-                        string.Join("; ", verifyResult.Errors));
-                }
-            }
-
-            // VerifyAsync sinh thông báo theo từng mặt. Gộp về một thông báo cho cả bộ KYC.
-            var generatedNotifications = await _dbContext.Notifications
-                .Where(notification =>
-                    notification.UserId == customer.Id &&
-                    notification.Title == "Giấy tờ đã được xác minh" &&
-                    notification.CreatedAt >= createdAt.AddMinutes(-1))
-                .ToListAsync(cancellationToken);
-
-            if (generatedNotifications.Count > 0)
-            {
-                _dbContext.Notifications.RemoveRange(generatedNotifications);
-            }
+            // Tuyệt đối không gọi IDocumentService.VerifyAsync ở đây.
+            // Nhân viên chỉ tiếp nhận hồ sơ và đối chiếu bản gốc; cả 4 giấy tờ giữ trạng thái Pending
+            // để quản trị viên mở ảnh, đối chiếu dữ liệu rồi duyệt/từ chối trong luồng Admin KYC.
+            var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? throw new InvalidOperationException("Không xác định được nhân viên đang tiếp nhận hồ sơ.");
 
             _dbContext.Notifications.Add(new Notification
             {
                 UserId = customer.Id,
-                Title = "Hồ sơ tại quầy đã được xác minh",
+                Title = "Hồ sơ giấy tờ đã được tiếp nhận",
                 Message =
-                    "SmartCar đã đối chiếu trực tiếp CCCD và GPLX bản gốc tại quầy. " +
-                    "Khi tạo đơn, hệ thống vẫn kiểm tra giấy tờ phải còn hiệu lực đến ngày trả xe."
+                    "Nhân viên đã hỗ trợ tiếp nhận CCCD và GPLX tại quầy. " +
+                    "Hồ sơ đang chờ quản trị viên kiểm tra và duyệt trước khi được dùng để lập đơn thuê xe."
             });
 
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -354,12 +315,12 @@ public sealed class StaffCustomersController : Controller
             try
             {
                 await _auditService.WriteAsync(
-                    verifierId,
-                    "StaffCreateWalkInCustomer",
+                    staffId,
+                    "StaffSubmitWalkInCustomerKyc",
                     "CustomerKycPackage",
                     customer.Id,
-                    $"Tạo Customer tại quầy cho {customer.FullName} ({normalizedEmail}); " +
-                    "hồ sơ dùng cùng KYC validator của Customer và được xác minh qua IDocumentService sau khi đối chiếu bản gốc.",
+                    $"Tạo tài khoản khách tại quầy cho {customer.FullName} ({normalizedEmail}); " +
+                    "nhân viên đã đối chiếu bản gốc và gửi 4 giấy tờ ở trạng thái Chờ xử lý để quản trị viên duyệt.",
                     ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                     cancellationToken: cancellationToken);
             }
@@ -367,17 +328,14 @@ public sealed class StaffCustomersController : Controller
             {
                 _logger.LogWarning(
                     auditException,
-                    "Không thể ghi audit tổng hợp khi tạo khách tại quầy {CustomerId}.",
+                    "Không thể ghi audit tổng hợp khi tiếp nhận KYC tại quầy {CustomerId}.",
                     customer.Id);
             }
 
             TempData["SuccessMessage"] =
-                "Đã tạo khách và xác minh CCCD/GPLX tại quầy. Có thể lập đơn thuê ngay.";
+                "Đã tạo khách và tiếp nhận CCCD/GPLX. Hồ sơ đang chờ quản trị viên duyệt; chỉ có thể lập đơn sau khi KYC được xác minh.";
 
-            return RedirectToAction(
-                "CounterRental",
-                "Staff",
-                new { customerId = customer.Id });
+            return RedirectToAction(nameof(Index), new { query = normalizedEmail });
         }
         catch (Exception exception)
         {
