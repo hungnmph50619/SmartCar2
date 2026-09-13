@@ -18,22 +18,13 @@
     {
         PaymentStatus.Paid => "bg-success",
         PaymentStatus.Pending => "bg-warning text-dark",
+        PaymentStatus.AwaitingConfirmation => "bg-info text-dark",
+        PaymentStatus.AwaitingRefund => "bg-warning text-dark",
+        PaymentStatus.RefundApproved => "bg-primary",
         PaymentStatus.Refunded => "bg-info text-dark",
-        _ => "bg-danger"
+        PaymentStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
     };
-
-    static string MaskCitizenId(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "Chưa cập nhật";
-        }
-
-        var trimmed = value.Trim();
-        return trimmed.Length <= 4
-            ? new string('*', trimmed.Length)
-            : new string('*', trimmed.Length - 4) + trimmed[^4..];
-    }
 
     var citizenFront = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenId);
     var citizenBack = Model.Documents.FirstOrDefault(item => item.DocumentType == DocumentTypes.CitizenIdBack);
@@ -164,7 +155,7 @@ else if (Model.ActiveTab == "documents")
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-3">
         <div>
             <h2 class="h4 fw-bold mb-1">Đối chiếu hồ sơ giấy tờ</h2>
-            <p class="text-muted mb-0">Chỉ số CCCD được che một phần; các thông tin cần thiết hiển thị để đối chiếu với ảnh.</p>
+            <p class="text-muted mb-0">Quản trị viên được xem đầy đủ số CCCD và GPLX để đối chiếu chính xác với hồ sơ và ảnh giấy tờ.</p>
         </div>
         <span class="badge @ProfileBadge(Model.ProfileStatusCode) fs-6">Hồ sơ: @Model.ProfileStatusText</span>
     </div>
@@ -194,7 +185,7 @@ else if (Model.ActiveTab == "documents")
             {
                 <div class="row g-3 mb-4">
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Họ và tên trên CCCD</span><strong>@(citizenFront.FullNameOnDocument ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Số CCCD</span><strong>@MaskCitizenId(citizenFront.DocumentNumber)</strong></div></div>
+                    <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Số CCCD</span><strong>@(string.IsNullOrWhiteSpace(citizenFront.DocumentNumber) ? "Chưa cập nhật" : citizenFront.DocumentNumber)</strong></div></div>
                     <div class="col-md-4"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày sinh</span><strong>@(citizenFront.DateOfBirth?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
                     <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Giới tính</span><strong>@(string.IsNullOrWhiteSpace(citizenFront.Gender) ? "Chưa cập nhật" : citizenFront.Gender)</strong></div></div>
                     <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Ngày hết hạn</span><strong>@(citizenFront.ExpiryDate?.ToString("dd/MM/yyyy") ?? "Chưa cập nhật")</strong></div></div>
@@ -306,7 +297,7 @@ else if (Model.ActiveTab == "documents")
             {
                 <div class="row g-3 mb-4">
                     <div class="col-md-6"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Họ và tên trên GPLX</span><strong>@(drivingLicense.FullNameOnDocument ?? "Chưa cập nhật")</strong></div></div>
-                    <div class="col-md-3"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Số GPLX</span><strong>@drivingLicense.DocumentNumber</strong></div></div>
+                    <div class="col-md-3"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Số GPLX</span><strong>@(string.IsNullOrWhiteSpace(drivingLicense.DocumentNumber) ? "Chưa cập nhật" : drivingLicense.DocumentNumber)</strong></div></div>
                     <div class="col-md-3"><div class="border rounded p-3 h-100"><span class="small text-muted d-block">Hạng GPLX</span><strong>@(drivingLicense.LicenseClass ?? "Chưa cập nhật")</strong></div></div>
                     @if (drivingLicense.IssuedDate.HasValue)
                     {
