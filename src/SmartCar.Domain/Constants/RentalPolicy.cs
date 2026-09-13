@@ -9,21 +9,25 @@ namespace SmartCar.Domain.Constants
         public const decimal DepositRate = 1.00m;
 
         // Giữ chỗ:
-        // - Đơn mới chờ Admin xác nhận tối đa 30 phút.
-        // - Sau khi được duyệt, khách có 15 phút để thanh toán/báo đã chuyển khoản.
+        // - Đơn mới có tối đa 60 phút cho bước nhân viên kiểm tra và quản trị viên duyệt.
+        // - Sau khi được quản trị viên duyệt, khách có 30 phút để thanh toán/báo đã chuyển khoản.
         // Khi khách đã báo chuyển khoản và payment ở AwaitingConfirmation thì không tự giải phóng lịch
         // cho tới khi SmartCar đối soát giao dịch.
-        public const int BookingConfirmationHoldMinutes = 30;
-        public const int BookingPaymentHoldMinutes = 15;
+        public const int BookingConfirmationHoldMinutes = 60;
+        public const int BookingPaymentHoldMinutes = 30;
 
         // Khoảng vận hành tối thiểu giữa hai lượt thuê cùng xe: nhận xe trả về, kiểm tra, chụp ảnh,
         // đối chiếu km/nhiên liệu và vệ sinh nhanh trước lượt kế tiếp.
-        public const int VehicleTurnaroundMinutes = 30;
+        public const int VehicleTurnaroundMinutes = 60;
 
-        // No-show: sau 30 phút, giữ 70% tiền thuê và hoàn 30% tiền thuê còn lại.
-        // Tiền cọc được hoàn theo số cọc còn lại thực tế của đơn.
+        // Khi lượt kế tiếp là giao tận nơi, hệ thống cần thêm thời gian chuẩn bị/di chuyển.
+        // Giá trị này sẽ được dùng bởi luồng kiểm tra khả dụng theo phương thức nhận xe.
+        public const int DeliveryLeadMinutes = 30;
+
+        // No-show: sau thời gian chờ, không hoàn phần tiền thuê. Tiền cọc và phí giao chưa thực hiện
+        // vẫn được hoàn theo số thực tế còn lại của đơn.
         public const int NoShowGraceMinutes = 30;
-        public const decimal NoShowFeeRate = 0.70m;
+        public const decimal NoShowFeeRate = 1.00m;
 
         // ============================================================
         // CHÍNH SÁCH GIAO XE THEO KHOẢNG CÁCH
