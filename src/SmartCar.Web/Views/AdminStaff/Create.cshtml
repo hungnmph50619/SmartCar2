@@ -31,7 +31,8 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label asp-for="FullName" class="form-label"></label>
-                            <input asp-for="FullName" class="form-control" placeholder="Họ và tên nhân viên" autocomplete="name" maxlength="100" />
+                            <input asp-for="FullName" id="staffFullName" class="form-control" placeholder="Họ và tên nhân viên" autocomplete="name" maxlength="100" />
+                            <div class="form-text">Chỉ nhập chữ cái và khoảng trắng; không nhập số hoặc ký tự đặc biệt.</div>
                             <span asp-validation-for="FullName" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
@@ -119,6 +120,14 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
+            const fullNameInput = document.getElementById('staffFullName');
+            fullNameInput?.addEventListener('input', () => {
+                fullNameInput.value = fullNameInput.value
+                    .replace(/[^\p{L}\s]/gu, '')
+                    .replace(/\s{2,}/g, ' ')
+                    .slice(0, 100);
+            });
+
             document.querySelectorAll('.password-toggle').forEach(button => {
                 button.addEventListener('click', () => {
                     const input = document.getElementById(button.dataset.target);
