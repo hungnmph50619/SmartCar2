@@ -13,7 +13,7 @@ public sealed record CreateReturnRequest(
     bool HasDamage,
     string? ImagePaths,
     string? Notes,
-    string IdentityVerifiedByStaffId);
+    string? IdentityVerifiedByStaffId = null);
 
 public sealed record AddChargeRequest(
     int BookingId,
