@@ -37,10 +37,14 @@ internal sealed class PolicyAwareVehicleService : IVehicleService
 
         foreach (var vehicle in candidates)
         {
+            // Màn tìm xe hiện chỉ lọc theo thời gian, chưa chọn phương thức nhận xe.
+            // Vì vậy dùng StorePickup cho bước tìm kiếm chung; nếu khách chọn giao tận nơi
+            // khi tạo đơn, BookingService sẽ kiểm tra lại với DeliveryLeadMinutes.
             var bufferedConflict = await _policy.HasBufferedConflictAsync(
                 vehicle.VehicleId,
                 request.PickupDate,
                 request.ReturnDate,
+                VehiclePickupMethod.StorePickup,
                 null,
                 cancellationToken);
 
