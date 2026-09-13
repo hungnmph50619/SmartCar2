@@ -47,6 +47,17 @@
                         </div>
                     </div>
 
+                    <div class="border rounded-3 p-3 mt-4 bg-light">
+                        <div class="form-check">
+                            <input asp-for="IdentityDocumentChecked" class="form-check-input" />
+                            <label asp-for="IdentityDocumentChecked" class="form-check-label fw-semibold">
+                                Tôi đã đối chiếu lại CCCD bản gốc nếu thay đổi số CCCD
+                            </label>
+                        </div>
+                        <div class="small text-muted mt-1">Chỉ bắt buộc khi số CCCD bị thay đổi. Các chỉnh sửa tên, email hoặc số điện thoại không cần xác minh lại CCCD.</div>
+                        <span asp-validation-for="IdentityDocumentChecked" class="text-danger small d-block mt-1"></span>
+                    </div>
+
                     <div class="d-flex gap-2 mt-4">
                         <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
                         <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.UserId">Hủy</a>
