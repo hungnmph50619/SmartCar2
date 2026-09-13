@@ -9,7 +9,10 @@
         && Model.HandoverSignedDocumentVerified
         && Model.ReturnIdentityVerified
         && Model.ReturnSignedDocumentVerified;
-    var canCancelBeforeHandover = b.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var canCancelBeforeHandover = b.Status is BookingStatus.PendingConfirmation
+        or BookingStatus.PendingPayment
+        or BookingStatus.Paid
+        or BookingStatus.ReadyForPickup;
     var canMarkNoShow = b.Status == BookingStatus.ReadyForPickup
         && !b.HasHandover
         && DateTime.Now >= b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes);
@@ -52,10 +55,31 @@
     </div>
 </div>
 
+@if (b.Status == BookingStatus.PendingConfirmation)
+{
+    <div class="card card-body shadow-sm mb-3 border-warning-subtle">
+        <h2 class="h5">1. Chờ quản trị viên duyệt</h2>
+        <p class="mb-0">Nhân viên có thể kiểm tra hồ sơ khách, lịch xe và thông tin đơn nhưng <strong>không tự duyệt đơn</strong>. Chỉ quản trị viên được duyệt hoặc từ chối để chuyển sang bước thanh toán.</p>
+    </div>
+}
+
+@if (b.Status == BookingStatus.PendingPayment)
+{
+    <div class="card card-body shadow-sm mb-3 border-info-subtle">
+        <h2 class="h5">2. Thu tiền tại quầy</h2>
+        <p>Đơn đã được quản trị viên duyệt. Nếu khách thanh toán tiền mặt tại quầy, nhân viên xác nhận đã thực nhận đủ tiền thuê và tiền cọc rồi mới ghi nhận vào hệ thống.</p>
+        <form asp-action="ReceiveCash" method="post" data-confirm="Bạn xác nhận đã thực nhận đủ tiền thuê và tiền cọc bằng tiền mặt từ khách?">
+            <input type="hidden" name="bookingId" value="@b.BookingId" />
+            <button class="btn btn-success">Xác nhận đã thu đủ tiền mặt</button>
+        </form>
+        <div class="small text-muted mt-2">Nếu khách đã báo chuyển khoản/QR, không dùng nút này; giao dịch đó phải chờ quản trị viên đối soát.</div>
+    </div>
+}
+
 @if (b.Status == BookingStatus.Paid)
 {
     <div class="card card-body shadow-sm mb-3">
-        <h2 class="h5">1. Chuẩn bị xe</h2>
+        <h2 class="h5">3. Chuẩn bị xe</h2>
         <p>Đơn đã thanh toán. Kiểm tra xe thực tế trước khi xác nhận sẵn sàng giao.</p>
         <form asp-action="MarkReady" method="post" data-confirm="Xác nhận xe đã sẵn sàng để giao cho khách?">
             <input type="hidden" name="bookingId" value="@b.BookingId" />
@@ -67,7 +91,7 @@
 @if (b.Status == BookingStatus.ReadyForPickup)
 {
     <div class="card card-body shadow-sm mb-3">
-        <h2 class="h5">2. Bàn giao xe</h2>
+        <h2 class="h5">4. Bàn giao xe</h2>
         @if (!b.HasHandover)
         {
             <div class="alert alert-info">Chưa có biên bản giao. Khi lập biên bản, hệ thống sẽ yêu cầu CCCD người nhận và chỉ chấp nhận nếu trùng CCCD đã xác minh của khách.</div>
@@ -144,18 +168,18 @@
 @if (canCancelBeforeHandover)
 {
     <div class="card card-body shadow-sm mb-3 border-danger-subtle">
-        <h2 class="h5">Xử lý ngoại lệ trước khi giao xe</h2>
-        <p class="text-muted">Đây là nghiệp vụ của Staff. Nếu phát sinh hoàn tiền, hệ thống chỉ tạo khoản <strong>chờ Admin duyệt</strong>; nhân viên chưa được chuyển tiền ở bước này.</p>
+        <h2 class="h5">Xử lý yêu cầu hủy trước khi giao xe</h2>
+        <p class="text-muted">Nhân viên thao tác hộ khách nên hệ thống vẫn áp dụng <strong>chính sách khách chủ động hủy theo thời điểm hủy</strong>. Nếu phát sinh hoàn tiền, khoản hoàn được tạo thật và phải chờ quản trị viên duyệt trước khi nhân viên chuyển tiền.</p>
 
         <details class="mb-3">
-            <summary class="text-danger fw-semibold">Hủy đơn do SmartCar / cửa hàng</summary>
-            <form asp-controller="StaffBookingOperations" asp-action="Cancel" method="post" class="row g-2 mt-2" data-confirm="Xác nhận hủy đơn này? Khoản hoàn phát sinh sẽ chuyển sang chờ Admin duyệt.">
+            <summary class="text-danger fw-semibold">Khách yêu cầu hủy đơn</summary>
+            <form asp-controller="StaffBookingOperations" asp-action="Cancel" method="post" class="row g-2 mt-2" data-confirm="Xác nhận khách yêu cầu hủy đơn này? Mức hoàn sẽ được hệ thống tính theo thời điểm hủy.">
                 <input type="hidden" name="BookingId" value="@b.BookingId" />
                 <div class="col-md-9">
-                    <input class="form-control" name="Reason" required maxlength="500" placeholder="Nhập lý do hủy đơn" />
+                    <input class="form-control" name="Reason" required maxlength="500" placeholder="Nhập lý do khách yêu cầu hủy" />
                 </div>
                 <div class="col-md-3 d-grid">
-                    <button class="btn btn-outline-danger">Hủy đơn</button>
+                    <button class="btn btn-outline-danger">Hủy theo yêu cầu khách</button>
                 </div>
             </form>
         </details>
@@ -166,11 +190,11 @@
             <div class="fw-semibold mb-2">Khách không đến nhận xe</div>
             @if (b.HasHandover)
             {
-                <div class="alert alert-secondary mb-0">Đơn đã có biên bản giao xe nên không thể đánh dấu no-show.</div>
+                <div class="alert alert-secondary mb-0">Đơn đã có biên bản giao xe nên không thể đánh dấu không đến nhận xe.</div>
             }
             else if (canMarkNoShow)
             {
-                <form asp-controller="StaffBookingOperations" asp-action="MarkNoShow" method="post" data-confirm="Bạn đã liên hệ khách và xác nhận ghi nhận no-show?">
+                <form asp-controller="StaffBookingOperations" asp-action="MarkNoShow" method="post" data-confirm="Bạn đã liên hệ khách và xác nhận ghi nhận khách không đến nhận xe?">
                     <input type="hidden" name="bookingId" value="@b.BookingId" />
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" name="customerContacted" value="true" id="customer-contacted" required />
@@ -181,7 +205,7 @@
             }
             else
             {
-                <div class="alert alert-secondary mb-0">Chỉ được ghi nhận no-show sau giờ nhận xe ít nhất <strong>@RentalPolicy.NoShowGraceMinutes phút</strong>. Mốc sớm nhất: @b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm").</div>
+                <div class="alert alert-secondary mb-0">Chỉ được ghi nhận khách không đến sau giờ nhận xe ít nhất <strong>@RentalPolicy.NoShowGraceMinutes phút</strong>. Mốc sớm nhất: @b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm").</div>
             }
         }
     </div>
@@ -190,7 +214,7 @@
 @if (b.Status == BookingStatus.Rented)
 {
     <div class="card card-body shadow-sm mb-3">
-        <h2 class="h5">3. Nhận xe trả</h2>
+        <h2 class="h5">5. Nhận xe trả</h2>
         <p>Xe đang trong chuyến. Khi khách trả xe, phải xác minh CCCD người trả trước khi lưu biên bản.</p>
         @if (!b.HasReturn)
         {
@@ -206,7 +230,7 @@
 @if (b.Status == BookingStatus.PendingInspection)
 {
     <div class="card card-body shadow-sm mb-3">
-        <h2 class="h5">4. Đối chiếu xe trả & quyết toán</h2>
+        <h2 class="h5">6. Đối chiếu xe trả & quyết toán</h2>
         <div class="row g-3">
             <div class="col-md-6">
                 <div class="border rounded p-3 h-100">
@@ -281,15 +305,15 @@
 @if (b.Status == BookingStatus.AwaitingRefund)
 {
     <div class="card card-body shadow-sm mb-3">
-        <h2 class="h5">5. Hoàn tiền</h2>
+        <h2 class="h5">7. Hoàn tiền</h2>
         <div class="fs-5 mb-2">Số tiền đang xử lý: <strong>@Model.RefundAmount.ToString("N0") đ</strong></div>
         @if (Model.HasUnapprovedRefund)
         {
-            <div class="alert alert-warning mb-0">Khoản hoàn đang chờ chủ/Admin duyệt. Nhân viên <strong>không được chuyển tiền</strong> trước bước duyệt.</div>
+            <div class="alert alert-warning mb-0">Khoản hoàn đang chờ quản trị viên duyệt. Nhân viên <strong>không được chuyển tiền</strong> trước bước duyệt.</div>
         }
         else if (Model.HasApprovedRefund)
         {
-            <div class="alert alert-success">Chủ/Admin đã duyệt. Nhân viên có thể thực hiện chuyển khoản và nhập mã giao dịch.</div>
+            <div class="alert alert-success">Quản trị viên đã duyệt. Nhân viên có thể thực hiện chuyển khoản và nhập mã giao dịch.</div>
             <a class="btn btn-success align-self-start" asp-action="Refunds">Mở danh sách hoàn tiền đã duyệt</a>
         }
     </div>

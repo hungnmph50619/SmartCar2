@@ -14,10 +14,10 @@
             <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> Nghiệp vụ tại quầy</span>
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div style="max-width:790px">
-                    <h1 class="display-6 fw-bold mb-2">Tạo đơn thuê xe tại quầy</h1>
+                    <h1 class="display-6 fw-bold mb-2">Lập đơn thuê xe tại quầy</h1>
                     <p class="text-muted mb-0">
-                        Chọn khách có CCCD/GPLX hợp lệ, chọn xe và khung giờ. Tiền thuê + cọc được ghi nhận
-                        <strong>tiền mặt tại quầy</strong>; giao xe vẫn phải qua đối chiếu người nhận, ảnh xe và bản ký.
+                        Nhân viên hỗ trợ khách đã có tài khoản và hồ sơ CCCD/GPLX hợp lệ lập đơn tại quầy.
+                        <strong>Nhân viên không tự duyệt đơn của mình.</strong> Sau khi quản trị viên duyệt, nhân viên mới được thu và ghi nhận tiền mặt.
                     </p>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
@@ -32,29 +32,29 @@
         <div class="col-sm-6 col-xl-3">
             <div class="staff-step">
                 <span class="staff-step-number">1</span>
-                <div class="fw-bold">Khách + KYC</div>
-                <div class="small text-muted">Dùng cùng hồ sơ CCCD/GPLX của Customer; BookingService kiểm tra hiệu lực đến ngày trả xe.</div>
+                <div class="fw-bold">Khách + hồ sơ</div>
+                <div class="small text-muted">Chọn khách có CCCD/GPLX đã được quản trị viên xác minh và còn hiệu lực đến ngày trả xe.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
             <div class="staff-step">
                 <span class="staff-step-number">2</span>
                 <div class="fw-bold">Kiểm tra lịch xe</div>
-                <div class="small text-muted">Không xếp chuyến sát nhau; cần tối thiểu @RentalPolicy.VehicleTurnaroundMinutes phút để nhận và chuẩn bị xe.</div>
+                <div class="small text-muted">Hệ thống kiểm tra xung đột và cần tối thiểu @RentalPolicy.VehicleTurnaroundMinutes phút xoay vòng giữa hai chuyến.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
             <div class="staff-step">
                 <span class="staff-step-number">3</span>
-                <div class="fw-bold">Thu tiền mặt</div>
-                <div class="small text-muted">Tiền thuê và cọc được ghi nhận Paid tại quầy kèm mã giao dịch nội bộ.</div>
+                <div class="fw-bold">Quản trị viên duyệt</div>
+                <div class="small text-muted">Đơn được giữ lịch ở trạng thái Chờ xác nhận; quản trị viên là người duyệt hoặc từ chối.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
             <div class="staff-step">
                 <span class="staff-step-number">4</span>
-                <div class="fw-bold">Bàn giao thực tế</div>
-                <div class="small text-muted">Đối chiếu CCCD gốc, km/nhiên liệu, ảnh xe và bản hợp đồng đã ký trước khi bắt đầu chuyến.</div>
+                <div class="fw-bold">Thu tiền & bàn giao</div>
+                <div class="small text-muted">Sau khi duyệt, nhân viên thu tiền mặt, chuẩn bị xe rồi thực hiện đối chiếu giấy tờ và bàn giao.</div>
             </div>
         </div>
     </div>
@@ -64,9 +64,9 @@
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
                 <div>
                     <h2 class="h4 mb-1">Thông tin đơn thuê</h2>
-                    <div class="text-muted small">Core tạo/confirm đơn vẫn gọi IBookingService giống luồng Admin/Customer, Staff không có bộ logic đặt xe riêng.</div>
+                    <div class="text-muted small">Đơn tạo tại quầy dùng cùng BookingService và cùng quy tắc lịch xe như đơn khách tự tạo.</div>
                 </div>
-                <span class="badge rounded-pill text-bg-success px-3 py-2">Thanh toán: Tiền mặt</span>
+                <span class="badge rounded-pill text-bg-warning px-3 py-2">Chờ quản trị viên duyệt</span>
             </div>
 
             <div asp-validation-summary="All" class="alert alert-danger py-2 mb-4"></div>
@@ -78,7 +78,7 @@
                            type="search"
                            class="form-control"
                            autocomplete="off"
-                           placeholder="Nhập tên, số điện thoại hoặc email/Gmail..." />
+                           placeholder="Nhập tên, số điện thoại hoặc email..." />
                     <div class="form-text">
                         Ô này lọc nhanh danh sách bên dưới. Cần tra cứu đầy đủ? <a asp-controller="StaffCustomers" asp-action="Index">Mở danh sách khách hàng</a>.
                     </div>
@@ -94,7 +94,7 @@
                         }
                     </select>
                     <div class="form-text">
-                        Không thấy khách? <a asp-controller="StaffCustomers" asp-action="Create">Tạo tài khoản + xác minh giấy tờ tại quầy</a>.
+                        Không thấy khách? <a asp-controller="StaffCustomers" asp-action="Create">Tạo tài khoản/hỗ trợ khách bổ sung hồ sơ tại quầy</a>.
                     </div>
                     <span asp-validation-for="CustomerId" class="text-danger small"></span>
                 </div>
@@ -127,8 +127,8 @@
                     <input class="form-control" value="Nhận tại cửa hàng" disabled />
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Thanh toán</label>
-                    <input class="form-control" value="Tiền mặt tại quầy" disabled />
+                    <label class="form-label fw-semibold">Dự kiến thanh toán</label>
+                    <input class="form-control" value="Tiền mặt tại quầy sau khi quản trị viên duyệt" disabled />
                 </div>
             </div>
 
@@ -160,7 +160,7 @@
             </div>
 
             <div class="mt-4 d-flex flex-wrap gap-2">
-                <button class="btn btn-primary staff-action-button px-4" type="submit" data-loading-text="Đang tạo đơn...">Tạo đơn và ghi nhận tiền mặt</button>
+                <button class="btn btn-primary staff-action-button px-4" type="submit" data-loading-text="Đang lập đơn...">Lập đơn chờ quản trị viên duyệt</button>
                 <a class="btn btn-outline-secondary px-4" asp-action="Index">Hủy</a>
             </div>
         </div>

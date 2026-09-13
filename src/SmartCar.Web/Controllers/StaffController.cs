@@ -22,6 +22,8 @@ public sealed class StaffController : Controller
 
     private static readonly BookingStatus[] OperationalStatuses =
     {
+        BookingStatus.PendingConfirmation,
+        BookingStatus.PendingPayment,
         BookingStatus.Paid,
         BookingStatus.ReadyForPickup,
         BookingStatus.Rented,
@@ -54,8 +56,8 @@ public sealed class StaffController : Controller
         var tomorrow = today.AddDays(1);
         var workItems = await _bookingService.GetAdminBookingsAsync(null, cancellationToken);
         var operational = workItems
-            .Where(item => item.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup or BookingStatus.Rented or BookingStatus.PendingInspection or BookingStatus.AwaitingRefund)
-            .OrderBy(item => item.Status == BookingStatus.PendingInspection ? 0 : 1)
+            .Where(item => OperationalStatuses.Contains(item.Status) && item.Status != BookingStatus.Completed)
+            .OrderBy(item => item.Status == BookingStatus.PendingInspection ? 0 : item.Status == BookingStatus.PendingConfirmation ? 1 : 2)
             .ThenBy(item => item.PickupDate)
             .Take(12)
             .ToList();
@@ -101,7 +103,7 @@ public sealed class StaffController : Controller
         if (booking is null) return NotFound();
         if (!OperationalStatuses.Contains(booking.Status))
         {
-            TempData["ErrorMessage"] = "Đơn này chưa tới bước nghiệp vụ của nhân viên.";
+            TempData["ErrorMessage"] = "Đơn này không thuộc luồng nghiệp vụ của nhân viên.";
             return RedirectToAction(nameof(Bookings));
         }
 
@@ -174,7 +176,7 @@ public sealed class StaffController : Controller
         {
             ModelState.AddModelError(
                 nameof(model.CustomerId),
-                "Khách hàng không hợp lệ, đã bị khóa hoặc không thuộc vai trò Customer.");
+                "Khách hàng không hợp lệ, đã bị khóa hoặc không thuộc vai trò Khách hàng.");
             await PopulateCounterOptionsAsync(model, cancellationToken);
             return View(model);
         }
@@ -202,46 +204,106 @@ public sealed class StaffController : Controller
         }
 
         var bookingId = createResult.BookingId.Value;
-        var confirmResult = await _bookingService.ConfirmAsync(bookingId, cancellationToken);
-        if (!confirmResult.Succeeded)
+        _dbContext.Notifications.Add(new Notification
         {
-            var failedBooking = await _dbContext.Bookings.FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
-            if (failedBooking is not null)
-            {
-                failedBooking.Status = BookingStatus.Rejected;
-                failedBooking.CancelReason = "Tạo đơn tại quầy không hoàn tất: " + string.Join("; ", confirmResult.Errors);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
-            ModelState.AddModelError(string.Empty, string.Join("; ", confirmResult.Errors));
-            await PopulateCounterOptionsAsync(model, cancellationToken);
-            return View(model);
+            UserId = model.CustomerId,
+            Title = "Đã lập yêu cầu thuê xe tại quầy",
+            Message = $"Nhân viên đã lập đơn #{bookingId}. Đơn đang chờ quản trị viên duyệt trước khi thu tiền."
+        });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await WriteAuditAsync(
+            "StaffCreateCounterRental",
+            nameof(Booking),
+            bookingId,
+            $"Nhân viên lập đơn thuê tại quầy #{bookingId} cho khách; chưa thu tiền, chờ quản trị viên duyệt.",
+            cancellationToken);
+
+        TempData["SuccessMessage"] = $"Đã lập đơn #{bookingId} tại quầy. Đơn đang chờ quản trị viên duyệt; chỉ thu tiền sau khi đơn chuyển sang Chờ thanh toán.";
+        return RedirectToAction(nameof(Details), new { id = bookingId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReceiveCash(int bookingId, CancellationToken cancellationToken)
+    {
+        var current = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
+        if (current is null)
+        {
+            TempData["ErrorMessage"] = "Không tìm thấy đơn thuê.";
+            return RedirectToAction(nameof(Bookings));
+        }
+
+        if (current.Status != BookingStatus.PendingPayment)
+        {
+            TempData["ErrorMessage"] = "Chỉ được thu tiền mặt sau khi quản trị viên đã duyệt đơn và đơn đang ở trạng thái Chờ thanh toán.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var booking = await _dbContext.Bookings.Include(item => item.Payments).FirstAsync(item => item.BookingId == bookingId, cancellationToken);
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking is null || booking.Status != BookingStatus.PendingPayment)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Trạng thái đơn đã thay đổi. Vui lòng tải lại trước khi thu tiền.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var upfrontPayments = booking.Payments
+            .Where(item => item.Type is PaymentType.Rental or PaymentType.Deposit)
+            .ToList();
+
+        if (upfrontPayments.Any(item => item.Status == PaymentStatus.AwaitingConfirmation))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Đơn đang có giao dịch chuyển khoản chờ quản trị viên đối soát. Không được đồng thời ghi nhận tiền mặt.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
         var paidAt = DateTime.UtcNow;
-        foreach (var payment in booking.Payments.Where(item => (item.Type is PaymentType.Rental or PaymentType.Deposit) && item.Status == PaymentStatus.Pending))
+        var transactionCode = $"CASH-{bookingId}-{paidAt:yyyyMMddHHmmss}";
+        foreach (var payment in upfrontPayments.Where(item => item.Status == PaymentStatus.Pending))
         {
             payment.Status = PaymentStatus.Paid;
             payment.Method = PaymentMethods.Cash;
             payment.PaidAt = paidAt;
-            payment.TransactionCode = $"CASH-{bookingId}-{paidAt:yyyyMMddHHmmss}";
+            payment.TransactionCode = transactionCode;
         }
-        var rentalPaid = booking.Payments.Any(item => item.Type == PaymentType.Rental && item.Status == PaymentStatus.Paid);
-        var depositPaid = booking.DepositAmount <= 0 || booking.Payments.Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid).Sum(item => item.Amount) >= booking.DepositAmount;
-        if (!rentalPaid || !depositPaid)
+
+        var rentalPaid = booking.Payments
+            .Where(item => item.Type == PaymentType.Rental && item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var depositPaid = booking.Payments
+            .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+
+        if (rentalPaid <= 0 || (booking.DepositAmount > 0 && depositPaid < booking.DepositAmount))
         {
             await transaction.RollbackAsync(cancellationToken);
-            ModelState.AddModelError(string.Empty, "Không thể ghi nhận đủ tiền thuê và tiền cọc bằng tiền mặt.");
-            await PopulateCounterOptionsAsync(model, cancellationToken);
-            return View(model);
+            TempData["ErrorMessage"] = "Không thể ghi nhận thanh toán vì đơn chưa có đủ khoản tiền thuê hoặc tiền cọc cần thu.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
         }
+
         booking.Status = BookingStatus.Paid;
-        _dbContext.Notifications.Add(new Notification { UserId = booking.CustomerId, Title = "Đã thanh toán tại quầy", Message = $"Đơn #{booking.BookingId}: SmartCar đã ghi nhận đủ tiền thuê và cọc bằng tiền mặt tại quầy." });
+        booking.ReservationExpiresAt = null;
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Đã thanh toán tại quầy",
+            Message = $"Đơn #{booking.BookingId}: SmartCar đã ghi nhận đủ tiền thuê và tiền cọc bằng tiền mặt tại quầy."
+        });
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        await WriteAuditAsync("StaffCounterRentalCash", nameof(Booking), bookingId, $"Nhân viên tạo đơn thuê tại quầy #{bookingId} và thu tiền mặt.", cancellationToken);
-        TempData["SuccessMessage"] = $"Đã tạo đơn #{bookingId} tại quầy và ghi nhận thanh toán tiền mặt. Tiếp tục chuẩn bị xe.";
+        await WriteAuditAsync(
+            "StaffReceiveCounterCash",
+            nameof(Booking),
+            bookingId,
+            $"Nhân viên thu tiền mặt cho đơn #{bookingId} sau khi quản trị viên duyệt. Mã giao dịch nội bộ: {transactionCode}.",
+            cancellationToken);
+
+        TempData["SuccessMessage"] = "Đã ghi nhận đủ tiền mặt. Đơn chuyển sang Đã thanh toán và có thể chuẩn bị xe.";
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
@@ -391,7 +453,7 @@ public sealed class StaffController : Controller
         if (hasWaitingApproval)
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Vẫn còn khoản hoàn chưa được chủ/Admin duyệt. Nhân viên chưa được phép chuyển tiền.";
+            TempData["ErrorMessage"] = "Vẫn còn khoản hoàn chưa được quản trị viên duyệt. Nhân viên chưa được phép chuyển tiền.";
             return RedirectToAction(nameof(Refunds));
         }
 
@@ -405,7 +467,7 @@ public sealed class StaffController : Controller
         if (approvedRefunds.Count == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Đơn không có khoản hoàn nào đã được chủ/Admin duyệt.";
+            TempData["ErrorMessage"] = "Đơn không có khoản hoàn nào đã được quản trị viên duyệt.";
             return RedirectToAction(nameof(Refunds));
         }
 
