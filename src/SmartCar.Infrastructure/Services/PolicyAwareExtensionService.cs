@@ -63,8 +63,9 @@ internal sealed class PolicyAwareExtensionService : IExtensionService
             booking.VehicleId,
             booking.PickupDate,
             request.RequestedReturnDate,
-            booking.BookingId,
-            cancellationToken);
+            pickupMethod: booking.PickupMethod,
+            excludedBookingId: booking.BookingId,
+            cancellationToken: cancellationToken);
 
         if (bufferedConflict && !request.IsForceMajeure)
         {
@@ -97,8 +98,9 @@ internal sealed class PolicyAwareExtensionService : IExtensionService
                 extension.Booking.VehicleId,
                 extension.Booking.PickupDate,
                 extension.RequestedReturnDate,
-                extension.BookingId,
-                cancellationToken);
+                pickupMethod: extension.Booking.PickupMethod,
+                excludedBookingId: extension.BookingId,
+                cancellationToken: cancellationToken);
 
             if (bufferedConflict)
             {
