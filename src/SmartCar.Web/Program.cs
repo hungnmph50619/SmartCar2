@@ -60,18 +60,29 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 
-// Nhân viên dùng mật khẩu tạm không được đi thẳng vào các màn hình nghiệp vụ.
-// Chỉ sau khi đổi mật khẩu lần đầu và đăng nhập lại mới được sử dụng khu vực Staff.
+// Kiểm soát tài khoản Staff ở mỗi request:
+// - tài khoản đã bị Admin khóa thì phiên đang đăng nhập cũng bị cắt ngay ở request kế tiếp;
+// - tài khoản dùng mật khẩu ban đầu phải đổi mật khẩu trước khi vào khu vực nghiệp vụ.
 app.Use(async (context, next) =>
 {
     if (context.User.Identity?.IsAuthenticated == true &&
         context.User.IsInRole(RoleNames.Staff) &&
-        !context.Request.Path.StartsWithSegments("/Account/FirstLoginPassword", StringComparison.OrdinalIgnoreCase) &&
+        !context.Request.Path.StartsWithSegments("/Account/Login", StringComparison.OrdinalIgnoreCase) &&
         !context.Request.Path.StartsWithSegments("/Account/Logout", StringComparison.OrdinalIgnoreCase))
     {
         var userManager = context.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+        var signInManager = context.RequestServices.GetRequiredService<SignInManager<ApplicationUser>>();
         var staff = await userManager.GetUserAsync(context.User);
-        if (staff?.MustChangePassword == true)
+
+        if (staff is null || !staff.IsActive)
+        {
+            await signInManager.SignOutAsync();
+            context.Response.Redirect("/Account/Login?reason=inactive");
+            return;
+        }
+
+        if (staff.MustChangePassword &&
+            !context.Request.Path.StartsWithSegments("/Account/FirstLoginPassword", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.Redirect("/Account/FirstLoginPassword");
             return;
