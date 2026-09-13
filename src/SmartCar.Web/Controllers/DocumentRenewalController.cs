@@ -69,20 +69,7 @@ public sealed class DocumentRenewalController : Controller
 
         if (duplicate)
         {
-            TempData["ErrorMessage"] = "Số CCCD đã được sử dụng bởi tài khoản khách hàng khác.";
-            return RedirectToProfile(returnVehicleId, pickupDate, returnDate);
-        }
-
-        var staffCitizenDuplicate = await _dbContext.Users
-            .AsNoTracking()
-            .AnyAsync(account =>
-                account.Id != user.Id &&
-                account.CitizenIdNumber == documentNumber,
-                cancellationToken);
-
-        if (staffCitizenDuplicate)
-        {
-            TempData["ErrorMessage"] = "Số CCCD này đang thuộc hồ sơ nhân viên. SmartCar không dùng cùng một danh tính cho Customer và Staff.";
+            TempData["ErrorMessage"] = "Số CCCD đã được sử dụng bởi tài khoản khác.";
             return RedirectToProfile(returnVehicleId, pickupDate, returnDate);
         }
 
