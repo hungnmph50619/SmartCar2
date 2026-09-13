@@ -48,7 +48,7 @@
         .ThenByDescending(row => row.Transaction.Amount)
         .ToList();
 
-    var revenueTransactionRows = allRevenueTransactionRows.Take(10).ToList();
+    var revenueTransactionRows = allRevenueTransactionRows.ToList();
 
     var refundTransactionRows = Model.Vehicles
         .SelectMany(vehicle => vehicle.Transactions
@@ -101,6 +101,11 @@
     .profit-page .method-badge { display:inline-flex; align-items:center; border:1px solid #dbe3ed; border-radius:999px; padding:.2rem .55rem; font-size:.75rem; background:#f8fafc; white-space:nowrap; }
     .profit-page .revenue-table th { color:#64748b; font-size:.75rem; font-weight:700; white-space:nowrap; }
     .profit-page .revenue-table td { vertical-align:middle; }
+    .profit-page .revenue-pager { display:flex; justify-content:flex-end; align-items:center; gap:.55rem; padding-top:.7rem; }
+    .profit-page .revenue-pager .pager-btn { width:34px; height:30px; display:inline-flex; align-items:center; justify-content:center; border:1px solid #dbe3ed; border-radius:8px; background:#fff; color:#0d6efd; font-size:1.05rem; line-height:1; }
+    .profit-page .revenue-pager .pager-btn:hover:not(:disabled) { background:#f3f7ff; border-color:#a9c8ff; }
+    .profit-page .revenue-pager .pager-btn:disabled { color:#a0aec0; background:#f8fafc; cursor:not-allowed; }
+    .profit-page .revenue-pager .pager-status { min-width:92px; text-align:center; color:var(--muted); font-size:.8rem; font-weight:600; }
     .profit-page .refund-details { border-top:1px solid var(--line); margin-top:.4rem; padding-top:.55rem; }
     .profit-page .refund-details summary { cursor:pointer; color:#0d6efd; font-size:.82rem; font-weight:700; list-style:none; }
     .profit-page .refund-details summary::-webkit-details-marker { display:none; }
@@ -261,7 +266,7 @@
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-2">
             <div>
                 <h2 class="section-title">Giao dịch doanh thu gần đây</h2>
-                <div class="tiny mt-1">10 giao dịch mới nhất trong kỳ.</div>
+                <div class="tiny mt-1">10 giao dịch mỗi trang trong kỳ.</div>
             </div>
             @if (!string.IsNullOrWhiteSpace(selectedPaymentMethod))
             {
@@ -289,10 +294,11 @@
                 }
                 else
                 {
-                    @foreach (var row in revenueTransactionRows)
+                    @for (var rowIndex = 0; rowIndex < revenueTransactionRows.Count; rowIndex++)
                     {
+                        var row = revenueTransactionRows[rowIndex];
                         var transaction = row.Transaction;
-                        <tr>
+                        <tr class="revenue-page-row @(rowIndex >= 10 ? "d-none" : string.Empty)">
                             <td class="text-nowrap">@transaction.OccurredAt.ToString("dd/MM/yyyy HH:mm")</td>
                             <td><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@transaction.BookingId">#@transaction.BookingId</a></td>
                             <td><strong>@row.VehicleName</strong><div class="tiny">@row.LicensePlate</div></td>
@@ -318,7 +324,11 @@
         </div>
         @if (allRevenueTransactionRows.Count > 10)
         {
-            <div class="tiny pt-2 text-end">Đang hiển thị 10 / @allRevenueTransactionRows.Count giao dịch phù hợp.</div>
+            <div id="revenue-pager" class="revenue-pager" aria-label="Phân trang giao dịch doanh thu">
+                <button id="revenue-prev" class="pager-btn" type="button" aria-label="Trang giao dịch trước" title="Trang trước">‹</button>
+                <span id="revenue-page-status" class="pager-status">1–10 / @allRevenueTransactionRows.Count</span>
+                <button id="revenue-next" class="pager-btn" type="button" aria-label="Trang giao dịch sau" title="Trang sau">›</button>
+            </div>
         }
     </div>
 
@@ -423,20 +433,57 @@
     const methodFilter = document.getElementById('payment-method-filter');
     if (methodFilter) methodFilter.value = methodFilter.dataset.selected || '';
 
+    const revenueRows = Array.from(document.querySelectorAll('.revenue-page-row'));
+    const revenuePrev = document.getElementById('revenue-prev');
+    const revenueNext = document.getElementById('revenue-next');
+    const revenueStatus = document.getElementById('revenue-page-status');
+    const revenuePageSize = 10;
+    let revenuePage = 0;
+
+    const renderRevenuePage = () => {
+        if (revenueRows.length === 0) return;
+
+        const totalPages = Math.ceil(revenueRows.length / revenuePageSize);
+        revenuePage = Math.max(0, Math.min(revenuePage, totalPages - 1));
+        const start = revenuePage * revenuePageSize;
+        const end = Math.min(start + revenuePageSize, revenueRows.length);
+
+        revenueRows.forEach((row, index) => {
+            row.classList.toggle('d-none', index < start || index >= end);
+        });
+
+        if (revenueStatus) revenueStatus.textContent = `${start + 1}–${end} / ${revenueRows.length}`;
+        if (revenuePrev) revenuePrev.disabled = revenuePage === 0;
+        if (revenueNext) revenueNext.disabled = revenuePage >= totalPages - 1;
+    };
+
+    revenuePrev?.addEventListener('click', () => {
+        revenuePage--;
+        renderRevenuePage();
+    });
+
+    revenueNext?.addEventListener('click', () => {
+        revenuePage++;
+        renderRevenuePage();
+    });
+
+    renderRevenuePage();
+
     const input = document.getElementById('vehicle-search');
     const rows = Array.from(document.querySelectorAll('.vehicle-wrapper'));
     const empty = document.getElementById('vehicle-empty');
-    if (!input) return;
-    input.addEventListener('input', () => {
-        const q = input.value.trim().toLocaleLowerCase('vi-VN');
-        let visible = 0;
-        rows.forEach(row => {
-            const match = !q || (row.dataset.search || '').toLocaleLowerCase('vi-VN').includes(q);
-            row.classList.toggle('d-none', !match);
-            if (match) visible++;
+    if (input) {
+        input.addEventListener('input', () => {
+            const q = input.value.trim().toLocaleLowerCase('vi-VN');
+            let visible = 0;
+            rows.forEach(row => {
+                const match = !q || (row.dataset.search || '').toLocaleLowerCase('vi-VN').includes(q);
+                row.classList.toggle('d-none', !match);
+                if (match) visible++;
+            });
+            empty?.classList.toggle('d-none', visible !== 0);
         });
-        empty?.classList.toggle('d-none', visible !== 0);
-    });
+    }
 })();
 </script>
 }
