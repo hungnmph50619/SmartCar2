@@ -36,6 +36,10 @@
     .staff-detail-page .danger-panel .panel-head { color:#b42318; background:#fffafa; }
     .staff-detail-page .masked-value { display:inline-flex; align-items:center; gap:.55rem; }
     .staff-detail-page .reveal-button { border:0; background:transparent; color:#1769d2; padding:0; font-size:.82rem; font-weight:700; }
+    .staff-detail-page .reset-details { border:1px solid #e5eaf1; border-radius:12px; overflow:hidden; }
+    .staff-detail-page .reset-details summary { list-style:none; cursor:pointer; padding:.8rem .9rem; font-weight:700; color:#1769d2; background:#f8fbff; }
+    .staff-detail-page .reset-details summary::-webkit-details-marker { display:none; }
+    .staff-detail-page .reset-form { padding:1rem; border-top:1px solid #e5eaf1; background:#fff; }
     @@media(max-width:767.98px) {
         .staff-detail-page .info-grid { grid-template-columns:1fr; }
         .staff-detail-page .info-item { border-right:0 !important; }
@@ -189,6 +193,51 @@
                     </a>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="panel mb-3">
+        <div class="panel-head">Khôi phục đăng nhập</div>
+        <div class="panel-body">
+            <div class="small text-muted mb-3">
+                Ưu tiên để nhân viên tự dùng “Quên mật khẩu” qua email. Chỉ cấp mật khẩu tạm khi nhân viên không thể tự khôi phục.
+            </div>
+            <details class="reset-details">
+                <summary>Cấp lại mật khẩu tạm</summary>
+                <form asp-controller="AdminStaffPassword"
+                      asp-action="ResetTemporaryPassword"
+                      method="post"
+                      class="reset-form"
+                      onsubmit="return confirm('Cấp lại mật khẩu tạm cho nhân viên này? Phiên đăng nhập cũ sẽ bị mất hiệu lực và nhân viên phải đổi mật khẩu ở lần đăng nhập tiếp theo.');">
+                    <input type="hidden" name="id" value="@Model.UserId" />
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Mật khẩu tạm mới</label>
+                            <input type="password"
+                                   name="temporaryPassword"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   required
+                                   minlength="8" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Nhập lại mật khẩu tạm</label>
+                            <input type="password"
+                                   name="confirmTemporaryPassword"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   required
+                                   minlength="8" />
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        Tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Quản trị viên chỉ biết mật khẩu tạm này; sau khi nhân viên đổi, không thể xem lại mật khẩu mới.
+                    </div>
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="submit" class="btn btn-outline-primary">Cấp mật khẩu tạm</button>
+                    </div>
+                </form>
+            </details>
         </div>
     </div>
 
