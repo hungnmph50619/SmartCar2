@@ -21,6 +21,11 @@ internal sealed class HandoverService : IHandoverService
         CreateHandoverRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.IdentityVerifiedByStaffId))
+        {
+            return OperationResult.Failure("Không xác định được nhân viên đã trực tiếp kiểm tra người nhận xe.");
+        }
+
         await using var transaction = await _dbContext.Database
             .BeginTransactionAsync(cancellationToken);
 
@@ -88,20 +93,17 @@ internal sealed class HandoverService : IHandoverService
 
         if (request.HandoverAt > DateTime.Now.AddMinutes(5))
         {
-            return OperationResult.Failure(
-                "Thời gian giao xe không được ở tương lai.");
+            return OperationResult.Failure("Thời gian giao xe không được ở tương lai.");
         }
 
         if (request.HandoverAt < booking.PickupDate)
         {
-            return OperationResult.Failure(
-                "Thời gian giao xe không được trước thời gian nhận xe đã đặt.");
+            return OperationResult.Failure("Thời gian giao xe không được trước thời gian nhận xe đã đặt.");
         }
 
         if (request.HandoverAt >= booking.ReturnDate)
         {
-            return OperationResult.Failure(
-                "Thời gian giao xe phải trước thời gian trả xe đã đặt.");
+            return OperationResult.Failure("Thời gian giao xe phải trước thời gian trả xe đã đặt.");
         }
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
@@ -112,8 +114,7 @@ internal sealed class HandoverService : IHandoverService
 
         if (!TryParseFuelPercent(request.FuelLevel, out var fuelPercent))
         {
-            return OperationResult.Failure(
-                "Mức nhiên liệu khi giao phải là số từ 0 đến 100%.");
+            return OperationResult.Failure("Mức nhiên liệu khi giao phải là số từ 0 đến 100%.");
         }
 
         if (!request.PenaltyPolicyAccepted)
@@ -124,13 +125,13 @@ internal sealed class HandoverService : IHandoverService
 
         if (string.IsNullOrWhiteSpace(request.ImagePaths))
         {
-            return OperationResult.Failure(
-                "Biên bản giao xe phải có ảnh đối chiếu tình trạng xe.");
+            return OperationResult.Failure("Biên bản giao xe phải có ảnh đối chiếu tình trạng xe.");
         }
 
         var rentalDays = Math.Max(
             1,
             (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalDays));
+        var verifiedAt = DateTime.UtcNow;
 
         booking.Handover = new VehicleHandover
         {
@@ -147,9 +148,14 @@ internal sealed class HandoverService : IHandoverService
             LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
             TrafficFineTerms = RentalPolicy.TrafficFineTerms,
             DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
-            PenaltyPolicyAccepted = true
+            PenaltyPolicyAccepted = true,
+            CustomerIdentityVerified = true,
+            IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
+            IdentityVerifiedAt = verifiedAt
         };
 
+        // Biên bản + kết quả kiểm tra đúng người được lưu trong cùng transaction.
+        // Không thể có trạng thái đã có biên bản nhưng mất cờ xác minh chỉ vì request sau bị lỗi.
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
