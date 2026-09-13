@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -116,10 +117,22 @@ public sealed class AdminStaffController : Controller
     {
         var fullName = NormalizeFullName(model.FullName);
         var email = model.Email.Trim().ToLowerInvariant();
-        var phoneNumber = model.PhoneNumber.Trim();
+        var phoneNumber = NormalizePhoneNumber(model.PhoneNumber);
         var citizenIdNumber = model.CitizenIdNumber.Trim();
 
+        model.FullName = fullName;
+        model.Email = email;
+        model.PhoneNumber = phoneNumber;
+        model.CitizenIdNumber = citizenIdNumber;
+
         ValidateFullName(fullName, nameof(model.FullName));
+        if (!model.IdentityDocumentChecked)
+        {
+            ModelState.AddModelError(
+                nameof(model.IdentityDocumentChecked),
+                "Quản trị viên phải đối chiếu CCCD bản gốc trước khi tạo tài khoản nhân viên.");
+        }
+
         await ValidateStaffInputAsync(
             email,
             phoneNumber,
@@ -131,6 +144,11 @@ public sealed class AdminStaffController : Controller
         {
             return View(model);
         }
+
+        // Serializable giúp hai Admin tạo nhân viên cùng lúc không cùng lấy một mã SC-NVxxx.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var employeeCode = await GenerateEmployeeCodeAsync(cancellationToken);
         var temporaryPassword = model.TemporaryPassword;
@@ -156,6 +174,7 @@ public sealed class AdminStaffController : Controller
         var createResult = await _userManager.CreateAsync(user, temporaryPassword);
         if (!createResult.Succeeded)
         {
+            await transaction.RollbackAsync(cancellationToken);
             AddIdentityErrors(createResult);
             return View(model);
         }
@@ -163,19 +182,21 @@ public sealed class AdminStaffController : Controller
         var roleResult = await _userManager.AddToRoleAsync(user, RoleNames.Staff);
         if (!roleResult.Succeeded)
         {
-            await _userManager.DeleteAsync(user);
+            await transaction.RollbackAsync(cancellationToken);
             AddIdentityErrors(roleResult);
             return View(model);
         }
 
+        await transaction.CommitAsync(cancellationToken);
+
         await WriteAuditAsync(
             "CreateStaffAccount",
             user.Id,
-            $"Tạo nhân viên {employeeCode} - {fullName}, gán role Staff và yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên.",
+            $"Tạo nhân viên {employeeCode} - {fullName}, đã đối chiếu CCCD bản gốc, gán role Staff và yêu cầu đổi mật khẩu ở lần đăng nhập đầu tiên.",
             cancellationToken);
 
         TempData["SuccessMessage"] =
-            $"Đã tạo nhân viên {employeeCode}. Nhân viên đăng nhập bằng email và mật khẩu tạm do Quản trị viên vừa đặt; hệ thống sẽ bắt buộc đổi mật khẩu ở lần đăng nhập đầu tiên.";
+            $"Đã tạo nhân viên {employeeCode}. Nhân viên đăng nhập bằng email và mật khẩu do Quản trị viên đặt; hệ thống sẽ bắt buộc đổi mật khẩu ở lần đăng nhập đầu tiên.";
 
         return RedirectToAction(nameof(Details), new { id = user.Id });
     }
@@ -194,6 +215,35 @@ public sealed class AdminStaffController : Controller
         return View(await BuildDetailsAsync(user, cancellationToken));
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RevealCitizenId(
+        string id,
+        CancellationToken cancellationToken)
+    {
+        var user = await GetStaffAsync(id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(user.CitizenIdNumber))
+        {
+            return BadRequest(new { message = "Nhân viên chưa có số CCCD." });
+        }
+
+        Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        Response.Headers.Pragma = "no-cache";
+
+        await WriteAuditAsync(
+            "RevealStaffCitizenId",
+            user.Id,
+            $"Quản trị viên xem đầy đủ CCCD của nhân viên {user.EmployeeCode ?? user.Email}; CCCD kết thúc bằng {LastFour(user.CitizenIdNumber)}.",
+            cancellationToken);
+
+        return Json(new { citizenId = user.CitizenIdNumber });
+    }
+
     [HttpGet]
     public async Task<IActionResult> Edit(string id)
     {
@@ -209,7 +259,7 @@ public sealed class AdminStaffController : Controller
             EmployeeCode = user.EmployeeCode ?? string.Empty,
             FullName = user.FullName,
             Email = user.Email ?? string.Empty,
-            PhoneNumber = user.PhoneNumber ?? string.Empty,
+            PhoneNumber = NormalizePhoneNumber(user.PhoneNumber ?? string.Empty),
             CitizenIdNumber = user.CitizenIdNumber ?? string.Empty
         });
     }
@@ -229,10 +279,26 @@ public sealed class AdminStaffController : Controller
         model.EmployeeCode = user.EmployeeCode ?? string.Empty;
         var fullName = NormalizeFullName(model.FullName);
         var email = model.Email.Trim().ToLowerInvariant();
-        var phoneNumber = model.PhoneNumber.Trim();
+        var phoneNumber = NormalizePhoneNumber(model.PhoneNumber);
         var citizenIdNumber = model.CitizenIdNumber.Trim();
+        var citizenIdChanged = !string.Equals(
+            user.CitizenIdNumber?.Trim(),
+            citizenIdNumber,
+            StringComparison.Ordinal);
+
+        model.FullName = fullName;
+        model.Email = email;
+        model.PhoneNumber = phoneNumber;
+        model.CitizenIdNumber = citizenIdNumber;
 
         ValidateFullName(fullName, nameof(model.FullName));
+        if (citizenIdChanged && !model.IdentityDocumentChecked)
+        {
+            ModelState.AddModelError(
+                nameof(model.IdentityDocumentChecked),
+                "Khi thay đổi CCCD, Quản trị viên phải đối chiếu lại CCCD bản gốc của nhân viên.");
+        }
+
         await ValidateStaffInputAsync(
             email,
             phoneNumber,
@@ -251,8 +317,12 @@ public sealed class AdminStaffController : Controller
         user.EmailConfirmed = true;
         user.PhoneNumber = phoneNumber;
         user.CitizenIdNumber = citizenIdNumber;
-        user.VerifiedByUserId = CurrentUserId();
-        user.VerifiedAt = DateTime.UtcNow;
+
+        if (citizenIdChanged)
+        {
+            user.VerifiedByUserId = CurrentUserId();
+            user.VerifiedAt = DateTime.UtcNow;
+        }
 
         var updateResult = await _userManager.UpdateAsync(user);
         if (!updateResult.Succeeded)
@@ -265,7 +335,9 @@ public sealed class AdminStaffController : Controller
         await WriteAuditAsync(
             "UpdateStaffAccount",
             user.Id,
-            $"Cập nhật hồ sơ nhân viên {user.EmployeeCode ?? user.Email} - {fullName} và xác minh lại thông tin.",
+            citizenIdChanged
+                ? $"Cập nhật hồ sơ nhân viên {user.EmployeeCode ?? user.Email} - {fullName} và đối chiếu lại CCCD bản gốc."
+                : $"Cập nhật hồ sơ nhân viên {user.EmployeeCode ?? user.Email} - {fullName}.",
             cancellationToken);
 
         TempData["SuccessMessage"] = "Đã cập nhật thông tin nhân viên.";
@@ -298,12 +370,12 @@ public sealed class AdminStaffController : Controller
             user.Id,
             user.IsActive
                 ? $"Kích hoạt lại tài khoản nhân viên {user.EmployeeCode ?? user.Email}."
-                : $"Khóa tài khoản nhân viên {user.EmployeeCode ?? user.Email}; giữ nguyên dữ liệu lịch sử.",
+                : $"Khóa tài khoản nhân viên {user.EmployeeCode ?? user.Email}; phiên đăng nhập hiện tại sẽ bị kết thúc ở request tiếp theo và dữ liệu lịch sử được giữ nguyên.",
             cancellationToken);
 
         TempData["SuccessMessage"] = user.IsActive
             ? "Đã kích hoạt lại tài khoản nhân viên."
-            : "Đã khóa tài khoản nhân viên. Dữ liệu lịch sử vẫn được giữ nguyên.";
+            : "Đã khóa tài khoản nhân viên. Phiên đang đăng nhập sẽ bị kết thúc ngay khi nhân viên thao tác tiếp.";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -344,7 +416,8 @@ public sealed class AdminStaffController : Controller
             FullName = user.FullName,
             Email = user.Email ?? string.Empty,
             PhoneNumber = user.PhoneNumber,
-            CitizenIdNumber = user.CitizenIdNumber,
+            MaskedCitizenIdNumber = MaskCitizenId(user.CitizenIdNumber),
+            HasCitizenIdNumber = !string.IsNullOrWhiteSpace(user.CitizenIdNumber),
             IsActive = user.IsActive,
             HasPassword = await _userManager.HasPasswordAsync(user),
             MustChangePassword = user.MustChangePassword,
@@ -369,25 +442,52 @@ public sealed class AdminStaffController : Controller
         var existingEmail = await _userManager.FindByEmailAsync(email);
         if (existingEmail is not null && existingEmail.Id != excludedUserId)
         {
-            ModelState.AddModelError(nameof(AdminStaffCreateViewModel.Email), "Email này đã được sử dụng.");
+            ModelState.AddModelError(nameof(AdminStaffCreateViewModel.Email), "Email này đã được sử dụng bởi tài khoản khác.");
         }
 
-        var phoneExists = phoneNumber.Length == 10 && phoneNumber.All(char.IsDigit) &&
-            await _userManager.Users.AnyAsync(
-                user => user.Id != excludedUserId && user.PhoneNumber == phoneNumber,
-                cancellationToken);
-        if (phoneExists)
+        if (IsValidNormalizedPhoneNumber(phoneNumber))
         {
-            ModelState.AddModelError(nameof(AdminStaffCreateViewModel.PhoneNumber), "Số điện thoại này đã được sử dụng.");
+            var internationalPhoneNumber = $"+84{phoneNumber[1..]}";
+            var phoneExists = await _userManager.Users.AnyAsync(
+                user => user.Id != excludedUserId &&
+                        (user.PhoneNumber == phoneNumber || user.PhoneNumber == internationalPhoneNumber),
+                cancellationToken);
+
+            if (phoneExists)
+            {
+                ModelState.AddModelError(
+                    nameof(AdminStaffCreateViewModel.PhoneNumber),
+                    "Số điện thoại này đã được sử dụng bởi tài khoản Customer, Staff hoặc Admin khác.");
+            }
         }
 
-        var citizenExists = citizenIdNumber.Length == 12 && citizenIdNumber.All(char.IsDigit) &&
-            await _userManager.Users.AnyAsync(
+        if (citizenIdNumber.Length == 12 && citizenIdNumber.All(char.IsDigit))
+        {
+            var staffCitizenExists = await _userManager.Users.AnyAsync(
                 user => user.Id != excludedUserId && user.CitizenIdNumber == citizenIdNumber,
                 cancellationToken);
-        if (citizenExists)
-        {
-            ModelState.AddModelError(nameof(AdminStaffCreateViewModel.CitizenIdNumber), "Số CCCD này đã được gán cho tài khoản nhân viên khác.");
+
+            if (staffCitizenExists)
+            {
+                ModelState.AddModelError(
+                    nameof(AdminStaffCreateViewModel.CitizenIdNumber),
+                    "Số CCCD này đã được gán cho tài khoản nội bộ khác.");
+            }
+
+            var customerCitizenExists = await _dbContext.CustomerDocuments
+                .AsNoTracking()
+                .AnyAsync(document =>
+                    (document.DocumentType == DocumentTypes.CitizenId ||
+                     document.DocumentType == DocumentTypes.CitizenIdBack) &&
+                    document.DocumentNumber == citizenIdNumber,
+                    cancellationToken);
+
+            if (customerCitizenExists)
+            {
+                ModelState.AddModelError(
+                    nameof(AdminStaffCreateViewModel.CitizenIdNumber),
+                    "Số CCCD này đã thuộc hồ sơ khách hàng. SmartCar không dùng cùng một danh tính cho Customer và Staff.");
+            }
         }
     }
 
@@ -479,4 +579,37 @@ public sealed class AdminStaffController : Controller
 
     private static string NormalizeFullName(string value) =>
         string.Join(' ', value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    private static string NormalizePhoneNumber(string value)
+    {
+        var phone = value.Trim()
+            .Replace(" ", string.Empty)
+            .Replace(".", string.Empty)
+            .Replace("-", string.Empty);
+
+        if (phone.StartsWith("+84", StringComparison.Ordinal))
+        {
+            phone = $"0{phone[3..]}";
+        }
+
+        return phone;
+    }
+
+    private static bool IsValidNormalizedPhoneNumber(string value) =>
+        value.Length == 10 && value[0] == '0' && value.All(char.IsDigit);
+
+    private static string MaskCitizenId(string? citizenIdNumber)
+    {
+        if (string.IsNullOrWhiteSpace(citizenIdNumber))
+        {
+            return "Chưa cập nhật";
+        }
+
+        return citizenIdNumber.Length <= 4
+            ? citizenIdNumber
+            : new string('•', citizenIdNumber.Length - 4) + citizenIdNumber[^4..];
+    }
+
+    private static string LastFour(string citizenIdNumber) =>
+        citizenIdNumber.Length <= 4 ? citizenIdNumber : citizenIdNumber[^4..];
 }
