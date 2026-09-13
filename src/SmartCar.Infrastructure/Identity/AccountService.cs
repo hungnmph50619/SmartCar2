@@ -40,15 +40,16 @@ internal sealed class AccountService : IAccountService
             return OperationResult.Failure("Email này đã được sử dụng.");
         }
 
-        var phoneExists = await _userManager.Users
-            .AnyAsync(
-                user => user.PhoneNumber == phoneNumber ||
-                        user.PhoneNumber == internationalPhoneNumber,
-                cancellationToken);
+        // Một người có thể có tài khoản Staff và Customer riêng. Vì vậy số điện thoại
+        // chỉ cần duy nhất trong phạm vi Customer; email đăng nhập vẫn duy nhất toàn hệ thống.
+        var customerUsers = await _userManager.GetUsersInRoleAsync(RoleNames.Customer);
+        var phoneExists = customerUsers.Any(user =>
+            user.PhoneNumber == phoneNumber ||
+            user.PhoneNumber == internationalPhoneNumber);
 
         if (phoneExists)
         {
-            return OperationResult.Failure("Số điện thoại này đã được sử dụng.");
+            return OperationResult.Failure("Số điện thoại này đã được sử dụng bởi tài khoản khách hàng khác.");
         }
 
         var user = new ApplicationUser
