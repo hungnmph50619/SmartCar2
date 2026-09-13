@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Reports;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
@@ -34,6 +34,16 @@ internal sealed class ReportService : IReportService
         PaymentType.Extension,
         PaymentType.AdditionalCharge,
         PaymentType.VehicleSwapAdjustment
+    };
+
+    // Các khoản này là cọc của khách A được dùng để bồi thường cho khách B.
+    // SmartCar chỉ giữ/chuyển hộ, vì vậy không được làm tăng doanh thu hay giảm kết quả ròng.
+    private static readonly string[] PassThroughCompensationPrefixes =
+    {
+        "EXT-ACTUAL-COMP-",
+        "EXT-DENIED-COMP-",
+        "OVERDUE-COMP-",
+        "EXT-COMP-"
     };
 
     private readonly ApplicationDbContext _dbContext;
@@ -211,10 +221,21 @@ internal sealed class ReportService : IReportService
             .SumAsync(item => (decimal?)item.Amount, cancellationToken)
             ?? 0m;
 
+        var pendingCompensationTransfers = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.CompensationRefund &&
+                (item.Status == PaymentStatus.AwaitingRefund ||
+                 item.Status == PaymentStatus.RefundApproved))
+            .SumAsync(item => (decimal?)item.Amount, cancellationToken)
+            ?? 0m;
+
         var pendingRefunds = await _dbContext.Payments
             .AsNoTracking()
             .Where(item =>
                 item.Type == PaymentType.Refund &&
+                item.Method != PaymentMethods.CompensationRefund &&
                 (item.Status == PaymentStatus.AwaitingRefund ||
                  item.Status == PaymentStatus.RefundApproved))
             .SumAsync(item => (decimal?)item.Amount, cancellationToken)
@@ -319,7 +340,9 @@ internal sealed class ReportService : IReportService
             });
 
         var collectedRevenuePayments = periodPayments
-            .Where(item => item.Type != PaymentType.Refund)
+            .Where(item =>
+                item.Type != PaymentType.Refund &&
+                !IsPassThroughCompensationDeduction(item.Type, item.Method, item.TransactionCode))
             .ToList();
 
         var totalCashRevenue = collectedRevenuePayments
@@ -365,7 +388,8 @@ internal sealed class ReportService : IReportService
             var depositDeductionRecovery = vehiclePayments
                 .Where(item =>
                     item.Type == PaymentType.AdditionalCharge &&
-                    item.Method == PaymentMethods.DepositDeduction)
+                    item.Method == PaymentMethods.DepositDeduction &&
+                    !IsPassThroughCompensationDeduction(item.Type, item.Method, item.TransactionCode))
                 .Sum(item => item.Amount);
 
             var revenue =
@@ -391,11 +415,9 @@ internal sealed class ReportService : IReportService
                       item.Method != PaymentMethods.CompensationRefund)))
                 .Sum(item => item.Amount);
 
-            var compensationCost = vehiclePayments
-                .Where(item =>
-                    item.Type == PaymentType.Refund &&
-                    item.Method == PaymentMethods.CompensationRefund)
-                .Sum(item => item.Amount);
+            // CompensationRefund hiện là khoản bồi thường chuyển cho khách B từ nghĩa vụ của khách A.
+            // Không phải chi phí SmartCar nên không làm giảm kết quả ròng.
+            var compensationCost = 0m;
 
             var vehicleBookings = bookings
                 .Where(item => item.VehicleId == vehicle.VehicleId)
@@ -453,6 +475,18 @@ internal sealed class ReportService : IReportService
 
             foreach (var payment in vehiclePayments)
             {
+                if (IsPassThroughCompensationDeduction(payment.Type, payment.Method, payment.TransactionCode))
+                {
+                    continue;
+                }
+
+                // Khoản bồi thường cho khách B được theo dõi ở "Tiền đang xử lý",
+                // không đưa vào giao dịch doanh thu/chi phí để tránh làm phồng báo cáo.
+                if (payment.Type == PaymentType.Refund && payment.Method == PaymentMethods.CompensationRefund)
+                {
+                    continue;
+                }
+
                 var recordedBy = payment.Method == PaymentMethods.Cash &&
                     collectorUserByBooking.TryGetValue(payment.BookingId, out var collectorUserId)
                     ? collectorNames.GetValueOrDefault(collectorUserId)
@@ -462,7 +496,6 @@ internal sealed class ReportService : IReportService
                 {
                     var refundCategory = payment.Method switch
                     {
-                        PaymentMethods.CompensationRefund => "Hỗ trợ/bồi thường",
                         PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
                         PaymentMethods.DepositRefund => "Hoàn cọc",
                         _ when payment.HasVehicleReturn => "Hoàn cọc",
@@ -487,7 +520,7 @@ internal sealed class ReportService : IReportService
                     PaymentType.Rental => "Tiền thuê",
                     PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
                     PaymentType.Extension => "Gia hạn",
-                    PaymentType.AdditionalCharge when payment.Method == PaymentMethods.DepositDeduction => "Khấu trừ tiền cọc",
+                    PaymentType.AdditionalCharge when payment.Method == PaymentMethods.DepositDeduction => "Thu phụ phí từ cọc",
                     PaymentType.AdditionalCharge => "Phụ phí",
                     _ => payment.Type.ToString()
                 };
@@ -603,11 +636,11 @@ internal sealed class ReportService : IReportService
             totalUnknownPaymentMethodRevenue,
             totalRevenueRefunds,
             totalDepositRefunds,
-            totalRevenueRefunds + totalDepositRefunds + totalCompensationCost,
+            totalRevenueRefunds + totalDepositRefunds,
             totalMaintenanceCost,
             totalIncidentCost,
             totalCompensationCost,
-            totalMaintenanceCost + totalIncidentCost + totalCompensationCost,
+            totalMaintenanceCost + totalIncidentCost,
             rows.Sum(item => item.NetOperatingProfit),
             rows.Count == 0
                 ? 0m
@@ -619,7 +652,24 @@ internal sealed class ReportService : IReportService
             outstandingDeposits,
             depositsHeld,
             pendingRefunds,
+            pendingCompensationTransfers,
             rows);
+    }
+
+    private static bool IsPassThroughCompensationDeduction(
+        PaymentType type,
+        string? method,
+        string? transactionCode)
+    {
+        if (type != PaymentType.AdditionalCharge ||
+            method != PaymentMethods.DepositDeduction ||
+            string.IsNullOrWhiteSpace(transactionCode))
+        {
+            return false;
+        }
+
+        return PassThroughCompensationPrefixes.Any(prefix =>
+            transactionCode.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static DateTime ToVietnamTime(DateTime utcValue) => utcValue.AddHours(VietnamUtcOffsetHours);
