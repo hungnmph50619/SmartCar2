@@ -34,20 +34,37 @@ public sealed class AdminBusinessSettingsController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Update(
-        int depositHoldDays,
+        string? depositHoldDays,
         CancellationToken cancellationToken)
     {
-        if (depositHoldDays < 0 || depositHoldDays > DepositHoldPolicy.MaxDays)
+        var rawValue = depositHoldDays?.Trim();
+
+        if (string.IsNullOrWhiteSpace(rawValue))
+        {
+            TempData["ErrorMessage"] = "Vui lòng nhập số ngày giữ cọc.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (rawValue.Any(character => character < '0' || character > '9'))
         {
             TempData["ErrorMessage"] =
-                $"Số ngày giữ cọc phải từ 0 đến {DepositHoldPolicy.MaxDays} ngày.";
+                $"Số ngày giữ cọc chỉ được nhập số nguyên từ 0 đến {DepositHoldPolicy.MaxDays}. Không nhập chữ, số âm hoặc số thập phân.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (!int.TryParse(rawValue, out var parsedDays) ||
+            parsedDays < 0 ||
+            parsedDays > DepositHoldPolicy.MaxDays)
+        {
+            TempData["ErrorMessage"] =
+                $"Số ngày giữ cọc phải là số nguyên từ 0 đến {DepositHoldPolicy.MaxDays}.";
             return RedirectToAction(nameof(Index));
         }
 
         var oldValue = await GetDepositHoldDaysAsync(cancellationToken);
-        if (oldValue == depositHoldDays)
+        if (oldValue == parsedDays)
         {
-            TempData["SuccessMessage"] = "Cấu hình không thay đổi.";
+            TempData["SuccessMessage"] = $"Số ngày giữ cọc hiện tại vẫn là {oldValue} ngày.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -57,7 +74,7 @@ public sealed class AdminBusinessSettingsController : Controller
         var affectedRows = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
             UPDATE [dbo].[BusinessSettings]
-            SET [DepositHoldDays] = {depositHoldDays},
+            SET [DepositHoldDays] = {parsedDays},
                 [UpdatedAt] = {updatedAt},
                 [UpdatedByUserId] = {adminId}
             WHERE [BusinessSettingId] = 1
@@ -71,7 +88,7 @@ public sealed class AdminBusinessSettingsController : Controller
                 INSERT INTO [dbo].[BusinessSettings]
                     ([BusinessSettingId], [DepositHoldDays], [UpdatedAt], [UpdatedByUserId])
                 VALUES
-                    (1, {depositHoldDays}, {updatedAt}, {adminId})
+                    (1, {parsedDays}, {updatedAt}, {adminId})
                 """,
                 cancellationToken);
         }
@@ -81,15 +98,15 @@ public sealed class AdminBusinessSettingsController : Controller
             "UpdateDepositHoldPolicy",
             "BusinessSetting",
             "1",
-            $"Thay đổi thời gian giữ cọc sau trả xe: {oldValue} ngày → {depositHoldDays} ngày.",
+            $"Thay đổi thời gian giữ cọc sau trả xe: {oldValue} ngày → {parsedDays} ngày.",
             oldValues: JsonSerializer.Serialize(new { DepositHoldDays = oldValue }),
-            newValues: JsonSerializer.Serialize(new { DepositHoldDays = depositHoldDays }),
+            newValues: JsonSerializer.Serialize(new { DepositHoldDays = parsedDays }),
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] =
-            $"Đã cập nhật thời gian giữ cọc từ {oldValue} ngày thành {depositHoldDays} ngày. " +
-            "Cấu hình mới chỉ áp dụng cho booking tạo sau thời điểm này.";
+            $"Đã đổi thời gian giữ cọc từ {oldValue} ngày thành {parsedDays} ngày. " +
+            "Chỉ các đơn thuê tạo mới từ bây giờ mới áp dụng giá trị này.";
 
         return RedirectToAction(nameof(Index));
     }
