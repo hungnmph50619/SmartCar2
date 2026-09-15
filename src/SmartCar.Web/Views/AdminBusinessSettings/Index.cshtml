@@ -155,11 +155,15 @@
         return true;
     };
 
+    // Luôn hiển thị giá trị đang áp dụng; khi Admin bấm vào thì chọn sẵn toàn bộ để nhập số mới nhanh hơn.
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('click', () => input.select());
+
     input.addEventListener('beforeinput', (event) => {
         if (event.inputType.startsWith('delete')) return;
         if (event.data && /[^0-9]/.test(event.data)) {
             event.preventDefault();
-            showError('Chỉ được nhập số nguyên từ 0 đến 90.');
+            showError(`Chỉ được nhập số nguyên từ 0 đến ${maxDays}.`);
         }
     });
 
@@ -167,7 +171,7 @@
         const text = event.clipboardData?.getData('text') ?? '';
         if (!/^\d+$/.test(text.trim())) {
             event.preventDefault();
-            showError('Nội dung dán không hợp lệ. Chỉ được nhập số nguyên từ 0 đến 90.');
+            showError(`Nội dung dán không hợp lệ. Chỉ được nhập số nguyên từ 0 đến ${maxDays}.`);
         }
     });
 
