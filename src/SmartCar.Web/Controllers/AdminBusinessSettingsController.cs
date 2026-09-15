@@ -48,16 +48,16 @@ public sealed class AdminBusinessSettingsController : Controller
         if (rawValue.Any(character => character < '0' || character > '9'))
         {
             TempData["ErrorMessage"] =
-                $"Số ngày giữ cọc chỉ được nhập số nguyên từ 0 đến {DepositHoldPolicy.MaxDays}. Không nhập chữ, số âm hoặc số thập phân.";
+                $"Số ngày giữ cọc chỉ được nhập số nguyên từ 0 đến {DepositHoldPolicy.MaxConfigurableDays}. Không nhập chữ, số âm hoặc số thập phân.";
             return RedirectToAction(nameof(Index));
         }
 
         if (!int.TryParse(rawValue, out var parsedDays) ||
             parsedDays < 0 ||
-            parsedDays > DepositHoldPolicy.MaxDays)
+            parsedDays > DepositHoldPolicy.MaxConfigurableDays)
         {
             TempData["ErrorMessage"] =
-                $"Số ngày giữ cọc phải là số nguyên từ 0 đến {DepositHoldPolicy.MaxDays}.";
+                $"Số ngày giữ cọc phải là số nguyên từ 0 đến {DepositHoldPolicy.MaxConfigurableDays}.";
             return RedirectToAction(nameof(Index));
         }
 
