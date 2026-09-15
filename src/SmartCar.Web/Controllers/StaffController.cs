@@ -660,7 +660,8 @@ public sealed class StaffController : Controller
         (await _dbContext.Payments.AsNoTracking()
             .Where(payment =>
                 payment.Type == PaymentType.Refund &&
-                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved)
+                (payment.Status == PaymentStatus.AwaitingRefund ||
+                 payment.Status == PaymentStatus.RefundApproved))
             .Select(payment => payment.BookingId)
             .Distinct()
             .ToListAsync(cancellationToken))
