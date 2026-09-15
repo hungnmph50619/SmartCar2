@@ -12,6 +12,9 @@ public sealed class ConfigurableDepositHoldPolicy : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
+        // Tách từng bước thành command riêng để SQL Server không phải compile
+        // cả block với object chưa tồn tại. Tất cả đều idempotent để chạy an toàn
+        // trên DB local đã có dữ liệu hoặc DB sạch.
         migrationBuilder.Sql("""
             IF OBJECT_ID(N'dbo.BusinessSettings', N'U') IS NULL
             BEGIN
@@ -26,7 +29,9 @@ public sealed class ConfigurableDepositHoldPolicy : Migration
                         CHECK ([DepositHoldDays] >= 0 AND [DepositHoldDays] <= 90)
                 );
             END;
+            """);
 
+        migrationBuilder.Sql("""
             IF NOT EXISTS (
                 SELECT 1
                 FROM [dbo].[BusinessSettings]
@@ -37,18 +42,23 @@ public sealed class ConfigurableDepositHoldPolicy : Migration
                 VALUES
                     (1, 15, SYSUTCDATETIME(), NULL);
             END;
+            """);
 
+        migrationBuilder.Sql("""
             IF COL_LENGTH(N'dbo.Bookings', N'DepositHoldDaysApplied') IS NULL
             BEGIN
                 ALTER TABLE [dbo].[Bookings]
                 ADD [DepositHoldDaysApplied] int NOT NULL
                     CONSTRAINT [DF_Bookings_DepositHoldDaysApplied] DEFAULT (15) WITH VALUES;
             END;
+            """);
 
+        migrationBuilder.Sql("""
             IF NOT EXISTS (
                 SELECT 1
                 FROM sys.check_constraints
-                WHERE [name] = N'CK_Bookings_DepositHoldDaysApplied')
+                WHERE [name] = N'CK_Bookings_DepositHoldDaysApplied'
+                  AND [parent_object_id] = OBJECT_ID(N'dbo.Bookings'))
             BEGIN
                 ALTER TABLE [dbo].[Bookings] WITH CHECK
                 ADD CONSTRAINT [CK_Bookings_DepositHoldDaysApplied]
@@ -56,78 +66,44 @@ public sealed class ConfigurableDepositHoldPolicy : Migration
             END;
             """);
 
-        // Chặn mọi đường cập nhật trực tiếp trạng thái hoàn cọc nếu:
-        // - chưa đủ thời gian giữ cọc của chính booking; hoặc
-        // - booking còn khoản phạt/vi phạm chưa thanh toán xong.
-        // ReturnedAt đang được lưu theo giờ nghiệp vụ Việt Nam nên so sánh với UTC+7 độc lập timezone server SQL.
-        migrationBuilder.Sql("""
-            CREATE OR ALTER TRIGGER [dbo].[TR_Payments_BlockEarlyDepositRefund]
-            ON [dbo].[Payments]
-            AFTER UPDATE
-            AS
-            BEGIN
-                SET NOCOUNT ON;
-
-                IF EXISTS
-                (
-                    SELECT 1
-                    FROM inserted i
-                    INNER JOIN deleted d ON d.[PaymentId] = i.[PaymentId]
-                    INNER JOIN [dbo].[Bookings] b ON b.[BookingId] = i.[BookingId]
-                    INNER JOIN [dbo].[VehicleReturns] vr ON vr.[BookingId] = b.[BookingId]
-                    WHERE i.[Type] = N'Refund'
-                      AND i.[Method] = N'Hoàn cọc'
-                      AND i.[Status] IN (N'RefundApproved', N'Refunded')
-                      AND ISNULL(d.[Status], N'') <> ISNULL(i.[Status], N'')
-                      AND
-                      (
-                          DATEADD(DAY, b.[DepositHoldDaysApplied], vr.[ReturnedAt])
-                              > DATEADD(HOUR, 7, SYSUTCDATETIME())
-                          OR EXISTS
-                          (
-                              SELECT 1
-                              FROM [dbo].[Payments] tf
-                              WHERE tf.[BookingId] = b.[BookingId]
-                                AND tf.[Type] = N'TrafficFine'
-                                AND tf.[Status] IN (N'Pending', N'AwaitingConfirmation', N'Failed')
-                                AND tf.[Amount] > 0
-                          )
-                      )
-                )
-                BEGIN
-                    THROW 51015, N'Chưa đủ điều kiện hoàn cọc: còn thời gian giữ cọc hoặc khoản phạt/vi phạm chưa xử lý.', 1;
-                END;
-            END;
-            """);
+        // Điều kiện hoàn cọc được chặn ở AdminPaymentsController và chỉ Staff
+        // được thực hiện giao dịch sau khi Admin duyệt. Không dùng SQL trigger ở đây
+        // để tránh làm migration startup thất bại trên các bản SQL Server/LocalDB khác nhau.
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.Sql("""
-            IF OBJECT_ID(N'dbo.TR_Payments_BlockEarlyDepositRefund', N'TR') IS NOT NULL
-                DROP TRIGGER [dbo].[TR_Payments_BlockEarlyDepositRefund];
-
             IF EXISTS (
                 SELECT 1
                 FROM sys.check_constraints
-                WHERE [name] = N'CK_Bookings_DepositHoldDaysApplied')
+                WHERE [name] = N'CK_Bookings_DepositHoldDaysApplied'
+                  AND [parent_object_id] = OBJECT_ID(N'dbo.Bookings'))
             BEGIN
                 ALTER TABLE [dbo].[Bookings]
                     DROP CONSTRAINT [CK_Bookings_DepositHoldDaysApplied];
             END;
+            """);
 
-            IF EXISTS (
-                SELECT 1
-                FROM sys.default_constraints
-                WHERE [name] = N'DF_Bookings_DepositHoldDaysApplied')
-            BEGIN
-                ALTER TABLE [dbo].[Bookings]
-                    DROP CONSTRAINT [DF_Bookings_DepositHoldDaysApplied];
-            END;
-
+        migrationBuilder.Sql("""
             IF COL_LENGTH(N'dbo.Bookings', N'DepositHoldDaysApplied') IS NOT NULL
-                ALTER TABLE [dbo].[Bookings] DROP COLUMN [DepositHoldDaysApplied];
+            BEGIN
+                DECLARE @defaultConstraint sysname;
+                SELECT @defaultConstraint = dc.[name]
+                FROM sys.default_constraints dc
+                INNER JOIN sys.columns c
+                    ON c.[default_object_id] = dc.[object_id]
+                WHERE dc.[parent_object_id] = OBJECT_ID(N'dbo.Bookings')
+                  AND c.[name] = N'DepositHoldDaysApplied';
 
+                IF @defaultConstraint IS NOT NULL
+                    EXEC(N'ALTER TABLE [dbo].[Bookings] DROP CONSTRAINT [' + @defaultConstraint + N']');
+
+                ALTER TABLE [dbo].[Bookings] DROP COLUMN [DepositHoldDaysApplied];
+            END;
+            """);
+
+        migrationBuilder.Sql("""
             IF OBJECT_ID(N'dbo.BusinessSettings', N'U') IS NOT NULL
                 DROP TABLE [dbo].[BusinessSettings];
             """);
