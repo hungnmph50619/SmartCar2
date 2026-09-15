@@ -72,12 +72,19 @@
                     <div class="text-muted">↓ chụp DepositHoldDaysApplied</div>
                     <div>Khách trả xe và hậu kiểm</div>
                     <div class="text-muted">↓ ReturnedAt + số ngày giữ cọc</div>
+                    <div>Đối soát phạt nguội / nghĩa vụ phát sinh</div>
+                    <div class="text-muted">↓ chỉ khi không còn khoản phạt chưa xử lý</div>
                     <div>Đủ điều kiện Admin duyệt hoàn cọc</div>
                 </div>
 
-                <div class="alert alert-info mb-0 small">
+                <div class="alert alert-info mb-3 small">
                     Ví dụ: trả xe 10/09, booking áp dụng 15 ngày → sớm nhất 25/09 mới được duyệt hoàn cọc.
-                    Nếu cấu hình là 0 ngày thì sau hậu kiểm có thể duyệt hoàn ngay.
+                    Nếu cấu hình là 0 ngày và không có khoản phạt/vi phạm đang mở thì sau hậu kiểm có thể duyệt hoàn ngay.
+                </div>
+
+                <div class="alert alert-warning mb-0 small">
+                    Nếu phạt nguội được ghi nhận trong thời gian giữ cọc, hệ thống vẫn chặn duyệt hoàn cho đến khi khoản phải thu đó được xử lý.
+                    Nếu phạt xuất hiện sau khi cọc đã hoàn, khoản phải thu phạt nguội vẫn tồn tại độc lập và chặn khách tạo chuyến thuê mới cho đến khi thanh toán.
                 </div>
             </div>
         </div>
