@@ -199,6 +199,7 @@ public sealed class AdminPaymentsController : Controller
             cancellationToken);
 
         var booking = await _dbContext.Bookings
+            .Include(item => item.VehicleReturn)
             .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
@@ -226,6 +227,42 @@ public sealed class AdminPaymentsController : Controller
         {
             TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ. Vui lòng kiểm tra dữ liệu.";
             return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
+        var hasDepositRefund = awaitingApproval.Any(item =>
+            item.Method == PaymentMethods.DepositRefund);
+
+        if (hasDepositRefund && booking.VehicleReturn is not null)
+        {
+            var holdDays = DepositHoldPolicy.NormalizeDays(booking.DepositHoldDaysApplied);
+            var eligibleAt = DepositHoldPolicy.CalculateEligibleAt(
+                booking.VehicleReturn.ReturnedAt,
+                holdDays);
+            var vietnamNow = DateTime.UtcNow.AddHours(7);
+
+            if (vietnamNow < eligibleAt)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Booking #{booking.BookingId} áp dụng chính sách giữ cọc {holdDays} ngày. " +
+                    $"Sớm nhất được duyệt hoàn lúc {eligibleAt:dd/MM/yyyy HH:mm}.";
+                return RedirectToAction(nameof(Index), new { section = "refund" });
+            }
+
+            var outstandingTrafficFine = booking.Payments
+                .Where(payment =>
+                    payment.Type == PaymentType.TrafficFine &&
+                    payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation or PaymentStatus.Failed)
+                .Sum(payment => payment.Amount);
+
+            if (outstandingTrafficFine > 0)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Booking #{booking.BookingId} còn {outstandingTrafficFine:N0} đồng phạt/vi phạm chưa xử lý. " +
+                    "Cần đối soát khoản này trước khi duyệt hoàn cọc.";
+                return RedirectToAction(nameof(Index), new { section = "refund" });
+            }
         }
 
         foreach (var refund in awaitingApproval)
