@@ -56,7 +56,9 @@ public sealed class ConfigurableDepositHoldPolicy : Migration
             END;
             """);
 
-        // Chặn mọi đường cập nhật trực tiếp trạng thái hoàn cọc trước khi đủ thời gian giữ cọc.
+        // Chặn mọi đường cập nhật trực tiếp trạng thái hoàn cọc nếu:
+        // - chưa đủ thời gian giữ cọc của chính booking; hoặc
+        // - booking còn khoản phạt/vi phạm chưa thanh toán xong.
         // ReturnedAt đang được lưu theo giờ nghiệp vụ Việt Nam nên so sánh với UTC+7 độc lập timezone server SQL.
         migrationBuilder.Sql("""
             CREATE OR ALTER TRIGGER [dbo].[TR_Payments_BlockEarlyDepositRefund]
@@ -77,11 +79,23 @@ public sealed class ConfigurableDepositHoldPolicy : Migration
                       AND i.[Method] = N'Hoàn cọc'
                       AND i.[Status] IN (N'RefundApproved', N'Refunded')
                       AND ISNULL(d.[Status], N'') <> ISNULL(i.[Status], N'')
-                      AND DATEADD(DAY, b.[DepositHoldDaysApplied], vr.[ReturnedAt])
-                          > DATEADD(HOUR, 7, SYSUTCDATETIME())
+                      AND
+                      (
+                          DATEADD(DAY, b.[DepositHoldDaysApplied], vr.[ReturnedAt])
+                              > DATEADD(HOUR, 7, SYSUTCDATETIME())
+                          OR EXISTS
+                          (
+                              SELECT 1
+                              FROM [dbo].[Payments] tf
+                              WHERE tf.[BookingId] = b.[BookingId]
+                                AND tf.[Type] = N'TrafficFine'
+                                AND tf.[Status] IN (N'Pending', N'AwaitingConfirmation', N'Failed')
+                                AND tf.[Amount] > 0
+                          )
+                      )
                 )
                 BEGIN
-                    THROW 51015, N'Chưa đủ thời gian giữ cọc theo chính sách đã áp dụng cho đơn thuê.', 1;
+                    THROW 51015, N'Chưa đủ điều kiện hoàn cọc: còn thời gian giữ cọc hoặc khoản phạt/vi phạm chưa xử lý.', 1;
                 END;
             END;
             """);
