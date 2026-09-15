@@ -111,7 +111,14 @@ public sealed class AdminBusinessSettingsController : Controller
                 HasPendingDepositRefund = item.Payments.Any(payment =>
                     payment.Type == PaymentType.Refund &&
                     payment.Method == PaymentMethods.DepositRefund &&
-                    payment.Status == PaymentStatus.AwaitingRefund)
+                    payment.Status == PaymentStatus.AwaitingRefund),
+                OutstandingTrafficFineAmount = item.Payments
+                    .Where(payment =>
+                        payment.Type == PaymentType.TrafficFine &&
+                        (payment.Status == PaymentStatus.Pending ||
+                         payment.Status == PaymentStatus.AwaitingConfirmation ||
+                         payment.Status == PaymentStatus.Failed))
+                    .Sum(payment => (decimal?)payment.Amount) ?? 0m
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -127,20 +134,45 @@ public sealed class AdminBusinessSettingsController : Controller
             booking.ReturnedAt.Value,
             holdDays);
         var vietnamNow = DateTime.UtcNow.AddHours(7);
-        var isEligible = vietnamNow >= eligibleAt;
+        var timeEligible = vietnamNow >= eligibleAt;
+        var hasOutstandingTrafficFine = booking.OutstandingTrafficFineAmount > 0;
+        var isEligible = timeEligible && !hasOutstandingTrafficFine;
+
+        string message;
+        if (!timeEligible)
+        {
+            message =
+                $"Booking áp dụng chính sách giữ cọc {holdDays} ngày. " +
+                $"Sớm nhất được duyệt hoàn lúc {eligibleAt:dd/MM/yyyy HH:mm}.";
+        }
+        else if (hasOutstandingTrafficFine)
+        {
+            message =
+                $"Đã đủ thời gian giữ cọc nhưng đơn còn {booking.OutstandingTrafficFineAmount:N0} đồng " +
+                "phạt/vi phạm chưa xử lý. Cần đối soát khoản này trước khi duyệt hoàn cọc.";
+        }
+        else if (holdDays == 0)
+        {
+            message =
+                "Booking áp dụng 0 ngày giữ cọc: đã đủ điều kiện duyệt hoàn ngay sau hậu kiểm.";
+        }
+        else
+        {
+            message =
+                $"Đã đủ {holdDays} ngày giữ cọc và không còn khoản phạt/vi phạm chưa xử lý. " +
+                "Khoản cọc đủ điều kiện để Admin duyệt hoàn.";
+        }
 
         return Json(new
         {
             applies = true,
             holdDays,
             isEligible,
+            timeEligible,
+            outstandingTrafficFineAmount = booking.OutstandingTrafficFineAmount,
             returnedAt = booking.ReturnedAt.Value.ToString("dd/MM/yyyy HH:mm"),
             eligibleAt = eligibleAt.ToString("dd/MM/yyyy HH:mm"),
-            message = isEligible
-                ? holdDays == 0
-                    ? "Booking áp dụng 0 ngày giữ cọc: đã đủ điều kiện duyệt hoàn ngay sau hậu kiểm."
-                    : $"Đã đủ {holdDays} ngày giữ cọc. Khoản cọc đủ điều kiện để Admin duyệt hoàn."
-                : $"Booking áp dụng chính sách giữ cọc {holdDays} ngày. Sớm nhất được duyệt hoàn lúc {eligibleAt:dd/MM/yyyy HH:mm}."
+            message
         });
     }
 
