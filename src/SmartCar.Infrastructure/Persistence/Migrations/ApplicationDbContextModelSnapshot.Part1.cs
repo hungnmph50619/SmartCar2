@@ -287,6 +287,9 @@ partial class ApplicationDbContextModelSnapshot
                     .HasPrecision(18, 2)
                     .HasColumnType("decimal(18,2)");
 
+                b.Property<int>("DepositHoldDaysApplied")
+                    .HasColumnType("int");
+
                 b.Property<DateTime?>("NoShowMarkedAt")
                     .HasColumnType("datetime2");
 
