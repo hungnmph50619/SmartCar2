@@ -4,14 +4,14 @@
 @{
     ViewData["Title"] = "Cấu hình nghiệp vụ";
     var currentPolicyText = Model == 0
-        ? "Hoàn cọc ngay sau hậu kiểm nếu không còn nghĩa vụ chưa xử lý."
-        : $"Sau khi trả xe, đơn mới phải chờ {Model} ngày trước khi được duyệt hoàn cọc.";
+        ? "Sau khi khách đã sử dụng và trả xe, cọc có thể được duyệt hoàn ngay sau hậu kiểm nếu không còn nghĩa vụ chưa xử lý."
+        : $"Sau khi khách đã sử dụng và trả xe, cọc phải chờ {Model} ngày trước khi được duyệt hoàn.";
 }
 
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
     <div>
         <h1 class="h3 mb-1">Cấu hình nghiệp vụ</h1>
-        <p class="text-muted mb-0">Thiết lập thời gian giữ cọc cho các đơn thuê tạo mới.</p>
+        <p class="text-muted mb-0">Thiết lập thời gian giữ cọc sau chuyến thuê cho các đơn tạo mới.</p>
     </div>
     <a class="btn btn-outline-secondary" asp-controller="AuditLogs" asp-action="Index" asp-route-auditAction="UpdateDepositHoldPolicy">
         Xem lịch sử thay đổi
@@ -23,7 +23,7 @@
         <div class="card shadow-sm border-0">
             <div class="card-body p-4">
                 <div class="rounded-3 border bg-light p-3 mb-4">
-                    <div class="text-muted small mb-1">Số ngày giữ cọc hiện tại</div>
+                    <div class="text-muted small mb-1">Số ngày giữ cọc sau khi trả xe</div>
                     <div class="d-flex align-items-end gap-2 flex-wrap">
                         <div class="display-6 fw-bold text-primary lh-1">@Model</div>
                         <div class="fw-semibold mb-1">ngày</div>
@@ -51,6 +51,10 @@
                         </div>
                         <div id="depositHoldHelp" class="form-text">Chỉ nhập số nguyên từ 0 đến @DepositHoldPolicy.MaxDays.</div>
                         <div id="depositHoldError" class="text-danger small mt-1 d-none" role="alert" aria-live="polite"></div>
+                    </div>
+
+                    <div class="alert alert-warning border py-2 px-3 small mb-3">
+                        <strong>Chỉ áp dụng sau chuyến thuê.</strong> Đơn hủy trước khi giao xe không phải chờ số ngày giữ cọc này.
                     </div>
 
                     <div class="alert alert-light border py-2 px-3 small mb-3">
