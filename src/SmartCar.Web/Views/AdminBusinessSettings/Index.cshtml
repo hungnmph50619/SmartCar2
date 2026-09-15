@@ -1,0 +1,85 @@
+@model int
+@using SmartCar.Domain.Constants
+
+@{
+    ViewData["Title"] = "Cấu hình nghiệp vụ";
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <h1 class="h3 mb-1">Cấu hình nghiệp vụ</h1>
+        <p class="text-muted mb-0">Thiết lập quy tắc vận hành dùng cho các booking tạo mới.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-controller="AuditLogs" asp-action="Index" asp-route-action="UpdateDepositHoldPolicy">
+        Xem Audit Log
+    </a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                    <div>
+                        <h2 class="h5 mb-1">Thời gian giữ cọc sau khi trả xe</h2>
+                        <p class="text-muted small mb-0">
+                            Dùng để đối soát phạt nguội và các nghĩa vụ phát sinh trước khi Admin duyệt hoàn phần cọc còn lại.
+                        </p>
+                    </div>
+                    <span class="badge text-bg-primary fs-6">Hiện tại: @Model ngày</span>
+                </div>
+
+                <form asp-action="Update" method="post" class="mt-4">
+                    <div class="mb-3">
+                        <label for="depositHoldDays" class="form-label fw-semibold">Số ngày giữ cọc sau khi trả xe</label>
+                        <div class="input-group" style="max-width:320px">
+                            <input id="depositHoldDays"
+                                   name="depositHoldDays"
+                                   type="number"
+                                   class="form-control"
+                                   min="0"
+                                   max="@DepositHoldPolicy.MaxDays"
+                                   value="@Model"
+                                   required />
+                            <span class="input-group-text">ngày</span>
+                        </div>
+                        <div class="form-text">
+                            Cho phép từ 0 đến @DepositHoldPolicy.MaxDays ngày. Giá trị 0 phù hợp khi demo trọn luồng hoàn cọc ngay sau hậu kiểm.
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                            class="btn btn-primary"
+                            data-confirm="Xác nhận thay đổi chính sách giữ cọc? Booking cũ vẫn giữ nguyên số ngày đã chụp tại thời điểm tạo.">
+                        Lưu cấu hình
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body p-4">
+                <h2 class="h5">Cách hệ thống áp dụng</h2>
+                <div class="small text-muted mb-3">
+                    Mỗi booking chụp lại chính sách tại thời điểm tạo nên việc Admin đổi cấu hình không làm thay đổi lịch sử của booking cũ.
+                </div>
+
+                <div class="border rounded p-3 bg-light mb-3">
+                    <div class="fw-semibold mb-2">Luồng chuẩn</div>
+                    <div>Tạo booking</div>
+                    <div class="text-muted">↓ chụp DepositHoldDaysApplied</div>
+                    <div>Khách trả xe và hậu kiểm</div>
+                    <div class="text-muted">↓ ReturnedAt + số ngày giữ cọc</div>
+                    <div>Đủ điều kiện Admin duyệt hoàn cọc</div>
+                </div>
+
+                <div class="alert alert-info mb-0 small">
+                    Ví dụ: trả xe 10/09, booking áp dụng 15 ngày → sớm nhất 25/09 mới được duyệt hoàn cọc.
+                    Nếu cấu hình là 0 ngày thì sau hậu kiểm có thể duyệt hoàn ngay.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
