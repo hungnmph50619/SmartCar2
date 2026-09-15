@@ -24,7 +24,6 @@ public interface IPaymentService
         PaymentType? type = null,
         CancellationToken cancellationToken = default);
 
-
     Task<OperationResult> SubmitQrPaymentAsync(
         int bookingId,
         string customerId,
@@ -39,11 +38,5 @@ public interface IPaymentService
     Task<OperationResult> RejectQrPaymentAsync(
         int paymentId,
         string adminId,
-        CancellationToken cancellationToken = default);
-
-    Task<OperationResult> ConfirmRefundAsync(
-        int paymentId,
-        string adminId,
-        string? transactionCode,
         CancellationToken cancellationToken = default);
 }

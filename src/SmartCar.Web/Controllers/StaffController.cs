@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -19,18 +20,6 @@ public sealed class StaffController : Controller
 {
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
-
-    private static readonly BookingStatus[] OperationalStatuses =
-    {
-        BookingStatus.PendingConfirmation,
-        BookingStatus.PendingPayment,
-        BookingStatus.Paid,
-        BookingStatus.ReadyForPickup,
-        BookingStatus.Rented,
-        BookingStatus.PendingInspection,
-        BookingStatus.AwaitingRefund,
-        BookingStatus.Completed
-    };
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IBookingService _bookingService;
@@ -54,34 +43,66 @@ public sealed class StaffController : Controller
     {
         var today = DateTime.Today;
         var tomorrow = today.AddDays(1);
+        var openRefundBookingIds = await GetOpenRefundBookingIdsAsync(cancellationToken);
         var workItems = await _bookingService.GetAdminBookingsAsync(null, cancellationToken);
         var operational = workItems
-            .Where(item => OperationalStatuses.Contains(item.Status) && item.Status != BookingStatus.Completed)
-            .OrderBy(item => item.Status == BookingStatus.PendingInspection ? 0 : item.Status == BookingStatus.PendingConfirmation ? 1 : 2)
+            .Where(item => BookingWorkflowRules.IsStaffWorkItem(
+                item.Status,
+                openRefundBookingIds.Contains(item.BookingId)))
+            .OrderBy(item => item.Status == BookingStatus.PendingInspection ? 0
+                : openRefundBookingIds.Contains(item.BookingId) ? 1
+                : item.Status == BookingStatus.PendingConfirmation ? 2
+                : 3)
             .ThenBy(item => item.PickupDate)
             .Take(12)
             .ToList();
 
         var model = new StaffDashboardViewModel
         {
-            TodayPickups = await _dbContext.Bookings.AsNoTracking().CountAsync(item => item.PickupDate >= today && item.PickupDate < tomorrow && item.Status == BookingStatus.ReadyForPickup, cancellationToken),
-            TodayReturns = await _dbContext.Bookings.AsNoTracking().CountAsync(item => item.ReturnDate >= today && item.ReturnDate < tomorrow && item.Status == BookingStatus.Rented, cancellationToken),
-            PendingInspections = await _dbContext.Bookings.AsNoTracking().CountAsync(item => item.Status == BookingStatus.PendingInspection, cancellationToken),
-            ApprovedRefundBookings = await _dbContext.Payments.AsNoTracking().Where(item => item.Type == PaymentType.Refund && item.Status == PaymentStatus.RefundApproved).Select(item => item.BookingId).Distinct().CountAsync(cancellationToken),
-            PaidWaitingPreparation = await _dbContext.Bookings.AsNoTracking().CountAsync(item => item.Status == BookingStatus.Paid, cancellationToken),
+            TodayPickups = await _dbContext.Bookings.AsNoTracking().CountAsync(
+                item => item.PickupDate >= today && item.PickupDate < tomorrow && item.Status == BookingStatus.ReadyForPickup,
+                cancellationToken),
+            TodayReturns = await _dbContext.Bookings.AsNoTracking().CountAsync(
+                item => item.ReturnDate >= today && item.ReturnDate < tomorrow && item.Status == BookingStatus.Rented,
+                cancellationToken),
+            PendingInspections = await _dbContext.Bookings.AsNoTracking().CountAsync(
+                item => item.Status == BookingStatus.PendingInspection,
+                cancellationToken),
+            ApprovedRefundBookings = await _dbContext.Payments.AsNoTracking()
+                .Where(item => item.Type == PaymentType.Refund && item.Status == PaymentStatus.RefundApproved)
+                .Select(item => item.BookingId)
+                .Distinct()
+                .CountAsync(cancellationToken),
+            PaidWaitingPreparation = await _dbContext.Bookings.AsNoTracking().CountAsync(
+                item => item.Status == BookingStatus.Paid,
+                cancellationToken),
             WorkItems = operational
         };
         return View(model);
     }
 
     [HttpGet]
-    public async Task<IActionResult> Bookings(BookingStatus? status, string? query, CancellationToken cancellationToken)
+    public async Task<IActionResult> Bookings(
+        BookingStatus? status,
+        string? query,
+        CancellationToken cancellationToken)
     {
-        if (status.HasValue && !OperationalStatuses.Contains(status.Value)) status = null;
         ViewBag.Status = status;
         ViewBag.Query = query;
-        var bookings = await _bookingService.GetAdminBookingsAsync(status, cancellationToken);
-        var filtered = bookings.Where(item => OperationalStatuses.Contains(item.Status)).ToList();
+
+        var openRefundBookingIds = await GetOpenRefundBookingIdsAsync(cancellationToken);
+        var bookings = await _bookingService.GetAdminBookingsAsync(null, cancellationToken);
+        var filtered = bookings
+            .Where(item => BookingWorkflowRules.IsStaffWorkItem(
+                item.Status,
+                openRefundBookingIds.Contains(item.BookingId)))
+            .ToList();
+
+        if (status.HasValue)
+        {
+            filtered = filtered.Where(item => item.Status == status.Value).ToList();
+        }
+
         if (!string.IsNullOrWhiteSpace(query))
         {
             var keyword = query.Trim();
@@ -93,6 +114,7 @@ public sealed class StaffController : Controller
                 item.VehicleName.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
                 item.LicensePlate.Contains(keyword, StringComparison.OrdinalIgnoreCase)).ToList();
         }
+
         return View(filtered);
     }
 
@@ -100,26 +122,42 @@ public sealed class StaffController : Controller
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(id, cancellationToken);
-        if (booking is null) return NotFound();
-        if (!OperationalStatuses.Contains(booking.Status))
+        if (booking is null)
+            return NotFound();
+
+        var records = await _dbContext.Bookings.AsNoTracking()
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
+            .Include(item => item.Payments)
+            .FirstAsync(item => item.BookingId == id, cancellationToken);
+
+        var refunds = records.Payments
+            .Where(item => item.Type == PaymentType.Refund)
+            .ToList();
+        var hasOpenRefund = refunds.Any(item =>
+            item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved);
+
+        var staffCanView = BookingWorkflowRules.IsStaffWorkItem(booking.Status, hasOpenRefund)
+            || booking.Status == BookingStatus.Completed;
+        if (!staffCanView)
         {
-            TempData["ErrorMessage"] = "Đơn này không thuộc luồng nghiệp vụ của nhân viên.";
+            TempData["ErrorMessage"] = "Đơn này không còn công việc vận hành dành cho nhân viên.";
             return RedirectToAction(nameof(Bookings));
         }
 
-        var records = await _dbContext.Bookings.AsNoTracking()
-            .Include(item => item.Handover).Include(item => item.VehicleReturn).Include(item => item.Payments)
-            .FirstAsync(item => item.BookingId == id, cancellationToken);
-
         var staffIds = new[]
         {
-            records.Handover?.IdentityVerifiedByStaffId, records.Handover?.SignedDocumentVerifiedByStaffId,
-            records.VehicleReturn?.IdentityVerifiedByStaffId, records.VehicleReturn?.SignedDocumentVerifiedByStaffId
+            records.Handover?.IdentityVerifiedByStaffId,
+            records.Handover?.SignedDocumentVerifiedByStaffId,
+            records.VehicleReturn?.IdentityVerifiedByStaffId,
+            records.VehicleReturn?.SignedDocumentVerifiedByStaffId
         }.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct().Cast<string>().ToArray();
 
-        var staffNames = staffIds.Length == 0 ? new Dictionary<string, string>() :
-            await _dbContext.Users.AsNoTracking().Where(user => staffIds.Contains(user.Id)).ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
-        var refunds = records.Payments.Where(item => item.Type == PaymentType.Refund).ToList();
+        var staffNames = staffIds.Length == 0
+            ? new Dictionary<string, string>()
+            : await _dbContext.Users.AsNoTracking()
+                .Where(user => staffIds.Contains(user.Id))
+                .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
 
         return View(new StaffBookingDetailsViewModel
         {
@@ -140,7 +178,9 @@ public sealed class StaffController : Controller
             ReturnSignedPaths = FindSignedPaths(records.VehicleReturn?.ImagePaths, ReturnSignedMarker),
             HasApprovedRefund = refunds.Any(item => item.Status == PaymentStatus.RefundApproved),
             HasUnapprovedRefund = refunds.Any(item => item.Status == PaymentStatus.AwaitingRefund),
-            RefundAmount = refunds.Where(item => item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved).Sum(item => item.Amount)
+            RefundAmount = refunds
+                .Where(item => item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved)
+                .Sum(item => item.Amount)
         });
     }
 
@@ -148,36 +188,38 @@ public sealed class StaffController : Controller
     public async Task<IActionResult> MarkReady(int bookingId, CancellationToken cancellationToken)
     {
         var result = await _bookingService.MarkReadyForPickupAsync(bookingId, cancellationToken);
-        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded ? "Đã xác nhận xe sẵn sàng để bàn giao." : string.Join("; ", result.Errors);
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã xác nhận xe sẵn sàng để bàn giao."
+            : string.Join("; ", result.Errors);
         if (result.Succeeded)
-            await WriteAuditAsync("StaffMarkReady", nameof(Booking), bookingId, $"Nhân viên xác nhận xe sẵn sàng giao cho đơn #{bookingId}.", cancellationToken);
+        {
+            await WriteAuditAsync(
+                "StaffMarkReady",
+                nameof(Booking),
+                bookingId,
+                $"Nhân viên xác nhận xe sẵn sàng giao cho đơn #{bookingId}.",
+                cancellationToken);
+        }
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
     [HttpGet]
-    public async Task<IActionResult> CounterRental(CancellationToken cancellationToken)
-    {
-        var model = new StaffCounterRentalViewModel();
-        await PopulateCounterOptionsAsync(model, cancellationToken);
-        return View(model);
-    }
+    public IActionResult CounterRental() =>
+        View(new StaffCounterRentalViewModel());
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> CounterRental(StaffCounterRentalViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> CounterRental(
+        StaffCounterRentalViewModel model,
+        CancellationToken cancellationToken)
     {
-        model.PaymentMethod = PaymentMethods.Cash;
         if (!ModelState.IsValid)
-        {
-            await PopulateCounterOptionsAsync(model, cancellationToken);
             return View(model);
-        }
 
         if (!await IsActiveCustomerAsync(model.CustomerId, cancellationToken))
         {
             ModelState.AddModelError(
                 nameof(model.CustomerId),
                 "Khách hàng không hợp lệ, đã bị khóa hoặc không thuộc vai trò Khách hàng.");
-            await PopulateCounterOptionsAsync(model, cancellationToken);
             return View(model);
         }
 
@@ -199,7 +241,6 @@ public sealed class StaffController : Controller
             {
                 ModelState.AddModelError(string.Empty, error);
             }
-            await PopulateCounterOptionsAsync(model, cancellationToken);
             return View(model);
         }
 
@@ -208,17 +249,18 @@ public sealed class StaffController : Controller
         {
             UserId = model.CustomerId,
             Title = "Đã lập yêu cầu thuê xe tại quầy",
-            Message = $"Nhân viên đã lập đơn #{bookingId}. Đơn đang chờ quản trị viên duyệt trước khi thu tiền."
+            Message = $"Nhân viên đã lập đơn #{bookingId}. Đơn đang chờ kiểm tra và quản trị viên duyệt trước khi thanh toán."
         });
         await _dbContext.SaveChangesAsync(cancellationToken);
         await WriteAuditAsync(
             "StaffCreateCounterRental",
             nameof(Booking),
             bookingId,
-            $"Nhân viên lập đơn thuê tại quầy #{bookingId} cho khách; chưa thu tiền, chờ quản trị viên duyệt.",
+            $"Nhân viên lập đơn thuê tại quầy #{bookingId}; khách/xe được chọn qua tìm kiếm, lịch xe sẽ tiếp tục được kiểm tra ở bước Staff review và Admin approval.",
             cancellationToken);
 
-        TempData["SuccessMessage"] = $"Đã lập đơn #{bookingId} tại quầy. Đơn đang chờ quản trị viên duyệt; chỉ thu tiền sau khi đơn chuyển sang Chờ thanh toán.";
+        TempData["SuccessMessage"] =
+            $"Đã lập đơn #{bookingId}. Hãy kiểm tra điều kiện đơn rồi gửi Admin duyệt trước khi thu tiền.";
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
@@ -234,11 +276,13 @@ public sealed class StaffController : Controller
 
         if (current.Status != BookingStatus.PendingPayment)
         {
-            TempData["ErrorMessage"] = "Chỉ được thu tiền mặt sau khi quản trị viên đã duyệt đơn và đơn đang ở trạng thái Chờ thanh toán.";
+            TempData["ErrorMessage"] = "Chỉ được thu tiền mặt sau khi Admin đã duyệt và đơn đang Chờ thanh toán.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
@@ -257,7 +301,7 @@ public sealed class StaffController : Controller
         if (upfrontPayments.Any(item => item.Status == PaymentStatus.AwaitingConfirmation))
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Đơn đang có giao dịch chuyển khoản chờ quản trị viên đối soát. Không được đồng thời ghi nhận tiền mặt.";
+            TempData["ErrorMessage"] = "Đơn đang có chuyển khoản chờ Admin đối soát. Không được đồng thời ghi nhận tiền mặt.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
@@ -281,7 +325,7 @@ public sealed class StaffController : Controller
         if (rentalPaid <= 0 || (booking.DepositAmount > 0 && depositPaid < booking.DepositAmount))
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Không thể ghi nhận thanh toán vì đơn chưa có đủ khoản tiền thuê hoặc tiền cọc cần thu.";
+            TempData["ErrorMessage"] = "Đơn chưa có đủ khoản tiền thuê hoặc tiền cọc cần thu nên không thể ghi Paid.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
@@ -300,47 +344,142 @@ public sealed class StaffController : Controller
             "StaffReceiveCounterCash",
             nameof(Booking),
             bookingId,
-            $"Nhân viên thu tiền mặt cho đơn #{bookingId} sau khi quản trị viên duyệt. Mã giao dịch nội bộ: {transactionCode}.",
+            $"Nhân viên thu tiền mặt cho đơn #{bookingId} sau khi Admin duyệt. Mã giao dịch nội bộ: {transactionCode}.",
             cancellationToken);
 
-        TempData["SuccessMessage"] = "Đã ghi nhận đủ tiền mặt. Đơn chuyển sang Đã thanh toán và có thể chuẩn bị xe.";
+        TempData["SuccessMessage"] = "Đã ghi nhận đủ tiền mặt. Đơn chuyển sang Đã thanh toán.";
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> VerifyHandoverSigned(int bookingId, bool signedCopyConfirmed, CancellationToken cancellationToken)
+    public async Task<IActionResult> VerifyHandoverSigned(
+        int bookingId,
+        bool signedCopyConfirmed,
+        CancellationToken cancellationToken)
     {
-        if (!signedCopyConfirmed) { TempData["ErrorMessage"] = "Phải mở bản ký và xác nhận đã đối chiếu chữ ký trước khi bắt đầu chuyến."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        var booking = await _dbContext.Bookings.Include(item => item.Handover).Include(item => item.Vehicle).FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
-        if (booking?.Handover is null) { TempData["ErrorMessage"] = "Không tìm thấy biên bản giao xe."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        if (!booking.Handover.CustomerIdentityVerified) { TempData["ErrorMessage"] = "Chưa xác minh đúng CCCD của người nhận xe."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        if (FindSignedPaths(booking.Handover.ImagePaths, HandoverSignedMarker).Count == 0) { TempData["ErrorMessage"] = "Chưa có ảnh/scan biên bản giao xe đã ký."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        if (booking.Status != BookingStatus.ReadyForPickup) { TempData["ErrorMessage"] = "Đơn không còn ở trạng thái sẵn sàng giao xe."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        if (booking.Vehicle.Status != VehicleStatus.Available) { TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        var staffId = CurrentUserId();
-        booking.Handover.SignedDocumentVerified = true; booking.Handover.SignedDocumentVerifiedByStaffId = staffId; booking.Handover.SignedDocumentVerifiedAt = DateTime.UtcNow;
-        booking.Status = BookingStatus.Rented; booking.Vehicle.Status = VehicleStatus.Rented; booking.Vehicle.CurrentMileage = booking.Handover.Mileage;
-        _dbContext.Notifications.Add(new Notification { UserId = booking.CustomerId, Title = "Đã bàn giao xe", Message = $"Đơn #{booking.BookingId} đã được nhân viên đối chiếu người nhận, xác minh bản ký và bắt đầu chuyến thuê." });
-        await _dbContext.SaveChangesAsync(cancellationToken); await transaction.CommitAsync(cancellationToken);
-        await WriteAuditAsync("StaffVerifySignedHandover", nameof(VehicleHandover), bookingId, $"Nhân viên xác minh bản ký giao xe và bắt đầu chuyến #{bookingId}.", cancellationToken);
-        TempData["SuccessMessage"] = "Đã xác minh bản ký giao xe. Chuyến thuê đã bắt đầu.";
-        return RedirectToAction(nameof(Details), new { id = bookingId });
-    }
+        if (!signedCopyConfirmed)
+        {
+            TempData["ErrorMessage"] = "Phải mở bản ký và xác nhận đã đối chiếu chữ ký trước khi bắt đầu chuyến.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
 
-    [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> VerifyReturnSigned(int bookingId, bool signedCopyConfirmed, CancellationToken cancellationToken)
-    {
-        if (!signedCopyConfirmed) { TempData["ErrorMessage"] = "Phải mở bản ký và xác nhận đã đối chiếu chữ ký trước khi quyết toán."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        var booking = await _dbContext.Bookings.Include(item => item.VehicleReturn).FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
-        if (booking?.VehicleReturn is null) { TempData["ErrorMessage"] = "Không tìm thấy biên bản trả xe."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        if (!booking.VehicleReturn.CustomerIdentityVerified) { TempData["ErrorMessage"] = "Chưa xác minh đúng CCCD của người trả xe."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        if (FindSignedPaths(booking.VehicleReturn.ImagePaths, ReturnSignedMarker).Count == 0) { TempData["ErrorMessage"] = "Chưa có ảnh/scan biên bản trả xe đã ký."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
-        if (booking.Status != BookingStatus.PendingInspection) { TempData["ErrorMessage"] = "Đơn không còn ở bước kiểm tra trả xe."; return RedirectToAction(nameof(Details), new { id = bookingId }); }
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Handover)
+            .Include(item => item.Vehicle)
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking?.Handover is null)
+        {
+            TempData["ErrorMessage"] = "Không tìm thấy biên bản giao xe.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (!booking.Handover.CustomerIdentityVerified)
+        {
+            TempData["ErrorMessage"] = "Chưa xác minh đúng danh tính người nhận xe.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (FindSignedPaths(booking.Handover.ImagePaths, HandoverSignedMarker).Count == 0)
+        {
+            TempData["ErrorMessage"] = "Chưa có ảnh/scan biên bản giao xe đã ký.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (booking.Status != BookingStatus.ReadyForPickup)
+        {
+            TempData["ErrorMessage"] = "Đơn không còn ở trạng thái sẵn sàng giao xe.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (booking.Vehicle.Status != VehicleStatus.Available)
+        {
+            TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (DateTime.Now < booking.PickupDate)
+        {
+            TempData["ErrorMessage"] = $"Chưa đến giờ nhận xe đã đặt ({booking.PickupDate:dd/MM/yyyy HH:mm}). Không thể bắt đầu chuyến sớm hơn lịch.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
         var staffId = CurrentUserId();
-        booking.VehicleReturn.SignedDocumentVerified = true; booking.VehicleReturn.SignedDocumentVerifiedByStaffId = staffId; booking.VehicleReturn.SignedDocumentVerifiedAt = DateTime.UtcNow;
+        var actualHandoverAt = DateTime.Now;
+        booking.Handover.HandoverAt = actualHandoverAt;
+        booking.Handover.SignedDocumentVerified = true;
+        booking.Handover.SignedDocumentVerifiedByStaffId = staffId;
+        booking.Handover.SignedDocumentVerifiedAt = DateTime.UtcNow;
+        booking.Status = BookingStatus.Rented;
+        booking.Vehicle.Status = VehicleStatus.Rented;
+        booking.Vehicle.CurrentMileage = booking.Handover.Mileage;
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Đã bàn giao xe",
+            Message = $"Đơn #{booking.BookingId} bắt đầu chuyến lúc {actualHandoverAt:dd/MM/yyyy HH:mm} sau khi nhân viên xác minh đúng người và bản ký."
+        });
+
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await WriteAuditAsync("StaffVerifySignedReturn", nameof(VehicleReturn), bookingId, $"Nhân viên xác minh bản ký trả xe của đơn #{bookingId}.", cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        await WriteAuditAsync(
+            "StaffVerifySignedHandover",
+            nameof(VehicleHandover),
+            bookingId,
+            $"Nhân viên xác minh bản ký và bắt đầu chuyến #{bookingId} lúc {actualHandoverAt:dd/MM/yyyy HH:mm}.",
+            cancellationToken);
+
+        TempData["SuccessMessage"] = "Đã xác minh bản ký. Thời điểm bàn giao thực tế đã được chốt và chuyến thuê bắt đầu.";
+        return RedirectToAction(nameof(Details), new { id = bookingId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> VerifyReturnSigned(
+        int bookingId,
+        bool signedCopyConfirmed,
+        CancellationToken cancellationToken)
+    {
+        if (!signedCopyConfirmed)
+        {
+            TempData["ErrorMessage"] = "Phải mở bản ký và xác nhận đã đối chiếu chữ ký trước khi quyết toán.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var booking = await _dbContext.Bookings
+            .Include(item => item.VehicleReturn)
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+        if (booking?.VehicleReturn is null)
+        {
+            TempData["ErrorMessage"] = "Không tìm thấy biên bản trả xe.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (!booking.VehicleReturn.CustomerIdentityVerified)
+        {
+            TempData["ErrorMessage"] = "Chưa xác minh đúng CCCD của người trả xe.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (FindSignedPaths(booking.VehicleReturn.ImagePaths, ReturnSignedMarker).Count == 0)
+        {
+            TempData["ErrorMessage"] = "Chưa có ảnh/scan biên bản trả xe đã ký.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (booking.Status != BookingStatus.PendingInspection)
+        {
+            TempData["ErrorMessage"] = "Đơn không còn ở bước kiểm tra trả xe.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var staffId = CurrentUserId();
+        booking.VehicleReturn.SignedDocumentVerified = true;
+        booking.VehicleReturn.SignedDocumentVerifiedByStaffId = staffId;
+        booking.VehicleReturn.SignedDocumentVerifiedAt = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await WriteAuditAsync(
+            "StaffVerifySignedReturn",
+            nameof(VehicleReturn),
+            bookingId,
+            $"Nhân viên xác minh bản ký trả xe của đơn #{bookingId}.",
+            cancellationToken);
+
         TempData["SuccessMessage"] = "Đã xác minh bản ký trả xe. Có thể tiếp tục đối chiếu và quyết toán.";
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
@@ -348,10 +487,21 @@ public sealed class StaffController : Controller
     [HttpGet]
     public async Task<IActionResult> Refunds(CancellationToken cancellationToken)
     {
-        var approved = await _dbContext.Payments.AsNoTracking().Where(item => item.Type == PaymentType.Refund && item.Status == PaymentStatus.RefundApproved)
-            .Include(item => item.Booking).ThenInclude(booking => booking.Vehicle).OrderBy(item => item.BookingId).ThenBy(item => item.PaymentId).ToListAsync(cancellationToken);
+        var approved = await _dbContext.Payments.AsNoTracking()
+            .Where(item => item.Type == PaymentType.Refund && item.Status == PaymentStatus.RefundApproved)
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.Vehicle)
+            .OrderBy(item => item.BookingId)
+            .ThenBy(item => item.PaymentId)
+            .ToListAsync(cancellationToken);
+
         var customerIds = approved.Select(item => item.Booking.CustomerId).Distinct().ToArray();
-        var customerNames = customerIds.Length == 0 ? new Dictionary<string, string>() : await _dbContext.Users.AsNoTracking().Where(user => customerIds.Contains(user.Id)).ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
+        var customerNames = customerIds.Length == 0
+            ? new Dictionary<string, string>()
+            : await _dbContext.Users.AsNoTracking()
+                .Where(user => customerIds.Contains(user.Id))
+                .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
+
         var model = new List<StaffRefundViewModel>();
         foreach (var group in approved.GroupBy(item => item.BookingId).OrderByDescending(group => group.Key))
         {
@@ -369,9 +519,12 @@ public sealed class StaffController : Controller
                 AccountNumber = bank?.AccountNumber,
                 AccountHolderName = bank?.AccountHolderName,
                 Status = PaymentStatus.RefundApproved,
-                Lines = group.Select(item => new StaffRefundLineViewModel(item.PaymentId, item.Amount, item.Method, item.Status)).ToList()
+                Lines = group
+                    .Select(item => new StaffRefundLineViewModel(item.PaymentId, item.Amount, item.Method, item.Status))
+                    .ToList()
             });
         }
+
         return View(model);
     }
 
@@ -396,8 +549,7 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Refunds));
         }
 
-        var customerId = await _dbContext.Bookings
-            .AsNoTracking()
+        var customerId = await _dbContext.Bookings.AsNoTracking()
             .Where(item => item.BookingId == bookingId)
             .Select(item => item.CustomerId)
             .FirstOrDefaultAsync(cancellationToken);
@@ -419,15 +571,11 @@ public sealed class StaffController : Controller
             IsolationLevel.Serializable,
             cancellationToken);
 
-        var duplicateCode = await _dbContext.Payments
-            .AsNoTracking()
-            .AnyAsync(
-                item =>
-                    item.Type == PaymentType.Refund &&
+        var duplicateCode = await _dbContext.Payments.AsNoTracking().AnyAsync(
+            item => item.Type == PaymentType.Refund &&
                     item.Status == PaymentStatus.Refunded &&
                     item.TransactionCode == transactionCode,
-                cancellationToken);
-
+            cancellationToken);
         if (duplicateCode)
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -438,7 +586,6 @@ public sealed class StaffController : Controller
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
-
         if (booking is null)
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -447,30 +594,24 @@ public sealed class StaffController : Controller
         }
 
         var hasWaitingApproval = booking.Payments.Any(item =>
-            item.Type == PaymentType.Refund &&
-            item.Status == PaymentStatus.AwaitingRefund);
-
+            item.Type == PaymentType.Refund && item.Status == PaymentStatus.AwaitingRefund);
         if (hasWaitingApproval)
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Vẫn còn khoản hoàn chưa được quản trị viên duyệt. Nhân viên chưa được phép chuyển tiền.";
+            TempData["ErrorMessage"] = "Vẫn còn khoản hoàn chưa được Admin duyệt. Staff chưa được phép chuyển tiền.";
             return RedirectToAction(nameof(Refunds));
         }
 
         var approvedRefunds = booking.Payments
-            .Where(item =>
-                item.Type == PaymentType.Refund &&
-                item.Status == PaymentStatus.RefundApproved)
+            .Where(item => item.Type == PaymentType.Refund && item.Status == PaymentStatus.RefundApproved)
             .OrderBy(item => item.PaymentId)
             .ToList();
-
         if (approvedRefunds.Count == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Đơn không có khoản hoàn nào đã được quản trị viên duyệt.";
+            TempData["ErrorMessage"] = "Đơn không có khoản hoàn nào đã được Admin duyệt.";
             return RedirectToAction(nameof(Refunds));
         }
-
         if (approvedRefunds.Any(item => item.Amount <= 0))
         {
             await transaction.RollbackAsync(cancellationToken);
@@ -480,7 +621,6 @@ public sealed class StaffController : Controller
 
         var refundedAt = DateTime.UtcNow;
         var total = approvedRefunds.Sum(item => item.Amount);
-
         foreach (var refund in approvedRefunds)
         {
             refund.Status = PaymentStatus.Refunded;
@@ -490,8 +630,7 @@ public sealed class StaffController : Controller
 
         var hasOpenRefund = booking.Payments.Any(item =>
             item.Type == PaymentType.Refund &&
-            (item.Status == PaymentStatus.AwaitingRefund || item.Status == PaymentStatus.RefundApproved));
-
+            item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved);
         if (booking.Status == BookingStatus.AwaitingRefund && !hasOpenRefund)
         {
             booking.Status = BookingStatus.Completed;
@@ -501,87 +640,84 @@ public sealed class StaffController : Controller
         {
             UserId = booking.CustomerId,
             Title = "Hoàn tiền thành công",
-            Message =
-                $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {total:N0} đồng vào " +
-                $"{bank.BankName} - {bank.MaskedAccountNumber}. Mã giao dịch: {transactionCode}."
+            Message = $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {total:N0} đồng vào {bank.BankName} - {bank.MaskedAccountNumber}. Mã giao dịch: {transactionCode}."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-
         await WriteAuditAsync(
             "StaffExecuteApprovedRefund",
             nameof(Payment),
             bookingId,
-            $"Thực hiện khoản hoàn đã được duyệt cho đơn #{bookingId}: {total:N0} đồng, mã GD {transactionCode}.",
+            $"Thực hiện khoản hoàn đã được Admin duyệt cho đơn #{bookingId}: {total:N0} đồng, mã GD {transactionCode}.",
             cancellationToken);
 
         TempData["SuccessMessage"] = $"Đã hoàn {total:N0} đ cho đơn #{bookingId}.";
         return RedirectToAction(nameof(Refunds));
     }
 
+    private async Task<HashSet<int>> GetOpenRefundBookingIdsAsync(CancellationToken cancellationToken) =>
+        (await _dbContext.Payments.AsNoTracking()
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved)
+            .Select(payment => payment.BookingId)
+            .Distinct()
+            .ToListAsync(cancellationToken))
+        .ToHashSet();
+
     private async Task<bool> IsActiveCustomerAsync(
         string customerId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(customerId))
-        {
             return false;
-        }
 
-        var customerRoleId = await _dbContext.Roles
-            .AsNoTracking()
+        var customerRoleId = await _dbContext.Roles.AsNoTracking()
             .Where(role => role.Name == RoleNames.Customer)
             .Select(role => role.Id)
             .FirstOrDefaultAsync(cancellationToken);
-
         if (string.IsNullOrWhiteSpace(customerRoleId))
-        {
             return false;
-        }
 
-        return await _dbContext.Users
-            .AsNoTracking()
-            .AnyAsync(user =>
-                user.Id == customerId &&
-                user.IsActive &&
-                _dbContext.UserRoles.Any(userRole =>
-                    userRole.UserId == user.Id &&
-                    userRole.RoleId == customerRoleId),
-                cancellationToken);
+        return await _dbContext.Users.AsNoTracking().AnyAsync(user =>
+            user.Id == customerId &&
+            user.IsActive &&
+            _dbContext.UserRoles.Any(userRole =>
+                userRole.UserId == user.Id &&
+                userRole.RoleId == customerRoleId),
+            cancellationToken);
     }
 
-    private async Task PopulateCounterOptionsAsync(StaffCounterRentalViewModel model, CancellationToken cancellationToken)
-    {
-        var customerRoleId = await _dbContext.Roles.AsNoTracking().Where(role => role.Name == RoleNames.Customer).Select(role => role.Id).FirstOrDefaultAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(customerRoleId)) model.Customers = Array.Empty<StaffOptionViewModel>();
-        else
-        {
-            var customers = await _dbContext.Users.AsNoTracking().Where(user => user.IsActive && _dbContext.UserRoles.Any(userRole => userRole.UserId == user.Id && userRole.RoleId == customerRoleId))
-                .OrderBy(user => user.FullName).Select(user => new { user.Id, user.FullName, user.Email, user.PhoneNumber }).ToListAsync(cancellationToken);
-            model.Customers = customers.Select(user => new StaffOptionViewModel(user.Id, $"{user.FullName} · {user.Email} · {user.PhoneNumber ?? "-"}")).ToList();
-        }
-        var vehicles = await _dbContext.Vehicles
-            .AsNoTracking()
-            .Where(vehicle =>
-                vehicle.Status == VehicleStatus.Available ||
-                vehicle.Status == VehicleStatus.Rented)
-            .OrderBy(vehicle => vehicle.VehicleName)
-            .Select(vehicle => new
-            {
-                vehicle.VehicleId,
-                vehicle.VehicleName,
-                vehicle.LicensePlate,
-                vehicle.DailyPrice,
-                vehicle.Status
-            })
-            .ToListAsync(cancellationToken);
-        model.Vehicles = vehicles.Select(vehicle => new StaffOptionViewModel(vehicle.VehicleId.ToString(), $"{vehicle.VehicleName} · {vehicle.LicensePlate} · {vehicle.DailyPrice:N0} đ/ngày · " + (vehicle.Status == VehicleStatus.Available ? "Có sẵn" : "Đang thuê - chỉ đặt lịch sau"))).ToList();
-    }
+    private static IReadOnlyList<string> FindSignedPaths(string? paths, string marker) =>
+        string.IsNullOrWhiteSpace(paths)
+            ? Array.Empty<string>()
+            : paths.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
 
-    private static IReadOnlyList<string> FindSignedPaths(string? paths, string marker) => string.IsNullOrWhiteSpace(paths) ? Array.Empty<string>() : paths.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase)).ToArray();
-    private static string? ResolveStaffName(IReadOnlyDictionary<string, string> staffNames, string? staffId) => !string.IsNullOrWhiteSpace(staffId) && staffNames.TryGetValue(staffId, out var name) ? name : null;
-    private string CurrentUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-    private Task WriteAuditAsync(string action, string entityName, int entityId, string description, CancellationToken cancellationToken) =>
-        _auditService.WriteAsync(CurrentUserId(), action, entityName, entityId.ToString(), description, ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken: cancellationToken);
+    private static string? ResolveStaffName(
+        IReadOnlyDictionary<string, string> staffNames,
+        string? staffId) =>
+        !string.IsNullOrWhiteSpace(staffId) && staffNames.TryGetValue(staffId, out var name)
+            ? name
+            : null;
+
+    private string CurrentUserId() =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+    private Task WriteAuditAsync(
+        string action,
+        string entityName,
+        int entityId,
+        string description,
+        CancellationToken cancellationToken) =>
+        _auditService.WriteAsync(
+            CurrentUserId(),
+            action,
+            entityName,
+            entityId.ToString(),
+            description,
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
 }

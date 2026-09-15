@@ -49,13 +49,7 @@ public sealed class StaffCounterRentalViewModel
 
     [Required(ErrorMessage = "Vui lòng chọn thời gian trả xe.")]
     public DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(1).AddMinutes(10);
-
-    public string PaymentMethod { get; set; } = "Tiền mặt tại quầy";
-    public IReadOnlyList<StaffOptionViewModel> Customers { get; set; } = Array.Empty<StaffOptionViewModel>();
-    public IReadOnlyList<StaffOptionViewModel> Vehicles { get; set; } = Array.Empty<StaffOptionViewModel>();
 }
-
-public sealed record StaffOptionViewModel(string Value, string Text);
 
 public sealed class StaffRefundViewModel
 {
@@ -72,4 +66,8 @@ public sealed class StaffRefundViewModel
     public IReadOnlyList<StaffRefundLineViewModel> Lines { get; init; } = Array.Empty<StaffRefundLineViewModel>();
 }
 
-public sealed record StaffRefundLineViewModel(int PaymentId, decimal Amount, string Method, PaymentStatus Status);
+public sealed record StaffRefundLineViewModel(
+    int PaymentId,
+    decimal Amount,
+    string Method,
+    PaymentStatus Status);

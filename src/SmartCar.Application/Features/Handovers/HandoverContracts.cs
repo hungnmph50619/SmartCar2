@@ -17,7 +17,8 @@ public sealed record CreateHandoverRequest(
     string TrafficFineTerms,
     string DamageCompensationTerms,
     bool PenaltyPolicyAccepted,
-    string? Notes);
+    string? Notes,
+    string IdentityVerifiedByStaffId);
 
 public interface IHandoverService
 {

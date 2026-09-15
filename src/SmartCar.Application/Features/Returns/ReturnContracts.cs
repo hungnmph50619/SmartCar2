@@ -12,7 +12,8 @@ public sealed record CreateReturnRequest(
     string? InteriorCondition,
     bool HasDamage,
     string? ImagePaths,
-    string? Notes);
+    string? Notes,
+    string? IdentityVerifiedByStaffId = null);
 
 public sealed record AddChargeRequest(
     int BookingId,
