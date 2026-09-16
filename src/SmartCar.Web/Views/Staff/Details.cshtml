@@ -218,6 +218,19 @@
                     }
                 </div>
 
+                @if (!Model.HandoverSignedDocumentVerified)
+                {
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned"
+                          method="post" enctype="multipart/form-data" class="border rounded-4 p-3 mt-3">
+                        <input type="hidden" name="bookingId" value="@b.BookingId" />
+                        <label for="handover-signed-files" class="form-label fw-semibold">Tải bản ký biên bản giao xe</label>
+                        <input id="handover-signed-files" name="signedDocuments" type="file"
+                               accept="image/jpeg,image/png,image/webp" multiple required class="form-control" />
+                        <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh. Nếu tải lại, chọn đủ các trang để thay bộ bản ký cũ.</div>
+                        <button type="submit" class="btn btn-outline-success mt-2">Tải bản ký giao xe</button>
+                    </form>
+                }
+
                 @if (Model.HandoverSignedPaths.Count == 0)
                 {
                     <div class="alert alert-warning mt-3 mb-0">In biên bản, cho đúng khách ký rồi tải ảnh/scan bản ký. Việc tải file <strong>không tự bắt đầu chuyến</strong>.</div>
@@ -354,7 +367,20 @@
                 }
             </div>
 
-            @if (Model.ReturnSignedPaths.Count == 0)
+            @if (!Model.ReturnSignedDocumentVerified)
+                {
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned"
+                          method="post" enctype="multipart/form-data" class="border rounded-4 p-3 mt-3">
+                        <input type="hidden" name="bookingId" value="@b.BookingId" />
+                        <label for="return-signed-files" class="form-label fw-semibold">Tải bản ký biên bản trả xe</label>
+                        <input id="return-signed-files" name="signedDocuments" type="file"
+                               accept="image/jpeg,image/png,image/webp" multiple required class="form-control" />
+                        <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh. Nếu tải lại, chọn đủ các trang để thay bộ bản ký cũ.</div>
+                        <button type="submit" class="btn btn-outline-success mt-2">Tải bản ký trả xe</button>
+                    </form>
+                }
+
+                @if (Model.ReturnSignedPaths.Count == 0)
             {
                 <div class="alert alert-warning mt-3 mb-0">In biên bản trả, cho đúng khách ký rồi tải bản scan/ảnh. File tải lên vẫn phải được Staff mở và xác minh.</div>
             }
@@ -415,3 +441,4 @@
         <div class="alert alert-success"><strong>✓ Đơn đã hoàn tất.</strong> Không còn thao tác vận hành bắt buộc.</div>
     }
 </div>
+

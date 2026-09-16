@@ -210,6 +210,10 @@ public sealed class ReturnsController : Controller
             .OrderByDescending(payment => payment.PaymentId)
             .FirstOrDefault();
 
+        ViewBag.DepositHoldDays = DepositHoldPolicy.NormalizeDays(records.DepositHoldDaysApplied);
+        ViewBag.DepositEligibleAt = DepositHoldPolicy.CalculateEligibleAt(
+            records.VehicleReturn.ReturnedAt, records.DepositHoldDaysApplied);
+
         var model = new ReturnInspectionViewModel
         {
             BookingId = booking.BookingId,
@@ -743,3 +747,4 @@ public sealed class ReturnsController : Controller
         }
     }
 }
+
