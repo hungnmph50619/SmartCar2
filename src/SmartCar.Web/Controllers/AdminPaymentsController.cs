@@ -44,8 +44,6 @@ public sealed class AdminPaymentsController : Controller
         string? section,
         CancellationToken cancellationToken)
     {
-        await RepairLegacyForceMajeureCompensationAsync(cancellationToken);
-
         var reviewAll =
             string.IsNullOrWhiteSpace(section) &&
             !type.HasValue &&
@@ -94,28 +92,6 @@ public sealed class AdminPaymentsController : Controller
             paymentId,
             adminId,
             cancellationToken);
-
-        if (result.Succeeded)
-        {
-            var payment = await _dbContext.Payments
-                .AsNoTracking()
-                .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
-
-            if (payment?.Type == PaymentType.Extension)
-            {
-                var extensionResult = await _extensionService.MarkPaidAsync(
-                    payment.BookingId,
-                    cancellationToken);
-
-                if (!extensionResult.Succeeded)
-                {
-                    TempData["ErrorMessage"] =
-                        "Đã xác nhận tiền gia hạn nhưng chưa cập nhật được ngày trả mới: " +
-                        string.Join("; ", extensionResult.Errors);
-                    return RedirectToAction(nameof(Index), new { section = section ?? "adjustment" });
-                }
-            }
-        }
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã xác nhận nhận được tiền."
