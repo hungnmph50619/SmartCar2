@@ -119,7 +119,7 @@ public sealed class StaffAccountRegressionTests
 
         public TestUserManager() : base(
             new UserStore<ApplicationUser>(new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().Options)),
-            Options.Create(new IdentityOptions()), new PasswordHasher<ApplicationUser>(),
+            Microsoft.Extensions.Options.Options.Create(new IdentityOptions()), new PasswordHasher<ApplicationUser>(),
             Array.Empty<IUserValidator<ApplicationUser>>(), Array.Empty<IPasswordValidator<ApplicationUser>>(),
             new UpperInvariantLookupNormalizer(), new IdentityErrorDescriber(), null!,
             NullLogger<UserManager<ApplicationUser>>.Instance) { }
