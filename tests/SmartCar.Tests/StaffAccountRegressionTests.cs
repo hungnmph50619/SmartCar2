@@ -81,6 +81,23 @@ public sealed class StaffAccountRegressionTests
     public void PhoneNormalizationHandlesMissingAndInternationalInput(string? input, string expected) =>
         Assert.Equal(expected, ProfileInputRules.NormalizePhoneNumber(input));
 
+    [Fact]
+    public void CitizenIdCollisionQueryChecksAllAccountsAndExcludesCurrentUser()
+    {
+        const string citizenId = "001205012345";
+        var users = new[]
+        {
+            new ApplicationUser { Id = "customer", CitizenIdNumber = citizenId },
+            new ApplicationUser { Id = "editing-staff", CitizenIdNumber = citizenId },
+            new ApplicationUser { Id = "other", CitizenIdNumber = "001205099999" }
+        }.AsQueryable();
+
+        Assert.True(AccountInputGuard.CitizenIdCollisions(users, citizenId, null).Any());
+        Assert.True(AccountInputGuard.CitizenIdCollisions(users, citizenId, "editing-staff").Any());
+        Assert.False(AccountInputGuard.CitizenIdCollisions(
+            users.Where(user => user.Id == "editing-staff"), citizenId, "editing-staff").Any());
+    }
+
     [Theory]
     [InlineData("Nguyễn Văn An", true)]
     [InlineData("Nguyễn Văn 123", false)]
