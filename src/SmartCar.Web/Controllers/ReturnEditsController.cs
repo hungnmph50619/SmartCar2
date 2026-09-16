@@ -12,7 +12,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class ReturnEditsController : Controller
 {
     private const string SignedMarker = "signed-return-";
@@ -53,7 +53,7 @@ public sealed class ReturnEditsController : Controller
         if (booking?.VehicleReturn is null || booking.Handover is null)
         {
             TempData["ErrorMessage"] = "Không tìm thấy biên bản trả xe để chỉnh sửa.";
-            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+            return RedirectToAction("Details", "Staff", new { id = bookingId });
         }
 
         if (!CanEdit(booking))
@@ -63,14 +63,15 @@ public sealed class ReturnEditsController : Controller
         }
 
         var parsedNotes = ParseReturnNotes(booking.VehicleReturn.Notes);
+        var parsedAccessory = ParseAccessoryValue(booking.VehicleReturn.AccessoryStatus);
         return View(new ReturnEditViewModel
         {
             BookingId = bookingId,
             ReturnedAt = booking.VehicleReturn.ReturnedAt,
             Mileage = booking.VehicleReturn.Mileage,
             FuelLevel = booking.VehicleReturn.FuelLevel.TrimEnd('%').Trim(),
-            AccessoryStatus = parsedNotes.AccessoryStatus,
-            MissingAccessories = parsedNotes.MissingAccessories,
+            AccessoryStatus = parsedAccessory.AccessoryStatus,
+            MissingAccessories = parsedAccessory.MissingAccessories,
             HasDamage = booking.VehicleReturn.HasDamage,
             Notes = parsedNotes.Note,
             ExistingImagePaths = ReturnPhotos(booking.VehicleReturn.ImagePaths).ToList()
@@ -175,7 +176,7 @@ public sealed class ReturnEditsController : Controller
 
         if (!TryParseFuel(model.FuelLevel, out var fuelPercent))
         {
-            ModelState.AddModelError(nameof(model.FuelLevel), "Mức nhiên liệu phải từ 0 đến 100%.");
+            ModelState.AddModelError(nameof(model.FuelLevel), "Mức nhiên liệu phải từ 0 đến 100%." );
         }
 
         if (model.AccessoryStatus == AccessoriesMissingValue && string.IsNullOrWhiteSpace(model.MissingAccessories))
@@ -199,10 +200,13 @@ public sealed class ReturnEditsController : Controller
                 .Concat(addedPaths)
                 .ToList();
 
+            var normalizedAccessory = NormalizeAccessoryValue(model.AccessoryStatus, model.MissingAccessories);
+
             booking.VehicleReturn.ReturnedAt = model.ReturnedAt;
             booking.VehicleReturn.Mileage = model.Mileage!.Value;
             booking.VehicleReturn.FuelLevel = $"{fuelPercent}%";
             booking.VehicleReturn.HasDamage = model.HasDamage;
+            booking.VehicleReturn.AccessoryStatus = normalizedAccessory;
             booking.VehicleReturn.Notes = BuildReturnNotes(model.AccessoryStatus, model.MissingAccessories, model.Notes);
             booking.VehicleReturn.ImagePaths = string.Join(';', updatedPaths);
             booking.Vehicle.CurrentMileage = model.Mileage.Value;
@@ -219,13 +223,13 @@ public sealed class ReturnEditsController : Controller
 
         DeletePhysicalFiles(deleteSet);
 
-        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         await _auditService.WriteAsync(
-            adminId,
-            "EditReturn",
+            staffId,
+            "StaffEditReturn",
             nameof(VehicleReturn),
             model.BookingId.ToString(),
-            $"Chỉnh sửa biên bản trả xe chưa ký của đơn #{model.BookingId}. Xóa {deleteSet.Count} ảnh, thêm {addedPaths.Count} ảnh.",
+            $"Nhân viên chỉnh sửa biên bản trả xe chưa ký của đơn #{model.BookingId}. Xóa {deleteSet.Count} ảnh, thêm {addedPaths.Count} ảnh.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
@@ -291,6 +295,25 @@ public sealed class ReturnEditsController : Controller
         return int.TryParse(normalized, out percent) && percent is >= 0 and <= 100;
     }
 
+    private static (string AccessoryStatus, string? MissingAccessories) ParseAccessoryValue(string? value)
+    {
+        var raw = value?.Trim();
+        if (!string.IsNullOrWhiteSpace(raw) &&
+            raw.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return (
+                AccessoriesMissingValue,
+                raw[AccessoriesMissingPrefix.Length..].Trim());
+        }
+
+        return (AccessoriesComplete, null);
+    }
+
+    private static string NormalizeAccessoryValue(string accessoryStatus, string? missingAccessories) =>
+        accessoryStatus == AccessoriesMissingValue
+            ? $"{AccessoriesMissingPrefix} {missingAccessories?.Trim()}".Trim()
+            : AccessoriesComplete;
+
     private static (string AccessoryStatus, string? MissingAccessories, string? Note) ParseReturnNotes(string? notes)
     {
         var raw = notes?.Trim();
@@ -317,9 +340,7 @@ public sealed class ReturnEditsController : Controller
 
     private static string BuildReturnNotes(string accessoryStatus, string? missingAccessories, string? note)
     {
-        var normalizedAccessory = accessoryStatus == AccessoriesMissingValue
-            ? $"{AccessoriesMissingPrefix} {missingAccessories?.Trim()}".Trim()
-            : AccessoriesComplete;
+        var normalizedAccessory = NormalizeAccessoryValue(accessoryStatus, missingAccessories);
         var normalizedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
         return normalizedNote is null
             ? $"{ReturnAccessoriesLabel} {normalizedAccessory}"
