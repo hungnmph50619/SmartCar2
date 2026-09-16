@@ -47,7 +47,9 @@ public sealed class HandoversController : Controller
     {
         var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
         if (booking is null)
+        {
             return NotFound();
+        }
 
         if (booking.Status != BookingStatus.ReadyForPickup)
         {
@@ -57,7 +59,7 @@ public sealed class HandoversController : Controller
 
         if (booking.HasHandover)
         {
-            TempData["ErrorMessage"] = "Biên bản điện tử đã được lập. Hãy in, ký và tải bản ký.";
+            TempData["ErrorMessage"] = "Biên bản điện tử đã được lập. Hãy tiếp tục bước ký và xác minh bản ký.";
             return RedirectToBookingDetails(bookingId);
         }
 
@@ -67,34 +69,39 @@ public sealed class HandoversController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        ViewData["ReceiverDrivingLicenseNumber"] = string.Empty;
-        return View(new HandoverViewModel
+        var model = new HandoverViewModel
         {
             BookingId = bookingId,
-            HandoverAt = DateTime.Now > booking.PickupDate ? DateTime.Now : booking.PickupDate,
+            HandoverAt = DateTime.Now,
             IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay,
             ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
             LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
             TrafficFineTerms = RentalPolicy.TrafficFineTerms,
             DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
             PenaltyPolicyAccepted = true
-        });
+        };
+
+        if (!await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
+        {
+            TempData["ErrorMessage"] =
+                "Khách chưa có đủ CCCD và GPLX đã được Admin xác minh, hoặc giấy tờ không còn hiệu lực đến ngày trả xe. Không thể bàn giao.";
+            return RedirectToBookingDetails(bookingId);
+        }
+
+        return View(model);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(
         HandoverViewModel model,
-        string? receiverDrivingLicenseNumber,
-        bool originalCitizenIdChecked,
-        bool originalDrivingLicenseChecked,
         CancellationToken cancellationToken)
     {
-        ViewData["ReceiverDrivingLicenseNumber"] = receiverDrivingLicenseNumber?.Trim() ?? string.Empty;
-
         var booking = await _bookingService.GetAdminBookingAsync(model.BookingId, cancellationToken);
         if (booking is null)
+        {
             return NotFound();
+        }
 
         if (booking.Status != BookingStatus.ReadyForPickup || booking.HasHandover)
         {
@@ -110,6 +117,10 @@ public sealed class HandoversController : Controller
             return RedirectToBookingDetails(model.BookingId);
         }
 
+        ModelState.Remove(nameof(HandoverViewModel.CustomerId));
+        ModelState.Remove(nameof(HandoverViewModel.VerifiedCustomerName));
+        ModelState.Remove(nameof(HandoverViewModel.VerifiedCitizenId));
+        ModelState.Remove(nameof(HandoverViewModel.VerifiedDrivingLicenseNumber));
         ModelState.Remove(nameof(HandoverViewModel.IncludedKilometers));
         ModelState.Remove(nameof(HandoverViewModel.ExcessKmFeePerKm));
         ModelState.Remove(nameof(HandoverViewModel.LateReturnFeeMultiplier));
@@ -118,6 +129,7 @@ public sealed class HandoversController : Controller
         ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
         ModelState.Remove(nameof(HandoverViewModel.Images));
 
+        model.HandoverAt = DateTime.Now;
         model.IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay;
         model.ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee;
         model.LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier;
@@ -126,60 +138,47 @@ public sealed class HandoversController : Controller
         model.PenaltyPolicyAccepted = true;
 
         var identityFailures = new List<string>();
-        var citizenMatches = await CustomerCitizenIdMatchesAsync(
-            booking.CustomerId,
-            model.ReceiverCitizenId,
-            cancellationToken);
-        if (!citizenMatches)
+        if (!await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
         {
-            const string message = "CCCD người nhận không trùng với CCCD đã được quản trị viên xác minh của khách đứng tên đơn.";
-            ModelState.AddModelError(nameof(HandoverViewModel.ReceiverCitizenId), message);
-            identityFailures.Add("CCCD không khớp hồ sơ đã xác minh");
+            ModelState.AddModelError(
+                string.Empty,
+                "Hồ sơ KYC của khách không còn đủ điều kiện bàn giao. Vui lòng dừng giao xe và kiểm tra lại hồ sơ.");
+            identityFailures.Add("hồ sơ KYC không còn hợp lệ");
         }
 
-        var licenseMatches = await CustomerDrivingLicenseMatchesAsync(
-            booking.CustomerId,
-            receiverDrivingLicenseNumber,
-            cancellationToken);
-        if (!licenseMatches)
+        if (!model.OriginalCitizenIdChecked)
         {
-            const string message = "GPLX người nhận không trùng với GPLX đã được quản trị viên xác minh của khách đứng tên đơn.";
-            ModelState.AddModelError("ReceiverDrivingLicenseNumber", message);
-            identityFailures.Add("GPLX không khớp hồ sơ đã xác minh");
-        }
-
-        if (!originalCitizenIdChecked)
-        {
-            ModelState.AddModelError("OriginalCitizenIdChecked", "Nhân viên phải kiểm tra CCCD bản gốc trước khi giao xe.");
             identityFailures.Add("chưa xác nhận CCCD bản gốc");
         }
 
-        if (!originalDrivingLicenseChecked)
+        if (!model.OriginalDrivingLicenseChecked)
         {
-            ModelState.AddModelError("OriginalDrivingLicenseChecked", "Nhân viên phải kiểm tra GPLX bản gốc trước khi giao xe.");
             identityFailures.Add("chưa xác nhận GPLX bản gốc");
         }
 
         if (!model.ReceiverIdentityCheckedInPerson)
         {
-            ModelState.AddModelError(
-                nameof(HandoverViewModel.ReceiverIdentityCheckedInPerson),
-                "Nhân viên phải xác nhận đúng người có mặt trực tiếp nhận xe.");
             identityFailures.Add("chưa xác nhận đúng người đang trực tiếp nhận xe");
         }
+
+        await ValidateIdentityFaceSessionAsync(model, booking, identityFailures, cancellationToken);
+        await ValidateEvidenceImagesAsync(model, cancellationToken);
 
         if (identityFailures.Count > 0)
         {
             await WriteFailedHandoverAttemptAsync(model.BookingId, identityFailures, cancellationToken);
         }
 
-        await ValidateEvidenceImagesAsync(model, cancellationToken);
         if (!ModelState.IsValid)
+        {
             return View(model);
+        }
 
         var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrWhiteSpace(staffId))
+        {
             return Challenge();
+        }
 
         IReadOnlyList<string> imagePaths;
         try
@@ -210,7 +209,8 @@ public sealed class HandoversController : Controller
                 model.DamageCompensationTerms,
                 model.PenaltyPolicyAccepted,
                 model.Notes,
-                staffId),
+                staffId,
+                model.IdentityFaceSessionId!.Value),
             cancellationToken);
 
         if (!result.Succeeded)
@@ -228,13 +228,14 @@ public sealed class HandoversController : Controller
             "CreateHandover",
             nameof(VehicleHandover),
             model.BookingId.ToString(),
-            $"Lập biên bản giao điện tử đơn #{model.BookingId}; đối chiếu CCCD + GPLX bản gốc đúng khách và lưu xác minh trong cùng transaction; " +
-            $"{mileage:N0} km; 7 nhóm ảnh bắt buộc và {Math.Max(0, imagePaths.Count - 7)} ảnh bổ sung.",
+            $"Lập biên bản giao điện tử đơn #{model.BookingId}; Staff đối chiếu CCCD + GPLX bản gốc với hồ sơ KYC đã xác minh, " +
+            $"chụp ảnh mặt người nhận trực tiếp và consume phiên ảnh một lần trong cùng transaction; {mileage:N0} km; " +
+            $"7 nhóm ảnh bắt buộc và {Math.Max(0, imagePaths.Count - 7)} ảnh bổ sung.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã lưu biên bản và kết quả xác minh người nhận trong cùng một giao dịch. Hãy in, ký và tải bản ký để Staff đối chiếu trước khi bắt đầu chuyến.";
+            "Đã lưu biên bản, ảnh mặt trực tiếp và kết quả đối chiếu người nhận. Hãy in, ký và tải bản ký để Staff kiểm tra trước khi bắt đầu chuyến.";
         return RedirectToBookingDetails(model.BookingId);
     }
 
@@ -242,38 +243,77 @@ public sealed class HandoversController : Controller
     public IActionResult Print(int bookingId) =>
         RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId });
 
-    private async Task<bool> CustomerCitizenIdMatchesAsync(
-        string customerId,
-        string? enteredCitizenId,
+    private async Task<bool> PopulateVerifiedIdentityAsync(
+        HandoverViewModel model,
+        BookingDetailsDto booking,
         CancellationToken cancellationToken)
     {
-        var normalized = new string((enteredCitizenId ?? string.Empty).Where(char.IsDigit).ToArray());
-        if (normalized.Length != 12)
+        var customer = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == booking.CustomerId && user.IsActive)
+            .Select(user => new { user.Id, user.FullName })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (customer is null)
+        {
             return false;
+        }
 
-        return await _dbContext.CustomerDocuments.AsNoTracking().AnyAsync(document =>
-            document.CustomerId == customerId &&
-            document.DocumentType == DocumentTypes.CitizenId &&
-            document.Status == DocumentStatus.Verified &&
-            document.DocumentNumber == normalized,
-            cancellationToken);
+        var documents = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == booking.CustomerId &&
+                document.Status == DocumentStatus.Verified &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.DrivingLicense))
+            .ToListAsync(cancellationToken);
+
+        var citizen = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.CitizenId);
+        var license = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.DrivingLicense);
+        if (citizen is null || license is null ||
+            !citizen.ExpiryDate.HasValue || citizen.ExpiryDate.Value.Date < booking.ReturnDate.Date ||
+            !license.ExpiryDate.HasValue || license.ExpiryDate.Value.Date < booking.ReturnDate.Date)
+        {
+            return false;
+        }
+
+        model.CustomerId = customer.Id;
+        model.VerifiedCustomerName = customer.FullName;
+        model.VerifiedCitizenId = citizen.DocumentNumber;
+        model.VerifiedDrivingLicenseNumber = license.DocumentNumber;
+        return true;
     }
 
-    private async Task<bool> CustomerDrivingLicenseMatchesAsync(
-        string customerId,
-        string? enteredLicenseNumber,
+    private async Task ValidateIdentityFaceSessionAsync(
+        HandoverViewModel model,
+        BookingDetailsDto booking,
+        ICollection<string> identityFailures,
         CancellationToken cancellationToken)
     {
-        var normalized = (enteredLicenseNumber ?? string.Empty).Trim().ToUpperInvariant();
-        if (normalized.Length is < 8 or > 12 || !normalized.All(char.IsLetterOrDigit))
-            return false;
+        if (!model.IdentityFaceSessionId.HasValue)
+        {
+            identityFailures.Add("chưa chụp ảnh mặt người nhận trực tiếp");
+            return;
+        }
 
-        return await _dbContext.CustomerDocuments.AsNoTracking().AnyAsync(document =>
-            document.CustomerId == customerId &&
-            document.DocumentType == DocumentTypes.DrivingLicense &&
-            document.Status == DocumentStatus.Verified &&
-            document.DocumentNumber == normalized,
-            cancellationToken);
+        var valid = await _dbContext.Set<IdentityCaptureSession>()
+            .AsNoTracking()
+            .AnyAsync(session =>
+                session.IdentityCaptureSessionId == model.IdentityFaceSessionId.Value &&
+                session.Purpose == IdentityCapturePurposes.Handover &&
+                session.BookingId == booking.BookingId &&
+                session.TargetCustomerId == booking.CustomerId &&
+                session.CompletedAt.HasValue &&
+                !session.ConsumedAt.HasValue &&
+                session.ImagePath != null,
+                cancellationToken);
+
+        if (!valid)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.IdentityFaceSessionId),
+                "Ảnh mặt người nhận không hợp lệ, không thuộc đúng đơn/khách hoặc đã được sử dụng. Vui lòng chụp lại.");
+            identityFailures.Add("ảnh mặt trực tiếp không hợp lệ");
+        }
     }
 
     private async Task WriteFailedHandoverAttemptAsync(
@@ -299,6 +339,17 @@ public sealed class HandoversController : Controller
         HandoverViewModel model,
         CancellationToken cancellationToken)
     {
+        var required = new IFormFile?[]
+        {
+            model.FrontImage,
+            model.RearImage,
+            model.LeftImage,
+            model.RightImage,
+            model.InteriorImage,
+            model.OdometerImage,
+            model.FuelImage
+        };
+
         await ValidateRequiredImageAsync(model.FrontImage, nameof(HandoverViewModel.FrontImage), "ảnh mặt trước xe", cancellationToken);
         await ValidateRequiredImageAsync(model.RearImage, nameof(HandoverViewModel.RearImage), "ảnh mặt sau xe", cancellationToken);
         await ValidateRequiredImageAsync(model.LeftImage, nameof(HandoverViewModel.LeftImage), "ảnh bên trái xe", cancellationToken);
@@ -318,6 +369,16 @@ public sealed class HandoversController : Controller
         foreach (var image in additional)
         {
             await ValidateImageAsync(image, nameof(HandoverViewModel.Images), cancellationToken);
+        }
+
+        var duplicates = await ImageFileValidator.FindDuplicateContentFileNamesAsync(
+            required.Concat(additional),
+            cancellationToken);
+        if (duplicates.Count > 0)
+        {
+            ModelState.AddModelError(
+                nameof(HandoverViewModel.Images),
+                "Không được dùng cùng một ảnh cho nhiều vị trí. Ảnh trùng nội dung: " + string.Join(", ", duplicates));
         }
     }
 
