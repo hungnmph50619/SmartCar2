@@ -8,6 +8,7 @@ namespace SmartCar.Tests;
 public sealed class StaffOperationsAuthorizationTests
 {
     [Theory]
+    [InlineData(typeof(StaffCustomersController))]
     [InlineData(typeof(HandoversController))]
     [InlineData(typeof(ReturnsController))]
     [InlineData(typeof(ReturnEditsController))]
