@@ -38,12 +38,12 @@
                         </div>
                         <div class="col-md-6">
                             <label asp-for="PhoneNumber" class="form-label"></label>
-                            <input asp-for="PhoneNumber" class="form-control" inputmode="numeric" maxlength="10" autocomplete="tel" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
+                            <input asp-for="PhoneNumber" class="form-control" inputmode="tel" maxlength="12" autocomplete="tel" />
                             <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
                             <label asp-for="CitizenIdNumber" class="form-label"></label>
-                            <input asp-for="CitizenIdNumber" class="form-control" inputmode="numeric" maxlength="12" autocomplete="off" oninput="this.value=this.value.replace(/\D/g,'').slice(0,12)" />
+                            <input asp-for="CitizenIdNumber" class="form-control" inputmode="tel" maxlength="12" autocomplete="off" oninput="this.value=this.value.replace(/\D/g,'').slice(0,12)" />
                             <span asp-validation-for="CitizenIdNumber" class="text-danger small"></span>
                         </div>
                     </div>
@@ -83,3 +83,4 @@
         })();
     </script>
 }
+

@@ -16,5 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/SmartCar.Application/SmartCar.Application.csproj" />
+    <ProjectReference Include="../../src/SmartCar.Web/SmartCar.Web.csproj" />
   </ItemGroup>
 </Project>
+

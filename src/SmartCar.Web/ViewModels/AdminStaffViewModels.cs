@@ -1,3 +1,4 @@
+using SmartCar.Domain.Constants;
 using System.ComponentModel.DataAnnotations;
 
 namespace SmartCar.Web.ViewModels;
@@ -30,7 +31,8 @@ public sealed class AdminStaffListItemViewModel
 public sealed class AdminStaffCreateViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập họ và tên nhân viên.")]
-    [StringLength(100, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 100 ký tự.")]
+    [StringLength(ProfileInputRules.FullNameMaxLength, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 100 ký tự.")]
+    [ValidFullName]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = string.Empty;
 
@@ -42,7 +44,7 @@ public sealed class AdminStaffCreateViewModel
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại.")]
-    [RegularExpression(@"^0\d{9}$", ErrorMessage = "Số điện thoại phải gồm đúng 10 chữ số, bắt đầu bằng số 0 và không được chứa chữ hoặc ký tự đặc biệt.")]
+    [RegularExpression(ProfileInputRules.PhonePattern, ErrorMessage = ProfileInputRules.PhoneError)]
     [Display(Name = "Số điện thoại")]
     public string PhoneNumber { get; set; } = string.Empty;
 
@@ -76,7 +78,8 @@ public sealed class AdminStaffEditViewModel
     public string EmployeeCode { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập họ và tên nhân viên.")]
-    [StringLength(100, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 100 ký tự.")]
+    [StringLength(ProfileInputRules.FullNameMaxLength, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 100 ký tự.")]
+    [ValidFullName]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = string.Empty;
 
@@ -88,7 +91,7 @@ public sealed class AdminStaffEditViewModel
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại.")]
-    [RegularExpression(@"^0\d{9}$", ErrorMessage = "Số điện thoại phải gồm đúng 10 chữ số, bắt đầu bằng số 0 và không được chứa chữ hoặc ký tự đặc biệt.")]
+    [RegularExpression(ProfileInputRules.PhonePattern, ErrorMessage = ProfileInputRules.PhoneError)]
     [Display(Name = "Số điện thoại")]
     public string PhoneNumber { get; set; } = string.Empty;
 
@@ -118,3 +121,4 @@ public sealed class AdminStaffDetailsViewModel
     public DateTime? VerifiedAt { get; set; }
     public string? VerifiedByName { get; set; }
 }
+

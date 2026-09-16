@@ -178,6 +178,12 @@ public class AccountController : Controller
             return RedirectToAction("Index", "Staff");
         }
 
+        if (string.Equals(model.CurrentPassword, model.NewPassword, StringComparison.Ordinal))
+        {
+            ModelState.AddModelError(nameof(model.NewPassword), "Mật khẩu mới phải khác mật khẩu tạm hiện tại.");
+            return View(model);
+        }
+
         var result = await _userManager.ChangePasswordAsync(
             user,
             model.CurrentPassword,
@@ -353,3 +359,4 @@ public class AccountController : Controller
     [HttpGet]
     public IActionResult AccessDenied() => View();
 }
+

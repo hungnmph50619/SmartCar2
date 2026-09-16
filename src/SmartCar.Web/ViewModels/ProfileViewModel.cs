@@ -1,3 +1,4 @@
+using SmartCar.Domain.Constants;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using SmartCar.Application.Features.Documents;
@@ -8,7 +9,8 @@ namespace SmartCar.Web.ViewModels;
 public sealed class ProfileViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập họ và tên.")]
-    [StringLength(150, ErrorMessage = "Họ và tên không được vượt quá 150 ký tự.")]
+    [StringLength(ProfileInputRules.FullNameMaxLength, MinimumLength = 2, ErrorMessage = "Họ và tên phải từ 2 đến 100 ký tự.")]
+    [ValidFullName]
     [Display(Name = "Họ và tên")]
     public string FullName { get; set; } = string.Empty;
 
@@ -16,11 +18,11 @@ public sealed class ProfileViewModel
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại liên hệ.")]
-    [RegularExpression(@"^(0|\+84)[0-9]{9}$", ErrorMessage = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0, hoặc dùng mã quốc gia +84.")]
+    [RegularExpression(ProfileInputRules.PhonePattern, ErrorMessage = ProfileInputRules.PhoneError)]
     [Display(Name = "Số điện thoại liên hệ")]
     public string PhoneNumber { get; set; } = string.Empty;
 
-    [StringLength(300, ErrorMessage = "Địa chỉ không được vượt quá 300 ký tự.")]
+    [StringLength(ProfileInputRules.AddressMaxLength, ErrorMessage = "Địa chỉ không được vượt quá 250 ký tự.")]
     [Display(Name = "Địa chỉ")]
     public string Address { get; set; } = string.Empty;
 
@@ -69,3 +71,4 @@ public sealed class BankAccountViewModel
     public string MaskedAccountNumber { get; set; } = string.Empty;
     public bool HasSavedAccount { get; set; }
 }
+

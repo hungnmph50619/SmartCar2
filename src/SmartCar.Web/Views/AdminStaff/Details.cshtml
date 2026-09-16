@@ -252,7 +252,7 @@
                         : "Sau khi kích hoạt, nhân viên có thể đăng nhập và tiếp tục sử dụng các chức năng được phân quyền.")
                 </div>
             </div>
-            <form asp-action="ToggleStatus" method="post" class="flex-shrink-0" onsubmit="return confirm('@(Model.IsActive ? "Khóa tài khoản nhân viên này? Phiên đang đăng nhập sẽ bị kết thúc và dữ liệu lịch sử vẫn được giữ lại." : "Kích hoạt lại tài khoản nhân viên này?")');">
+            <form asp-action="@(Model.IsActive ? "LockStaff" : "UnlockStaff")" method="post" class="flex-shrink-0" onsubmit="return confirm('@(Model.IsActive ? "Khóa tài khoản nhân viên này? Phiên đang đăng nhập sẽ bị kết thúc và dữ liệu lịch sử vẫn được giữ lại." : "Kích hoạt lại tài khoản nhân viên này?")');">
                 <input type="hidden" name="id" value="@Model.UserId" />
                 <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-success") px-4" type="submit">
                     @(Model.IsActive ? "Khóa tài khoản" : "Kích hoạt lại")
@@ -310,3 +310,4 @@
 })();
 </script>
 }
+
