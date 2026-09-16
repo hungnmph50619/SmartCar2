@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -40,25 +41,20 @@ internal sealed class BookingReservationPolicy
 
         foreach (var booking in candidates)
         {
-            if (booking.Status == BookingStatus.PendingPayment &&
+            var transferAwaitingConfirmation =
+                booking.Status == BookingStatus.PendingPayment &&
                 booking.Payments.Any(payment =>
                     payment.Type == PaymentType.Rental &&
-                    payment.Status == PaymentStatus.AwaitingConfirmation))
-            {
-                if (booking.ReservationExpiresAt.HasValue)
-                {
-                    booking.ReservationExpiresAt = null;
-                    changed = true;
-                }
-
-                continue;
-            }
+                    payment.Status == PaymentStatus.AwaitingConfirmation);
 
             if (!booking.ReservationExpiresAt.HasValue)
             {
                 booking.ReservationExpiresAt = booking.Status == BookingStatus.PendingConfirmation
                     ? booking.CreatedAt.AddMinutes(RentalPolicy.BookingConfirmationHoldMinutes)
-                    : now.AddMinutes(RentalPolicy.BookingPaymentHoldMinutes);
+                    : now.AddMinutes(
+                        transferAwaitingConfirmation
+                            ? RentalPolicy.BookingTransferReconciliationHoldMinutes
+                            : RentalPolicy.BookingPaymentHoldMinutes);
                 changed = true;
             }
 
@@ -68,13 +64,41 @@ internal sealed class BookingReservationPolicy
             }
 
             var oldStatus = booking.Status;
+            var expiredDuringTransferReconciliation = transferAwaitingConfirmation;
+
             booking.Status = BookingStatus.Expired;
             booking.CancelledBy = "Hệ thống";
             booking.CancelledAt = now;
             booking.CancelReason = oldStatus == BookingStatus.PendingConfirmation
                 ? $"Yêu cầu đặt xe hết hạn sau {RentalPolicy.BookingConfirmationHoldMinutes} phút chờ xác nhận."
-                : $"Đơn hết hạn sau {RentalPolicy.BookingPaymentHoldMinutes} phút chờ thanh toán.";
+                : expiredDuringTransferReconciliation
+                    ? $"Đơn hết hạn sau {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút chờ đối soát chuyển khoản."
+                    : $"Đơn hết hạn sau {RentalPolicy.BookingPaymentHoldMinutes} phút chờ thanh toán.";
             booking.ReservationExpiresAt = null;
+
+            // Một booking đã hết hold không được để payment Pending/AwaitingConfirmation tiếp tục
+            // giữ trạng thái mập mờ. Chỉ đóng các khoản tiền thuê/cọc chưa thanh toán của hold này.
+            foreach (var payment in booking.Payments.Where(payment =>
+                         payment.Type is PaymentType.Rental or PaymentType.Deposit &&
+                         payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation))
+            {
+                payment.Status = PaymentStatus.Failed;
+                payment.PaidAt = null;
+                payment.TransactionCode = null;
+            }
+
+            var alreadyRecorded = await _dbContext.Set<BookingHoldEvent>()
+                .AnyAsync(item => item.BookingId == booking.BookingId, cancellationToken);
+            if (!alreadyRecorded)
+            {
+                _dbContext.Set<BookingHoldEvent>().Add(new BookingHoldEvent
+                {
+                    BookingId = booking.BookingId,
+                    CustomerId = booking.CustomerId,
+                    VehicleId = booking.VehicleId,
+                    OccurredAt = now
+                });
+            }
 
             _dbContext.Notifications.Add(new Notification
             {
@@ -82,7 +106,9 @@ internal sealed class BookingReservationPolicy
                 Title = "Đơn giữ chỗ đã hết hạn",
                 Message = oldStatus == BookingStatus.PendingConfirmation
                     ? $"Đơn #{booking.BookingId} đã hết thời gian chờ xác nhận và lịch xe đã được giải phóng."
-                    : $"Đơn #{booking.BookingId} đã hết thời gian thanh toán và lịch xe đã được giải phóng."
+                    : expiredDuringTransferReconciliation
+                        ? $"Đơn #{booking.BookingId} đã quá thời gian đối soát chuyển khoản và lịch xe đã được giải phóng. Nếu bạn thực sự đã chuyển tiền, vui lòng liên hệ SmartCar để kiểm tra giao dịch."
+                        : $"Đơn #{booking.BookingId} đã hết thời gian thanh toán và lịch xe đã được giải phóng."
             });
 
             changed = true;
@@ -92,6 +118,57 @@ internal sealed class BookingReservationPolicy
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    public async Task<bool> HasActiveUnpaidHoldAsync(
+        string customerId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return false;
+        }
+
+        return await _dbContext.Bookings
+            .AsNoTracking()
+            .AnyAsync(booking =>
+                booking.CustomerId == customerId &&
+                (booking.Status == BookingStatus.PendingConfirmation ||
+                 booking.Status == BookingStatus.PendingPayment),
+                cancellationToken);
+    }
+
+    public async Task<BookingHoldRestriction> GetHoldRestrictionAsync(
+        string customerId,
+        int vehicleId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return BookingHoldAbusePolicy.Evaluate(
+                DateTime.UtcNow,
+                Array.Empty<DateTime>(),
+                Array.Empty<DateTime>());
+        }
+
+        var now = DateTime.UtcNow;
+        var windowStart = now.AddHours(-BookingHoldAbusePolicy.RollingWindowHours);
+        var events = await _dbContext.Set<BookingHoldEvent>()
+            .AsNoTracking()
+            .Where(item =>
+                item.CustomerId == customerId &&
+                !item.IsWaived &&
+                item.OccurredAt >= windowStart &&
+                item.OccurredAt <= now)
+            .Select(item => new { item.VehicleId, item.OccurredAt })
+            .ToListAsync(cancellationToken);
+
+        return BookingHoldAbusePolicy.Evaluate(
+            now,
+            events.Select(item => item.OccurredAt).ToArray(),
+            events.Where(item => item.VehicleId == vehicleId)
+                .Select(item => item.OccurredAt)
+                .ToArray());
     }
 
     public async Task SetConfirmationExpiryAsync(
@@ -128,6 +205,23 @@ internal sealed class BookingReservationPolicy
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task SetTransferReconciliationExpiryAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        var booking = await _dbContext.Bookings
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking is null || booking.Status != BookingStatus.PendingPayment)
+        {
+            return;
+        }
+
+        booking.ReservationExpiresAt = DateTime.UtcNow
+            .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public Task<bool> HasBufferedConflictAsync(
         int vehicleId,
         DateTime pickupDate,
@@ -141,9 +235,6 @@ internal sealed class BookingReservationPolicy
             ? RentalPolicy.DeliveryLeadMinutes
             : 0;
 
-        // Trước chuyến đang xét phải có đủ thời gian nhận/kiểm tra xe và, nếu giao tận nơi,
-        // thêm thời gian chuẩn bị di chuyển. Sau chuyến đang xét, buffer phụ thuộc phương thức
-        // nhận xe của chính chuyến kế tiếp đã tồn tại trong DB.
         return _dbContext.Bookings
             .AsNoTracking()
             .AnyAsync(booking =>
@@ -171,9 +262,6 @@ internal sealed class BookingReservationPolicy
             .Select(vehicle => (VehicleStatus?)vehicle.Status)
             .FirstOrDefaultAsync(cancellationToken);
 
-        // Buffer kế hoạch là 60 phút. Khi xe thực tế đang ở Inspection thì nguồn sự thật là
-        // ReturnedAt + thời gian xoay vòng; nếu nhân viên đã hoàn tất kiểm tra và xe Available
-        // thì không giữ xe chỉ vì đồng hồ chưa đủ buffer kế hoạch.
         if (vehicleStatus != VehicleStatus.Inspection)
         {
             return null;
