@@ -1,4 +1,6 @@
-﻿namespace SmartCar.Domain.Entities;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace SmartCar.Domain.Entities;
 
 public class VehicleReturn
 {
@@ -9,6 +11,10 @@ public class VehicleReturn
     public string FuelLevel { get; set; } = string.Empty;
     public string? ExteriorCondition { get; set; }
     public string? InteriorCondition { get; set; }
+
+    [MaxLength(1000)]
+    public string? AccessoryStatus { get; set; }
+
     public bool HasDamage { get; set; }
     public bool IsLateReturn { get; set; }
     public int LateMinutes { get; set; }
