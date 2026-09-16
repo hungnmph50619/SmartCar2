@@ -13,7 +13,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class AdminRentalDocumentsController : Controller
 {
     private const long MaximumSignedDocumentBytes = 8 * 1024 * 1024;
