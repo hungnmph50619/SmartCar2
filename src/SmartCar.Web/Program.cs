@@ -10,7 +10,6 @@ using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Filters;
 using SmartCar.Web.Services;
 
-// Giữ tiếng Việt hiển thị đúng trong Developer PowerShell/Terminal khi chạy app.
 Console.InputEncoding = Encoding.UTF8;
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -27,6 +26,7 @@ builder.Services.AddScoped<AdminWorkNotificationFilter>();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
+    options.Filters.Add(new KycFaceCaptureFilter());
     options.Filters.Add(new StaffOperationsAuthorizationFilter());
     options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
     options.Filters.AddService<AdminWorkNotificationFilter>();
@@ -42,8 +42,6 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Không cho truy cập trực tiếp ảnh CCCD/GPLX cũ trong wwwroot.
-// Ảnh chỉ được trả về thông qua controller sau khi kiểm tra quyền.
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments(
@@ -61,11 +59,6 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 
-// Kiểm soát tài khoản Staff ở mỗi request:
-// - tài khoản đã bị Admin khóa thì phiên đang đăng nhập cũng bị cắt ngay ở request kế tiếp;
-// - tài khoản dùng mật khẩu ban đầu phải đổi mật khẩu trước khi vào khu vực nghiệp vụ;
-// - Staff có thể có một tài khoản Customer riêng dùng cùng CCCD/SĐT, nhưng không được
-//   thực hiện thao tác làm thay đổi chính đơn thuê của mình.
 app.Use(async (context, next) =>
 {
     if (context.User.Identity?.IsAuthenticated == true &&
@@ -187,8 +180,6 @@ app.Use(async (context, next) =>
 
 app.UseAuthorization();
 
-// Ảnh CCCD/GPLX là dữ liệu nhạy cảm. Khi Quản trị viên xem ảnh thông qua
-// endpoint có phân quyền, ghi lại thao tác để có thể truy vết khi cần.
 app.Use(async (context, next) =>
 {
     await next();
