@@ -79,17 +79,65 @@ public sealed class StaffPaymentsController : Controller
         }
 
         var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        await _auditService.WriteAsync(
-            staffId,
-            "StaffSubmitCounterQr",
-            nameof(Payment),
-            bookingId.ToString(),
-            $"Nhân viên tại quầy xác nhận khách đã thực hiện chuyển khoản/QR cho đơn #{bookingId}; giao dịch chuyển sang chờ Admin đối soát.",
-            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken: cancellationToken);
+        var bookingRow = await _dbContext.Bookings
+            .FirstAsync(item => item.BookingId == bookingId, cancellationToken);
+        bookingRow.ReservationExpiresAt = DateTime.UtcNow
+            .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
+
+        // PaymentService dùng chung cho Customer và Staff. Sau khi Staff thực hiện tại quầy,
+        // sửa audit thanh toán vừa sinh về đúng actor thay vì để lịch sử ghi nhầm là Customer tự báo.
+        var rentalPaymentId = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment =>
+                payment.BookingId == bookingId &&
+                payment.Type == PaymentType.Rental &&
+                payment.Method == PaymentMethods.BankQr &&
+                payment.Status == PaymentStatus.AwaitingConfirmation)
+            .OrderByDescending(payment => payment.PaymentId)
+            .Select(payment => payment.PaymentId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var correctedExistingAudit = false;
+        if (rentalPaymentId > 0)
+        {
+            var paymentAudit = await _dbContext.AuditLogs
+                .Where(log =>
+                    log.Action == "SubmitQrPayment" &&
+                    log.EntityName == nameof(Payment) &&
+                    log.EntityId == rentalPaymentId.ToString() &&
+                    log.UserId == booking.CustomerId)
+                .OrderByDescending(log => log.CreatedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (paymentAudit is not null)
+            {
+                paymentAudit.UserId = staffId;
+                paymentAudit.Action = "StaffSubmitCounterQr";
+                paymentAudit.Description =
+                    $"Nhân viên tại quầy xác nhận khách đã thực hiện chuyển khoản/QR cho đơn #{bookingId}; " +
+                    $"giao dịch chờ Admin đối soát tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút.";
+                paymentAudit.IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                correctedExistingAudit = true;
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (!correctedExistingAudit)
+        {
+            await _auditService.WriteAsync(
+                staffId,
+                "StaffSubmitCounterQr",
+                nameof(Payment),
+                rentalPaymentId > 0 ? rentalPaymentId.ToString() : bookingId.ToString(),
+                $"Nhân viên tại quầy xác nhận khách đã thực hiện chuyển khoản/QR cho đơn #{bookingId}; " +
+                $"giao dịch chờ Admin đối soát tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút.",
+                ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+                cancellationToken: cancellationToken);
+        }
 
         TempData["SuccessMessage"] =
-            "Đã ghi nhận khách báo chuyển khoản. Giao dịch đang chờ Admin đối soát; chưa được coi là đã thanh toán.";
+            $"Đã ghi nhận khách báo chuyển khoản. Admin có tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
         return RedirectToStaffDetails(bookingId);
     }
 
