@@ -92,4 +92,42 @@ public sealed class BookingWorkflowRulesTests
     {
         Assert.False(BookingWorkflowRules.CanStaffReview(status, staffReviewedAt: null));
     }
+
+    [Fact]
+    public void CanPrepareHandover_AllowsDraftBeforePickupButNotAfterReturn()
+    {
+        var pickup = new DateTime(2026, 9, 20, 10, 0, 0);
+        var returnAt = new DateTime(2026, 9, 21, 10, 0, 0);
+
+        Assert.True(BookingWorkflowRules.CanPrepareHandover(
+            pickup.AddHours(-2),
+            returnAt));
+        Assert.False(BookingWorkflowRules.CanPrepareHandover(
+            returnAt,
+            returnAt));
+    }
+
+    [Fact]
+    public void CanStartTrip_RequiresCurrentTimeInsideBookedWindow()
+    {
+        var pickup = new DateTime(2026, 9, 20, 10, 0, 0);
+        var returnAt = new DateTime(2026, 9, 21, 10, 0, 0);
+
+        Assert.False(BookingWorkflowRules.CanStartTrip(pickup.AddSeconds(-1), pickup, returnAt));
+        Assert.True(BookingWorkflowRules.CanStartTrip(pickup, pickup, returnAt));
+        Assert.True(BookingWorkflowRules.CanStartTrip(returnAt.AddSeconds(-1), pickup, returnAt));
+        Assert.False(BookingWorkflowRules.CanStartTrip(returnAt, pickup, returnAt));
+    }
+
+    [Fact]
+    public void CanRecordReturn_RejectsBeforeHandoverAndFutureBeyondGrace()
+    {
+        var handoverAt = new DateTime(2026, 9, 20, 10, 0, 0);
+        var now = new DateTime(2026, 9, 20, 12, 0, 0);
+
+        Assert.False(BookingWorkflowRules.CanRecordReturn(handoverAt.AddMinutes(-1), handoverAt, now));
+        Assert.True(BookingWorkflowRules.CanRecordReturn(now, handoverAt, now));
+        Assert.True(BookingWorkflowRules.CanRecordReturn(now.AddMinutes(5), handoverAt, now));
+        Assert.False(BookingWorkflowRules.CanRecordReturn(now.AddMinutes(6), handoverAt, now));
+    }
 }
