@@ -17,15 +17,18 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminBookingsController : Controller
 {
     private readonly IBookingService _bookingService;
+    private readonly IBookingReviewService _bookingReviewService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
 
     public AdminBookingsController(
         IBookingService bookingService,
+        IBookingReviewService bookingReviewService,
         IAuditService auditService,
         ApplicationDbContext dbContext)
     {
         _bookingService = bookingService;
+        _bookingReviewService = bookingReviewService;
         _auditService = auditService;
         _dbContext = dbContext;
     }
@@ -84,6 +87,17 @@ public sealed class AdminBookingsController : Controller
             return RedirectToAction(nameof(Details), new { id });
         }
 
+        // AuditLog chỉ chứng minh nhân viên đã từng kiểm tra. Trước khi Admin duyệt phải
+        // kiểm tra lại dữ liệu hiện tại để không duyệt dựa trên KYC/lịch xe đã lỗi thời.
+        var currentReview = await _bookingReviewService.ValidateForStaffReviewAsync(id, cancellationToken);
+        if (!currentReview.Succeeded)
+        {
+            TempData["ErrorMessage"] =
+                "Đơn không còn đủ điều kiện duyệt theo dữ liệu hiện tại: " +
+                string.Join("; ", currentReview.Errors);
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
         var result = await _bookingService.ConfirmAsync(id, cancellationToken);
         SetMessage(result, "Đã duyệt đơn thuê và tạo khoản thanh toán cho khách.");
 
@@ -92,7 +106,7 @@ public sealed class AdminBookingsController : Controller
             await WriteAuditAsync(
                 "AdminApproveBooking",
                 id,
-                $"Quản trị viên duyệt đơn thuê #{id} sau bước kiểm tra của nhân viên và chuyển sang Chờ thanh toán.",
+                $"Quản trị viên duyệt đơn thuê #{id} sau bước kiểm tra của nhân viên và re-check KYC/xe/lịch hiện tại; chuyển sang Chờ thanh toán.",
                 cancellationToken);
         }
 
