@@ -72,23 +72,31 @@ public sealed class AdminBookingsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Confirm(int id, CancellationToken cancellationToken)
     {
-        var staffReviewed = await _dbContext.AuditLogs
+        var staffReview = await _dbContext.Bookings
             .AsNoTracking()
-            .AnyAsync(log =>
-                log.Action == "StaffReviewedBooking" &&
-                log.EntityName == "Booking" &&
-                log.EntityId == id.ToString(),
-                cancellationToken);
+            .Where(item => item.BookingId == id)
+            .Select(item => new
+            {
+                item.StaffReviewedAt,
+                item.StaffReviewedByStaffId
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (!staffReviewed)
+        if (staffReview is null)
+        {
+            return NotFound();
+        }
+
+        if (!staffReview.StaffReviewedAt.HasValue ||
+            string.IsNullOrWhiteSpace(staffReview.StaffReviewedByStaffId))
         {
             TempData["ErrorMessage"] =
-                "Đơn chưa có bước kiểm tra của nhân viên. Nhân viên phải kiểm tra KYC, xe và lịch thuê trước khi quản trị viên duyệt.";
+                "Đơn chưa được nhân viên kiểm tra và gửi duyệt. Quản trị viên không thể bỏ qua bước vận hành này.";
             return RedirectToAction(nameof(Details), new { id });
         }
 
-        // AuditLog chỉ chứng minh nhân viên đã từng kiểm tra. Trước khi Admin duyệt phải
-        // kiểm tra lại dữ liệu hiện tại để không duyệt dựa trên KYC/lịch xe đã lỗi thời.
+        // Staff review là workflow state, nhưng dữ liệu có thể đổi sau thời điểm review.
+        // Vì vậy Admin vẫn phải re-check KYC, xe và lịch ngay tại thời điểm duyệt.
         var currentReview = await _bookingReviewService.ValidateForStaffReviewAsync(id, cancellationToken);
         if (!currentReview.Succeeded)
         {
@@ -106,7 +114,7 @@ public sealed class AdminBookingsController : Controller
             await WriteAuditAsync(
                 "AdminApproveBooking",
                 id,
-                $"Quản trị viên duyệt đơn thuê #{id} sau bước kiểm tra của nhân viên và re-check KYC/xe/lịch hiện tại; chuyển sang Chờ thanh toán.",
+                $"Quản trị viên duyệt đơn thuê #{id} sau bước Staff review có trạng thái lưu trên Booking và re-check KYC/xe/lịch hiện tại; chuyển sang Chờ thanh toán.",
                 cancellationToken);
         }
 
