@@ -69,4 +69,27 @@ public sealed class BookingWorkflowRulesTests
     {
         Assert.False(BookingWorkflowRules.IsStaffWorkItem(status, hasOpenRefund: false));
     }
+
+    [Fact]
+    public void CanStaffReview_AllowsPendingConfirmationOnlyBeforeReview()
+    {
+        Assert.True(BookingWorkflowRules.CanStaffReview(
+            BookingStatus.PendingConfirmation,
+            staffReviewedAt: null));
+
+        Assert.False(BookingWorkflowRules.CanStaffReview(
+            BookingStatus.PendingConfirmation,
+            staffReviewedAt: DateTime.UtcNow));
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.PendingPayment)]
+    [InlineData(BookingStatus.Paid)]
+    [InlineData(BookingStatus.ReadyForPickup)]
+    [InlineData(BookingStatus.Rented)]
+    [InlineData(BookingStatus.Cancelled)]
+    public void CanStaffReview_RejectsStatusesOutsidePendingConfirmation(BookingStatus status)
+    {
+        Assert.False(BookingWorkflowRules.CanStaffReview(status, staffReviewedAt: null));
+    }
 }
