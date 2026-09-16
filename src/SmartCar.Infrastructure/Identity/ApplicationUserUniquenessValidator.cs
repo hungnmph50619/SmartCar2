@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Identity;
-using SmartCar.Domain.Constants;
 
 namespace SmartCar.Infrastructure.Identity;
 
@@ -15,7 +14,7 @@ public sealed class ApplicationUserUniquenessValidator : IUserValidator<Applicat
         {
             errors.Add(new IdentityError
             {
-                Code = "DuplicatePhoneNumber",
+                Code = "DuplicateAccountData",
                 Description = AccountInputGuard.DuplicatePhoneMessage
             });
         }
@@ -24,7 +23,7 @@ public sealed class ApplicationUserUniquenessValidator : IUserValidator<Applicat
         {
             errors.Add(new IdentityError
             {
-                Code = "DuplicateCitizenIdNumber",
+                Code = "DuplicateAccountData",
                 Description = AccountInputGuard.DuplicateCitizenIdMessage
             });
         }
@@ -33,7 +32,7 @@ public sealed class ApplicationUserUniquenessValidator : IUserValidator<Applicat
         {
             errors.Add(new IdentityError
             {
-                Code = "DuplicateEmployeeCode",
+                Code = "DuplicateAccountData",
                 Description = AccountInputGuard.DuplicateEmployeeCodeMessage
             });
         }
