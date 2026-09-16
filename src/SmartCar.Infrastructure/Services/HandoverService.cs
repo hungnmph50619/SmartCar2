@@ -27,6 +27,11 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Không xác định được nhân viên đã trực tiếp kiểm tra người nhận xe.");
         }
 
+        if (request.IdentityFaceSessionId == Guid.Empty)
+        {
+            return OperationResult.Failure("Cần chụp ảnh khuôn mặt người nhận xe trực tiếp trước khi lập biên bản.");
+        }
+
         await using var transaction = await _dbContext.Database
             .BeginTransactionAsync(cancellationToken);
 
@@ -49,6 +54,22 @@ internal sealed class HandoverService : IHandoverService
         if (booking.Handover is not null)
         {
             return OperationResult.Failure("Đơn đã có biên bản giao xe.");
+        }
+
+        var faceSession = await _dbContext.Set<IdentityCaptureSession>()
+            .FirstOrDefaultAsync(item =>
+                item.IdentityCaptureSessionId == request.IdentityFaceSessionId,
+                cancellationToken);
+
+        if (faceSession is null ||
+            faceSession.Purpose != IdentityCapturePurposes.Handover ||
+            faceSession.BookingId != booking.BookingId ||
+            faceSession.TargetCustomerId != booking.CustomerId ||
+            !faceSession.CanConsume(DateTime.UtcNow) ||
+            !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
+        {
+            return OperationResult.Failure(
+                "Ảnh mặt người nhận không hợp lệ, không thuộc đúng đơn/khách hoặc đã được dùng. Vui lòng chụp lại tại quầy.");
         }
 
         var rentalPaid = booking.Payments.Any(payment =>
@@ -137,6 +158,7 @@ internal sealed class HandoverService : IHandoverService
             InteriorCondition = Normalize(request.InteriorCondition),
             Accessories = Normalize(request.Accessories),
             ImagePaths = Normalize(request.ImagePaths),
+            ReceiverFaceImagePath = faceSession.ImagePath,
             Notes = Normalize(request.Notes),
             IncludedKilometers = rentalDays * RentalPolicy.IncludedKilometersPerDay,
             ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
@@ -148,6 +170,8 @@ internal sealed class HandoverService : IHandoverService
             IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
             IdentityVerifiedAt = verifiedAt
         };
+
+        faceSession.ConsumedAt = verifiedAt;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
