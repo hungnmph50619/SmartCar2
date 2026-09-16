@@ -10,15 +10,20 @@ namespace SmartCar.Domain.Constants
         // Giữ chỗ:
         // - Đơn mới có tối đa 60 phút cho bước nhân viên kiểm tra và quản trị viên duyệt.
         // - Sau khi được quản trị viên duyệt, khách có 30 phút để thanh toán/báo đã chuyển khoản.
-        // - Khi khách đã báo chuyển khoản, SmartCar có tối đa 120 phút để đối soát. Không trạng thái
-        //   nào trước thanh toán được giữ lịch xe vô thời hạn.
+        // - Sau khi báo chuyển khoản, SmartCar có tối đa 120 phút để đối soát; không giữ lịch vô hạn.
         public const int BookingConfirmationHoldMinutes = 60;
         public const int BookingPaymentHoldMinutes = 30;
         public const int BookingTransferReconciliationHoldMinutes = 120;
 
+        // Khoảng vận hành tối thiểu giữa hai lượt thuê cùng xe: nhận xe trả về, kiểm tra, chụp ảnh,
+        // đối chiếu km/nhiên liệu và vệ sinh nhanh trước lượt kế tiếp.
         public const int VehicleTurnaroundMinutes = 60;
+
+        // Khi lượt kế tiếp là giao tận nơi, hệ thống cần thêm thời gian chuẩn bị/di chuyển.
         public const int DeliveryLeadMinutes = 30;
 
+        // No-show: sau thời gian chờ, không hoàn phần tiền thuê. Tiền cọc và phí giao chưa thực hiện
+        // vẫn được hoàn theo số thực tế còn lại của đơn.
         public const int NoShowGraceMinutes = 30;
         public const decimal NoShowFeeRate = 1.00m;
 
@@ -70,12 +75,16 @@ namespace SmartCar.Domain.Constants
             var deltaLng = deliveryLng - storeLng;
 
             var a =
-                Math.Sin(deltaLat / 2d) * Math.Sin(deltaLat / 2d) +
+                Math.Pow(Math.Sin(deltaLat / 2d), 2d) +
                 Math.Cos(storeLat) * Math.Cos(deliveryLat) *
-                Math.Sin(deltaLng / 2d) * Math.Sin(deltaLng / 2d);
+                Math.Pow(Math.Sin(deltaLng / 2d), 2d);
 
             var c = 2d * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1d - a));
-            return EarthRadiusKm * c;
+
+            return Math.Round(
+                EarthRadiusKm * c,
+                2,
+                MidpointRounding.AwayFromZero);
         }
 
         public static decimal CalculateDeliveryFee(
@@ -83,36 +92,47 @@ namespace SmartCar.Domain.Constants
             decimal? deliveryLatitude,
             decimal? deliveryLongitude)
         {
-            if (pickupMethod == VehiclePickupMethod.StorePickup)
+            if (pickupMethod != VehiclePickupMethod.Delivery)
             {
                 return 0m;
             }
 
             if (!deliveryLatitude.HasValue || !deliveryLongitude.HasValue)
             {
-                throw new ArgumentException("Thiếu tọa độ giao xe.");
+                return 0m;
             }
 
             var distanceKm = CalculateDeliveryDistanceKm(
                 deliveryLatitude.Value,
                 deliveryLongitude.Value);
 
-            if (distanceKm > MaxDeliveryDistanceKm)
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(deliveryLatitude),
-                    $"Khoảng cách giao xe vượt quá {MaxDeliveryDistanceKm:0} km.");
-            }
+            var extraDistanceKm = Math.Max(0d, distanceKm - IncludedDeliveryDistanceKm);
+            var extraWholeKilometers = (decimal)Math.Ceiling(extraDistanceKm);
 
-            if (distanceKm <= IncludedDeliveryDistanceKm)
-            {
-                return BaseDeliveryFee;
-            }
-
-            var extraKilometers = Math.Ceiling(distanceKm - IncludedDeliveryDistanceKm);
-            return BaseDeliveryFee + (decimal)extraKilometers * DeliveryFeePerExtraKm;
+            return BaseDeliveryFee + extraWholeKilometers * DeliveryFeePerExtraKm;
         }
 
-        private static double ToRadians(double degrees) => degrees * Math.PI / 180d;
+        public static bool IsWithinDeliveryRange(
+            decimal deliveryLatitude,
+            decimal deliveryLongitude)
+        {
+            return CalculateDeliveryDistanceKm(
+                       deliveryLatitude,
+                       deliveryLongitude)
+                   <= MaxDeliveryDistanceKm;
+        }
+
+        public static decimal CalculateDeposit(decimal rentalAmount)
+        {
+            return Math.Round(
+                rentalAmount * DepositRate,
+                0,
+                MidpointRounding.AwayFromZero);
+        }
+
+        private static double ToRadians(double degrees)
+        {
+            return degrees * Math.PI / 180d;
+        }
     }
 }
