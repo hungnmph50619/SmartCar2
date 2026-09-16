@@ -80,6 +80,34 @@ public static class ImageFileValidator
         return CryptographicOperations.FixedTimeEquals(firstHash, secondHash);
     }
 
+    public static async Task<IReadOnlyList<string>> FindDuplicateContentFileNamesAsync(
+        IEnumerable<IFormFile?> files,
+        CancellationToken cancellationToken = default)
+    {
+        var seen = new Dictionary<string, string>(StringComparer.Ordinal);
+        var duplicates = new List<string>();
+
+        foreach (var file in files.Where(file => file is { Length: > 0 }).Cast<IFormFile>())
+        {
+            await using var stream = file.OpenReadStream();
+            var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+            if (seen.TryGetValue(hash, out var firstName))
+            {
+                if (!duplicates.Contains(firstName, StringComparer.OrdinalIgnoreCase))
+                {
+                    duplicates.Add(firstName);
+                }
+                duplicates.Add(file.FileName);
+            }
+            else
+            {
+                seen[hash] = file.FileName;
+            }
+        }
+
+        return duplicates.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
     public static string GetContentType(string fileName)
     {
         return Path.GetExtension(fileName).ToLowerInvariant() switch
