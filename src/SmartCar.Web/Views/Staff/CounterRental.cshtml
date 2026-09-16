@@ -1,4 +1,5 @@
 @model SmartCar.Web.ViewModels.StaffCounterRentalViewModel
+@using SmartCar.Application.Features.Bookings
 @using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Thuê xe tại quầy";
@@ -296,7 +297,7 @@
                 if (!pickup.value || !returned.value) return false;
                 const start = new Date(pickup.value);
                 const end = new Date(returned.value);
-                return Number.isFinite(start.valueOf()) && Number.isFinite(end.valueOf()) && end > start && start >= new Date(Date.now() + 4 * 60000);
+                return Number.isFinite(start.valueOf()) && Number.isFinite(end.valueOf()) && end > start && start >= new Date(Date.now() + @BookingDateRules.MinimumPickupLeadMinutes * 60000);
             };
 
             const renderDuration = () => {
