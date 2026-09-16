@@ -33,6 +33,27 @@ public static class BookingWorkflowRules
         DateTime? staffReviewedAt) =>
         status == BookingStatus.PendingConfirmation && !staffReviewedAt.HasValue;
 
+    // Biên bản nháp có thể chuẩn bị trước giờ nhận để Staff không phải đợi đến đúng phút
+    // mới bắt đầu nhập ảnh/tình trạng. Chuyến chỉ được bắt đầu bởi CanStartTrip.
+    public static bool CanPrepareHandover(
+        DateTime now,
+        DateTime returnDate) =>
+        now < returnDate;
+
+    public static bool CanStartTrip(
+        DateTime now,
+        DateTime pickupDate,
+        DateTime returnDate) =>
+        now >= pickupDate && now < returnDate;
+
+    public static bool CanRecordReturn(
+        DateTime returnedAt,
+        DateTime handoverAt,
+        DateTime now,
+        int futureGraceMinutes = 5) =>
+        returnedAt >= handoverAt &&
+        returnedAt <= now.AddMinutes(Math.Max(0, futureGraceMinutes));
+
     public static bool IsStaffWorkItem(
         BookingStatus status,
         bool hasOpenRefund)
