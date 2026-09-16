@@ -71,10 +71,31 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 $"{blockedUntil.Value:dd/MM/yyyy HH:mm}.");
         }
 
+        // Chụp cấu hình trước khi tạo booking. Giá trị này được lưu riêng trên booking
+        // để các lần thay đổi policy sau đó không làm thay đổi lịch sử đơn cũ.
+        var depositHoldDaysApplied = await GetConfiguredDepositHoldDaysAsync(cancellationToken);
+
         var result = await _inner.CreateAsync(customerId, request, cancellationToken);
         if (!result.Succeeded || !result.BookingId.HasValue)
         {
             return result;
+        }
+
+        var createdBooking = await _dbContext.Bookings
+            .FirstOrDefaultAsync(
+                booking => booking.BookingId == result.BookingId.Value,
+                cancellationToken);
+
+        if (createdBooking is null)
+        {
+            return BookingMutationResult.Failure(
+                "Đơn đã được tạo nhưng không thể tải lại để áp dụng chính sách giữ cọc.");
+        }
+
+        if (createdBooking.DepositHoldDaysApplied != depositHoldDaysApplied)
+        {
+            createdBooking.DepositHoldDaysApplied = depositHoldDaysApplied;
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
         var postConflict = await _policy.HasBufferedConflictAsync(
@@ -87,21 +108,13 @@ internal sealed class PolicyAwareBookingService : IBookingService
 
         if (postConflict)
         {
-            var createdBooking = await _dbContext.Bookings
-                .FirstOrDefaultAsync(
-                    booking => booking.BookingId == result.BookingId.Value,
-                    cancellationToken);
-
-            if (createdBooking is not null)
-            {
-                createdBooking.Status = BookingStatus.Expired;
-                createdBooking.CancelledBy = "Hệ thống";
-                createdBooking.CancelledAt = DateTime.UtcNow;
-                createdBooking.CancelReason =
-                    "Lịch xe phát sinh xung đột trong lúc tạo đơn; hệ thống tự giải phóng giữ chỗ.";
-                createdBooking.ReservationExpiresAt = null;
-                await _dbContext.SaveChangesAsync(cancellationToken);
-            }
+            createdBooking.Status = BookingStatus.Expired;
+            createdBooking.CancelledBy = "Hệ thống";
+            createdBooking.CancelledAt = DateTime.UtcNow;
+            createdBooking.CancelReason =
+                "Lịch xe phát sinh xung đột trong lúc tạo đơn; hệ thống tự giải phóng giữ chỗ.";
+            createdBooking.ReservationExpiresAt = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
             return BookingMutationResult.Failure(
                 "Xe vừa có lịch thuê khác và không còn đủ thời gian xoay vòng. Vui lòng chọn khung giờ hoặc xe khác.");
@@ -236,5 +249,18 @@ internal sealed class PolicyAwareBookingService : IBookingService
         }
 
         return await _inner.MarkReadyForPickupAsync(bookingId, cancellationToken);
+    }
+
+    private async Task<int> GetConfiguredDepositHoldDaysAsync(
+        CancellationToken cancellationToken)
+    {
+        var values = await _dbContext.Database
+            .SqlQueryRaw<int>(
+                "SELECT [DepositHoldDays] AS [Value] FROM [dbo].[BusinessSettings] WHERE [BusinessSettingId] = 1")
+            .ToListAsync(cancellationToken);
+
+        return values.Count == 0
+            ? DepositHoldPolicy.DefaultDays
+            : DepositHoldPolicy.NormalizeDays(values[0]);
     }
 }

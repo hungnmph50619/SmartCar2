@@ -1,0 +1,200 @@
+@model SmartCar.Web.ViewModels.AdminStaffIndexViewModel
+@{
+    ViewData["Title"] = "Quản lý nhân viên";
+    var pendingPasswordCount = Model.PendingFirstPasswordChangeCount;
+}
+
+<style>
+    .staff-page { --staff-line:#e5eaf1; --staff-muted:#64748b; }
+    .staff-page .staff-header h1 { font-weight:800; color:#102a43; }
+    .staff-page .staff-header p { color:var(--staff-muted); max-width:720px; }
+    .staff-page .staff-kpi { border:1px solid var(--staff-line); border-radius:16px; background:#fff; padding:1.1rem 1.2rem; box-shadow:0 4px 14px rgba(15,35,60,.04); height:100%; }
+    .staff-page .staff-kpi-label { color:var(--staff-muted); font-size:.82rem; font-weight:600; }
+    .staff-page .staff-kpi-value { margin-top:.2rem; font-size:1.65rem; line-height:1.2; font-weight:800; color:#102a43; }
+    .staff-page .staff-panel { border:1px solid var(--staff-line); border-radius:16px; overflow:hidden; background:#fff; box-shadow:0 4px 14px rgba(15,35,60,.04); }
+    .staff-page .staff-filter { padding:1rem; border-bottom:1px solid var(--staff-line); background:#fff; }
+    .staff-page .staff-result-count { padding:.65rem 1rem; border-bottom:1px solid var(--staff-line); background:#fbfcfe; color:var(--staff-muted); font-size:.86rem; }
+    .staff-page .staff-table thead th { background:#f8fafc; color:#64748b; border-bottom:1px solid #d8e0ea; font-size:.78rem; font-weight:700; white-space:nowrap; }
+    .staff-page .staff-table tbody td { padding-top:.9rem; padding-bottom:.9rem; border-color:#edf1f5; }
+    .staff-page .staff-person { min-width:160px; }
+    .staff-page .staff-contact { min-width:220px; }
+    .staff-page .staff-account { min-width:175px; }
+    .staff-page .account-sub { margin-top:.35rem; font-size:.78rem; color:var(--staff-muted); }
+    .staff-page .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:.4rem; }
+    .staff-page .status-dot.active { background:#198754; }
+    .staff-page .status-dot.inactive { background:#6c757d; }
+    .staff-page .staff-warning { border:1px solid #ffe49a; background:#fff9e8; color:#7a5a00; border-radius:12px; padding:.7rem .9rem; }
+    .staff-page .employee-code { font-weight:800; color:#20364f; white-space:nowrap; }
+    .staff-page .action-group { display:flex; justify-content:flex-end; gap:.45rem; }
+    @@media(max-width:767.98px) {
+        .staff-page .staff-header-actions { width:100%; }
+        .staff-page .staff-header-actions .btn { width:100%; }
+    }
+</style>
+
+<div class="staff-page">
+    <div class="staff-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1">Quản lý nhân viên</h1>
+            <p class="mb-0">Quản lý hồ sơ và trạng thái tài khoản nhân viên. Tài khoản ngừng hoạt động vẫn được giữ lại để truy vết lịch sử nghiệp vụ.</p>
+        </div>
+        <div class="staff-header-actions">
+            <a class="btn btn-primary px-3" asp-action="Create">+ Thêm nhân viên</a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="staff-kpi">
+                <div class="staff-kpi-label">TỔNG NHÂN VIÊN</div>
+                <div class="staff-kpi-value">@Model.TotalStaffCount</div>
+                <div class="small text-muted mt-1">Tổng tài khoản nhân viên trong hệ thống</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="staff-kpi">
+                <div class="staff-kpi-label">ĐANG HOẠT ĐỘNG</div>
+                <div class="staff-kpi-value text-success">@Model.ActiveStaffCount</div>
+                <div class="small text-muted mt-1">Có thể đăng nhập và làm việc</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="staff-kpi">
+                <div class="staff-kpi-label">NGỪNG HOẠT ĐỘNG</div>
+                <div class="staff-kpi-value text-secondary">@Model.InactiveStaffCount</div>
+                <div class="small text-muted mt-1">Đã khóa nhưng vẫn giữ lịch sử</div>
+            </div>
+        </div>
+    </div>
+
+    @if (pendingPasswordCount > 0)
+    {
+        <div class="staff-warning d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <span><strong>@pendingPasswordCount tài khoản</strong> đang chờ đổi mật khẩu ở lần đăng nhập đầu tiên.</span>
+            <span class="small">Xem trạng thái trong cột Tài khoản.</span>
+        </div>
+    }
+
+    <div class="staff-panel">
+        <div class="staff-filter">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-lg-7">
+                    <label class="form-label small fw-semibold mb-1">Tìm nhân viên</label>
+                    <input class="form-control" name="query" value="@Model.Query" placeholder="Mã nhân viên, họ tên, email, SĐT hoặc CCCD" />
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label small fw-semibold mb-1">Trạng thái tài khoản</label>
+                    <select class="form-select" name="status">
+                        @if (Model.Status == "all")
+                        {
+                            <option value="all" selected>Tất cả trạng thái</option>
+                        }
+                        else
+                        {
+                            <option value="all">Tất cả trạng thái</option>
+                        }
+                        @if (Model.Status == "active")
+                        {
+                            <option value="active" selected>Đang hoạt động</option>
+                        }
+                        else
+                        {
+                            <option value="active">Đang hoạt động</option>
+                        }
+                        @if (Model.Status == "inactive")
+                        {
+                            <option value="inactive" selected>Ngừng hoạt động</option>
+                        }
+                        else
+                        {
+                            <option value="inactive">Ngừng hoạt động</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-lg-2 d-grid">
+                    <button class="btn btn-outline-primary" type="submit">Lọc danh sách</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="staff-result-count">
+            Hiển thị <strong class="text-dark">@Model.Staff.Count</strong> nhân viên
+            @if (!string.IsNullOrWhiteSpace(Model.Query) || Model.Status != "all")
+            {
+                <span> phù hợp bộ lọc</span>
+            }
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 staff-table">
+                <thead>
+                    <tr>
+                        <th>Mã NV</th>
+                        <th>Nhân viên</th>
+                        <th>Liên hệ</th>
+                        <th>Tài khoản</th>
+                        <th>Ngày tạo</th>
+                        <th class="text-end">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (Model.Staff.Count == 0)
+                {
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="fw-semibold">Không tìm thấy nhân viên</div>
+                            <div class="small text-muted mt-1">Thử thay đổi từ khóa hoặc trạng thái lọc.</div>
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    foreach (var item in Model.Staff)
+                    {
+                        <tr>
+                            <td><span class="employee-code">@(string.IsNullOrWhiteSpace(item.EmployeeCode) ? "Chưa cập nhật" : item.EmployeeCode)</span></td>
+                            <td class="staff-person">
+                                <div class="fw-semibold text-dark">@item.FullName</div>
+                            </td>
+                            <td class="staff-contact">
+                                <div>@item.Email</div>
+                                <div class="small text-muted mt-1">@(item.PhoneNumber ?? "Chưa có SĐT")</div>
+                            </td>
+                            <td class="staff-account">
+                                <div>
+                                    <span class="status-dot @(item.IsActive ? "active" : "inactive")"></span>
+                                    <span class="fw-semibold">@(item.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")</span>
+                                </div>
+                                <div class="account-sub">
+                                    @if (item.MustChangePassword)
+                                    {
+                                        <span class="text-warning fw-semibold">Chờ đổi mật khẩu lần đầu</span>
+                                    }
+                                    else if (item.HasPassword)
+                                    {
+                                        <span>Đã thiết lập mật khẩu</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary">Chưa thiết lập mật khẩu</span>
+                                    }
+                                </div>
+                            </td>
+                            <td class="text-nowrap">
+                                <div>@item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</div>
+                                <div class="small text-muted">@item.CreatedAt.ToLocalTime().ToString("HH:mm")</div>
+                            </td>
+                            <td class="text-end text-nowrap">
+                                <div class="action-group">
+                                    <a class="btn btn-sm btn-outline-primary" asp-action="Details" asp-route-id="@item.UserId">Chi tiết</a>
+                                    <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@item.UserId">Sửa</a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

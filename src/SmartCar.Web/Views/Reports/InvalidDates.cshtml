@@ -1,0 +1,27 @@
+@{
+    ViewData["Title"] = "Báo cáo kinh doanh";
+    var today = (DateTime)ViewBag.Today;
+}
+<h1 class="h3 mb-3">Báo cáo kinh doanh</h1>
+<div asp-validation-summary="All" class="alert alert-danger" role="alert"></div>
+<form asp-action="Index" method="get" class="card card-body" data-report-date-filter>
+    <div class="row g-3 align-items-end">
+        <div class="col-sm-4">
+            <label for="fromDate" class="form-label">Từ ngày</label>
+            <input id="fromDate" name="fromDate" type="date" value="@ViewBag.FromDate"
+                   class="form-control" required min="0001-01-02" max="@today.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="col-sm-4">
+            <label for="toDate" class="form-label">Đến ngày</label>
+            <input id="toDate" name="toDate" type="date" value="@ViewBag.ToDate"
+                   class="form-control" required min="0001-01-02" max="@today.ToString("yyyy-MM-dd")" />
+        </div>
+        <input type="hidden" name="paymentMethod" value="@ViewBag.SelectedPaymentMethod" />
+        <div class="col-sm-4"><button type="submit" class="btn btn-primary">Xem báo cáo</button></div>
+    </div>
+    <p class="text-muted mt-3 mb-0">Vui lòng chọn khoảng ngày hợp lệ để xem số liệu.</p>
+    <a asp-action="Index" class="mt-2">Xem 30 ngày gần nhất</a>
+</form>
+@section Scripts {
+    <script src="~/js/report-date-filter.js" asp-append-version="true"></script>
+}

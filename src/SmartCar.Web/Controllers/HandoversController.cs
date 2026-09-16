@@ -71,7 +71,7 @@ public sealed class HandoversController : Controller
         return View(new HandoverViewModel
         {
             BookingId = bookingId,
-            HandoverAt = DateTime.Now > booking.PickupDate ? DateTime.Now : booking.PickupDate,
+            HandoverAt = DateTime.Now,
             IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay,
             ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
             LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
@@ -424,3 +424,4 @@ public sealed class HandoversController : Controller
         }
     }
 }
+

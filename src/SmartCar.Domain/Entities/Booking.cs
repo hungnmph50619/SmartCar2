@@ -1,3 +1,4 @@
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Domain.Entities;
@@ -13,6 +14,11 @@ public class Booking
     public int NumberOfDays { get; set; }
     public decimal RentalAmount { get; set; }
     public decimal DepositAmount { get; set; }
+
+    // Snapshot chính sách giữ cọc tại thời điểm booking được tạo.
+    // Admin đổi cấu hình sau đó không làm thay đổi booking cũ.
+    public int DepositHoldDaysApplied { get; set; } = DepositHoldPolicy.DefaultDays;
+
     public decimal AdditionalAmount { get; set; }
     public decimal TotalAmount { get; set; }
     public VehiclePickupMethod PickupMethod { get; set; }

@@ -1,0 +1,205 @@
+@model int
+@using SmartCar.Domain.Constants
+
+@{
+    ViewData["Title"] = "Cấu hình nghiệp vụ";
+    var currentPolicyText = Model == 0
+        ? "Sau khi khách trả xe và hậu kiểm xong, cọc có thể được duyệt hoàn ngay nếu không còn khoản cần xử lý."
+        : $"Sau khi khách trả xe, cọc phải chờ {Model} ngày trước khi được duyệt hoàn.";
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <h1 class="h3 mb-1">Cấu hình nghiệp vụ</h1>
+        <p class="text-muted mb-0">Thiết lập thời gian giữ cọc sau chuyến thuê cho các đơn tạo mới.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-controller="AuditLogs" asp-action="Index" asp-route-auditAction="UpdateDepositHoldPolicy">
+        Xem lịch sử thay đổi
+    </a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <div class="rounded-3 border bg-light p-3 mb-4">
+                    <div class="text-muted small mb-1">Số ngày giữ cọc sau khi trả xe</div>
+                    <div class="d-flex align-items-end gap-2 flex-wrap">
+                        <div class="display-6 fw-bold text-primary lh-1">@Model</div>
+                        <div class="fw-semibold mb-1">ngày</div>
+                    </div>
+                    <div class="small text-muted mt-2">@currentPolicyText</div>
+                </div>
+
+                <form asp-action="Update" method="post" id="depositHoldForm" novalidate>
+                    <div class="mb-3">
+                        <label for="depositHoldDays" class="form-label fw-semibold">Đổi số ngày giữ cọc</label>
+                        <div class="input-group" style="max-width:320px">
+                            <input id="depositHoldDays"
+                                   name="depositHoldDays"
+                                   type="text"
+                                   inputmode="numeric"
+                                   pattern="[0-9]*"
+                                   maxlength="2"
+                                   autocomplete="off"
+                                   spellcheck="false"
+                                   class="form-control"
+                                   value="@Model"
+                                   aria-describedby="depositHoldHelp depositHoldError"
+                                   required />
+                            <span class="input-group-text">ngày</span>
+                        </div>
+                        <div id="depositHoldHelp" class="form-text">Chỉ nhập số nguyên từ 0 đến @DepositHoldPolicy.MaxConfigurableDays.</div>
+                        <div id="depositHoldError" class="text-danger small mt-1 d-none" role="alert" aria-live="polite"></div>
+                    </div>
+
+                    <div class="alert alert-warning border py-2 px-3 small mb-3">
+                        <strong>Chỉ áp dụng sau chuyến thuê.</strong> Đơn hủy trước khi giao xe không phải chờ số ngày giữ cọc này.
+                    </div>
+
+                    <div class="alert alert-light border py-2 px-3 small mb-3">
+                        <strong>Lưu ý:</strong> chỉ đơn thuê tạo sau khi lưu mới dùng số ngày mới. Đơn cũ giữ nguyên.
+                    </div>
+
+                    <button type="submit" id="saveDepositHoldButton" class="btn btn-primary px-4">
+                        Lưu thay đổi
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-3">Cách áp dụng</h2>
+
+                <div class="d-grid gap-3">
+                    <div class="d-flex gap-3">
+                        <span class="badge rounded-pill text-bg-primary align-self-start">1</span>
+                        <div>
+                            <div class="fw-semibold">Tạo đơn</div>
+                            <div class="small text-muted">Đơn giữ nguyên số ngày đang áp dụng lúc tạo.</div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-3">
+                        <span class="badge rounded-pill text-bg-primary align-self-start">2</span>
+                        <div>
+                            <div class="fw-semibold">Trả xe</div>
+                            <div class="small text-muted">Bắt đầu tính thời gian giữ cọc.</div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-3">
+                        <span class="badge rounded-pill text-bg-primary align-self-start">3</span>
+                        <div>
+                            <div class="fw-semibold">Đủ ngày</div>
+                            <div class="small text-muted">Nếu không còn khoản cần xử lý, Admin được duyệt hoàn cọc.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info small mt-4 mb-0">
+                    <strong>Ví dụ:</strong> giữ 15 ngày, trả xe 10/09 → từ 25/09 có thể duyệt hoàn.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(() => {
+    const form = document.getElementById('depositHoldForm');
+    const input = document.getElementById('depositHoldDays');
+    const error = document.getElementById('depositHoldError');
+    const maxDays = @DepositHoldPolicy.MaxConfigurableDays;
+    const currentDays = @Model;
+
+    if (!form || !input || !error) return;
+
+    const showError = (message) => {
+        error.textContent = message;
+        error.classList.remove('d-none');
+        input.classList.add('is-invalid');
+    };
+
+    const clearError = () => {
+        error.textContent = '';
+        error.classList.add('d-none');
+        input.classList.remove('is-invalid');
+    };
+
+    const validate = () => {
+        const value = input.value.trim();
+
+        if (!value) {
+            showError('Vui lòng nhập số ngày giữ cọc.');
+            return false;
+        }
+
+        if (!/^\d+$/.test(value)) {
+            showError('Chỉ được nhập số nguyên, không nhập chữ, số âm hoặc số thập phân.');
+            return false;
+        }
+
+        const days = Number(value);
+        if (!Number.isInteger(days) || days < 0 || days > maxDays) {
+            showError(`Số ngày phải từ 0 đến ${maxDays}.`);
+            return false;
+        }
+
+        clearError();
+        return true;
+    };
+
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('click', () => input.select());
+
+    input.addEventListener('beforeinput', (event) => {
+        if (event.inputType.startsWith('delete')) return;
+        if (event.data && /[^0-9]/.test(event.data)) {
+            event.preventDefault();
+            showError(`Chỉ được nhập số nguyên từ 0 đến ${maxDays}.`);
+        }
+    });
+
+    input.addEventListener('paste', (event) => {
+        const text = event.clipboardData?.getData('text') ?? '';
+        if (!/^\d+$/.test(text.trim())) {
+            event.preventDefault();
+            showError(`Nội dung dán không hợp lệ. Chỉ được nhập số nguyên từ 0 đến ${maxDays}.`);
+        }
+    });
+
+    input.addEventListener('input', () => {
+        if (/^\d*$/.test(input.value)) {
+            validate();
+        }
+    });
+
+    form.addEventListener('submit', (event) => {
+        if (!validate()) {
+            event.preventDefault();
+            input.focus();
+            return;
+        }
+
+        const newDays = Number(input.value);
+        if (newDays === currentDays) {
+            event.preventDefault();
+            showError(`Số ngày hiện tại đã là ${currentDays} ngày, không có thay đổi để lưu.`);
+            input.focus();
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Đổi thời gian giữ cọc từ ${currentDays} ngày thành ${newDays} ngày?\n\nChỉ các đơn thuê tạo mới sau khi lưu mới áp dụng.`
+        );
+
+        if (!confirmed) {
+            event.preventDefault();
+        }
+    });
+})();
+</script>
+}

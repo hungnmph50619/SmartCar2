@@ -85,6 +85,13 @@ public sealed class ProfileController : Controller
         model.ActiveTab = "profile";
         model.Documents = await LoadDocumentsForCurrentRoleAsync(user.Id, cancellationToken);
 
+        model.FullName = ProfileInputRules.NormalizeFullName(model.FullName);
+        model.PhoneNumber = ProfileInputRules.NormalizePhoneNumber(model.PhoneNumber);
+        if (await AccountInputGuard.PhoneExistsAsync(_userManager, model.PhoneNumber, user.Id, cancellationToken))
+        {
+            ModelState.AddModelError(nameof(model.PhoneNumber), AccountInputGuard.DuplicatePhoneMessage);
+        }
+
         if (!ModelState.IsValid)
         {
             await SetRentalReturnContextAsync(returnVehicleId, pickupDate, returnDate, cancellationToken);
@@ -99,7 +106,7 @@ public sealed class ProfileController : Controller
             ? null
             : model.Address.Trim();
 
-        var result = await _userManager.UpdateAsync(user);
+        var result = await AccountInputGuard.SaveAsync(() => _userManager.UpdateAsync(user));
         if (!result.Succeeded)
         {
             foreach (var error in result.Errors)
@@ -514,3 +521,4 @@ public sealed class ProfileController : Controller
             cancellationToken);
     }
 }
+

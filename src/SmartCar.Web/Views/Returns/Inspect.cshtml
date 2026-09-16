@@ -631,6 +631,13 @@ else
     }
 
 </div>
+<div class="alert alert-info mt-3">
+    <strong>Chính sách cọc của đơn: giữ @ViewBag.DepositHoldDays ngày sau khi trả xe.</strong>
+    <div>Sớm nhất được duyệt hoàn: @(((DateTime)ViewBag.DepositEligibleAt).ToString("dd/MM/yyyy HH:mm")).</div>
+    <div>Hoàn tất đối chiếu sẽ quyết toán và tạo khoản hoàn cọc còn lại nếu có. Đủ thời gian và không còn khoản phạt cần xử lý, Admin duyệt; nhân viên chuyển tiền và xác nhận hoàn.</div>
+    <div class="small">Đổi cấu hình hiện tại không thay đổi số ngày đã lưu trên đơn này.</div>
+</div>
+
 @if (canComplete)
 {
     <div class="card card-body shadow-sm border-primary">
@@ -771,3 +778,4 @@ else if (Model.Status == BookingStatus.Completed)
         })();
     </script>
 }
+

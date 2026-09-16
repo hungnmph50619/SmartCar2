@@ -140,7 +140,7 @@ internal sealed class PolicyAwareIncidentService : IIncidentService
             EvidencePaths = Normalize(request.EvidencePaths),
             Notes = AppendText(
                 Normalize(request.Notes),
-                "Khoản phải thu được tạo từ thông báo vi phạm; không giữ tiền cọc của chuyến thuê trong nhiều tuần để chờ phạt nguội."),
+                "Khoản phải thu được tạo từ thông báo vi phạm. Nếu cọc của booking vẫn đang trong thời gian giữ theo policy đã chụp thì chưa được duyệt hoàn khi khoản phạt này còn mở; nếu cọc đã hoàn, khoản phải thu vẫn tồn tại độc lập và chặn chuyến mới cho đến khi được xử lý."),
             CreatedAt = DateTime.UtcNow
         };
 

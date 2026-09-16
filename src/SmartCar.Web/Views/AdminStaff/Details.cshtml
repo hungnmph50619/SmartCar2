@@ -1,0 +1,313 @@
+@model SmartCar.Web.ViewModels.AdminStaffDetailsViewModel
+@{
+    ViewData["Title"] = "Chi tiết nhân viên";
+    var employeeCode = string.IsNullOrWhiteSpace(Model.EmployeeCode) ? "Chưa cập nhật mã" : Model.EmployeeCode;
+    var initial = string.IsNullOrWhiteSpace(Model.FullName)
+        ? "N"
+        : Model.FullName.Trim().Substring(0, 1).ToUpperInvariant();
+}
+
+<style>
+    .staff-detail-page { --line:#e5eaf1; --muted:#64748b; --ink:#102a43; }
+    .staff-detail-page .detail-hero { display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; margin-bottom:1.2rem; }
+    .staff-detail-page .identity { display:flex; align-items:center; gap:14px; }
+    .staff-detail-page .avatar { width:54px; height:54px; border-radius:16px; background:#e7f0ff; color:#1769d2; display:flex; align-items:center; justify-content:center; font-size:1.25rem; font-weight:800; flex-shrink:0; }
+    .staff-detail-page .identity h1 { margin:0; font-size:1.75rem; font-weight:800; color:var(--ink); }
+    .staff-detail-page .identity-meta { color:var(--muted); margin-top:.2rem; display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; }
+    .staff-detail-page .status-pill { display:inline-flex; align-items:center; gap:.4rem; border-radius:999px; padding:.28rem .65rem; font-size:.78rem; font-weight:700; }
+    .staff-detail-page .status-pill.active { color:#146c43; background:#e7f7ef; }
+    .staff-detail-page .status-pill.inactive { color:#5c636a; background:#eef1f4; }
+    .staff-detail-page .dot { width:7px; height:7px; border-radius:50%; background:currentColor; }
+    .staff-detail-page .panel { background:#fff; border:1px solid var(--line); border-radius:16px; box-shadow:0 4px 14px rgba(15,35,60,.04); overflow:hidden; }
+    .staff-detail-page .panel-head { padding:.95rem 1.1rem; border-bottom:1px solid var(--line); font-weight:800; color:var(--ink); }
+    .staff-detail-page .panel-body { padding:1.1rem; }
+    .staff-detail-page .info-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; }
+    .staff-detail-page .info-item { padding:.9rem 1rem; border-bottom:1px solid #eef2f6; }
+    .staff-detail-page .info-item:nth-last-child(-n+2) { border-bottom:0; }
+    .staff-detail-page .info-item:nth-child(odd) { border-right:1px solid #eef2f6; }
+    .staff-detail-page .info-label { font-size:.78rem; font-weight:700; color:var(--muted); margin-bottom:.25rem; }
+    .staff-detail-page .info-value { color:#183153; font-weight:600; word-break:break-word; }
+    .staff-detail-page .account-row { display:flex; justify-content:space-between; gap:18px; padding:.72rem 0; border-bottom:1px solid #eef2f6; }
+    .staff-detail-page .account-row:last-child { border-bottom:0; }
+    .staff-detail-page .account-row .label { color:var(--muted); }
+    .staff-detail-page .account-row .value { text-align:right; font-weight:600; color:#183153; }
+    .staff-detail-page .activity-icon { width:42px; height:42px; border-radius:12px; background:#eef5ff; color:#1769d2; display:flex; align-items:center; justify-content:center; font-weight:800; }
+    .staff-detail-page .danger-panel { border-color:#f2c5c9; }
+    .staff-detail-page .danger-panel .panel-head { color:#b42318; background:#fffafa; }
+    .staff-detail-page .masked-value { display:inline-flex; align-items:center; gap:.55rem; }
+    .staff-detail-page .reveal-button { border:0; background:transparent; color:#1769d2; padding:0; font-size:.82rem; font-weight:700; }
+    .staff-detail-page .reset-details { border:1px solid #e5eaf1; border-radius:12px; overflow:hidden; }
+    .staff-detail-page .reset-details summary { list-style:none; cursor:pointer; padding:.8rem .9rem; font-weight:700; color:#1769d2; background:#f8fbff; }
+    .staff-detail-page .reset-details summary::-webkit-details-marker { display:none; }
+    .staff-detail-page .reset-form { padding:1rem; border-top:1px solid #e5eaf1; background:#fff; }
+    @@media(max-width:767.98px) {
+        .staff-detail-page .info-grid { grid-template-columns:1fr; }
+        .staff-detail-page .info-item { border-right:0 !important; }
+        .staff-detail-page .info-item:nth-last-child(-n+2) { border-bottom:1px solid #eef2f6; }
+        .staff-detail-page .info-item:last-child { border-bottom:0; }
+        .staff-detail-page .detail-actions { width:100%; }
+        .staff-detail-page .detail-actions .btn { flex:1; }
+    }
+</style>
+
+<div class="staff-detail-page">
+    <div class="detail-hero">
+        <div class="identity">
+            <div class="avatar">@initial</div>
+            <div>
+                <h1>@Model.FullName</h1>
+                <div class="identity-meta">
+                    <span>@employeeCode</span>
+                    <span class="status-pill @(Model.IsActive ? "active" : "inactive")">
+                        <span class="dot"></span>
+                        @(Model.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="detail-actions d-flex gap-2">
+            <a class="btn btn-outline-secondary" asp-action="Index">← Danh sách</a>
+            <a class="btn btn-primary" asp-action="Edit" asp-route-id="@Model.UserId">Sửa thông tin</a>
+        </div>
+    </div>
+
+    <div class="panel mb-3">
+        <div class="panel-head">Thông tin nhân viên</div>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Mã nhân viên</div>
+                <div class="info-value">@employeeCode</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Họ và tên</div>
+                <div class="info-value">@Model.FullName</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Email đăng nhập</div>
+                <div class="info-value">@Model.Email</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Số điện thoại</div>
+                <div class="info-value">@(Model.PhoneNumber ?? "Chưa cập nhật")</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Số CCCD</div>
+                <div class="info-value masked-value">
+                    <span id="staff-citizen-id" data-masked="@Model.MaskedCitizenIdNumber">@Model.MaskedCitizenIdNumber</span>
+                    @if (Model.HasCitizenIdNumber)
+                    {
+                        <button type="button" class="reveal-button" id="toggle-staff-citizen-id" aria-label="Hiện số CCCD">Hiện</button>
+                    }
+                </div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Ngày tạo hồ sơ</div>
+                <div class="info-value">@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.HasCitizenIdNumber)
+    {
+        <form id="reveal-citizen-id-form" asp-action="RevealCitizenId" method="post" class="d-none">
+            <input type="hidden" name="id" value="@Model.UserId" />
+        </form>
+    }
+
+    <div class="row g-3 mb-3">
+        <div class="col-lg-6">
+            <div class="panel h-100">
+                <div class="panel-head">Tài khoản & xác minh</div>
+                <div class="panel-body">
+                    <div class="account-row">
+                        <span class="label">Trạng thái</span>
+                        <span class="value">
+                            <span class="status-pill @(Model.IsActive ? "active" : "inactive")">
+                                <span class="dot"></span>
+                                @(Model.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")
+                            </span>
+                        </span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Mật khẩu</span>
+                        <span class="value">
+                            @if (Model.MustChangePassword)
+                            {
+                                <span class="text-warning">Chờ đổi ở lần đăng nhập đầu</span>
+                            }
+                            else if (Model.HasPassword)
+                            {
+                                <span class="text-success">Đã thiết lập</span>
+                            }
+                            else
+                            {
+                                <span class="text-secondary">Chưa thiết lập</span>
+                            }
+                        </span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">CCCD</span>
+                        <span class="value">
+                            @if (Model.VerifiedAt.HasValue)
+                            {
+                                <span class="text-success">Đã đối chiếu bản gốc</span>
+                            }
+                            else
+                            {
+                                <span class="text-secondary">Chưa ghi nhận đối chiếu</span>
+                            }
+                        </span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Người đối chiếu</span>
+                        <span class="value">@(Model.VerifiedByName ?? "Dữ liệu cũ / chưa ghi nhận")</span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Thời gian đối chiếu</span>
+                        <span class="value">@(Model.VerifiedAt.HasValue ? Model.VerifiedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "—")</span>
+                    </div>
+                    <div class="account-row">
+                        <span class="label">Người tạo</span>
+                        <span class="value">@(Model.CreatedByName ?? "Dữ liệu cũ / chưa ghi nhận")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="panel h-100">
+                <div class="panel-head">Hoạt động</div>
+                <div class="panel-body">
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <div class="activity-icon">≡</div>
+                        <div>
+                            <div class="fw-semibold text-dark">Lịch sử thao tác</div>
+                            <div class="small text-muted mt-1">Xem các nghiệp vụ và thay đổi do nhân viên này thực hiện.</div>
+                        </div>
+                    </div>
+                    <a class="btn btn-outline-primary w-100"
+                       asp-controller="AuditLogs"
+                       asp-action="Index"
+                       asp-route-userId="@Model.UserId">
+                        Xem lịch sử thao tác →
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel mb-3">
+        <div class="panel-head">Khôi phục đăng nhập</div>
+        <div class="panel-body">
+            <div class="small text-muted mb-3">
+                Ưu tiên để nhân viên tự dùng “Quên mật khẩu” qua email. Chỉ cấp mật khẩu tạm khi nhân viên không thể tự khôi phục.
+            </div>
+            <details class="reset-details">
+                <summary>Cấp lại mật khẩu tạm</summary>
+                <form asp-controller="AdminStaffPassword"
+                      asp-action="ResetTemporaryPassword"
+                      method="post"
+                      class="reset-form"
+                      onsubmit="return confirm('Cấp lại mật khẩu tạm cho nhân viên này? Phiên đăng nhập cũ sẽ bị mất hiệu lực và nhân viên phải đổi mật khẩu ở lần đăng nhập tiếp theo.');">
+                    <input type="hidden" name="id" value="@Model.UserId" />
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Mật khẩu tạm mới</label>
+                            <input type="password"
+                                   name="temporaryPassword"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   required
+                                   minlength="8" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Nhập lại mật khẩu tạm</label>
+                            <input type="password"
+                                   name="confirmTemporaryPassword"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   required
+                                   minlength="8" />
+                        </div>
+                    </div>
+                    <div class="small text-muted mt-2">
+                        Tối thiểu 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt. Quản trị viên chỉ biết mật khẩu tạm này; sau khi nhân viên đổi, không thể xem lại mật khẩu mới.
+                    </div>
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="submit" class="btn btn-outline-primary">Cấp mật khẩu tạm</button>
+                    </div>
+                </form>
+            </details>
+        </div>
+    </div>
+
+    <div class="panel danger-panel">
+        <div class="panel-head">Quản lý tài khoản</div>
+        <div class="panel-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+            <div>
+                <div class="fw-semibold text-dark">@(Model.IsActive ? "Khóa quyền truy cập của nhân viên" : "Kích hoạt lại tài khoản nhân viên")</div>
+                <div class="small text-muted mt-1">
+                    @(Model.IsActive
+                        ? "Nhân viên sẽ bị đăng xuất ở thao tác tiếp theo, nhưng lịch sử giao xe, nhận xe và các thao tác trước đó vẫn được giữ nguyên."
+                        : "Sau khi kích hoạt, nhân viên có thể đăng nhập và tiếp tục sử dụng các chức năng được phân quyền.")
+                </div>
+            </div>
+            <form asp-action="@(Model.IsActive ? "LockStaff" : "UnlockStaff")" method="post" class="flex-shrink-0" onsubmit="return confirm('@(Model.IsActive ? "Khóa tài khoản nhân viên này? Phiên đang đăng nhập sẽ bị kết thúc và dữ liệu lịch sử vẫn được giữ lại." : "Kích hoạt lại tài khoản nhân viên này?")');">
+                <input type="hidden" name="id" value="@Model.UserId" />
+                <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-success") px-4" type="submit">
+                    @(Model.IsActive ? "Khóa tài khoản" : "Kích hoạt lại")
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(() => {
+    const value = document.getElementById('staff-citizen-id');
+    const button = document.getElementById('toggle-staff-citizen-id');
+    const form = document.getElementById('reveal-citizen-id-form');
+    if (!value || !button || !form) return;
+
+    let visible = false;
+    let revealedValue = null;
+
+    button.addEventListener('click', async () => {
+        if (visible) {
+            visible = false;
+            value.textContent = value.dataset.masked || '';
+            button.textContent = 'Hiện';
+            button.setAttribute('aria-label', 'Hiện số CCCD');
+            return;
+        }
+
+        try {
+            if (!revealedValue) {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Không thể xem CCCD.');
+                }
+
+                const data = await response.json();
+                revealedValue = data.citizenId;
+            }
+
+            visible = true;
+            value.textContent = revealedValue || '';
+            button.textContent = 'Ẩn';
+            button.setAttribute('aria-label', 'Ẩn số CCCD');
+        } catch {
+            alert('Không thể hiển thị CCCD. Vui lòng thử lại.');
+        }
+    });
+})();
+</script>
+}
+

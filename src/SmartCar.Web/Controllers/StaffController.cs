@@ -396,11 +396,7 @@ public sealed class StaffController : Controller
             TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
-        if (DateTime.Now < booking.PickupDate)
-        {
-            TempData["ErrorMessage"] = $"Chưa đến giờ nhận xe đã đặt ({booking.PickupDate:dd/MM/yyyy HH:mm}). Không thể bắt đầu chuyến sớm hơn lịch.";
-            return RedirectToAction(nameof(Details), new { id = bookingId });
-        }
+        // Demo: signed handovers may start before the scheduled pickup time.
 
         var staffId = CurrentUserId();
         var actualHandoverAt = DateTime.Now;
@@ -660,7 +656,8 @@ public sealed class StaffController : Controller
         (await _dbContext.Payments.AsNoTracking()
             .Where(payment =>
                 payment.Type == PaymentType.Refund &&
-                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved)
+                (payment.Status == PaymentStatus.AwaitingRefund ||
+                 payment.Status == PaymentStatus.RefundApproved))
             .Select(payment => payment.BookingId)
             .Distinct()
             .ToListAsync(cancellationToken))
@@ -721,3 +718,4 @@ public sealed class StaffController : Controller
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 }
+

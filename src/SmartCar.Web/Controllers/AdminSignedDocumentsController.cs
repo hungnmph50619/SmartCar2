@@ -7,7 +7,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
 public sealed class AdminSignedDocumentsController : Controller
 {
     private const string HandoverSignedMarker = "signed-handover-";
@@ -15,7 +15,8 @@ public sealed class AdminSignedDocumentsController : Controller
 
     private readonly ApplicationDbContext _dbContext;
 
-    public AdminSignedDocumentsController(ApplicationDbContext dbContext)
+    public AdminSignedDocumentsController(
+        ApplicationDbContext dbContext)
     {
         _dbContext = dbContext;
     }
@@ -37,12 +38,19 @@ public sealed class AdminSignedDocumentsController : Controller
             .FirstOrDefaultAsync(cancellationToken);
 
         if (record is null)
+        {
             return NotFound();
+        }
 
-        var paths = FindSignedPaths(record.ImagePaths, HandoverSignedMarker);
+        var paths = FindSignedPaths(
+            record.ImagePaths,
+            HandoverSignedMarker);
+
         if (paths.Count == 0)
         {
-            TempData["ErrorMessage"] = "Biên bản giao xe chưa có bản ký để xem.";
+            TempData["ErrorMessage"] =
+                "Biên bản giao xe chưa có bản ký để xem.";
+
             return RedirectToBookingDetails(bookingId);
         }
 
@@ -76,12 +84,19 @@ public sealed class AdminSignedDocumentsController : Controller
             .FirstOrDefaultAsync(cancellationToken);
 
         if (record is null)
+        {
             return NotFound();
+        }
 
-        var paths = FindSignedPaths(record.ImagePaths, ReturnSignedMarker);
+        var paths = FindSignedPaths(
+            record.ImagePaths,
+            ReturnSignedMarker);
+
         if (paths.Count == 0)
         {
-            TempData["ErrorMessage"] = "Biên bản trả xe chưa có bản ký để xem.";
+            TempData["ErrorMessage"] =
+                "Biên bản trả xe chưa có bản ký để xem.";
+
             return RedirectToBookingDetails(bookingId);
         }
 
@@ -98,8 +113,17 @@ public sealed class AdminSignedDocumentsController : Controller
             });
     }
 
-    private IActionResult RedirectToBookingDetails(int bookingId) =>
-        RedirectToAction("Details", "Staff", new { id = bookingId });
+    private IActionResult RedirectToBookingDetails(
+        int bookingId) =>
+        User.IsInRole(RoleNames.Staff)
+            ? RedirectToAction(
+                "Details",
+                "Staff",
+                new { id = bookingId })
+            : RedirectToAction(
+                "Details",
+                "AdminBookings",
+                new { id = bookingId });
 
     private static IReadOnlyList<string> FindSignedPaths(
         string? paths,
@@ -111,6 +135,9 @@ public sealed class AdminSignedDocumentsController : Controller
                     ';',
                     StringSplitOptions.RemoveEmptyEntries |
                     StringSplitOptions.TrimEntries)
-                .Where(path => path.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                .Where(path =>
+                    path.Contains(
+                        marker,
+                        StringComparison.OrdinalIgnoreCase))
                 .ToArray();
 }

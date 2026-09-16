@@ -38,10 +38,10 @@
         PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
         PaymentType.AdditionalCharge when method == PaymentMethods.DepositDeduction => "Khấu trừ tiền cọc",
         PaymentType.AdditionalCharge => "Phụ phí",
-        PaymentType.Refund when method == PaymentMethods.DepositRefund => "Hoàn cọc",
+        PaymentType.Refund when method == PaymentMethods.DepositRefund => "Hoàn tiền cọc",
         PaymentType.Refund when method == PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
         PaymentType.Refund when method == PaymentMethods.CompensationRefund => "Hỗ trợ / bồi thường",
-        PaymentType.Refund when method == PaymentMethods.BankTransferRefund => "Hoàn tiền thuê / phí giao",
+        PaymentType.Refund when method == PaymentMethods.BankTransferRefund => "Hoàn do hủy / phí chưa sử dụng",
         PaymentType.Refund => "Hoàn tiền",
         _ => type.ToString()
     };
@@ -102,8 +102,11 @@ else if (currentSection == "refund")
         .OrderByDescending(group => group.Max(payment => payment.PaymentId))
         .ToList();
 
-    <div class="alert alert-light border small">
+    <div class="alert alert-light border small mb-2">
         Các khoản hoàn của cùng một đơn được gộp thành <strong>một lần chuyển khoản</strong>. Hệ thống vẫn lưu riêng tiền thuê, cọc và hỗ trợ để đối soát.
+    </div>
+    <div class="alert alert-info border small">
+        <strong>Phân biệt:</strong> đơn hủy trước khi giao xe <strong>không phải chờ thời gian giữ cọc</strong>. Chỉ hoàn cọc sau khi khách đã sử dụng và trả xe mới áp dụng số ngày giữ cọc trong Cấu hình nghiệp vụ.
     </div>
 
     <div class="card shadow-sm border-0">
@@ -159,6 +162,10 @@ else if (currentSection == "refund")
                             1 => transactionCodes[0],
                             _ => "Nhiều giao dịch"
                         };
+                        var hasCancellationRefund = shown.Any(payment =>
+                            payment.Method == PaymentMethods.BankTransferRefund);
+                        var hasDepositRefund = shown.Any(payment =>
+                            payment.Method == PaymentMethods.DepositRefund);
                         UserBankAccountDto? bank = null;
                         if (awaitingApproval.Count > 0 || approved.Count > 0)
                         {
@@ -172,6 +179,14 @@ else if (currentSection == "refund")
                                 <small class="text-muted">@first.VehicleName · @first.LicensePlate</small>
                             </td>
                             <td>
+                                @if (hasCancellationRefund)
+                                {
+                                    <div class="mb-2"><span class="badge bg-light text-dark border">Hủy trước giao xe · không chờ giữ cọc</span></div>
+                                }
+                                else if (hasDepositRefund)
+                                {
+                                    <div class="mb-2"><span class="badge bg-light text-dark border">Hoàn cọc · nếu đã trả xe thì áp dụng thời gian giữ cọc</span></div>
+                                }
                                 @foreach (var refund in shown)
                                 {
                                     <div class="d-flex justify-content-between gap-3 small py-1 border-bottom">

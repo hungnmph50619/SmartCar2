@@ -38,9 +38,19 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(user => user.FullName).HasMaxLength(100).IsRequired();
             entity.Property(user => user.Address).HasMaxLength(250);
             entity.Property(user => user.AvatarPath).HasMaxLength(250);
+            entity.Property(user => user.EmployeeCode).HasMaxLength(30);
+            entity.Property(user => user.CitizenIdNumber).HasMaxLength(20);
+            entity.Property(user => user.CreatedByUserId).HasMaxLength(450);
+            entity.Property(user => user.VerifiedByUserId).HasMaxLength(450);
             entity.HasIndex(user => user.PhoneNumber)
                 .IsUnique()
                 .HasFilter("[PhoneNumber] IS NOT NULL");
+            entity.HasIndex(user => user.EmployeeCode)
+                .IsUnique()
+                .HasFilter("[EmployeeCode] IS NOT NULL");
+            entity.HasIndex(user => user.CitizenIdNumber)
+                .IsUnique()
+                .HasFilter("[CitizenIdNumber] IS NOT NULL");
         });
 
         builder.Entity<Brand>(entity =>

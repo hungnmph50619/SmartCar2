@@ -1,0 +1,86 @@
+@model SmartCar.Web.ViewModels.AdminStaffEditViewModel
+@{
+    ViewData["Title"] = "Sửa nhân viên";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h3 mb-1">Sửa thông tin nhân viên</h1>
+        <p class="text-muted mb-0">Mã nhân viên là định danh nội bộ do hệ thống cấp và không thay đổi sau khi tạo.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.UserId">← Chi tiết nhân viên</a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-xl-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form asp-action="Edit" method="post" novalidate>
+                    <input asp-for="UserId" type="hidden" />
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="EmployeeCode" class="form-label"></label>
+                            <input asp-for="EmployeeCode" class="form-control" readonly />
+                            <div class="form-text">Mã nhân viên được hệ thống tự sinh và không thể sửa.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="FullName" class="form-label"></label>
+                            <input asp-for="FullName" id="staffFullName" class="form-control" maxlength="100" autocomplete="name" />
+                            <div class="form-text">Chỉ nhập chữ cái và khoảng trắng; không nhập số hoặc ký tự đặc biệt.</div>
+                            <span asp-validation-for="FullName" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Email" class="form-label"></label>
+                            <input asp-for="Email" class="form-control" maxlength="256" autocomplete="email" />
+                            <span asp-validation-for="Email" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="PhoneNumber" class="form-label"></label>
+                            <input asp-for="PhoneNumber" class="form-control" inputmode="tel" maxlength="12" autocomplete="tel" />
+                            <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="CitizenIdNumber" class="form-label"></label>
+                            <input asp-for="CitizenIdNumber" class="form-control" inputmode="tel" maxlength="12" autocomplete="off" oninput="this.value=this.value.replace(/\D/g,'').slice(0,12)" />
+                            <span asp-validation-for="CitizenIdNumber" class="text-danger small"></span>
+                        </div>
+                    </div>
+
+                    <div class="border rounded-3 p-3 mt-4 bg-light">
+                        <div class="form-check">
+                            <input asp-for="IdentityDocumentChecked" class="form-check-input" />
+                            <label asp-for="IdentityDocumentChecked" class="form-check-label fw-semibold">
+                                Tôi đã đối chiếu lại CCCD bản gốc nếu thay đổi số CCCD
+                            </label>
+                        </div>
+                        <div class="small text-muted mt-1">Chỉ bắt buộc khi số CCCD bị thay đổi. Các chỉnh sửa tên, email hoặc số điện thoại không cần xác minh lại CCCD.</div>
+                        <span asp-validation-for="IdentityDocumentChecked" class="text-danger small d-block mt-1"></span>
+                    </div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+                        <a class="btn btn-outline-secondary" asp-action="Details" asp-route-id="@Model.UserId">Hủy</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (() => {
+            const fullNameInput = document.getElementById('staffFullName');
+            fullNameInput?.addEventListener('input', () => {
+                fullNameInput.value = fullNameInput.value
+                    .replace(/[^\p{L}\s]/gu, '')
+                    .replace(/\s{2,}/g, ' ')
+                    .slice(0, 100);
+            });
+        })();
+    </script>
+}
+

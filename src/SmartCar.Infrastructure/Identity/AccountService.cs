@@ -33,22 +33,14 @@ internal sealed class AccountService : IAccountService
                 "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0, hoặc dùng mã quốc gia +84.");
         }
 
-        var internationalPhoneNumber = $"+84{phoneNumber[1..]}";
-
         if (await _userManager.FindByEmailAsync(email) is not null)
         {
             return OperationResult.Failure("Email này đã được sử dụng.");
         }
 
-        var phoneExists = await _userManager.Users
-            .AnyAsync(
-                user => user.PhoneNumber == phoneNumber ||
-                        user.PhoneNumber == internationalPhoneNumber,
-                cancellationToken);
-
-        if (phoneExists)
+        if (await AccountInputGuard.PhoneExistsAsync(_userManager, phoneNumber, null, cancellationToken))
         {
-            return OperationResult.Failure("Số điện thoại này đã được sử dụng.");
+            return OperationResult.Failure(AccountInputGuard.DuplicatePhoneMessage);
         }
 
         var user = new ApplicationUser
@@ -61,7 +53,7 @@ internal sealed class AccountService : IAccountService
             CreatedAt = DateTime.UtcNow
         };
 
-        var createResult = await _userManager.CreateAsync(user, request.Password);
+        var createResult = await AccountInputGuard.SaveAsync(() => _userManager.CreateAsync(user, request.Password));
         if (!createResult.Succeeded)
         {
             return OperationResult.Failure(createResult.Errors.Select(error => error.Description));
@@ -175,3 +167,4 @@ internal sealed class AccountService : IAccountService
         value[0] == '0' &&
         value.All(char.IsDigit);
 }
+

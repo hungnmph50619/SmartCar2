@@ -6,4 +6,10 @@ public interface IEmailService
         string toEmail,
         string resetUrl,
         CancellationToken cancellationToken = default);
+
+    Task SendStaffActivationEmailAsync(
+        string toEmail,
+        string fullName,
+        string activationUrl,
+        CancellationToken cancellationToken = default);
 }
