@@ -2,7 +2,7 @@
 @using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Báo cáo kinh doanh";
-    var today = DateTime.UtcNow.AddHours(7).Date;
+    var today = (DateTime?)ViewBag.Today ?? DateTime.UtcNow.AddHours(7).Date;
     var sevenDaysStart = today.AddDays(-6);
     var thirtyDaysStart = today.AddDays(-29);
     var monthStart = new DateTime(today.Year, today.Month, 1);
@@ -136,7 +136,7 @@
         </div>
     </div>
 
-    <form method="get" class="panel p-3 mb-3">
+    <form method="get" class="panel p-3 mb-3" data-report-date-filter>
         <div class="row g-2 align-items-end">
             <div class="col-lg-auto">
                 <div class="d-flex gap-2">
@@ -145,8 +145,8 @@
                     <a class="btn btn-sm btn-outline-primary" asp-action="Index" asp-route-fromDate="@monthStart.ToString("yyyy-MM-dd")" asp-route-toDate="@today.ToString("yyyy-MM-dd")" asp-route-paymentMethod="@selectedPaymentMethod">Tháng này</a>
                 </div>
             </div>
-            <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Từ ngày</label><input name="fromDate" type="date" value="@Model.FromDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
-            <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Đến ngày</label><input name="toDate" type="date" value="@Model.ToDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+            <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Từ ngày</label><input name="fromDate" type="date" required min="0001-01-02" max="@today.ToString("yyyy-MM-dd")" value="@Model.FromDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+            <div class="col-sm-4 col-lg"><label class="form-label small mb-1">Đến ngày</label><input name="toDate" type="date" required min="0001-01-02" max="@today.ToString("yyyy-MM-dd")" value="@Model.ToDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
             <div class="col-sm-4 col-lg">
                 <label class="form-label small mb-1">Lọc giao dịch</label>
                 <select name="paymentMethod" id="payment-method-filter" data-selected="@selectedPaymentMethod" class="form-select form-select-sm">
@@ -428,6 +428,7 @@
 </div>
 
 @section Scripts {
+<script src="~/js/report-date-filter.js" asp-append-version="true"></script>
 <script>
 (() => {
     const methodFilter = document.getElementById('payment-method-filter');
@@ -487,3 +488,4 @@
 })();
 </script>
 }
+

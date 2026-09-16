@@ -19,18 +19,27 @@ public sealed class ReportsController : Controller
 
     [HttpGet]
     public async Task<IActionResult> Index(
-        DateTime? fromDate,
-        DateTime? toDate,
+        string? fromDate,
+        string? toDate,
         string? paymentMethod,
         CancellationToken cancellationToken)
     {
         // Báo cáo dùng ngày nghiệp vụ Việt Nam. PaidAt trong DB vẫn lưu UTC.
         var vietnamToday = DateTime.UtcNow.AddHours(7).Date;
-        var to = (toDate ?? vietnamToday).Date;
-        var from = (fromDate ?? to.AddDays(-29)).Date;
-        if (from > to)
+        ViewBag.Today = vietnamToday;
+        // MVC converts empty query values to null; only a genuinely initial visit uses defaults.
+        if (Request.Query.ContainsKey(nameof(fromDate)) || Request.Query.ContainsKey(nameof(toDate)))
         {
-            (from, to) = (to, from);
+            fromDate ??= string.Empty;
+            toDate ??= string.Empty;
+        }
+        if (!ReportDateRange.TryCreate(fromDate, toDate, vietnamToday, out var range, out var error))
+        {
+            ModelState.AddModelError(string.Empty, error!);
+            ViewBag.FromDate = fromDate;
+            ViewBag.ToDate = toDate;
+            ViewBag.SelectedPaymentMethod = paymentMethod;
+            return View("InvalidDates");
         }
 
         var allowedFilters = new[]
@@ -48,7 +57,8 @@ public sealed class ReportsController : Controller
         ViewBag.SelectedPaymentMethod = selectedPaymentMethod;
         ViewBag.UnknownPaymentMethodFilter = UnknownPaymentMethodFilter;
 
-        var report = await _reportService.GetFleetReportAsync(from, to, cancellationToken);
+        var report = await _reportService.GetFleetReportAsync(range!.From, range.To, cancellationToken);
         return View(report);
     }
 }
+
