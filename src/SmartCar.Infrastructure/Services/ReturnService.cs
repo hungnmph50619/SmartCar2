@@ -39,6 +39,12 @@ internal sealed class ReturnService : IReturnService
                 "Không xác định được nhân viên đã trực tiếp kiểm tra người trả xe.");
         }
 
+        if (request.IdentityFaceSessionId == Guid.Empty)
+        {
+            return OperationResult.Failure(
+                "Cần chụp ảnh khuôn mặt người trả xe trực tiếp trước khi lập biên bản.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
@@ -66,20 +72,34 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Đơn đã có biên bản trả xe.");
         }
 
+        var faceSession = await _dbContext.Set<IdentityCaptureSession>()
+            .FirstOrDefaultAsync(item =>
+                item.IdentityCaptureSessionId == request.IdentityFaceSessionId,
+                cancellationToken);
+
+        if (faceSession is null ||
+            faceSession.Purpose != IdentityCapturePurposes.Return ||
+            faceSession.BookingId != booking.BookingId ||
+            faceSession.TargetCustomerId != booking.CustomerId ||
+            !faceSession.CanConsume(DateTime.UtcNow) ||
+            !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
+        {
+            return OperationResult.Failure(
+                "Ảnh mặt người trả không hợp lệ, không thuộc đúng đơn/khách hoặc đã được dùng. Vui lòng chụp lại tại quầy.");
+        }
+
         if (request.Mileage < booking.Handover.Mileage)
         {
             return OperationResult.Failure(
                 $"Số km trả xe không được nhỏ hơn lúc giao ({booking.Handover.Mileage:N0} km).");
         }
 
-        if (request.ReturnedAt < booking.Handover.HandoverAt)
+        // ReturnedAt là thời điểm nghiệp vụ thực tế, vì vậy lấy từ server khi Staff lưu biên bản.
+        // Không tin một timestamp tùy ý từ trình duyệt để tránh tính sai phí trả muộn.
+        var actualReturnedAt = DateTime.Now;
+        if (actualReturnedAt < booking.Handover.HandoverAt)
         {
             return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
-        }
-
-        if (request.ReturnedAt > DateTime.Now.AddMinutes(5))
-        {
-            return OperationResult.Failure("Thời gian trả xe không được ở tương lai.");
         }
 
         var evidencePaths = SplitImagePaths(request.ImagePaths)
@@ -105,7 +125,7 @@ internal sealed class ReturnService : IReturnService
                 "Đã ghi nhận hư hỏng mới thì biên bản trả xe phải có ít nhất một ảnh hư hỏng.");
         }
 
-        var accessoryStatus = Normalize(request.InteriorCondition);
+        var accessoryStatus = Normalize(request.AccessoryStatus);
         if (accessoryStatus is null ||
             (accessoryStatus != AccessoriesComplete &&
              !accessoryStatus.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase)))
@@ -122,7 +142,7 @@ internal sealed class ReturnService : IReturnService
         var drivenKilometers = request.Mileage - booking.Handover.Mileage;
         var elapsedDays = Math.Max(
             1,
-            (int)Math.Ceiling((request.ReturnedAt - booking.Handover.HandoverAt).TotalHours / 24d));
+            (int)Math.Ceiling((actualReturnedAt - booking.Handover.HandoverAt).TotalHours / 24d));
         var maximumReasonableKilometers = elapsedDays * MaximumReasonableKilometersPerDay;
 
         if (drivenKilometers > maximumReasonableKilometers)
@@ -137,8 +157,8 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Mức nhiên liệu khi trả phải là số từ 0 đến 100%.");
         }
 
-        var lateMinutes = request.ReturnedAt > booking.ReturnDate
-            ? (int)Math.Ceiling((request.ReturnedAt - booking.ReturnDate).TotalMinutes)
+        var lateMinutes = actualReturnedAt > booking.ReturnDate
+            ? (int)Math.Ceiling((actualReturnedAt - booking.ReturnDate).TotalMinutes)
             : 0;
         var lateDays = lateMinutes > 0
             ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
@@ -158,21 +178,24 @@ internal sealed class ReturnService : IReturnService
         var identityVerifiedAt = DateTime.UtcNow;
         var vehicleReturn = new VehicleReturn
         {
-            ReturnedAt = request.ReturnedAt,
+            ReturnedAt = actualReturnedAt,
             Mileage = request.Mileage,
             FuelLevel = $"{fuelPercent}%",
-            ExteriorCondition = null,
-            InteriorCondition = null,
+            ExteriorCondition = Normalize(request.ExteriorCondition),
+            InteriorCondition = Normalize(request.InteriorCondition),
             HasDamage = request.HasDamage,
             IsLateReturn = lateMinutes > 0,
             LateMinutes = lateMinutes,
             LateFee = lateFee,
             ImagePaths = string.Join(';', evidencePaths),
+            ReturnerFaceImagePath = faceSession.ImagePath,
             Notes = BuildReturnNotes(accessoryStatus, request.Notes),
             CustomerIdentityVerified = true,
             IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
             IdentityVerifiedAt = identityVerifiedAt
         };
+
+        faceSession.ConsumedAt = identityVerifiedAt;
 
         var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
@@ -226,7 +249,6 @@ internal sealed class ReturnService : IReturnService
             });
         }
 
-        // Biên bản trả + kết quả đối chiếu đúng người được lưu cùng một transaction.
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
