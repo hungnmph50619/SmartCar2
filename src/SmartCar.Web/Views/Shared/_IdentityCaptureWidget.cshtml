@@ -1,0 +1,95 @@
+@model SmartCar.Web.ViewModels.IdentityCaptureWidgetViewModel
+@using SmartCar.Domain.Constants
+@{
+    var widgetId = $"identity-{Guid.NewGuid():N}";
+}
+
+<div id="@widgetId"
+     class="identity-capture-widget border rounded-4 p-3 bg-light"
+     data-identity-capture-widget
+     data-purpose="@Model.Purpose"
+     data-booking-id="@Model.BookingId"
+     data-customer-id="@Model.CustomerId"
+     data-create-url="@Url.Action("CreateSession", "IdentityCapture")"
+     data-submit-url="@Url.Action("SubmitCamera", "IdentityCapture")"
+     data-status-url="@Url.Action("Status", "IdentityCapture")"
+     data-fallback-url="@Url.Action("StaffFallback", "IdentityCapture")">
+
+    <input type="hidden"
+           name="@Model.HiddenFieldName"
+           value="@Model.CompletedSessionId"
+           data-face-session />
+
+    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+        <div>
+            <div class="fw-semibold">@Model.Title</div>
+            <div class="small text-muted">@Model.HelpText</div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-sm btn-primary" data-start-camera>Chụp bằng camera</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" data-use-phone>Chụp bằng điện thoại</button>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1 align-items-start">
+        <div class="col-md-5">
+            <img data-face-preview
+                 class="img-fluid rounded-3 border bg-white d-none"
+                 alt="Ảnh khuôn mặt đã chụp"
+                 style="width:100%;max-width:320px;aspect-ratio:4/3;object-fit:cover" />
+        </div>
+        <div class="col-md-7">
+            <div class="d-none" data-camera-panel>
+                <video data-face-video
+                       playsinline
+                       muted
+                       class="w-100 rounded-3 border bg-dark"
+                       style="max-height:320px;object-fit:cover"></video>
+                <div class="d-flex gap-2 mt-2">
+                    <button type="button" class="btn btn-success" data-take-photo>Chụp ảnh này</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel-camera>Đóng camera</button>
+                </div>
+            </div>
+
+            <div class="d-none border rounded-3 p-3 bg-white" data-handoff-panel>
+                <div class="fw-semibold mb-2">Quét QR bằng điện thoại</div>
+                <img data-handoff-qr
+                     alt="QR mở camera xác minh trên điện thoại"
+                     width="190" height="190"
+                     class="border rounded p-1 bg-white"
+                     style="object-fit:contain" />
+                <div class="small mt-2">
+                    QR chỉ dùng cho đúng phiên xác minh này, hết hạn sau @IdentityCapturePolicy.SessionLifetimeMinutes phút và không dùng lại được.
+                </div>
+                <a data-handoff-link target="_blank" rel="noopener" class="small"></a>
+            </div>
+        </div>
+    </div>
+
+    <div class="small mt-2 text-muted" data-face-status>
+        Chưa có ảnh mặt xác minh. Customer không được chọn ảnh có sẵn từ thư viện trong luồng bình thường.
+    </div>
+
+    @if (Model.AllowStaffFallback && User.IsInRole(RoleNames.Staff))
+    {
+        <details class="mt-3">
+            <summary class="small text-warning fw-semibold">Thiết bị không thể dùng camera/QR · Staff upload dự phòng</summary>
+            <div class="alert alert-warning small mt-2 mb-2">
+                Chỉ dùng khi camera trên thiết bị và chụp qua QR đều không thể thực hiện. Hệ thống ghi Staff, thời gian và lý do vào audit.
+            </div>
+            <div data-staff-fallback-form data-hidden-target="@Model.HiddenFieldName">
+                <div class="row g-2">
+                    <div class="col-md-5">
+                        <input type="file" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm" data-fallback-file />
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" maxlength="500" class="form-control form-control-sm" placeholder="Lý do bắt buộc, ví dụ: máy quầy và điện thoại đều lỗi camera" data-fallback-reason />
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button type="button" class="btn btn-sm btn-outline-warning" data-fallback-submit>Dùng ảnh dự phòng</button>
+                    </div>
+                </div>
+            </div>
+        </details>
+    }
+</div>
