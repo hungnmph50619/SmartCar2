@@ -22,6 +22,10 @@ public class VehicleHandover
     public bool CustomerIdentityVerified { get; set; }
     public string? IdentityVerifiedByStaffId { get; set; }
     public DateTime? IdentityVerifiedAt { get; set; }
+    public string? ReceiverFaceImagePath { get; set; }
+    public DateTime? ReceiverFaceCapturedAt { get; set; }
+    public string? ReceiverFaceCaptureMethod { get; set; }
+
     public bool SignedDocumentVerified { get; set; }
     public string? SignedDocumentVerifiedByStaffId { get; set; }
     public DateTime? SignedDocumentVerifiedAt { get; set; }
