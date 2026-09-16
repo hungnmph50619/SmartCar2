@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Handovers;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -91,20 +92,13 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
 
-        if (request.HandoverAt > DateTime.Now.AddMinutes(5))
-        {
-            return OperationResult.Failure("Thời gian giao xe không được ở tương lai.");
-        }
-
-        if (request.HandoverAt < booking.PickupDate)
+        // Đây chỉ là thời điểm Staff chuẩn bị/lưu biên bản nháp. Chuyến chưa bắt đầu ở đây.
+        // Thời điểm giao thực tế được chốt bằng server time khi xác minh bản ký.
+        var preparedAt = DateTime.Now;
+        if (!BookingWorkflowRules.CanPrepareHandover(preparedAt, booking.ReturnDate))
         {
             return OperationResult.Failure(
-                "Thời gian giao xe không được trước thời gian nhận xe đã đặt.");
-        }
-
-        if (request.HandoverAt >= booking.ReturnDate)
-        {
-            return OperationResult.Failure("Thời gian giao xe phải trước thời gian trả xe đã đặt.");
+                "Đã đến hoặc quá thời gian trả xe của đơn, không thể chuẩn bị biên bản giao.");
         }
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
@@ -136,7 +130,7 @@ internal sealed class HandoverService : IHandoverService
 
         booking.Handover = new VehicleHandover
         {
-            HandoverAt = request.HandoverAt,
+            HandoverAt = preparedAt,
             Mileage = request.Mileage,
             FuelLevel = $"{fuelPercent}%",
             ExteriorCondition = Normalize(request.ExteriorCondition),
@@ -155,8 +149,6 @@ internal sealed class HandoverService : IHandoverService
             IdentityVerifiedAt = verifiedAt
         };
 
-        // Biên bản + kết quả kiểm tra đúng người được lưu trong cùng transaction.
-        // Không thể có trạng thái đã có biên bản nhưng mất cờ xác minh chỉ vì request sau bị lỗi.
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
