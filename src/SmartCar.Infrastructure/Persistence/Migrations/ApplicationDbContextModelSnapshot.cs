@@ -13,7 +13,7 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
 #pragma warning disable 612, 618
-        BuildMigration20260916173924(modelBuilder);
+        BuildMigration20260916180000(modelBuilder);
 #pragma warning restore 612, 618
     }
 }
