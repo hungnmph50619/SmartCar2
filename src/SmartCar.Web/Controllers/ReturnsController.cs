@@ -72,13 +72,22 @@ public sealed class ReturnsController : Controller
         }
 
         SetHandoverBaseline(handover);
-
-        return View(new ReturnViewModel
+        var model = new ReturnViewModel
         {
             BookingId = bookingId,
             ReturnedAt = DateTime.Now,
-            Mileage = handover.Mileage
-        });
+            Mileage = handover.Mileage,
+            AccessoryStatus = "Đủ"
+        };
+
+        if (!await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
+        {
+            TempData["ErrorMessage"] =
+                "Không tìm thấy CCCD đã được Admin xác minh của khách đứng tên đơn. Vui lòng kiểm tra hồ sơ trước khi nhận xe trả.";
+            return RedirectToBookingDetails(bookingId);
+        }
+
+        return View(model);
     }
 
     [HttpPost]
@@ -87,17 +96,46 @@ public sealed class ReturnsController : Controller
         ReturnViewModel model,
         CancellationToken cancellationToken)
     {
-        var identityMatches = await CustomerCitizenIdMatchesAsync(
-            model.BookingId,
-            model.ReturnerCitizenId,
-            cancellationToken);
+        var booking = await _bookingService.GetAdminBookingAsync(model.BookingId, cancellationToken);
+        if (booking is null)
+        {
+            return NotFound();
+        }
 
-        if (!identityMatches)
+        if (booking.Status != BookingStatus.Rented || booking.HasReturn)
+        {
+            TempData["ErrorMessage"] = booking.HasReturn
+                ? "Đơn đã có biên bản trả xe."
+                : "Đơn không còn ở trạng thái đang thuê.";
+            return RedirectToBookingDetails(model.BookingId);
+        }
+
+        ModelState.Remove(nameof(ReturnViewModel.CustomerId));
+        ModelState.Remove(nameof(ReturnViewModel.VerifiedCustomerName));
+        ModelState.Remove(nameof(ReturnViewModel.VerifiedCitizenId));
+        ModelState.Remove(nameof(ReturnViewModel.ReturnedAt));
+        model.ReturnedAt = DateTime.Now;
+
+        var identityFailures = new List<string>();
+        if (!await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
         {
             ModelState.AddModelError(
-                nameof(ReturnViewModel.ReturnerCitizenId),
-                "CCCD người trả không trùng với CCCD đã xác minh của khách đứng tên đơn thuê.");
+                string.Empty,
+                "Hồ sơ CCCD đã xác minh của khách không còn khả dụng. Vui lòng dừng nhận xe trả và kiểm tra lại hồ sơ.");
+            identityFailures.Add("không có CCCD KYC hợp lệ");
         }
+
+        if (!model.OriginalCitizenIdChecked)
+        {
+            identityFailures.Add("chưa kiểm tra CCCD bản gốc");
+        }
+
+        if (!model.ReturnerIdentityCheckedInPerson)
+        {
+            identityFailures.Add("chưa xác nhận đúng người đang trực tiếp trả xe");
+        }
+
+        await ValidateIdentityFaceSessionAsync(model, booking, identityFailures, cancellationToken);
 
         var evidenceFiles = BuildEvidenceFiles(model);
         await ValidateImagesAsync(
@@ -106,6 +144,16 @@ public sealed class ReturnsController : Controller
             model.Images,
             model.HasDamage,
             cancellationToken);
+
+        if (identityFailures.Count > 0)
+        {
+            await WriteAuditAsync(
+                "FailedReturnIdentityCheck",
+                nameof(Booking),
+                model.BookingId,
+                $"Nhận xe trả chưa đạt điều kiện danh tính: {string.Join("; ", identityFailures.Distinct())}. Biên bản chưa được tạo.",
+                cancellationToken);
+        }
 
         if (!ModelState.IsValid)
         {
@@ -146,10 +194,12 @@ public sealed class ReturnsController : Controller
                 model.FuelLevel,
                 model.ExteriorCondition,
                 model.InteriorCondition,
+                model.AccessoryStatus,
                 model.HasDamage,
                 string.Join(';', imagePaths),
                 model.Notes,
-                staffId),
+                staffId,
+                model.IdentityFaceSessionId!.Value),
             cancellationToken);
 
         if (!result.Succeeded)
@@ -165,11 +215,12 @@ public sealed class ReturnsController : Controller
             nameof(VehicleReturn),
             model.BookingId,
             $"Lập biên bản trả xe đơn #{model.BookingId}, {model.Mileage:N0} km, {imagePaths.Count} ảnh chứng cứ; " +
-            $"đã đối chiếu trực tiếp người trả và lưu xác minh trong cùng transaction; hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
+            $"đối chiếu CCCD bản gốc với KYC, chụp ảnh mặt người trả trực tiếp và consume phiên ảnh một lần trong cùng transaction; " +
+            $"hư hỏng mới: {(model.HasDamage ? "Có" : "Không")}.",
             cancellationToken);
 
         TempData["SuccessMessage"] =
-            "Đã lưu biên bản trả xe và kết quả xác minh người trả trong cùng một giao dịch. Hãy in, ký và tải bản ký trước khi quyết toán.";
+            "Đã lưu biên bản trả xe, ảnh mặt trực tiếp và kết quả xác minh người trả. Hãy in, ký và tải bản ký trước khi quyết toán.";
 
         return RedirectToAction("Details", "Staff", new { id = model.BookingId });
     }
@@ -458,39 +509,70 @@ public sealed class ReturnsController : Controller
         return RedirectToBookingDetails(model.BookingId);
     }
 
-    private async Task<bool> CustomerCitizenIdMatchesAsync(
-        int bookingId,
-        string? enteredCitizenId,
+    private async Task<bool> PopulateVerifiedIdentityAsync(
+        ReturnViewModel model,
+        BookingDetailsDto booking,
         CancellationToken cancellationToken)
     {
-        var normalized = new string((enteredCitizenId ?? string.Empty)
-            .Where(char.IsDigit)
-            .ToArray());
-
-        if (normalized.Length != 12)
-        {
-            return false;
-        }
-
-        var customerId = await _dbContext.Bookings
+        var customer = await _dbContext.Users
             .AsNoTracking()
-            .Where(item => item.BookingId == bookingId)
-            .Select(item => item.CustomerId)
+            .Where(user => user.Id == booking.CustomerId && user.IsActive)
+            .Select(user => new { user.Id, user.FullName })
             .FirstOrDefaultAsync(cancellationToken);
-
-        if (string.IsNullOrWhiteSpace(customerId))
+        if (customer is null)
         {
             return false;
         }
 
-        return await _dbContext.CustomerDocuments
+        var citizen = await _dbContext.CustomerDocuments
             .AsNoTracking()
-            .AnyAsync(document =>
-                document.CustomerId == customerId &&
+            .FirstOrDefaultAsync(document =>
+                document.CustomerId == booking.CustomerId &&
                 document.DocumentType == DocumentTypes.CitizenId &&
-                document.Status == DocumentStatus.Verified &&
-                document.DocumentNumber == normalized,
+                document.Status == DocumentStatus.Verified,
                 cancellationToken);
+        if (citizen is null)
+        {
+            return false;
+        }
+
+        model.CustomerId = customer.Id;
+        model.VerifiedCustomerName = customer.FullName;
+        model.VerifiedCitizenId = citizen.DocumentNumber;
+        return true;
+    }
+
+    private async Task ValidateIdentityFaceSessionAsync(
+        ReturnViewModel model,
+        BookingDetailsDto booking,
+        ICollection<string> identityFailures,
+        CancellationToken cancellationToken)
+    {
+        if (!model.IdentityFaceSessionId.HasValue)
+        {
+            identityFailures.Add("chưa chụp ảnh mặt người trả trực tiếp");
+            return;
+        }
+
+        var valid = await _dbContext.Set<IdentityCaptureSession>()
+            .AsNoTracking()
+            .AnyAsync(session =>
+                session.IdentityCaptureSessionId == model.IdentityFaceSessionId.Value &&
+                session.Purpose == IdentityCapturePurposes.Return &&
+                session.BookingId == booking.BookingId &&
+                session.TargetCustomerId == booking.CustomerId &&
+                session.CompletedAt.HasValue &&
+                !session.ConsumedAt.HasValue &&
+                session.ImagePath != null,
+                cancellationToken);
+
+        if (!valid)
+        {
+            ModelState.AddModelError(
+                nameof(ReturnViewModel.IdentityFaceSessionId),
+                "Ảnh mặt người trả không hợp lệ, không thuộc đúng đơn/khách hoặc đã được sử dụng. Vui lòng chụp lại.");
+            identityFailures.Add("ảnh mặt trực tiếp không hợp lệ");
+        }
     }
 
     private static bool AllStaffChecksCompleted(
@@ -608,6 +690,18 @@ public sealed class ReturnsController : Controller
         foreach (var image in selectedOtherImages)
         {
             await ValidateImageAsync(image, nameof(ReturnViewModel.Images), cancellationToken);
+        }
+
+        var duplicates = await ImageFileValidator.FindDuplicateContentFileNamesAsync(
+            evidenceFiles.Select(item => item.File)
+                .Concat(selectedDamageImages)
+                .Concat(selectedOtherImages),
+            cancellationToken);
+        if (duplicates.Count > 0)
+        {
+            ModelState.AddModelError(
+                nameof(ReturnViewModel.Images),
+                "Không được dùng cùng một ảnh cho nhiều vị trí/chứng cứ. Ảnh trùng nội dung: " + string.Join(", ", duplicates));
         }
     }
 
@@ -747,4 +841,3 @@ public sealed class ReturnsController : Controller
         }
     }
 }
-
