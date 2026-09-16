@@ -10,6 +10,7 @@ public sealed record CreateReturnRequest(
     string FuelLevel,
     string? ExteriorCondition,
     string? InteriorCondition,
+    string AccessoryStatus,
     bool HasDamage,
     string? ImagePaths,
     string? Notes,
