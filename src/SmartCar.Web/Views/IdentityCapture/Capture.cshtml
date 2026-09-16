@@ -1,0 +1,42 @@
+@model SmartCar.Web.ViewModels.IdentityCapturePageViewModel
+@{
+    Layout = null;
+}
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Chụp ảnh xác minh - SmartCar</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+</head>
+<body class="bg-light">
+    <main class="container py-4" style="max-width:680px"
+          data-identity-mobile-page
+          data-session-id="@Model.SessionId"
+          data-token="@Model.Token"
+          data-submit-url="@Url.Action("SubmitCamera", "IdentityCapture")">
+        <div class="card shadow-sm border-0 rounded-4">
+            <div class="card-body p-4">
+                <h1 class="h4">Chụp ảnh xác minh khuôn mặt</h1>
+                <p class="text-muted">
+                    Đây là phiên dùng một lần cho <strong>@Model.Purpose</strong>. Không có chức năng chọn ảnh có sẵn từ thư viện.
+                </p>
+                <div class="alert alert-info" data-mobile-status>
+                    Bấm mở camera, nhìn thẳng, đủ sáng và không che khuôn mặt.
+                </div>
+                <video data-mobile-video playsinline muted class="w-100 rounded-3 bg-dark d-none" style="max-height:480px;object-fit:cover"></video>
+                <img data-mobile-preview alt="Ảnh vừa chụp" class="w-100 rounded-3 border d-none" style="max-height:480px;object-fit:cover" />
+                <div class="d-grid gap-2 mt-3">
+                    <button type="button" class="btn btn-primary btn-lg" data-mobile-start>Mở camera</button>
+                    <button type="button" class="btn btn-success btn-lg d-none" data-mobile-capture>Chụp và gửi ảnh này</button>
+                </div>
+                <div class="small text-muted mt-3">
+                    Phiên hết hạn lúc @Model.ExpiresAtUtc.ToLocalTime().ToString("HH:mm:ss dd/MM/yyyy") và tự vô hiệu sau khi chụp thành công.
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="~/js/identity-capture.js" asp-append-version="true"></script>
+</body>
+</html>
