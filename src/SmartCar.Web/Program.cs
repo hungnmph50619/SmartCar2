@@ -23,6 +23,7 @@ builder.Services.AddScoped<IUserBankAccountService, UserBankAccountService>();
 builder.Services.AddHostedService<BookingReservationCleanupService>();
 builder.Services.AddScoped<KycAdminNotificationConsolidationFilter>();
 builder.Services.AddScoped<AdminWorkNotificationFilter>();
+builder.Services.AddScoped<AdminKycFaceDecisionFilter>();
 builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
@@ -30,6 +31,7 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.Add(new StaffOperationsAuthorizationFilter());
     options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
     options.Filters.AddService<AdminWorkNotificationFilter>();
+    options.Filters.AddService<AdminKycFaceDecisionFilter>();
 });
 
 var app = builder.Build();
