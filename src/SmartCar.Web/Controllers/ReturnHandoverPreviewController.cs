@@ -6,7 +6,7 @@ using SmartCar.Infrastructure.Persistence;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class ReturnHandoverPreviewController : Controller
 {
     private const string HandoverSignedMarker = "signed-handover-";
