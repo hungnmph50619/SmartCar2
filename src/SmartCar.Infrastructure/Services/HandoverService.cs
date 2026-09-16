@@ -96,7 +96,11 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Thời gian giao xe không được ở tương lai.");
         }
 
-        // Demo: allow an actual handover before the scheduled pickup time.
+        if (request.HandoverAt < booking.PickupDate)
+        {
+            return OperationResult.Failure(
+                "Thời gian giao xe không được trước thời gian nhận xe đã đặt.");
+        }
 
         if (request.HandoverAt >= booking.ReturnDate)
         {
@@ -178,4 +182,3 @@ internal sealed class HandoverService : IHandoverService
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
-
