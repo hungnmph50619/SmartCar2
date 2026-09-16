@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Domain.Constants;
@@ -39,36 +38,60 @@ public sealed class KycFaceCaptureFilter : IAsyncActionFilter
             .FirstOrDefaultAsync(item =>
                 item.IdentityCaptureSessionId == kycModel.FaceCaptureSessionId.Value,
                 context.HttpContext.RequestAborted);
+        var customer = await dbContext.Users
+            .FirstOrDefaultAsync(user => user.Id == customerId, context.HttpContext.RequestAborted);
 
-        var valid = session is not null &&
-                    session.Purpose == IdentityCapturePurposes.Kyc &&
-                    session.TargetCustomerId == customerId &&
-                    session.CompletedAt.HasValue &&
-                    !string.IsNullOrWhiteSpace(session.ImagePath) &&
-                    IdentityCaptureMethods.All.Contains(session.CaptureMethod ?? string.Empty, StringComparer.Ordinal);
+        var validSession = session is not null &&
+                           session.Purpose == IdentityCapturePurposes.Kyc &&
+                           session.TargetCustomerId == customerId &&
+                           session.CompletedAt.HasValue &&
+                           !string.IsNullOrWhiteSpace(session.ImagePath) &&
+                           IdentityCaptureMethods.All.Contains(
+                               session.CaptureMethod ?? string.Empty,
+                               StringComparer.Ordinal);
 
-        if (!valid)
+        if (!validSession || customer is null)
         {
             context.ModelState.AddModelError(
                 nameof(KycPackageSubmitViewModel.FaceCaptureSessionId),
-                "Ảnh mặt KYC không hợp lệ, chưa chụp xong hoặc không thuộc tài khoản này. Vui lòng chụp lại.");
+                customer is null
+                    ? "Không tìm thấy tài khoản khách hàng."
+                    : "Ảnh mặt KYC không hợp lệ, chưa chụp xong hoặc không thuộc tài khoản này. Vui lòng chụp lại.");
             await next();
             return;
         }
 
-        var customer = await dbContext.Users
-            .FirstOrDefaultAsync(user => user.Id == customerId, context.HttpContext.RequestAborted);
-        if (customer is null)
+        // Nếu browser/server validation của chính form đã lỗi, giữ nguyên session chưa consume để
+        // khách sửa text/ảnh giấy tờ rồi submit lại mà không phải chụp mặt lần nữa.
+        if (!context.ModelState.IsValid)
         {
-            context.ModelState.AddModelError(string.Empty, "Không tìm thấy tài khoản khách hàng.");
             await next();
             return;
         }
 
-        // Đây là ảnh ứng viên KYC; chỉ Admin mới biến bộ hồ sơ thành Verified.
-        customer.IdentityFaceImagePath = session!.ImagePath;
+        if (session!.ConsumedAt.HasValue)
+        {
+            // Retry hợp lệ sau một lỗi nghiệp vụ phía action: session đã dùng một lần nhưng vẫn
+            // được chấp nhận cho đúng tài khoản nếu ảnh ứng viên hiện tại chính là ảnh của session đó.
+            var sameCandidate = string.Equals(
+                customer.IdentityFaceImagePath,
+                session.ImagePath,
+                StringComparison.Ordinal);
+            if (!sameCandidate)
+            {
+                context.ModelState.AddModelError(
+                    nameof(KycPackageSubmitViewModel.FaceCaptureSessionId),
+                    "Phiên ảnh mặt này đã được dùng cho hồ sơ khác hoặc ảnh ứng viên đã thay đổi. Vui lòng chụp lại.");
+            }
+
+            await next();
+            return;
+        }
+
+        customer.IdentityFaceImagePath = session.ImagePath;
         customer.IdentityFaceCapturedAt = session.CompletedAt;
         customer.IdentityFaceCaptureMethod = session.CaptureMethod;
+        session.ConsumedAt = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(context.HttpContext.RequestAborted);
 
         await next();
