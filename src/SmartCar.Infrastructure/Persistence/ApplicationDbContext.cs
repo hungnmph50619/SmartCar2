@@ -28,6 +28,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<IdentityCaptureSession> IdentityCaptureSessions => Set<IdentityCaptureSession>();
+    public DbSet<BookingHoldEvent> BookingHoldEvents => Set<BookingHoldEvent>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -42,6 +44,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(user => user.CitizenIdNumber).HasMaxLength(20);
             entity.Property(user => user.CreatedByUserId).HasMaxLength(450);
             entity.Property(user => user.VerifiedByUserId).HasMaxLength(450);
+            entity.Property(user => user.IdentityFaceImagePath).HasMaxLength(500);
+            entity.Property(user => user.IdentityFaceCaptureMethod).HasMaxLength(50);
             entity.HasIndex(user => user.PhoneNumber)
                 .IsUnique()
                 .HasFilter("[PhoneNumber] IS NOT NULL");
@@ -163,6 +167,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.CancelledBy).HasMaxLength(30);
             entity.Property(booking => booking.RefundReason).HasMaxLength(500);
             entity.Property(booking => booking.ReservationExpiresAt).HasColumnType("datetime2");
+            entity.Property(booking => booking.StaffReviewedByStaffId).HasMaxLength(450);
             entity.Property(booking => booking.RowVersion).IsRowVersion();
             entity.HasIndex(booking => new
             {
@@ -230,6 +235,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(handover => handover.DamageCompensationTerms).HasMaxLength(1500).IsRequired();
             entity.Property(handover => handover.IdentityVerifiedByStaffId).HasMaxLength(450);
             entity.Property(handover => handover.SignedDocumentVerifiedByStaffId).HasMaxLength(450);
+            entity.Property(handover => handover.ReceiverFaceImagePath).HasMaxLength(500);
         });
 
         builder.Entity<VehicleReturn>(entity =>
@@ -244,6 +250,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .OnDelete(DeleteBehavior.Cascade);
             entity.Property(vehicleReturn => vehicleReturn.IdentityVerifiedByStaffId).HasMaxLength(450);
             entity.Property(vehicleReturn => vehicleReturn.SignedDocumentVerifiedByStaffId).HasMaxLength(450);
+            entity.Property(vehicleReturn => vehicleReturn.ReturnerFaceImagePath).HasMaxLength(500);
         });
 
         builder.Entity<AdditionalCharge>(entity =>
@@ -306,6 +313,40 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(log => log.IpAddress).HasMaxLength(100);
             entity.HasIndex(log => new { log.EntityName, log.EntityId, log.CreatedAt });
             entity.HasIndex(log => new { log.UserId, log.CreatedAt });
+        });
+
+        builder.Entity<IdentityCaptureSession>(entity =>
+        {
+            entity.HasKey(session => session.IdentityCaptureSessionId);
+            entity.Property(session => session.TokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(session => session.Purpose).HasMaxLength(30).IsRequired();
+            entity.Property(session => session.TargetCustomerId).HasMaxLength(450).IsRequired();
+            entity.Property(session => session.CreatedByUserId).HasMaxLength(450).IsRequired();
+            entity.Property(session => session.ImagePath).HasMaxLength(500);
+            entity.Property(session => session.CaptureMethod).HasMaxLength(50);
+            entity.Property(session => session.FallbackReason).HasMaxLength(500);
+            entity.HasIndex(session => session.TokenHash).IsUnique();
+            entity.HasIndex(session => new { session.TargetCustomerId, session.Purpose, session.ExpiresAt });
+            entity.HasIndex(session => session.BookingId);
+            entity.HasOne<Booking>()
+                .WithMany()
+                .HasForeignKey(session => session.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<BookingHoldEvent>(entity =>
+        {
+            entity.HasKey(item => item.BookingHoldEventId);
+            entity.Property(item => item.CustomerId).HasMaxLength(450).IsRequired();
+            entity.Property(item => item.WaivedByAdminId).HasMaxLength(450);
+            entity.Property(item => item.WaiveReason).HasMaxLength(500);
+            entity.HasIndex(item => item.BookingId).IsUnique();
+            entity.HasIndex(item => new { item.CustomerId, item.OccurredAt });
+            entity.HasIndex(item => new { item.VehicleId, item.OccurredAt });
+            entity.HasOne<Booking>()
+                .WithMany()
+                .HasForeignKey(item => item.BookingId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
