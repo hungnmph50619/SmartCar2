@@ -1,6 +1,9 @@
 @model SmartCar.Web.ViewModels.StaffBookingDetailsViewModel
+@using Microsoft.EntityFrameworkCore
 @using SmartCar.Domain.Enums
 @using SmartCar.Domain.Constants
+@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext Db
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     ViewData["Title"] = $"Xử lý đơn #{Model.Booking.BookingId}";
     var b = Model.Booking;
@@ -20,6 +23,17 @@
         payment.Type == PaymentType.Rental &&
         payment.Status == PaymentStatus.AwaitingConfirmation);
     var hasOpenRefund = Model.HasUnapprovedRefund || Model.HasApprovedRefund;
+
+    var staffReview = await Db.Bookings.AsNoTracking()
+        .Where(item => item.BookingId == b.BookingId)
+        .Select(item => new { item.StaffReviewedAt, item.StaffReviewedByStaffId })
+        .FirstOrDefaultAsync();
+
+    var paymentBankName = Configuration["PaymentQr:BankName"]?.Trim() ?? "Vietcombank";
+    var paymentAccountNumber = Configuration["PaymentQr:AccountNumber"]?.Trim() ?? string.Empty;
+    var paymentAccountHolder = Configuration["PaymentQr:AccountHolder"]?.Trim() ?? "SMARTCAR";
+    var paymentQrImagePath = Configuration["PaymentQr:QrImagePath"]?.Trim() ?? "/images/payment/bank-qr.jpg";
+    var transferContent = $"SMARTCAR {b.BookingId}";
 }
 
 @section Styles {
@@ -61,7 +75,7 @@
             <div class="card card-body shadow-sm h-100 border-0 rounded-4">
                 <h2 class="h5">Kiểm soát bắt buộc</h2>
                 <div class="small d-grid gap-2">
-                    <div>✓ Người nhận/trả phải khớp <strong>hồ sơ CCCD/GPLX đã xác minh</strong>.</div>
+                    <div>✓ Người nhận/trả phải khớp <strong>hồ sơ danh tính đã xác minh</strong>.</div>
                     <div>✓ File tải lên chỉ là <strong>bản chờ đối chiếu</strong>, không tự trở thành biên bản hợp lệ.</div>
                     <div>✓ Chỉ sau khi Staff mở bản ký và xác minh thì hệ thống mới cho đi bước tiếp theo.</div>
                 </div>
@@ -75,12 +89,24 @@
             <div class="d-flex gap-3 align-items-start">
                 <span class="staff-step-number">1</span>
                 <div class="flex-grow-1">
-                    <h2 class="h5 mb-2">Kiểm tra đơn trước khi gửi Admin duyệt</h2>
-                    <p class="text-muted mb-3">Kiểm tra hiện trạng KYC, xe và lịch ngay lúc thao tác. Admin sẽ kiểm lại một lần nữa ở thời điểm duyệt để tránh dùng kết quả cũ.</p>
-                    <form asp-controller="StaffBookingOperations" asp-action="ReviewForApproval" method="post">
-                        <input type="hidden" name="bookingId" value="@b.BookingId" />
-                        <button class="btn btn-primary">Kiểm tra điều kiện & gửi duyệt</button>
-                    </form>
+                    @if (staffReview?.StaffReviewedAt is null)
+                    {
+                        <h2 class="h5 mb-2">Kiểm tra đơn & gửi Admin duyệt</h2>
+                        <p class="text-muted mb-3">Đây là thao tác duy nhất cho bước kiểm tra. Hệ thống kiểm tra KYC, xe và lịch hiện tại rồi ghi trạng thái review thật lên đơn.</p>
+                        <form asp-controller="StaffBookingOperations" asp-action="ReviewForApproval" method="post" data-loading-form data-confirm="Kiểm tra điều kiện hiện tại và gửi đơn cho Admin duyệt?">
+                            <input type="hidden" name="bookingId" value="@b.BookingId" />
+                            <button class="btn btn-primary" data-loading-text="Đang kiểm tra...">Kiểm tra & gửi duyệt</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <h2 class="h5 mb-2">Đã kiểm tra · đang chờ Admin duyệt</h2>
+                        <div class="alert alert-success mb-0">
+                            <strong>✓ Bước Staff đã hoàn tất.</strong>
+                            Đã kiểm tra lúc @staffReview.StaffReviewedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm").
+                            Không cần và không thể gửi duyệt lần hai.
+                        </div>
+                    }
                 </div>
             </div>
         </section>
@@ -93,7 +119,7 @@
                 <span class="staff-step-number">2</span>
                 <div>
                     <h2 class="h5 mb-1">Thanh toán sau khi Admin duyệt</h2>
-                    <div class="text-muted">Chọn đúng thao tác khách đang thực hiện tại quầy. Hai luồng này ghi dữ liệu thật, không phải nút mô phỏng.</div>
+                    <div class="text-muted">Chọn đúng thao tác khách đang thực hiện tại quầy. Cả hai luồng đều ghi dữ liệu thật.</div>
                 </div>
             </div>
 
@@ -118,18 +144,32 @@
                     </div>
                     <div class="col-lg-6">
                         <div class="border rounded-4 p-3 h-100">
-                            <div class="d-flex gap-3 align-items-start">
-                                <img src="~/images/payment/bank-qr.jpg" alt="QR chuyển khoản SmartCar" width="112" height="112" class="rounded border object-fit-cover" />
-                                <div>
-                                    <h3 class="h6">Chuyển khoản / QR</h3>
-                                    <p class="small text-muted mb-2">Khách quét QR và chuyển tiền. Staff chỉ báo giao dịch; <strong>Admin mới là người đối soát</strong>.</p>
+                            <h3 class="h6 mb-3">Chuyển khoản / QR</h3>
+                            <div class="row g-3 align-items-start">
+                                <div class="col-sm-auto text-center">
+                                    <div class="bg-white border rounded-3 p-2 d-inline-block">
+                                        <img src="@paymentQrImagePath"
+                                             alt="QR chuyển khoản SmartCar"
+                                             width="220" height="220"
+                                             style="display:block;object-fit:contain;max-width:100%;height:auto" />
+                                    </div>
+                                </div>
+                                <div class="col">
+                                    <dl class="small mb-2">
+                                        <dt>Ngân hàng</dt><dd>@paymentBankName</dd>
+                                        <dt>Số tài khoản</dt><dd class="font-monospace fw-semibold">@paymentAccountNumber</dd>
+                                        <dt>Chủ tài khoản</dt><dd>@paymentAccountHolder</dd>
+                                        <dt>Số tiền trước giao xe</dt><dd class="fw-bold text-primary">@b.UpfrontAmount.ToString("N0") đ</dd>
+                                        <dt>Nội dung</dt><dd class="font-monospace fw-semibold">@transferContent</dd>
+                                    </dl>
+                                    <div class="small text-muted">QR dùng chung cấu hình thanh toán với màn Customer; ảnh được hiển thị nguyên tỷ lệ, không crop.</div>
                                 </div>
                             </div>
                             <form asp-controller="StaffPayments" asp-action="SubmitCounterQr" method="post" class="mt-3" data-confirm="Xác nhận khách đã thực hiện chuyển khoản/QR? Thao tác này CHƯA coi là đã thanh toán; giao dịch sẽ chờ Admin đối soát.">
                                 <input type="hidden" name="bookingId" value="@b.BookingId" />
                                 <div class="form-check mb-2">
                                     <input class="form-check-input" type="checkbox" name="transferConfirmed" value="true" id="counter-transfer-confirmed" required />
-                                    <label class="form-check-label small" for="counter-transfer-confirmed">Tôi đã thấy khách hoàn tất thao tác chuyển tiền.</label>
+                                    <label class="form-check-label small" for="counter-transfer-confirmed">Tôi đã thấy khách hoàn tất thao tác chuyển tiền đúng đơn này.</label>
                                 </div>
                                 <button class="btn btn-outline-primary">Gửi giao dịch chờ đối soát</button>
                             </form>
@@ -170,7 +210,7 @@
 
             @if (!b.HasHandover)
             {
-                <div class="alert alert-info">Chưa có biên bản giao. Hệ thống sẽ kiểm CCCD + GPLX của người nhận với hồ sơ đã xác minh và yêu cầu ảnh tình trạng xe.</div>
+                <div class="alert alert-info">Chưa có biên bản giao. Màn bàn giao sẽ đối chiếu hồ sơ đã xác minh và yêu cầu ảnh tình trạng xe.</div>
                 <a class="btn btn-primary align-self-start" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@b.BookingId">Lập biên bản giao xe</a>
             }
             else
@@ -368,19 +408,19 @@
             </div>
 
             @if (!Model.ReturnSignedDocumentVerified)
-                {
-                    <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned"
-                          method="post" enctype="multipart/form-data" class="border rounded-4 p-3 mt-3">
-                        <input type="hidden" name="bookingId" value="@b.BookingId" />
-                        <label for="return-signed-files" class="form-label fw-semibold">Tải bản ký biên bản trả xe</label>
-                        <input id="return-signed-files" name="signedDocuments" type="file"
-                               accept="image/jpeg,image/png,image/webp" multiple required class="form-control" />
-                        <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh. Nếu tải lại, chọn đủ các trang để thay bộ bản ký cũ.</div>
-                        <button type="submit" class="btn btn-outline-success mt-2">Tải bản ký trả xe</button>
-                    </form>
-                }
+            {
+                <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned"
+                      method="post" enctype="multipart/form-data" class="border rounded-4 p-3 mt-3">
+                    <input type="hidden" name="bookingId" value="@b.BookingId" />
+                    <label for="return-signed-files" class="form-label fw-semibold">Tải bản ký biên bản trả xe</label>
+                    <input id="return-signed-files" name="signedDocuments" type="file"
+                           accept="image/jpeg,image/png,image/webp" multiple required class="form-control" />
+                    <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh. Nếu tải lại, chọn đủ các trang để thay bộ bản ký cũ.</div>
+                    <button type="submit" class="btn btn-outline-success mt-2">Tải bản ký trả xe</button>
+                </form>
+            }
 
-                @if (Model.ReturnSignedPaths.Count == 0)
+            @if (Model.ReturnSignedPaths.Count == 0)
             {
                 <div class="alert alert-warning mt-3 mb-0">In biên bản trả, cho đúng khách ký rồi tải bản scan/ảnh. File tải lên vẫn phải được Staff mở và xác minh.</div>
             }
@@ -441,4 +481,3 @@
         <div class="alert alert-success"><strong>✓ Đơn đã hoàn tất.</strong> Không còn thao tác vận hành bắt buộc.</div>
     }
 </div>
-
