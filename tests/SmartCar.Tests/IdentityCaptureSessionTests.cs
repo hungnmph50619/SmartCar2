@@ -24,7 +24,7 @@ public sealed class IdentityCaptureSessionTests
     }
 
     [Fact]
-    public void CanConsume_RequiresCompletedUnusedUnexpiredImage()
+    public void CanConsume_RequiresCompletedUnusedImage_AndDoesNotDependOnQrExpiry()
     {
         var now = new DateTime(2026, 9, 16, 12, 0, 0, DateTimeKind.Utc);
         var session = new IdentityCaptureSession
@@ -35,6 +35,7 @@ public sealed class IdentityCaptureSessionTests
         };
 
         Assert.True(session.CanConsume(now));
+        Assert.True(session.CanConsume(now.AddHours(1)));
 
         session.ConsumedAt = now;
         Assert.False(session.CanConsume(now.AddSeconds(1)));
