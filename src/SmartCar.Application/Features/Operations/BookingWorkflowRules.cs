@@ -28,6 +28,11 @@ public static class BookingWorkflowRules
         bool hasHandover) =>
         !hasHandover && CancellableBeforeHandoverStatuses.Contains(status);
 
+    public static bool CanStaffReview(
+        BookingStatus status,
+        DateTime? staffReviewedAt) =>
+        status == BookingStatus.PendingConfirmation && !staffReviewedAt.HasValue;
+
     public static bool IsStaffWorkItem(
         BookingStatus status,
         bool hasOpenRefund)
