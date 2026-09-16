@@ -28,7 +28,6 @@ builder.Services.AddControllersWithViews(options =>
 {
     options.Filters.Add(new DuplicateDocumentImagesFilter());
     options.Filters.Add(new KycFaceCaptureFilter());
-    options.Filters.Add(new StaffOperationsAuthorizationFilter());
     options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
     options.Filters.AddService<AdminWorkNotificationFilter>();
     options.Filters.AddService<AdminKycFaceDecisionFilter>();
