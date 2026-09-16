@@ -20,9 +20,12 @@ public sealed class IdentityCaptureSession
 
     public bool IsExpired(DateTime utcNow) => utcNow >= ExpiresAt;
 
+    // ExpiresAt khóa khả năng CHỤP thêm bằng token/QR.
     public bool CanCapture(DateTime utcNow) =>
         !IsExpired(utcNow) && !CompletedAt.HasValue && string.IsNullOrWhiteSpace(ImagePath);
 
+    // Sau khi đã chụp, ảnh vẫn được phép gắn vào form đích một lần dù QR đã hết hạn.
+    // Việc consume luôn phải kiểm tra đúng Customer/Booking/Purpose ở server.
     public bool CanConsume(DateTime utcNow) =>
-        !IsExpired(utcNow) && CompletedAt.HasValue && !ConsumedAt.HasValue && !string.IsNullOrWhiteSpace(ImagePath);
+        CompletedAt.HasValue && !ConsumedAt.HasValue && !string.IsNullOrWhiteSpace(ImagePath);
 }
