@@ -19,6 +19,10 @@ public class VehicleReturn
     public bool CustomerIdentityVerified { get; set; }
     public string? IdentityVerifiedByStaffId { get; set; }
     public DateTime? IdentityVerifiedAt { get; set; }
+    public string? ReturnerFaceImagePath { get; set; }
+    public DateTime? ReturnerFaceCapturedAt { get; set; }
+    public string? ReturnerFaceCaptureMethod { get; set; }
+
     public bool SignedDocumentVerified { get; set; }
     public string? SignedDocumentVerifiedByStaffId { get; set; }
     public DateTime? SignedDocumentVerifiedAt { get; set; }
