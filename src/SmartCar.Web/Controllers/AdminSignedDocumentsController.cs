@@ -7,7 +7,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class AdminSignedDocumentsController : Controller
 {
     private const string HandoverSignedMarker = "signed-handover-";
@@ -115,15 +115,10 @@ public sealed class AdminSignedDocumentsController : Controller
 
     private IActionResult RedirectToBookingDetails(
         int bookingId) =>
-        User.IsInRole(RoleNames.Staff)
-            ? RedirectToAction(
-                "Details",
-                "Staff",
-                new { id = bookingId })
-            : RedirectToAction(
-                "Details",
-                "AdminBookings",
-                new { id = bookingId });
+        RedirectToAction(
+            "Details",
+            "Staff",
+            new { id = bookingId });
 
     private static IReadOnlyList<string> FindSignedPaths(
         string? paths,
