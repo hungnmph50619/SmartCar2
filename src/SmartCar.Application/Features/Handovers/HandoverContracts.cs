@@ -18,7 +18,8 @@ public sealed record CreateHandoverRequest(
     string DamageCompensationTerms,
     bool PenaltyPolicyAccepted,
     string? Notes,
-    string IdentityVerifiedByStaffId);
+    string IdentityVerifiedByStaffId,
+    Guid IdentityFaceSessionId);
 
 public interface IHandoverService
 {
