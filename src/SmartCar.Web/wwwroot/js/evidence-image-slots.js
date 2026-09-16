@@ -1,4 +1,15 @@
 (() => {
+    // Razor boolean attributes such as selected="False" are still truthy HTML attributes.
+    // Normalize the return accessory mode from the hidden business value before the inline
+    // form script reads the select, so a server-side validation round-trip preserves state.
+    const accessoryMode = document.querySelector('[data-accessory-mode]');
+    const accessoryValue = document.querySelector('[data-accessory-value]');
+    if (accessoryMode instanceof HTMLSelectElement && accessoryValue instanceof HTMLInputElement) {
+        accessoryMode.value = accessoryValue.value.trim().toLowerCase().startsWith('thiếu/mất:')
+            ? 'missing'
+            : 'Đủ';
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-evidence-slot]').forEach(initializeSlot);
         document.querySelectorAll('[data-evidence-multiple]').forEach(initializeMultiple);
