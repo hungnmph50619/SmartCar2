@@ -123,16 +123,10 @@ public sealed class CreateBookingViewModel
     public VehiclePickupMethod PickupMethod { get; set; }
         = VehiclePickupMethod.StorePickup;
 
-    [StringLength(
-        500,
-        ErrorMessage = "Địa chỉ giao xe tối đa 500 ký tự.")]
+    [StringLength(500, ErrorMessage = "Địa chỉ giao xe tối đa 500 ký tự.")]
     public string? DeliveryAddress { get; set; }
 
-    // Tọa độ nhận từ JavaScript dưới dạng chuỗi dùng dấu chấm
-    // (ví dụ: 21.0381298). Controller sẽ parse bằng
-    // CultureInfo.InvariantCulture để không phụ thuộc culture Windows/vi-VN.
     public string? DeliveryLatitude { get; set; }
-
     public string? DeliveryLongitude { get; set; }
 }
 
@@ -150,18 +144,26 @@ public sealed class HandoverViewModel
     [Range(1, int.MaxValue)]
     public int BookingId { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng nhập thời gian giao xe.")]
-    public DateTime HandoverAt { get; set; } = DateTime.Now;
+    public string CustomerId { get; set; } = string.Empty;
+    public string VerifiedCustomerName { get; set; } = string.Empty;
+    public string VerifiedCitizenId { get; set; } = string.Empty;
+    public string VerifiedDrivingLicenseNumber { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng nhập CCCD người nhận xe.")]
-    [RegularExpression(@"^[0-9]{12}$", ErrorMessage = "CCCD phải gồm đúng 12 chữ số.")]
-    [Display(Name = "CCCD người nhận xe")]
-    public string ReceiverCitizenId { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Vui lòng chụp ảnh khuôn mặt người nhận xe trực tiếp.")]
+    public Guid? IdentityFaceSessionId { get; set; }
 
-    [MustBeTrue(
-        ErrorMessage = "Nhân viên phải xác nhận đã đối chiếu CCCD gốc và người nhận xe trực tiếp.")]
+    [MustBeTrue(ErrorMessage = "Nhân viên phải xác nhận đã kiểm tra CCCD bản gốc.")]
+    public bool OriginalCitizenIdChecked { get; set; }
+
+    [MustBeTrue(ErrorMessage = "Nhân viên phải xác nhận đã kiểm tra GPLX bản gốc còn hiệu lực.")]
+    public bool OriginalDrivingLicenseChecked { get; set; }
+
+    [MustBeTrue(ErrorMessage = "Nhân viên phải xác nhận đúng người có mặt trực tiếp nhận xe.")]
     [Display(Name = "Đã đối chiếu người nhận trực tiếp")]
     public bool ReceiverIdentityCheckedInPerson { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập thời gian giao xe.")]
+    public DateTime HandoverAt { get; set; } = DateTime.Now;
 
     [Required(ErrorMessage = "Vui lòng nhập số km khi giao xe.")]
     [Range(0, int.MaxValue, ErrorMessage = "Số km phải là số nguyên từ 0 trở lên.")]
@@ -180,7 +182,6 @@ public sealed class HandoverViewModel
     [StringLength(1000)]
     public string? Accessories { get; set; }
 
-    // Ảnh chứng cứ bắt buộc. Controller lưu tên file có tiền tố để tra cứu/đối chiếu.
     public IFormFile? FrontImage { get; set; }
     public IFormFile? RearImage { get; set; }
     public IFormFile? LeftImage { get; set; }
@@ -196,7 +197,6 @@ public sealed class HandoverViewModel
     public List<IFormFile>? NewImages { get; set; }
 
     public List<string> ExistingImagePaths { get; set; } = new();
-
     public List<string>? ImagesToDelete { get; set; }
 
     [Range(0, int.MaxValue)]
@@ -216,9 +216,7 @@ public sealed class HandoverViewModel
     [StringLength(1500)]
     public string DamageCompensationTerms { get; set; } = string.Empty;
 
-    [MustBeTrue(
-        ErrorMessage =
-            "Cần xác nhận đã thông báo và khách đã đồng ý chính sách phí/phạt trước khi giao xe.")]
+    [MustBeTrue(ErrorMessage = "Cần xác nhận đã thông báo và khách đã đồng ý chính sách phí/phạt trước khi giao xe.")]
     public bool PenaltyPolicyAccepted { get; set; }
 
     [StringLength(1500)]
@@ -230,24 +228,27 @@ public sealed class ReturnViewModel
     [Range(1, int.MaxValue, ErrorMessage = "Đơn thuê không hợp lệ.")]
     public int BookingId { get; set; }
 
-    [Required(ErrorMessage = "Vui lòng nhập thời gian trả xe.")]
-    public DateTime ReturnedAt { get; set; } = DateTime.Now;
+    public string CustomerId { get; set; } = string.Empty;
+    public string VerifiedCustomerName { get; set; } = string.Empty;
+    public string VerifiedCitizenId { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng nhập CCCD người trả xe.")]
-    [RegularExpression(@"^[0-9]{12}$", ErrorMessage = "CCCD phải gồm đúng 12 chữ số.")]
-    [Display(Name = "CCCD người trả xe")]
-    public string ReturnerCitizenId { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Vui lòng chụp ảnh khuôn mặt người trả xe trực tiếp.")]
+    public Guid? IdentityFaceSessionId { get; set; }
 
-    [MustBeTrue(
-        ErrorMessage = "Nhân viên phải xác nhận đã đối chiếu CCCD gốc và người trả xe trực tiếp.")]
+    [MustBeTrue(ErrorMessage = "Nhân viên phải xác nhận đã kiểm tra CCCD bản gốc của người trả.")]
+    public bool OriginalCitizenIdChecked { get; set; }
+
+    [MustBeTrue(ErrorMessage = "Nhân viên phải xác nhận đúng người có mặt trực tiếp trả xe.")]
     [Display(Name = "Đã đối chiếu người trả trực tiếp")]
     public bool ReturnerIdentityCheckedInPerson { get; set; }
 
-    [Range(0, int.MaxValue)]
+    public DateTime ReturnedAt { get; set; } = DateTime.Now;
+
+    [Range(0, int.MaxValue, ErrorMessage = "Số km phải là số nguyên từ 0 trở lên.")]
     public int Mileage { get; set; }
 
     [Required(ErrorMessage = "Vui lòng nhập mức nhiên liệu khi trả xe.")]
-    [StringLength(30, ErrorMessage = "Mức nhiên liệu tối đa 30 ký tự.")]
+    [RegularExpression(@"^(?:100|[0-9]{1,2})$", ErrorMessage = "Mức nhiên liệu phải là số từ 0 đến 100.")]
     public string FuelLevel { get; set; } = string.Empty;
 
     [StringLength(1500, ErrorMessage = "Mô tả ngoại thất tối đa 1500 ký tự.")]
@@ -256,9 +257,12 @@ public sealed class ReturnViewModel
     [StringLength(1500, ErrorMessage = "Mô tả nội thất tối đa 1500 ký tự.")]
     public string? InteriorCondition { get; set; }
 
+    [Required(ErrorMessage = "Vui lòng xác nhận tình trạng phụ kiện khi trả.")]
+    [StringLength(1000)]
+    public string AccessoryStatus { get; set; } = "Đủ";
+
     public bool HasDamage { get; set; }
 
-    // Ảnh chứng cứ trả xe theo cùng vị trí với lúc giao để đối chiếu trực tiếp.
     public IFormFile? FrontImage { get; set; }
     public IFormFile? RearImage { get; set; }
     public IFormFile? LeftImage { get; set; }
