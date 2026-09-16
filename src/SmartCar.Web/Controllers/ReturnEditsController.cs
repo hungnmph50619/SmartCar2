@@ -153,10 +153,7 @@ public sealed class ReturnEditsController : Controller
             ModelState.AddModelError(nameof(model.ReturnedAt), "Thời gian trả không được trước thời gian giao xe.");
         }
 
-        if (model.ReturnedAt > DateTime.Now.AddMinutes(5))
-        {
-            ModelState.AddModelError(nameof(model.ReturnedAt), "Thời gian trả xe không được ở tương lai.");
-        }
+        // Demo: allow a future return timestamp to exercise return/deposit scenarios.
 
         if (model.Mileage.HasValue && model.ReturnedAt >= booking.Handover.HandoverAt)
         {
@@ -463,3 +460,4 @@ public sealed class ReturnEditsController : Controller
         }
     }
 }
+

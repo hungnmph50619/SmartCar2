@@ -77,10 +77,7 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
         }
 
-        if (request.ReturnedAt > DateTime.Now.AddMinutes(5))
-        {
-            return OperationResult.Failure("Thời gian trả xe không được ở tương lai.");
-        }
+        // Demo: allow a future return timestamp to exercise return/deposit scenarios.
 
         var evidencePaths = SplitImagePaths(request.ImagePaths)
             .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
@@ -718,3 +715,4 @@ internal sealed class ReturnService : IReturnService
             ? addition
             : $"{current.Trim()} {addition}";
 }
+
