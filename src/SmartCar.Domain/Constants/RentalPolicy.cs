@@ -10,53 +10,29 @@ namespace SmartCar.Domain.Constants
         // Giữ chỗ:
         // - Đơn mới có tối đa 60 phút cho bước nhân viên kiểm tra và quản trị viên duyệt.
         // - Sau khi được quản trị viên duyệt, khách có 30 phút để thanh toán/báo đã chuyển khoản.
-        // Khi khách đã báo chuyển khoản và payment ở AwaitingConfirmation thì không tự giải phóng lịch
-        // cho tới khi SmartCar đối soát giao dịch.
+        // - Khi khách đã báo chuyển khoản, SmartCar có tối đa 120 phút để đối soát. Không trạng thái
+        //   nào trước thanh toán được giữ lịch xe vô thời hạn.
         public const int BookingConfirmationHoldMinutes = 60;
         public const int BookingPaymentHoldMinutes = 30;
+        public const int BookingTransferReconciliationHoldMinutes = 120;
 
-        // Khoảng vận hành tối thiểu giữa hai lượt thuê cùng xe: nhận xe trả về, kiểm tra, chụp ảnh,
-        // đối chiếu km/nhiên liệu và vệ sinh nhanh trước lượt kế tiếp.
         public const int VehicleTurnaroundMinutes = 60;
-
-        // Khi lượt kế tiếp là giao tận nơi, hệ thống cần thêm thời gian chuẩn bị/di chuyển.
-        // Giá trị này sẽ được dùng bởi luồng kiểm tra khả dụng theo phương thức nhận xe.
         public const int DeliveryLeadMinutes = 30;
 
-        // No-show: sau thời gian chờ, không hoàn phần tiền thuê. Tiền cọc và phí giao chưa thực hiện
-        // vẫn được hoàn theo số thực tế còn lại của đơn.
         public const int NoShowGraceMinutes = 30;
         public const decimal NoShowFeeRate = 1.00m;
 
-        // ============================================================
-        // CHÍNH SÁCH GIAO XE THEO KHOẢNG CÁCH
-        // ============================================================
+        public const decimal StoreLatitude = 21.0381298m;
+        public const decimal StoreLongitude = 105.7424982m;
 
-        // QUAN TRỌNG:
-        // THAY 2 tọa độ này bằng tọa độ THẬT của cửa hàng bạn.
-        public const decimal StoreLatitude = 21.0381298m; //vĩ độ
-        public const decimal StoreLongitude = 105.7424982m; //kinh độ
-
-        // 3 km đầu = 30.000đ
-        public const double IncludedDeliveryDistanceKm = 3d; //số km đầu
-        public const decimal BaseDeliveryFee = 30_000m; //giá
-
-        // Sau 3 km, mỗi km bắt đầu tiếp theo = +10.000đ
+        public const double IncludedDeliveryDistanceKm = 3d;
+        public const decimal BaseDeliveryFee = 30_000m;
         public const decimal DeliveryFeePerExtraKm = 10_000m;
-
-        // Khoảng cách giao tối đa
         public const double MaxDeliveryDistanceKm = 50d;
-
-        // Bán kính trung bình Trái Đất
         private const double EarthRadiusKm = 6371.0088d;
 
-        // Mỗi ngày được đi 300 km
         public const int IncludedKilometersPerDay = 300;
-
-        // Đi vượt định mức: 5.000đ/km
         public const decimal ExcessKilometerFee = 5_000m;
-
-        // Trả xe muộn: 1.5 lần giá thuê/ngày
         public const decimal LateReturnFeeMultiplier = 1.50m;
 
         public const string TrafficFineTerms =
@@ -82,133 +58,61 @@ namespace SmartCar.Domain.Constants
             return pickupA < returnB.Add(buffer) && returnA.Add(buffer) > pickupB;
         }
 
-        // ============================================================
-        // TÍNH KHOẢNG CÁCH
-        // ============================================================
-
         public static double CalculateDeliveryDistanceKm(
             decimal deliveryLatitude,
             decimal deliveryLongitude)
         {
             var storeLat = ToRadians((double)StoreLatitude);
             var storeLng = ToRadians((double)StoreLongitude);
-
-            var deliveryLat =
-                ToRadians((double)deliveryLatitude);
-
-            var deliveryLng =
-                ToRadians((double)deliveryLongitude);
-
-            var deltaLat =
-                deliveryLat - storeLat;
-
-            var deltaLng =
-                deliveryLng - storeLng;
+            var deliveryLat = ToRadians((double)deliveryLatitude);
+            var deliveryLng = ToRadians((double)deliveryLongitude);
+            var deltaLat = deliveryLat - storeLat;
+            var deltaLng = deliveryLng - storeLng;
 
             var a =
-                Math.Pow(
-                    Math.Sin(deltaLat / 2d),
-                    2d)
-                +
-                Math.Cos(storeLat)
-                *
-                Math.Cos(deliveryLat)
-                *
-                Math.Pow(
-                    Math.Sin(deltaLng / 2d),
-                    2d);
+                Math.Sin(deltaLat / 2d) * Math.Sin(deltaLat / 2d) +
+                Math.Cos(storeLat) * Math.Cos(deliveryLat) *
+                Math.Sin(deltaLng / 2d) * Math.Sin(deltaLng / 2d);
 
-            var c =
-                2d * Math.Atan2(
-                    Math.Sqrt(a),
-                    Math.Sqrt(1d - a));
-
-            return Math.Round(
-                EarthRadiusKm * c,
-                2,
-                MidpointRounding.AwayFromZero);
+            var c = 2d * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1d - a));
+            return EarthRadiusKm * c;
         }
-
-        // ============================================================
-        // TÍNH PHÍ GIAO XE
-        // ============================================================
 
         public static decimal CalculateDeliveryFee(
             VehiclePickupMethod pickupMethod,
             decimal? deliveryLatitude,
             decimal? deliveryLongitude)
         {
-            // Nhận tại cửa hàng => không có phí giao
-            if (pickupMethod !=
-                VehiclePickupMethod.Delivery)
+            if (pickupMethod == VehiclePickupMethod.StorePickup)
             {
                 return 0m;
             }
 
-            if (!deliveryLatitude.HasValue ||
-                !deliveryLongitude.HasValue)
+            if (!deliveryLatitude.HasValue || !deliveryLongitude.HasValue)
             {
-                return 0m;
+                throw new ArgumentException("Thiếu tọa độ giao xe.");
             }
 
-            var distanceKm =
-                CalculateDeliveryDistanceKm(
-                    deliveryLatitude.Value,
-                    deliveryLongitude.Value);
+            var distanceKm = CalculateDeliveryDistanceKm(
+                deliveryLatitude.Value,
+                deliveryLongitude.Value);
 
-            // Số km vượt quá 3 km
-            var extraDistanceKm =
-                Math.Max(
-                    0d,
-                    distanceKm -
-                    IncludedDeliveryDistanceKm);
+            if (distanceKm > MaxDeliveryDistanceKm)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(deliveryLatitude),
+                    $"Khoảng cách giao xe vượt quá {MaxDeliveryDistanceKm:0} km.");
+            }
 
-            // Ví dụ:
-            // vượt 0.1km cũng tính thành 1km
-            // vượt 2.2km tính thành 3km
-            var extraWholeKilometers =
-                (decimal)Math.Ceiling(
-                    extraDistanceKm);
+            if (distanceKm <= IncludedDeliveryDistanceKm)
+            {
+                return BaseDeliveryFee;
+            }
 
-            return
-                BaseDeliveryFee
-                +
-                extraWholeKilometers
-                *
-                DeliveryFeePerExtraKm;
+            var extraKilometers = Math.Ceiling(distanceKm - IncludedDeliveryDistanceKm);
+            return BaseDeliveryFee + (decimal)extraKilometers * DeliveryFeePerExtraKm;
         }
 
-        // ============================================================
-        // KIỂM TRA PHẠM VI GIAO
-        // ============================================================
-
-        public static bool IsWithinDeliveryRange(
-            decimal deliveryLatitude,
-            decimal deliveryLongitude)
-        {
-            return
-                CalculateDeliveryDistanceKm(
-                    deliveryLatitude,
-                    deliveryLongitude)
-                <=
-                MaxDeliveryDistanceKm;
-        }
-
-        public static decimal CalculateDeposit(
-            decimal rentalAmount)
-        {
-            return Math.Round(
-                rentalAmount * DepositRate,
-                0,
-                MidpointRounding.AwayFromZero);
-        }
-
-        private static double ToRadians(
-            double degrees)
-        {
-            return degrees *
-                   Math.PI /
-                   180d;
-        }
+        private static double ToRadians(double degrees) => degrees * Math.PI / 180d;
     }
 }
