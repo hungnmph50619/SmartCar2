@@ -202,10 +202,21 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (booking is null)
             return RefundResult.Failure("Không tìm thấy đơn thuê.");
 
+        var hasPaymentAwaitingConfirmation = booking.Payments.Any(payment =>
+            payment.Type != PaymentType.Refund &&
+            payment.Status == PaymentStatus.AwaitingConfirmation);
+
         if (!BookingWorkflowRules.CanCancelBeforeHandover(
                 booking.Status,
-                booking.Handover is not null))
+                booking.Handover is not null,
+                hasPaymentAwaitingConfirmation))
         {
+            if (hasPaymentAwaitingConfirmation)
+            {
+                return RefundResult.Failure(
+                    "Đơn đang có khoản chuyển khoản/QR chờ đối soát. Cần xác nhận hoặc từ chối giao dịch trước khi hủy để tránh thất lạc tiền khách đã chuyển.");
+            }
+
             return RefundResult.Failure(
                 booking.Handover is not null
                     ? "Đơn đã lập biên bản giao xe nên không thể hủy. Nếu giao xe chưa hoàn tất, hãy xử lý hồ sơ bàn giao thay vì hủy đơn."
