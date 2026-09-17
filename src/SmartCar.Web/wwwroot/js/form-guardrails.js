@@ -6,7 +6,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         initializeBoundedNumericInputs();
         initializeFileDrafts().catch(() => {
-            // IndexedDB may be disabled by browser/private mode. Forms still work normally.
+            // IndexedDB có thể bị tắt ở private mode. Form vẫn hoạt động nhưng không thể phục hồi file cục bộ.
         });
     });
 
@@ -17,9 +17,19 @@
             const min = parseFinite(input.min);
             const max = parseFinite(input.max);
             const integerOnly = input.dataset.integer === 'true' || input.step === '1';
+            const maxDigits = resolveMaxDigits(input, max);
+            let lastAcceptedValue = normalizeInitialValue(input.value, min, max, integerOnly, maxDigits);
+
+            if (lastAcceptedValue !== input.value) {
+                input.value = lastAcceptedValue;
+            }
+
+            input.inputMode = integerOnly ? 'numeric' : 'decimal';
 
             input.addEventListener('keydown', (event) => {
-                if (event.key === 'e' || event.key === 'E' || event.key === '+') {
+                if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+                if (['e', 'E', '+'].includes(event.key)) {
                     event.preventDefault();
                     return;
                 }
@@ -29,15 +39,36 @@
                 }
                 if (integerOnly && (event.key === '.' || event.key === ',')) {
                     event.preventDefault();
+                    return;
+                }
+
+                if (maxDigits && /^\d$/.test(event.key)) {
+                    const selectionLength = Math.max(0, input.selectionEnd - input.selectionStart);
+                    const digitCount = input.value.replace(/\D/g, '').length - selectionLength;
+                    if (digitCount >= maxDigits) {
+                        event.preventDefault();
+                    }
                 }
             });
 
-            const applyHardBounds = (finalizeMinimum) => {
-                if (!input.value) return;
+            const enforce = (finalizeMinimum) => {
+                if (!input.value) {
+                    lastAcceptedValue = '';
+                    input.setCustomValidity('');
+                    return;
+                }
 
-                const value = Number(input.value);
-                if (!Number.isFinite(value)) {
+                const sanitized = sanitizeNumericValue(input.value, integerOnly, maxDigits);
+                if (!sanitized) {
                     input.value = '';
+                    lastAcceptedValue = '';
+                    input.setCustomValidity('');
+                    return;
+                }
+
+                const value = Number(sanitized);
+                if (!Number.isFinite(value)) {
+                    input.value = lastAcceptedValue;
                     return;
                 }
 
@@ -46,16 +77,76 @@
                 if (finalizeMinimum && min !== null && bounded < min) bounded = min;
                 if (integerOnly) bounded = Math.trunc(bounded);
 
-                if (bounded !== value) {
-                    input.value = String(bounded);
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                const next = String(bounded);
+                if (input.value !== next) {
+                    input.value = next;
                 }
+                lastAcceptedValue = next;
+                input.setCustomValidity('');
             };
 
-            input.addEventListener('input', () => applyHardBounds(false));
-            input.addEventListener('paste', () => setTimeout(() => applyHardBounds(false), 0));
-            input.addEventListener('blur', () => applyHardBounds(true));
+            input.addEventListener('input', () => enforce(false));
+            input.addEventListener('paste', () => setTimeout(() => enforce(false), 0));
+            input.addEventListener('drop', () => setTimeout(() => enforce(false), 0));
+            input.addEventListener('blur', () => enforce(true));
+            input.addEventListener('wheel', (event) => {
+                if (document.activeElement === input) {
+                    event.preventDefault();
+                    input.blur();
+                }
+            }, { passive: false });
         });
+    }
+
+    function resolveMaxDigits(input, max) {
+        const explicit = Number(input.dataset.maxDigits || input.dataset.numericMaxDigits || '');
+        if (Number.isInteger(explicit) && explicit > 0) return explicit;
+
+        if (max !== null && max >= 0 && Number.isFinite(max)) {
+            return Math.max(1, Math.trunc(max).toString().length);
+        }
+
+        const name = `${input.name} ${input.id}`.toLowerCase();
+        if (name.includes('fuel') || name.includes('percent')) return 3;
+        if (name.includes('mileage') || name.includes('kilometer')) return 7;
+        if (name.includes('year')) return 4;
+        return null;
+    }
+
+    function sanitizeNumericValue(raw, integerOnly, maxDigits) {
+        let value = String(raw ?? '').trim();
+        if (integerOnly) {
+            const negative = value.startsWith('-');
+            value = value.replace(/\D/g, '');
+            if (maxDigits) value = value.slice(0, maxDigits);
+            return negative ? `-${value}` : value;
+        }
+
+        value = value.replace(',', '.').replace(/[^0-9.-]/g, '');
+        const firstDot = value.indexOf('.');
+        if (firstDot >= 0) {
+            value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, '');
+        }
+        if (maxDigits) {
+            const sign = value.startsWith('-') ? '-' : '';
+            const unsigned = value.replace('-', '');
+            const [whole, fraction = ''] = unsigned.split('.');
+            const clippedWhole = whole.slice(0, maxDigits);
+            value = `${sign}${clippedWhole}${unsigned.includes('.') ? `.${fraction}` : ''}`;
+        }
+        return value;
+    }
+
+    function normalizeInitialValue(raw, min, max, integerOnly, maxDigits) {
+        if (!raw) return '';
+        const sanitized = sanitizeNumericValue(raw, integerOnly, maxDigits);
+        const value = Number(sanitized);
+        if (!Number.isFinite(value)) return '';
+        let bounded = value;
+        if (max !== null && bounded > max) bounded = max;
+        if (min !== null && bounded < min) bounded = min;
+        if (integerOnly) bounded = Math.trunc(bounded);
+        return String(bounded);
     }
 
     function parseFinite(value) {
