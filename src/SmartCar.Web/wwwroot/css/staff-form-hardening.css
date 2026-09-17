@@ -1,0 +1,59 @@
+.admin-content [data-evidence-preview],
+.admin-content [data-evidence-multiple-preview] img,
+.admin-content img[src*="/uploads/handovers/"],
+.admin-content img[src*="/uploads/returns/"] {
+    object-fit: contain !important;
+    background: #0b0f14;
+}
+
+.admin-content [data-evidence-slot] {
+    position: relative;
+    overflow: hidden;
+}
+
+.admin-content [data-evidence-slot].border-danger {
+    box-shadow: 0 0 0 .12rem rgba(220,53,69,.08);
+}
+
+.admin-content [data-evidence-slot].border-success {
+    box-shadow: 0 0 0 .12rem rgba(25,135,84,.08);
+}
+
+.admin-content .staff-file-actions {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+    margin-top: .5rem;
+}
+
+.admin-content .staff-file-actions .btn {
+    --bs-btn-padding-y: .25rem;
+    --bs-btn-padding-x: .6rem;
+    --bs-btn-font-size: .8rem;
+}
+
+.admin-content .staff-evidence-error {
+    margin-top: .45rem;
+    font-size: .82rem;
+    color: var(--bs-danger);
+}
+
+.admin-content .staff-evidence-help {
+    margin-top: .35rem;
+    font-size: .78rem;
+    color: var(--bs-secondary-color);
+}
+
+.admin-content input[type="number"]::-webkit-inner-spin-button,
+.admin-content input[type="number"]::-webkit-outer-spin-button {
+    opacity: .35;
+}
+
+.admin-content .staff-stuck-workflow-alert {
+    border-left: .35rem solid var(--bs-warning);
+}
+
+.admin-content .staff-validation-summary-cleanup .field-validation-error:empty,
+.admin-content .staff-validation-summary-cleanup .validation-summary-errors:empty {
+    display: none;
+}
