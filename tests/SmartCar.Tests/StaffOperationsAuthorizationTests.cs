@@ -10,6 +10,7 @@ public sealed class StaffOperationsAuthorizationTests
     [Theory]
     [InlineData(typeof(StaffCustomersController))]
     [InlineData(typeof(HandoversController))]
+    [InlineData(typeof(HandoverEditsController))]
     [InlineData(typeof(ReturnsController))]
     [InlineData(typeof(ReturnEditsController))]
     [InlineData(typeof(AdminSignedDocumentsController))]
