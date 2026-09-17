@@ -27,6 +27,18 @@ public sealed class BookingWorkflowRulesTests
     }
 
     [Theory]
+    [InlineData(BookingStatus.PendingPayment)]
+    [InlineData(BookingStatus.Paid)]
+    [InlineData(BookingStatus.ReadyForPickup)]
+    public void CanCancelBeforeHandover_RejectsWhileTransferAwaitsReconciliation(BookingStatus status)
+    {
+        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(
+            status,
+            hasHandover: false,
+            hasPaymentAwaitingConfirmation: true));
+    }
+
+    [Theory]
     [InlineData(BookingStatus.Rented)]
     [InlineData(BookingStatus.PendingInspection)]
     [InlineData(BookingStatus.Completed)]
