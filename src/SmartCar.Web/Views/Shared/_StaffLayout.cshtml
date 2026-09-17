@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/SmartCar.Web.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-layout.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/staff-form-hardening.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="admin-body">
@@ -78,6 +79,8 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/form-guardrails.js" asp-append-version="true"></script>
+    <script src="~/js/staff-form-hardening.js" asp-append-version="true"></script>
     <script>(()=>{const sidebar=document.getElementById('adminSidebar'),toggle=document.getElementById('adminSidebarToggle'),backdrop=document.getElementById('adminSidebarBackdrop');const closeSidebar=()=>{sidebar?.classList.remove('open');backdrop?.classList.remove('show')};toggle?.addEventListener('click',()=>{sidebar?.classList.toggle('open');backdrop?.classList.toggle('show')});backdrop?.addEventListener('click',closeSidebar);sidebar?.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>{if(window.innerWidth<992)closeSidebar()}));window.addEventListener('resize',()=>{if(window.innerWidth>=992)closeSidebar()})})();</script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
