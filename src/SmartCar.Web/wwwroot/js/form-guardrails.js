@@ -43,8 +43,10 @@
                 }
 
                 if (maxDigits && /^\d$/.test(event.key)) {
-                    const selectionLength = Math.max(0, input.selectionEnd - input.selectionStart);
-                    const digitCount = input.value.replace(/\D/g, '').length - selectionLength;
+                    const selectionStart = input.selectionStart ?? input.value.length;
+                    const selectionEnd = input.selectionEnd ?? selectionStart;
+                    const selectedDigits = input.value.slice(selectionStart, selectionEnd).replace(/\D/g, '').length;
+                    const digitCount = input.value.replace(/\D/g, '').length - selectedDigits;
                     if (digitCount >= maxDigits) {
                         event.preventDefault();
                     }
@@ -156,17 +158,42 @@
     }
 
     async function initializeFileDrafts() {
-        const inputs = Array.from(document.querySelectorAll('input[type="file"][data-file-draft-key]'))
-            .filter((input) => input instanceof HTMLInputElement);
-        if (inputs.length === 0 || !('indexedDB' in window)) return;
+        if (!('indexedDB' in window)) return;
 
         const db = await openDraftDb();
         await purgeExpiredDrafts(db);
 
-        for (const input of inputs) {
+        const registerInput = async (input) => {
+            if (!(input instanceof HTMLInputElement) || input.type !== 'file' || !input.dataset.fileDraftKey) return;
+            if (input.dataset.fileDraftInitialized === 'true') return;
+            input.dataset.fileDraftInitialized = 'true';
             input.addEventListener('change', () => saveInputDraft(db, input));
             await restoreInputDraft(db, input);
-        }
+        };
+
+        const registerTree = async (root) => {
+            if (root instanceof HTMLInputElement) {
+                await registerInput(root);
+            }
+            if (!(root instanceof Element) && root !== document) return;
+            const inputs = Array.from(root.querySelectorAll?.('input[type="file"][data-file-draft-key]') || []);
+            for (const input of inputs) {
+                await registerInput(input);
+            }
+        };
+
+        await registerTree(document);
+
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node instanceof Element) {
+                        registerTree(node).catch(() => {});
+                    }
+                });
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
     }
 
     function openDraftDb() {
