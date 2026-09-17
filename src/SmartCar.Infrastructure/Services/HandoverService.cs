@@ -72,6 +72,32 @@ internal sealed class HandoverService : IHandoverService
                 "Ảnh mặt người nhận không hợp lệ, không thuộc đúng đơn/khách hoặc đã được dùng. Vui lòng chụp lại tại quầy.");
         }
 
+        var counterEvidence = await _dbContext.Set<IdentityCaptureSession>()
+            .Where(item =>
+                item.BookingId == booking.BookingId &&
+                item.TargetCustomerId == booking.CustomerId &&
+                item.CreatedByUserId == request.IdentityVerifiedByStaffId &&
+                !item.ConsumedAt.HasValue &&
+                item.CompletedAt.HasValue &&
+                item.ExpiresAt > DateTime.UtcNow &&
+                item.ImagePath != null &&
+                item.CaptureMethod == IdentityCaptureMethods.StaffCounterDocument &&
+                (item.Purpose == IdentityCapturePurposes.HandoverCitizenFront ||
+                 item.Purpose == IdentityCapturePurposes.HandoverCitizenBack))
+            .OrderByDescending(item => item.CompletedAt)
+            .ToListAsync(cancellationToken);
+
+        var citizenFrontSession = counterEvidence
+            .FirstOrDefault(item => item.Purpose == IdentityCapturePurposes.HandoverCitizenFront);
+        var citizenBackSession = counterEvidence
+            .FirstOrDefault(item => item.Purpose == IdentityCapturePurposes.HandoverCitizenBack);
+
+        if (citizenFrontSession is null || citizenBackSession is null)
+        {
+            return OperationResult.Failure(
+                "Cần chụp và lưu đủ CCCD mặt trước + mặt sau của khách đang có mặt tại quầy trước khi lập biên bản giao xe.");
+        }
+
         var rentalPaid = booking.Payments.Any(payment =>
             payment.Type == PaymentType.Rental &&
             payment.Status == PaymentStatus.Paid);
@@ -172,6 +198,8 @@ internal sealed class HandoverService : IHandoverService
         };
 
         faceSession.ConsumedAt = verifiedAt;
+        citizenFrontSession.ConsumedAt = verifiedAt;
+        citizenBackSession.ConsumedAt = verifiedAt;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
