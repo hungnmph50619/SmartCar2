@@ -81,6 +81,7 @@
     <script src="~/js/site.js" asp-append-version="true"></script>
     <script src="~/js/form-guardrails.js" asp-append-version="true"></script>
     <script src="~/js/staff-form-hardening.js" asp-append-version="true"></script>
+    <script src="~/js/staff-identity-comparison.js" asp-append-version="true"></script>
     <script>(()=>{const sidebar=document.getElementById('adminSidebar'),toggle=document.getElementById('adminSidebarToggle'),backdrop=document.getElementById('adminSidebarBackdrop');const closeSidebar=()=>{sidebar?.classList.remove('open');backdrop?.classList.remove('show')};toggle?.addEventListener('click',()=>{sidebar?.classList.toggle('open');backdrop?.classList.toggle('show')});backdrop?.addEventListener('click',closeSidebar);sidebar?.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>{if(window.innerWidth<992)closeSidebar()}));window.addEventListener('resize',()=>{if(window.innerWidth>=992)closeSidebar()})})();</script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
