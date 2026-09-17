@@ -40,4 +40,19 @@ public sealed class IdentityCaptureSessionTests
         session.ConsumedAt = now;
         Assert.False(session.CanConsume(now.AddSeconds(1)));
     }
+
+    [Fact]
+    public void CounterCitizenEvidence_HasDedicatedPurposes_AndCannotMasqueradeAsFaceCapture()
+    {
+        Assert.Contains(IdentityCapturePurposes.HandoverCitizenFront, IdentityCapturePurposes.All);
+        Assert.Contains(IdentityCapturePurposes.HandoverCitizenBack, IdentityCapturePurposes.All);
+
+        Assert.DoesNotContain(
+            IdentityCaptureMethods.StaffCounterDocument,
+            IdentityCaptureMethods.All);
+
+        Assert.True(
+            IdentityCapturePolicy.CounterDocumentSessionLifetimeMinutes >
+            IdentityCapturePolicy.SessionLifetimeMinutes);
+    }
 }
