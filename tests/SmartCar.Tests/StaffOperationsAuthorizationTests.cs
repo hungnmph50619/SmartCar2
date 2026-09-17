@@ -15,6 +15,8 @@ public sealed class StaffOperationsAuthorizationTests
     [InlineData(typeof(AdminSignedDocumentsController))]
     [InlineData(typeof(AdminRentalDocumentsController))]
     [InlineData(typeof(ReturnHandoverPreviewController))]
+    [InlineData(typeof(StaffWorkflowDiagnosticsController))]
+    [InlineData(typeof(StaffCounterIdentityEvidenceController))]
     public void OperationalControllers_AreExplicitlyStaffOnly(Type controllerType)
     {
         var authorizeAttributes = controllerType
