@@ -223,6 +223,14 @@ public sealed class StaffController : Controller
             return View(model);
         }
 
+        if (await _bankAccountService.GetDefaultAsync(model.CustomerId, cancellationToken) is null)
+        {
+            ModelState.AddModelError(
+                string.Empty,
+                "Khách hàng chưa có tài khoản ngân hàng mặc định để nhận hoàn cọc/hoàn tiền. Hãy bổ sung tài khoản ngân hàng cho khách trước khi lập đơn tại quầy.");
+            return View(model);
+        }
+
         var createResult = await _bookingService.CreateAsync(
             model.CustomerId,
             new CreateBookingRequest(
@@ -723,4 +731,3 @@ public sealed class StaffController : Controller
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 }
-
