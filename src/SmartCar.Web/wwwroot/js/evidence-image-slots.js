@@ -16,16 +16,31 @@
         document.querySelectorAll('[data-evidence-slot]').forEach(initializeSlot);
         document.querySelectorAll('[data-evidence-multiple]').forEach(initializeMultiple);
         document.querySelectorAll('form').forEach((form) => {
-            if (form.querySelector('[data-evidence-input], [data-evidence-multiple-input]')) {
-                form.addEventListener('submit', async (event) => {
-                    const okay = await validateDuplicateContent(form);
-                    if (!okay) {
-                        event.preventDefault();
-                        event.stopImmediatePropagation();
-                        form.querySelector(':invalid')?.reportValidity();
-                    }
-                }, true);
-            }
+            if (!form.querySelector('[data-evidence-input], [data-evidence-multiple-input]')) return;
+
+            form.addEventListener('submit', async (event) => {
+                if (form.dataset.evidenceSubmitReady === 'true') {
+                    delete form.dataset.evidenceSubmitReady;
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopImmediatePropagation();
+
+                const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
+                const okay = await validateDuplicateContent(form);
+                if (!okay || !form.checkValidity()) {
+                    form.querySelector(':invalid')?.reportValidity();
+                    return;
+                }
+
+                form.dataset.evidenceSubmitReady = 'true';
+                if (submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement) {
+                    form.requestSubmit(submitter);
+                } else {
+                    form.requestSubmit();
+                }
+            }, true);
         });
     });
 
@@ -192,7 +207,8 @@
             valid = false;
             const labels = group.map((item) => item.input.dataset.evidenceLabel || item.file.name);
             group.forEach((entry) => {
-                const other = labels.filter((label) => label !== (entry.input.dataset.evidenceLabel || entry.file.name));
+                const ownLabel = entry.input.dataset.evidenceLabel || entry.file.name;
+                const other = labels.filter((label, index) => group[index] !== entry && label !== ownLabel);
                 const host = entry.input.closest('[data-evidence-slot], [data-evidence-multiple]');
                 if (host) {
                     setInputError(entry.input, host, `Ảnh này đã được dùng ở ${other.join(', ') || 'một vị trí khác'}. Mỗi vị trí phải có ảnh riêng.`);
@@ -205,8 +221,8 @@
 
     async function hashFile(file) {
         const buffer = await file.arrayBuffer();
-        if (crypto?.subtle) {
-            const digest = await crypto.subtle.digest('SHA-256', buffer);
+        if (globalThis.crypto?.subtle) {
+            const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
             return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
         }
         return `${file.name}:${file.size}:${file.lastModified}`;
