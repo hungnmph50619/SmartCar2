@@ -1,0 +1,574 @@
+name: Apply payment hardening patch
+
+on:
+  push:
+    branches:
+      - agent/payment-patcher-20260918
+    paths:
+      - .github/workflows/apply-payment-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/payment-refund-state-hardening-20260918
+          fetch-depth: 0
+
+      - name: Apply guarded source replacements
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8-sig')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          payment_service = 'src/SmartCar.Infrastructure/Services/PaymentService.cs'
+
+          replace_once(payment_service, '''        if (paymentType == PaymentType.Rental &&
+            booking.PickupMethod == VehiclePickupMethod.Delivery)
+        {
+            var storedDeliveryFee = Math.Max(
+                0m,
+                booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
+
+            if (storedDeliveryFee <= 0m &&
+                booking.DeliveryLatitude.HasValue &&
+                booking.DeliveryLongitude.HasValue)
+            {
+                storedDeliveryFee = RentalPolicy.CalculateDeliveryFee(
+                    booking.PickupMethod,
+                    booking.DeliveryLatitude,
+                    booking.DeliveryLongitude);
+            }
+
+            payment.Amount = booking.RentalAmount + storedDeliveryFee;
+            booking.TotalAmount = booking.RentalAmount + storedDeliveryFee + booking.AdditionalAmount;
+        }
+''', '''        if (paymentType == PaymentType.Rental)
+        {
+            var storedDeliveryFee = 0m;
+            if (booking.PickupMethod == VehiclePickupMethod.Delivery)
+            {
+                storedDeliveryFee = Math.Max(
+                    0m,
+                    booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
+
+                if (storedDeliveryFee <= 0m &&
+                    booking.DeliveryLatitude.HasValue &&
+                    booking.DeliveryLongitude.HasValue)
+                {
+                    storedDeliveryFee = RentalPolicy.CalculateDeliveryFee(
+                        booking.PickupMethod,
+                        booking.DeliveryLatitude,
+                        booking.DeliveryLongitude);
+                }
+            }
+
+            booking.TotalAmount =
+                Math.Max(0m, booking.RentalAmount) +
+                storedDeliveryFee +
+                Math.Max(0m, booking.AdditionalAmount);
+            payment.Amount = UpfrontPaymentRules.GetRequiredRentalAmount(
+                booking.RentalAmount,
+                booking.TotalAmount,
+                booking.AdditionalAmount);
+
+            if (payment.Amount <= 0m)
+            {
+                return OperationResult.Failure("Số tiền thuê/phí giao cần thu không hợp lệ.");
+            }
+        }
+''')
+
+          replace_once(payment_service, '''        Payment? bundledDeposit = null;
+
+        if (paymentType == PaymentType.Rental && booking.DepositAmount > 0)
+        {
+            bundledDeposit = booking.Payments
+                .FirstOrDefault(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status != PaymentStatus.Paid);
+
+            if (bundledDeposit is null &&
+                !booking.Payments.Any(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.Paid))
+            {
+                bundledDeposit = new Payment
+                {
+                    BookingId = booking.BookingId,
+                    Type = PaymentType.Deposit,
+                    Amount = booking.DepositAmount,
+                    Method = PaymentMethods.BankQr,
+                    Status = PaymentStatus.AwaitingConfirmation
+                };
+                booking.Payments.Add(bundledDeposit);
+            }
+            else if (bundledDeposit is not null)
+            {
+                bundledDeposit.Amount = booking.DepositAmount;
+                bundledDeposit.Method = PaymentMethods.BankQr;
+                bundledDeposit.Status = PaymentStatus.AwaitingConfirmation;
+                bundledDeposit.PaidAt = null;
+                bundledDeposit.TransactionCode = null;
+            }
+        }
+''', '''        Payment? bundledDeposit = null;
+
+        if (paymentType == PaymentType.Rental && booking.DepositAmount > 0)
+        {
+            var depositAssessment = UpfrontPaymentRules.Assess(
+                booking.RentalAmount,
+                booking.TotalAmount,
+                booking.AdditionalAmount,
+                booking.DepositAmount,
+                booking.Payments.Select(item =>
+                    new UpfrontPaymentEntry(item.Type, item.Amount, item.Status)));
+            var remainingDeposit = depositAssessment.MissingDepositAmount;
+
+            var orphanedAwaitingDeposit = booking.Payments.Any(item =>
+                item.Type == PaymentType.Deposit &&
+                item.Status == PaymentStatus.AwaitingConfirmation);
+            if (orphanedAwaitingDeposit)
+            {
+                return OperationResult.Failure(
+                    "Đơn đang có giao dịch cọc chờ đối soát. Vui lòng xử lý giao dịch cũ trước khi tạo lần thanh toán mới.");
+            }
+
+            var pendingDeposits = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.Pending)
+                .OrderBy(item => item.PaymentId)
+                .ToList();
+
+            if (remainingDeposit > 0m)
+            {
+                bundledDeposit = pendingDeposits.FirstOrDefault();
+                foreach (var duplicate in pendingDeposits.Skip(1))
+                {
+                    duplicate.Status = PaymentStatus.Failed;
+                    duplicate.Method = PaymentMethods.NotSelected;
+                    duplicate.PaidAt = null;
+                    duplicate.TransactionCode = null;
+                }
+
+                if (bundledDeposit is null)
+                {
+                    bundledDeposit = new Payment
+                    {
+                        BookingId = booking.BookingId,
+                        Type = PaymentType.Deposit,
+                        Amount = remainingDeposit,
+                        Method = PaymentMethods.BankQr,
+                        Status = PaymentStatus.AwaitingConfirmation
+                    };
+                    booking.Payments.Add(bundledDeposit);
+                }
+                else
+                {
+                    bundledDeposit.Amount = remainingDeposit;
+                    bundledDeposit.Method = PaymentMethods.BankQr;
+                    bundledDeposit.Status = PaymentStatus.AwaitingConfirmation;
+                    bundledDeposit.PaidAt = null;
+                    bundledDeposit.TransactionCode = null;
+                }
+            }
+            else
+            {
+                foreach (var stale in pendingDeposits)
+                {
+                    stale.Status = PaymentStatus.Failed;
+                    stale.Method = PaymentMethods.NotSelected;
+                    stale.PaidAt = null;
+                    stale.TransactionCode = null;
+                }
+            }
+        }
+''')
+
+          replace_once(payment_service, '''        if (originalType == PaymentType.TrafficFine &&
+            (payment.VehicleIncidentId is null ||
+             payment.VehicleIncident is null ||
+             payment.VehicleIncident.BookingId != booking.BookingId ||
+             payment.VehicleIncident.IncidentType != IncidentType.TrafficFine ||
+             payment.VehicleIncident.Status == IncidentStatus.Cancelled))
+        {
+            return OperationResult.Failure(
+                "Không thể xác nhận vì khoản phạt không còn gắn với hồ sơ vi phạm hợp lệ.");
+        }
+
+        var paidAt = DateTime.UtcNow;
+''', '''        if (originalType == PaymentType.TrafficFine &&
+            (payment.VehicleIncidentId is null ||
+             payment.VehicleIncident is null ||
+             payment.VehicleIncident.BookingId != booking.BookingId ||
+             payment.VehicleIncident.IncidentType != IncidentType.TrafficFine ||
+             payment.VehicleIncident.Status == IncidentStatus.Cancelled))
+        {
+            return OperationResult.Failure(
+                "Không thể xác nhận vì khoản phạt không còn gắn với hồ sơ vi phạm hợp lệ.");
+        }
+
+        Payment? expectedBundledDeposit = null;
+        if (originalType == PaymentType.Rental)
+        {
+            var requiredRentalAmount = UpfrontPaymentRules.GetRequiredRentalAmount(
+                booking.RentalAmount,
+                booking.TotalAmount,
+                booking.AdditionalAmount);
+            if (payment.Amount != requiredRentalAmount)
+            {
+                return OperationResult.Failure(
+                    $"Số tiền thuê/phí giao chờ xác nhận ({payment.Amount:N0} đồng) không khớp số phải thu hiện tại ({requiredRentalAmount:N0} đồng). " +
+                    "Không xác nhận để tránh ghi Paid sai số tiền.");
+            }
+
+            var currentAssessment = UpfrontPaymentRules.Assess(
+                booking.RentalAmount,
+                booking.TotalAmount,
+                booking.AdditionalAmount,
+                booking.DepositAmount,
+                booking.Payments.Select(item =>
+                    new UpfrontPaymentEntry(item.Type, item.Amount, item.Status)));
+            var awaitingDeposits = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.AwaitingConfirmation)
+                .OrderBy(item => item.PaymentId)
+                .ToList();
+
+            if (currentAssessment.MissingDepositAmount > 0m)
+            {
+                if (awaitingDeposits.Count != 1)
+                {
+                    return OperationResult.Failure(
+                        "Dữ liệu cọc chờ đối soát không nhất quán. Phải có đúng một khoản cọc đi kèm trước khi xác nhận tiền thuê.");
+                }
+
+                expectedBundledDeposit = awaitingDeposits[0];
+                if (expectedBundledDeposit.Amount != currentAssessment.MissingDepositAmount)
+                {
+                    return OperationResult.Failure(
+                        $"Khoản cọc chờ xác nhận ({expectedBundledDeposit.Amount:N0} đồng) không khớp phần cọc còn thiếu ({currentAssessment.MissingDepositAmount:N0} đồng).");
+                }
+            }
+            else if (awaitingDeposits.Count > 0)
+            {
+                return OperationResult.Failure(
+                    "Đơn đã đủ cọc nhưng vẫn còn giao dịch cọc chờ xác nhận. Vui lòng xử lý dữ liệu trùng trước khi tiếp tục.");
+            }
+
+            var projectedSettlement = UpfrontPaymentRules.Assess(
+                booking.RentalAmount,
+                booking.TotalAmount,
+                booking.AdditionalAmount,
+                booking.DepositAmount,
+                booking.Payments.Select(item => new UpfrontPaymentEntry(
+                    item.Type,
+                    item.Amount,
+                    item.PaymentId == payment.PaymentId ||
+                    (expectedBundledDeposit is not null && item.PaymentId == expectedBundledDeposit.PaymentId)
+                        ? PaymentStatus.Paid
+                        : item.Status)));
+
+            if (!projectedSettlement.IsSettled)
+            {
+                return OperationResult.Failure(
+                    $"Sau khi xác nhận giao dịch vẫn còn thiếu {projectedSettlement.MissingRentalAmount:N0} đồng tiền thuê/phí giao " +
+                    $"và {projectedSettlement.MissingDepositAmount:N0} đồng tiền cọc. Không chuyển đơn sang Đã thanh toán.");
+            }
+        }
+
+        var paidAt = DateTime.UtcNow;
+''')
+
+          replace_once(payment_service, '''        Payment? bundledDeposit = null;
+
+        if (originalType == PaymentType.Rental)
+        {
+            bundledDeposit = booking.Payments
+                .FirstOrDefault(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.AwaitingConfirmation);
+
+            if (booking.DepositAmount > 0 && bundledDeposit is not null)
+            {
+                bundledDeposit.Amount = booking.DepositAmount;
+                bundledDeposit.Method = PaymentMethods.BankQr;
+                bundledDeposit.Status = PaymentStatus.Paid;
+                bundledDeposit.PaidAt = paidAt;
+                bundledDeposit.TransactionCode = transactionCode;
+            }
+
+            booking.Status = BookingStatus.Paid;
+            booking.ReservationExpiresAt = null;
+        }
+''', '''        Payment? bundledDeposit = null;
+
+        if (originalType == PaymentType.Rental)
+        {
+            bundledDeposit = expectedBundledDeposit;
+
+            if (bundledDeposit is not null)
+            {
+                bundledDeposit.Method = PaymentMethods.BankQr;
+                bundledDeposit.Status = PaymentStatus.Paid;
+                bundledDeposit.PaidAt = paidAt;
+                bundledDeposit.TransactionCode = transactionCode;
+            }
+
+            var settlement = UpfrontPaymentRules.Assess(
+                booking.RentalAmount,
+                booking.TotalAmount,
+                booking.AdditionalAmount,
+                booking.DepositAmount,
+                booking.Payments.Select(item =>
+                    new UpfrontPaymentEntry(item.Type, item.Amount, item.Status)));
+            if (!settlement.IsSettled)
+            {
+                return OperationResult.Failure(
+                    $"Không thể chuyển đơn sang Đã thanh toán: còn thiếu {settlement.MissingRentalAmount:N0} đồng tiền thuê/phí giao " +
+                    $"và {settlement.MissingDepositAmount:N0} đồng tiền cọc.");
+            }
+
+            booking.Status = BookingStatus.Paid;
+            booking.ReservationExpiresAt = null;
+        }
+''')
+
+          replace_once(payment_service, '''        if (payment.Type == PaymentType.Rental)
+        {
+            var bundledDeposit = payment.Booking.Payments
+                .FirstOrDefault(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.AwaitingConfirmation);
+
+            if (bundledDeposit is not null)
+            {
+                bundledDeposit.Status = PaymentStatus.Pending;
+                bundledDeposit.Method = PaymentMethods.NotSelected;
+                bundledDeposit.PaidAt = null;
+                bundledDeposit.TransactionCode = null;
+            }
+        }
+''', '''        if (payment.Type == PaymentType.Rental)
+        {
+            var bundledDeposits = payment.Booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.AwaitingConfirmation)
+                .ToList();
+
+            foreach (var bundledDeposit in bundledDeposits)
+            {
+                bundledDeposit.Status = PaymentStatus.Pending;
+                bundledDeposit.Method = PaymentMethods.NotSelected;
+                bundledDeposit.PaidAt = null;
+                bundledDeposit.TransactionCode = null;
+            }
+        }
+''')
+
+          replace_once(payment_service, '''        if (payment.Type != PaymentType.Refund ||
+            payment.Status != PaymentStatus.AwaitingRefund)
+        {
+            return OperationResult.Failure("Khoản hoàn tiền không còn ở trạng thái chờ xử lý.");
+        }
+''', '''        if (payment.Type != PaymentType.Refund ||
+            payment.Status != PaymentStatus.RefundApproved)
+        {
+            return OperationResult.Failure(
+                "Khoản hoàn tiền chưa được Admin duyệt hoặc đã được xử lý; không được bỏ qua bước phê duyệt hoàn tiền.");
+        }
+''')
+
+          staff_controller = 'src/SmartCar.Web/Controllers/StaffController.cs'
+          replace_once(staff_controller, '''using SmartCar.Application.Features.Operations;
+''', '''using SmartCar.Application.Features.Operations;
+using SmartCar.Application.Features.Payments;
+''')
+
+          replace_once(staff_controller, '''        var upfrontPayments = booking.Payments
+            .Where(item => item.Type is PaymentType.Rental or PaymentType.Deposit)
+            .ToList();
+
+        if (upfrontPayments.Any(item => item.Status == PaymentStatus.AwaitingConfirmation))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Đơn đang có chuyển khoản chờ Admin đối soát. Không được đồng thời ghi nhận tiền mặt.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var paidAt = DateTime.UtcNow;
+        var transactionCode = $"CASH-{bookingId}-{paidAt:yyyyMMddHHmmss}";
+        foreach (var payment in upfrontPayments.Where(item => item.Status == PaymentStatus.Pending))
+        {
+            payment.Status = PaymentStatus.Paid;
+            payment.Method = PaymentMethods.Cash;
+            payment.PaidAt = paidAt;
+            payment.TransactionCode = transactionCode;
+        }
+
+        var rentalPaid = booking.Payments
+            .Where(item => item.Type == PaymentType.Rental && item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var depositPaid = booking.Payments
+            .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+
+        if (rentalPaid <= 0 || (booking.DepositAmount > 0 && depositPaid < booking.DepositAmount))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Đơn chưa có đủ khoản tiền thuê hoặc tiền cọc cần thu nên không thể ghi Paid.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+''', '''        var upfrontPayments = booking.Payments
+            .Where(item => item.Type is PaymentType.Rental or PaymentType.Deposit)
+            .ToList();
+
+        if (upfrontPayments.Any(item => item.Status == PaymentStatus.AwaitingConfirmation))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Đơn đang có chuyển khoản chờ Admin đối soát. Không được đồng thời ghi nhận tiền mặt.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var paidAt = DateTime.UtcNow;
+        var transactionCode = $"CASH-{bookingId}-{paidAt:yyyyMMddHHmmss}";
+        var beforeSettlement = UpfrontPaymentRules.Assess(
+            booking.RentalAmount,
+            booking.TotalAmount,
+            booking.AdditionalAmount,
+            booking.DepositAmount,
+            booking.Payments.Select(item =>
+                new UpfrontPaymentEntry(item.Type, item.Amount, item.Status)));
+
+        var pendingRental = upfrontPayments
+            .Where(item => item.Type == PaymentType.Rental && item.Status == PaymentStatus.Pending)
+            .OrderBy(item => item.PaymentId)
+            .ToList();
+        if (beforeSettlement.MissingRentalAmount > 0m)
+        {
+            var rental = pendingRental.FirstOrDefault();
+            if (rental is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Đơn còn thiếu {beforeSettlement.MissingRentalAmount:N0} đồng tiền thuê/phí giao nhưng không có khoản phải thu hợp lệ.";
+                return RedirectToAction(nameof(Details), new { id = bookingId });
+            }
+
+            rental.Amount = beforeSettlement.MissingRentalAmount;
+            rental.Status = PaymentStatus.Paid;
+            rental.Method = PaymentMethods.Cash;
+            rental.PaidAt = paidAt;
+            rental.TransactionCode = transactionCode;
+            foreach (var duplicate in pendingRental.Skip(1))
+            {
+                duplicate.Status = PaymentStatus.Failed;
+                duplicate.Method = PaymentMethods.NotSelected;
+                duplicate.PaidAt = null;
+                duplicate.TransactionCode = null;
+            }
+        }
+        else
+        {
+            foreach (var stale in pendingRental)
+            {
+                stale.Status = PaymentStatus.Failed;
+                stale.Method = PaymentMethods.NotSelected;
+                stale.PaidAt = null;
+                stale.TransactionCode = null;
+            }
+        }
+
+        var afterRentalSettlement = UpfrontPaymentRules.Assess(
+            booking.RentalAmount,
+            booking.TotalAmount,
+            booking.AdditionalAmount,
+            booking.DepositAmount,
+            booking.Payments.Select(item =>
+                new UpfrontPaymentEntry(item.Type, item.Amount, item.Status)));
+        var pendingDeposit = upfrontPayments
+            .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Pending)
+            .OrderBy(item => item.PaymentId)
+            .ToList();
+        if (afterRentalSettlement.MissingDepositAmount > 0m)
+        {
+            var deposit = pendingDeposit.FirstOrDefault();
+            if (deposit is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Đơn còn thiếu {afterRentalSettlement.MissingDepositAmount:N0} đồng tiền cọc nhưng không có khoản cọc phải thu hợp lệ.";
+                return RedirectToAction(nameof(Details), new { id = bookingId });
+            }
+
+            deposit.Amount = afterRentalSettlement.MissingDepositAmount;
+            deposit.Status = PaymentStatus.Paid;
+            deposit.Method = PaymentMethods.Cash;
+            deposit.PaidAt = paidAt;
+            deposit.TransactionCode = transactionCode;
+            foreach (var duplicate in pendingDeposit.Skip(1))
+            {
+                duplicate.Status = PaymentStatus.Failed;
+                duplicate.Method = PaymentMethods.NotSelected;
+                duplicate.PaidAt = null;
+                duplicate.TransactionCode = null;
+            }
+        }
+        else
+        {
+            foreach (var stale in pendingDeposit)
+            {
+                stale.Status = PaymentStatus.Failed;
+                stale.Method = PaymentMethods.NotSelected;
+                stale.PaidAt = null;
+                stale.TransactionCode = null;
+            }
+        }
+
+        var settlement = UpfrontPaymentRules.Assess(
+            booking.RentalAmount,
+            booking.TotalAmount,
+            booking.AdditionalAmount,
+            booking.DepositAmount,
+            booking.Payments.Select(item =>
+                new UpfrontPaymentEntry(item.Type, item.Amount, item.Status)));
+        if (!settlement.IsSettled)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                $"Chưa thể ghi Đã thanh toán: còn thiếu {settlement.MissingRentalAmount:N0} đồng tiền thuê/phí giao " +
+                $"và {settlement.MissingDepositAmount:N0} đồng tiền cọc.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+''')
+          PY
+
+      - name: Verify patch shape
+        run: |
+          git diff --check
+          git diff -- src/SmartCar.Infrastructure/Services/PaymentService.cs src/SmartCar.Web/Controllers/StaffController.cs
+
+      - name: Commit to feature branch
+        run: |
+          git config user.name "Trường Hoàng"
+          git config user.email "113461904+truonghoangg@users.noreply.github.com"
+          git add src/SmartCar.Infrastructure/Services/PaymentService.cs src/SmartCar.Web/Controllers/StaffController.cs
+          git diff --cached --quiet && { echo "Patch produced no changes"; exit 1; }
+          git commit -m "fix(payments): enforce full upfront settlement before Paid"
+          git push origin HEAD:fix/payment-refund-state-hardening-20260918
