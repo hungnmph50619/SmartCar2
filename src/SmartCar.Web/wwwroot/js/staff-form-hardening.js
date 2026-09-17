@@ -2,6 +2,7 @@
     const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
     const allowedImageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
     const defaultMaximumImageBytes = 5 * 1024 * 1024;
+    const signedMaximumImageBytes = 8 * 1024 * 1024;
 
     document.addEventListener('DOMContentLoaded', () => {
         hardenImageInputs();
@@ -14,8 +15,9 @@
             if (!(input instanceof HTMLInputElement)) return;
             if (!looksLikeImageInput(input)) return;
 
-            const maximumBytes = Number(input.dataset.maxBytes || defaultMaximumImageBytes);
-            const maximumFiles = Number(input.dataset.maxFiles || (input.multiple ? 25 : 1));
+            const signedInput = /signed/i.test(`${input.name} ${input.id}`);
+            const maximumBytes = Number(input.dataset.maxBytes || (signedInput ? signedMaximumImageBytes : defaultMaximumImageBytes));
+            const maximumFiles = Number(input.dataset.maxFiles || (input.multiple ? (signedInput ? 12 : 25) : 1));
 
             input.addEventListener('change', () => {
                 const files = Array.from(input.files || []);
@@ -106,9 +108,9 @@
         });
     }
 
-    function explainBlockedInspectionState() {
-        const path = window.location.pathname.toLowerCase();
-        if (!path.includes('/staff/details/')) return;
+    async function explainBlockedInspectionState() {
+        const match = /^\/Staff\/Details\/(\d+)/i.exec(window.location.pathname);
+        if (!match) return;
 
         const heading = Array.from(document.querySelectorAll('h2, h3')).find((node) =>
             /đối chiếu xe trả.*quyết toán/i.test(node.textContent || ''));
@@ -116,16 +118,52 @@
 
         const section = heading.closest('section');
         if (!section) return;
-        const inspectLink = section.querySelector('a[href*="/Returns/Inspect"], a[href*="/returns/inspect"]');
-        if (inspectLink) return;
 
-        const existingActionableForm = section.querySelector('form button:not([disabled]), form input[type="submit"]:not([disabled])');
-        if (existingActionableForm) return;
+        const currentInspectLink = section.querySelector('a[href*="/Returns/Inspect"], a[href*="/returns/inspect"]');
+        if (currentInspectLink) return;
 
-        const alert = document.createElement('div');
-        alert.className = 'alert alert-warning staff-stuck-workflow-alert mt-3 mb-0';
-        alert.innerHTML = '<strong>Chưa thể mở quyết toán.</strong> Hồ sơ giao/trả còn ít nhất một điều kiện xác minh chưa đạt. Hãy kiểm tra lại trạng thái danh tính và bản ký; hệ thống không nên để đơn đứng im mà không giải thích bước tiếp theo.';
-        section.appendChild(alert);
+        const bookingId = Number(match[1]);
+        if (!Number.isInteger(bookingId) || bookingId <= 0) return;
+
+        try {
+            const response = await fetch(`/StaffWorkflowDiagnostics/Inspection?bookingId=${bookingId}`, {
+                headers: { 'Accept': 'application/json' },
+                credentials: 'same-origin'
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+
+            if (data.canInspect && data.inspectUrl) {
+                const action = document.createElement('a');
+                action.className = 'btn btn-primary mt-3';
+                action.href = data.inspectUrl;
+                action.textContent = 'Đối chiếu, thêm phí & quyết toán';
+                section.appendChild(action);
+                return;
+            }
+
+            const blockers = Array.isArray(data.blockers) ? data.blockers : [];
+            if (blockers.length === 0) return;
+
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-warning staff-stuck-workflow-alert mt-3 mb-0';
+            const title = document.createElement('strong');
+            title.textContent = 'Chưa thể mở quyết toán.';
+            const intro = document.createElement('div');
+            intro.className = 'small mt-1 mb-2';
+            intro.textContent = 'Không để đơn treo im lặng: hệ thống đã xác định các điều kiện còn thiếu bên dưới.';
+            const list = document.createElement('ul');
+            list.className = 'mb-0';
+            blockers.forEach((reason) => {
+                const item = document.createElement('li');
+                item.textContent = reason;
+                list.appendChild(item);
+            });
+            alert.append(title, intro, list);
+            section.appendChild(alert);
+        } catch {
+            // Không chặn trang nếu endpoint chẩn đoán tạm thời không truy cập được.
+        }
     }
 
     function cssEscape(value) {
