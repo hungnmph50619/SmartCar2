@@ -25,8 +25,11 @@ public static class BookingWorkflowRules
 
     public static bool CanCancelBeforeHandover(
         BookingStatus status,
-        bool hasHandover) =>
-        !hasHandover && CancellableBeforeHandoverStatuses.Contains(status);
+        bool hasHandover,
+        bool hasPaymentAwaitingConfirmation = false) =>
+        !hasHandover &&
+        !hasPaymentAwaitingConfirmation &&
+        CancellableBeforeHandoverStatuses.Contains(status);
 
     public static bool CanStaffReview(
         BookingStatus status,
