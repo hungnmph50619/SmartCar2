@@ -53,14 +53,42 @@ namespace SmartCar.Domain.Constants
             "Nếu yêu cầu gia hạn thông thường bị từ chối vì xe đã có đơn kế tiếp, Bên B phải trả xe đúng hạn; trường hợp đã được thông báo từ chối nhưng vẫn cố tình không giao/trả xe đúng hạn làm ảnh hưởng đơn kế tiếp, Bên B chịu phí trả muộn và khoản bồi thường bằng giá hợp đồng của đơn thuê bị ảnh hưởng. " +
             "Trường hợp bất khả kháng phải có minh chứng và vị trí hiện tại; SmartCar ưu tiên xử lý đổi xe cho khách kế tiếp. Nếu khách kế tiếp không chấp nhận phương án đổi xe và phải hủy đơn, các khoản khách đó đã thanh toán được hoàn theo chính sách; khoản bồi thường (nếu có) được xác định theo thiệt hại thực tế có căn cứ và khấu trừ từ tiền cọc của khách đang thuê. Khoản bồi thường này được thông báo rõ trước khi duyệt/thanh toán gia hạn và không tự động lấy bằng giá hợp đồng của đơn kế tiếp.";
 
+        public static int GetOperationalPreparationMinutes(VehiclePickupMethod pickupMethod) =>
+            VehicleTurnaroundMinutes +
+            (pickupMethod == VehiclePickupMethod.Delivery ? DeliveryLeadMinutes : 0);
+
+        public static bool HasOperationalConflict(
+            DateTime pickupA,
+            DateTime returnA,
+            VehiclePickupMethod pickupMethodA,
+            DateTime pickupB,
+            DateTime returnB,
+            VehiclePickupMethod pickupMethodB)
+        {
+            // Khoảng đệm trước một lượt thuê phụ thuộc vào cách nhận của CHÍNH lượt đó:
+            // nhận tại cửa hàng cần thời gian xoay vòng; giao tận nơi cần thêm lead time.
+            var preparationBeforeA = TimeSpan.FromMinutes(
+                GetOperationalPreparationMinutes(pickupMethodA));
+            var preparationBeforeB = TimeSpan.FromMinutes(
+                GetOperationalPreparationMinutes(pickupMethodB));
+
+            return pickupA < returnB.Add(preparationBeforeA) &&
+                   returnA.Add(preparationBeforeB) > pickupB;
+        }
+
         public static bool HasTurnaroundConflict(
             DateTime pickupA,
             DateTime returnA,
             DateTime pickupB,
             DateTime returnB)
         {
-            var buffer = TimeSpan.FromMinutes(VehicleTurnaroundMinutes);
-            return pickupA < returnB.Add(buffer) && returnA.Add(buffer) > pickupB;
+            return HasOperationalConflict(
+                pickupA,
+                returnA,
+                VehiclePickupMethod.StorePickup,
+                pickupB,
+                returnB,
+                VehiclePickupMethod.StorePickup);
         }
 
         public static double CalculateDeliveryDistanceKm(
