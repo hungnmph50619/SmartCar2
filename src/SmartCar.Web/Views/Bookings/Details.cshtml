@@ -585,6 +585,31 @@
                             <div class="text-end small">@refund.TransactionCode</div>
                         </div>
                     }
+                    @if (ViewBag.CustomerDepositEligibleAt is DateTime depositEligibleAt &&
+                        refundPayments.Any(payment => payment.Method == PaymentMethods.DepositRefund &&
+                            (payment.Status == PaymentStatus.AwaitingRefund || payment.Status == PaymentStatus.RefundApproved)))
+                    {
+                        var depositAwaitingApproval = refundPayments.Any(payment =>
+                            payment.Method == PaymentMethods.DepositRefund && payment.Status == PaymentStatus.AwaitingRefund);
+                        <div class="alert alert-info mt-3 mb-2">
+                            <div class="fw-semibold mb-1">Thời gian hoàn cọc</div>
+                            <div>Thời gian giữ cọc của đơn: <strong>@ViewBag.CustomerDepositHoldDays ngày</strong> kể từ lúc trả xe.</div>
+                            <div>Sớm nhất được duyệt hoàn: <strong>@depositEligibleAt.ToString("dd/MM/yyyy HH:mm")</strong> (giờ Việt Nam).</div>
+                            @if (!depositAwaitingApproval)
+                            {
+                                <div class="mt-2">Khoản hoàn cọc đã được duyệt, đang chờ nhân viên thực hiện chuyển tiền.</div>
+                            }
+                            else if (DateTime.UtcNow.AddHours(7) < depositEligibleAt)
+                            {
+                                <div class="mt-2">Tiền cọc đang trong thời gian chờ theo chính sách của đơn.</div>
+                            }
+                            else
+                            {
+                                <div class="mt-2">Đã đủ thời gian giữ cọc. Khoản hoàn đang chờ xét duyệt sau khi đối soát các khoản phạt hoặc phát sinh, nếu có.</div>
+                            }
+                            <div class="small mt-2">Đây là thời điểm sớm nhất được duyệt hoàn, không phải thời điểm tiền chắc chắn vào tài khoản. Tiền sẽ được chuyển sau khi khoản hoàn được duyệt và nhân viên thực hiện.</div>
+                        </div>
+                    }
                     @if (!string.IsNullOrWhiteSpace(Model.RefundReason))
                     {
                         <div class="small text-muted mt-2">@Model.RefundReason</div>
