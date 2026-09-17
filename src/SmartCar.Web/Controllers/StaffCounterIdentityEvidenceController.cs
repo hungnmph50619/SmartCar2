@@ -62,8 +62,104 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
             allowed = booking.Status == BookingStatus.ReadyForPickup,
             frontReady = sessions.Front is not null,
             backReady = sessions.Back is not null,
-            ready = sessions.Front is not null && sessions.Back is not null
+            ready = sessions.Front is not null && sessions.Back is not null,
+            frontUrl = sessions.Front is null
+                ? null
+                : Url.Action(nameof(CurrentHandoverCitizen), new { bookingId, side = "front" }),
+            backUrl = sessions.Back is null
+                ? null
+                : Url.Action(nameof(CurrentHandoverCitizen), new { bookingId, side = "back" })
         });
+    }
+
+    [HttpGet("KycCitizen")]
+    public async Task<IActionResult> KycCitizen(
+        int bookingId,
+        string side,
+        CancellationToken cancellationToken)
+    {
+        var booking = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.BookingId == bookingId)
+            .Select(item => new { item.CustomerId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        var documentType = side.Equals("back", StringComparison.OrdinalIgnoreCase)
+            ? DocumentTypes.CitizenIdBack
+            : side.Equals("front", StringComparison.OrdinalIgnoreCase)
+                ? DocumentTypes.CitizenId
+                : null;
+        if (documentType is null)
+        {
+            return BadRequest();
+        }
+
+        var storedPath = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == booking.CustomerId &&
+                document.DocumentType == documentType &&
+                document.Status == DocumentStatus.Verified)
+            .OrderByDescending(document => document.VerifiedAt)
+            .Select(document => document.ImagePath)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return SecureImage(storedPath);
+    }
+
+    [HttpGet("CurrentHandoverCitizen")]
+    public async Task<IActionResult> CurrentHandoverCitizen(
+        int bookingId,
+        string side,
+        CancellationToken cancellationToken)
+    {
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(staffId))
+        {
+            return Challenge();
+        }
+
+        var booking = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.BookingId == bookingId)
+            .Select(item => new { item.CustomerId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        var purpose = side.Equals("back", StringComparison.OrdinalIgnoreCase)
+            ? IdentityCapturePurposes.HandoverCitizenBack
+            : side.Equals("front", StringComparison.OrdinalIgnoreCase)
+                ? IdentityCapturePurposes.HandoverCitizenFront
+                : null;
+        if (purpose is null)
+        {
+            return BadRequest();
+        }
+
+        var now = DateTime.UtcNow;
+        var storedPath = await _dbContext.Set<IdentityCaptureSession>()
+            .AsNoTracking()
+            .Where(item =>
+                item.BookingId == bookingId &&
+                item.TargetCustomerId == booking.CustomerId &&
+                item.CreatedByUserId == staffId &&
+                item.Purpose == purpose &&
+                item.CompletedAt.HasValue &&
+                !item.ConsumedAt.HasValue &&
+                item.ExpiresAt > now &&
+                item.ImagePath != null)
+            .OrderByDescending(item => item.CompletedAt)
+            .Select(item => item.ImagePath)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return SecureImage(storedPath);
     }
 
     [HttpPost("UploadHandover")]
@@ -129,6 +225,7 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
         var ownerKey = $"counter-id-booking-{booking.BookingId}-{booking.CustomerId}";
         string? frontPath = null;
         string? backPath = null;
+        var persisted = false;
 
         try
         {
@@ -144,11 +241,13 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
                     (item.Purpose == IdentityCapturePurposes.HandoverCitizenFront ||
                      item.Purpose == IdentityCapturePurposes.HandoverCitizenBack))
                 .ToListAsync(cancellationToken);
+            var oldPaths = previous
+                .Select(item => item.ImagePath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
-            foreach (var old in previous)
-            {
-                _secureStorage.Delete(old.ImagePath);
-            }
             _dbContext.RemoveRange(previous);
 
             var now = DateTime.UtcNow;
@@ -169,24 +268,56 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
                     now));
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+            persisted = true;
+
+            foreach (var oldPath in oldPaths)
+            {
+                _secureStorage.Delete(oldPath);
+            }
 
             await _auditService.WriteAsync(
                 staffId,
                 "CaptureHandoverCitizenIdEvidence",
                 nameof(Booking),
                 booking.BookingId.ToString(),
-                "Nhân viên chụp/lưu CCCD mặt trước và mặt sau của khách đang có mặt tại quầy để đối chiếu trước khi bàn giao xe.",
+                "Nhân viên chụp/lưu CCCD mặt trước và mặt sau của khách đang có mặt tại quầy để đối chiếu với hồ sơ KYC trước khi bàn giao xe.",
                 ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken: cancellationToken);
 
-            return Json(new { saved = true, frontReady = true, backReady = true });
+            return Json(new
+            {
+                saved = true,
+                frontReady = true,
+                backReady = true,
+                frontUrl = Url.Action(nameof(CurrentHandoverCitizen), new { bookingId, side = "front" }),
+                backUrl = Url.Action(nameof(CurrentHandoverCitizen), new { bookingId, side = "back" })
+            });
         }
         catch
         {
-            if (frontPath is not null) _secureStorage.Delete(frontPath);
-            if (backPath is not null) _secureStorage.Delete(backPath);
+            if (!persisted)
+            {
+                if (frontPath is not null) _secureStorage.Delete(frontPath);
+                if (backPath is not null) _secureStorage.Delete(backPath);
+            }
             throw;
         }
+    }
+
+    private IActionResult SecureImage(string? storedPath)
+    {
+        if (string.IsNullOrWhiteSpace(storedPath) ||
+            !_secureStorage.TryResolve(storedPath, out var fullPath, out var contentType))
+        {
+            return NotFound();
+        }
+
+        var stream = System.IO.File.Open(
+            fullPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite);
+        return File(stream, contentType);
     }
 
     private async Task<(IdentityCaptureSession? Front, IdentityCaptureSession? Back)> GetCurrentSessionsAsync(
@@ -206,6 +337,7 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
                 item.CompletedAt.HasValue &&
                 item.ExpiresAt > now &&
                 item.ImagePath != null &&
+                item.CaptureMethod == IdentityCaptureMethods.StaffCounterDocument &&
                 (item.Purpose == IdentityCapturePurposes.HandoverCitizenFront ||
                  item.Purpose == IdentityCapturePurposes.HandoverCitizenBack))
             .OrderByDescending(item => item.CompletedAt)
