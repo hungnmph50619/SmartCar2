@@ -21,6 +21,10 @@
         .Where(payment => payment.Status == PaymentStatus.Paid &&
             payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment)
         .Sum(payment => payment.Amount);
+    var trafficFines = Model.Payments.Where(payment => payment.Type == PaymentType.TrafficFine).ToList();
+    var unpaidTrafficFines = trafficFines.Where(payment => payment.Status is PaymentStatus.Pending or PaymentStatus.Failed).Sum(payment => payment.Amount);
+    var awaitingTrafficFines = trafficFines.Where(payment => payment.Status == PaymentStatus.AwaitingConfirmation).Sum(payment => payment.Amount);
+    var outstandingTrafficFines = unpaidTrafficFines + awaitingTrafficFines;
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
     var hasPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
@@ -102,6 +106,27 @@
 @if (hasAwaitingConfirmation)
 {
     <div class="alert alert-warning py-2">Đã báo chuyển khoản. SmartCar đang đối soát.</div>
+}
+
+@if (trafficFines.Count > 0)
+{
+    <div class="alert @(outstandingTrafficFines > 0 ? "alert-warning" : "alert-info") mb-4">
+        <strong>Phạt / vi phạm của đơn #@Model.BookingId</strong>
+        @if (unpaidTrafficFines > 0)
+        {
+            <div>Còn cần thanh toán: <strong>@unpaidTrafficFines.ToString("N0") đ</strong>.</div>
+        }
+        @if (awaitingTrafficFines > 0)
+        {
+            <div>Đang chờ xác nhận thanh toán: <strong>@awaitingTrafficFines.ToString("N0") đ</strong>. Không chuyển lại khoản đang chờ xác nhận.</div>
+        }
+        @if (outstandingTrafficFines <= 0)
+        {
+            <div>Hiện không còn khoản phạt chưa xử lý trong đơn này.</div>
+        }
+        <div class="small mt-1">Khoản phạt được theo dõi riêng, không tự trừ vào tiền cọc. Trạng thái xử lý hồ sơ vi phạm không thay thế trạng thái thanh toán.</div>
+        <a class="btn btn-sm btn-outline-primary mt-2" asp-controller="TrafficFines" asp-action="Index" asp-route-bookingId="@Model.BookingId">Xem bằng chứng và thanh toán phạt</a>
+    </div>
 }
 
 <div class="row g-4">
@@ -595,7 +620,12 @@
                             <div class="fw-semibold mb-1">Thời gian hoàn cọc</div>
                             <div>Thời gian giữ cọc của đơn: <strong>@ViewBag.CustomerDepositHoldDays ngày</strong> kể từ lúc trả xe.</div>
                             <div>Sớm nhất được duyệt hoàn: <strong>@depositEligibleAt.ToString("dd/MM/yyyy HH:mm")</strong> (giờ Việt Nam).</div>
-                            @if (!depositAwaitingApproval)
+                            @if (outstandingTrafficFines > 0 && depositAwaitingApproval)
+                            {
+                                <div class="mt-2 fw-semibold">Chưa thể duyệt hoàn cọc: đơn còn @outstandingTrafficFines.ToString("N0") đ tiền phạt chưa xử lý, bao gồm khoản đang chờ xác nhận thanh toán nếu có. Cần đủ thời gian giữ cọc và xử lý xong khoản phạt.</div>
+                                <a asp-controller="TrafficFines" asp-action="Index" asp-route-bookingId="@Model.BookingId">Xem khoản phạt của đơn</a>
+                            }
+                            else if (!depositAwaitingApproval)
                             {
                                 <div class="mt-2">Khoản hoàn cọc đã được duyệt, đang chờ nhân viên thực hiện chuyển tiền.</div>
                             }

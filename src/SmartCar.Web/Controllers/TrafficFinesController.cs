@@ -24,7 +24,7 @@ public sealed class TrafficFinesController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(int? bookingId, CancellationToken cancellationToken)
     {
         var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrWhiteSpace(customerId))
@@ -32,11 +32,20 @@ public sealed class TrafficFinesController : Controller
             return Challenge();
         }
 
+        if (bookingId.HasValue && !await _dbContext.Bookings.AsNoTracking().AnyAsync(
+                booking => booking.BookingId == bookingId.Value && booking.CustomerId == customerId,
+                cancellationToken))
+        {
+            return NotFound();
+        }
+        ViewBag.SelectedBookingId = bookingId;
+
         var items = await _dbContext.Payments
             .AsNoTracking()
             .Where(payment =>
                 payment.Booking.CustomerId == customerId &&
-                payment.Type == PaymentType.TrafficFine)
+                payment.Type == PaymentType.TrafficFine &&
+                (!bookingId.HasValue || payment.BookingId == bookingId.Value))
             .OrderByDescending(payment => payment.PaymentId)
             .Select(payment => new TrafficFinePaymentViewModel
             {
@@ -74,3 +83,4 @@ public sealed class TrafficFinesController : Controller
         });
     }
 }
+
