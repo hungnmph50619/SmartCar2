@@ -29,6 +29,9 @@
     var hasUnsettledPreHandoverPayment = b.Payments.Any(payment =>
         payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment &&
         payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
+    var hasPendingSwapAdjustment = b.Payments.Any(payment =>
+        payment.Type == PaymentType.VehicleSwapAdjustment &&
+        payment.Status == PaymentStatus.Pending);
 
     var paymentBankName = Configuration["PaymentQr:BankName"]?.Trim() ?? "Vietcombank";
     var paymentAccountNumber = Configuration["PaymentQr:AccountNumber"]?.Trim() ?? string.Empty;
@@ -194,6 +197,16 @@
                             Đơn còn khoản tiền trước giao xe chưa hoàn tất hoặc đang chờ đối soát.
                             Không được chuyển sang sẵn sàng bàn giao cho đến khi khoản này được xử lý xong.
                         </div>
+                        @if (hasPendingSwapAdjustment && !hasPaymentAwaitingConfirmation)
+                        {
+                            <form asp-action="ReceiveCash"
+                                  method="post"
+                                  class="mt-2"
+                                  data-confirm="Xác nhận đã thực nhận đủ phần chênh lệch đổi xe còn thiếu bằng tiền mặt?">
+                                <input type="hidden" name="bookingId" value="@b.BookingId" />
+                                <button class="btn btn-success">Thu chênh lệch đổi xe bằng tiền mặt</button>
+                            </form>
+                        }
                     }
                     else
                     {
