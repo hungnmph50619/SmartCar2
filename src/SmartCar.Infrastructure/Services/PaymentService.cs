@@ -304,8 +304,8 @@ internal sealed class PaymentService : IPaymentService
 
         var submittedAmount = payment.Amount + (bundledDeposit?.Amount ?? 0m);
 
-        await NotifyAdminsAsync(
-            "Có giao dịch chờ xác nhận",
+        await NotifyStaffAsync(
+            "Có giao dịch chờ đối soát",
             paymentType == PaymentType.Rental
                 ? $"Đơn #{booking.BookingId} báo đã chuyển {submittedAmount:N0} đồng gồm tiền thuê/phí giao và cọc."
                 : $"Đơn #{booking.BookingId} báo đã chuyển {submittedAmount:N0} đồng cho {GetPaymentLabel(payment.Type)}.",
@@ -777,13 +777,13 @@ internal sealed class PaymentService : IPaymentService
             _ => null
         };
 
-    private async Task NotifyAdminsAsync(
+    private async Task NotifyStaffAsync(
         string title,
         string message,
         CancellationToken cancellationToken)
     {
         var roleId = await _dbContext.Roles
-            .Where(role => role.Name == RoleNames.Admin)
+            .Where(role => role.Name == RoleNames.Staff)
             .Select(role => role.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -792,16 +792,16 @@ internal sealed class PaymentService : IPaymentService
             return;
         }
 
-        var adminIds = await _dbContext.UserRoles
+        var staffIds = await _dbContext.UserRoles
             .Where(item => item.RoleId == roleId)
             .Select(item => item.UserId)
             .ToListAsync(cancellationToken);
 
-        foreach (var adminId in adminIds)
+        foreach (var staffId in staffIds)
         {
             _dbContext.Notifications.Add(new Notification
             {
-                UserId = adminId,
+                UserId = staffId,
                 Title = title,
                 Message = message
             });
