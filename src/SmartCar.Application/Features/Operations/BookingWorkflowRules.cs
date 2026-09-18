@@ -52,6 +52,16 @@ public static class BookingWorkflowRules
     public static bool IsOpenRefundStatus(PaymentStatus status) =>
         status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved;
 
+    public static bool ShouldCancelExtensionWhenVehicleReturns(
+        BookingExtensionStatus status) =>
+        status is BookingExtensionStatus.Pending
+            or BookingExtensionStatus.NeedsEvidence
+            or BookingExtensionStatus.Approved;
+
+    public static bool BlocksVehicleReturnForExtensionPayment(
+        PaymentStatus status) =>
+        status == PaymentStatus.AwaitingConfirmation;
+
     public static bool CanStaffReview(
         BookingStatus status,
         DateTime? staffReviewedAt) =>
