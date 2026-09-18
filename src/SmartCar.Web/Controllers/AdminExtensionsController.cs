@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -194,7 +195,9 @@ public sealed class AdminExtensionsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var extension = await _dbContext.BookingExtensions
             .Include(item => item.Booking)
@@ -227,14 +230,26 @@ public sealed class AdminExtensionsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        var conflictPreparation = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(conflict.PickupMethod));
+        var conflictPickupBoundary = conflict.PickupDate - conflictPreparation;
+        var conflictReturnWithStorePreparation = conflict.ReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        var conflictReturnWithDeliveryPreparation = conflict.ReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+
         var replacementHasConflict = await _dbContext.Bookings
             .AsNoTracking()
             .AnyAsync(item =>
                 item.VehicleId == replacement.VehicleId &&
                 item.BookingId != conflict.BookingId &&
                 BlockingStatuses.Contains(item.Status) &&
-                item.PickupDate < conflict.ReturnDate &&
-                item.ReturnDate > conflict.PickupDate,
+                conflictPickupBoundary < item.ReturnDate &&
+                (
+                    item.PickupMethod == VehiclePickupMethod.Delivery
+                        ? conflictReturnWithDeliveryPreparation > item.PickupDate
+                        : conflictReturnWithStorePreparation > item.PickupDate
+                ),
                 cancellationToken);
 
         if (replacementHasConflict)
@@ -557,6 +572,14 @@ public sealed class AdminExtensionsController : Controller
         Booking conflict,
         CancellationToken cancellationToken)
     {
+        var conflictPreparation = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(conflict.PickupMethod));
+        var conflictPickupBoundary = conflict.PickupDate - conflictPreparation;
+        var conflictReturnWithStorePreparation = conflict.ReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        var conflictReturnWithDeliveryPreparation = conflict.ReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+
         var candidates = await _dbContext.Vehicles
             .AsNoTracking()
             .Where(vehicle =>
@@ -568,8 +591,12 @@ public sealed class AdminExtensionsController : Controller
                     booking.VehicleId == vehicle.VehicleId &&
                     booking.BookingId != conflict.BookingId &&
                     BlockingStatuses.Contains(booking.Status) &&
-                    booking.PickupDate < conflict.ReturnDate &&
-                    booking.ReturnDate > conflict.PickupDate) &&
+                    conflictPickupBoundary < booking.ReturnDate &&
+                    (
+                        booking.PickupMethod == VehiclePickupMethod.Delivery
+                            ? conflictReturnWithDeliveryPreparation > booking.PickupDate
+                            : conflictReturnWithStorePreparation > booking.PickupDate
+                    )) &&
                 !_dbContext.VehicleIncidents.Any(incident =>
                     incident.VehicleId == vehicle.VehicleId &&
                     incident.Status != IncidentStatus.Resolved &&
@@ -595,6 +622,11 @@ public sealed class AdminExtensionsController : Controller
         BookingExtension extension,
         CancellationToken cancellationToken)
     {
+        var storeBoundary = extension.RequestedReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        var deliveryBoundary = extension.RequestedReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+
         return await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
@@ -602,8 +634,12 @@ public sealed class AdminExtensionsController : Controller
                 other.VehicleId == extension.Booking.VehicleId &&
                 other.BookingId != extension.BookingId &&
                 BlockingStatuses.Contains(other.Status) &&
-                other.PickupDate < extension.RequestedReturnDate &&
-                other.ReturnDate > extension.OriginalReturnDate)
+                other.ReturnDate > extension.OriginalReturnDate &&
+                (
+                    other.PickupMethod == VehiclePickupMethod.Delivery
+                        ? other.PickupDate < deliveryBoundary
+                        : other.PickupDate < storeBoundary
+                ))
             .OrderBy(other => other.PickupDate)
             .FirstOrDefaultAsync(cancellationToken);
     }
