@@ -108,6 +108,57 @@ public static class ImageFileValidator
         return duplicates.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    public static async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> FindDuplicateContentFieldsAsync(
+        IEnumerable<(string FieldName, IFormFile? File)> files,
+        CancellationToken cancellationToken = default)
+    {
+        var groupsByHash = new Dictionary<string, List<(string FieldName, string FileName)>>(StringComparer.Ordinal);
+
+        foreach (var item in files.Where(item => item.File is { Length: > 0 }))
+        {
+            await using var stream = item.File!.OpenReadStream();
+            var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
+            if (!groupsByHash.TryGetValue(hash, out var group))
+            {
+                group = new List<(string FieldName, string FileName)>();
+                groupsByHash[hash] = group;
+            }
+
+            group.Add((item.FieldName, item.File.FileName));
+        }
+
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var group in groupsByHash.Values.Where(group => group.Count > 1))
+        {
+            var duplicateNames = group
+                .Select(item => item.FileName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            foreach (var item in group)
+            {
+                if (!result.TryGetValue(item.FieldName, out var names))
+                {
+                    names = new List<string>();
+                    result[item.FieldName] = names;
+                }
+
+                foreach (var duplicateName in duplicateNames)
+                {
+                    if (!names.Contains(duplicateName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        names.Add(duplicateName);
+                    }
+                }
+            }
+        }
+
+        return result.ToDictionary(
+            item => item.Key,
+            item => (IReadOnlyList<string>)item.Value,
+            StringComparer.Ordinal);
+    }
+
     public static string GetContentType(string fileName)
     {
         return Path.GetExtension(fileName).ToLowerInvariant() switch
