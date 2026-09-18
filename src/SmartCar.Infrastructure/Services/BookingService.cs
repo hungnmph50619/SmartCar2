@@ -4,6 +4,7 @@ using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Application.Features.Operations;
+using SmartCar.Application.Features.VehicleDocuments;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -25,13 +26,16 @@ internal sealed class BookingService : IBookingService
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IDocumentService _documentService;
+    private readonly IVehicleDocumentService _vehicleDocumentService;
 
     public BookingService(
         ApplicationDbContext dbContext,
-        IDocumentService documentService)
+        IDocumentService documentService,
+        IVehicleDocumentService vehicleDocumentService)
     {
         _dbContext = dbContext;
         _documentService = documentService;
+        _vehicleDocumentService = vehicleDocumentService;
     }
 
     public async Task<BookingMutationResult> CreateAsync(
@@ -516,6 +520,19 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure(
                 $"Chưa thể đánh dấu xe sẵn sàng. Đơn #{previousActiveBooking.BookingId} của cùng xe vẫn {previousStatusText} " +
                 $"(dự kiến trả {previousActiveBooking.ReturnDate:dd/MM/yyyy HH:mm}). Xe phải được trả và hoàn tất kiểm tra trước.");
+        }
+
+        var legalStatus = await _vehicleDocumentService.GetRentalLegalStatusAsync(
+            booking.VehicleId,
+            booking.PickupDate,
+            booking.ReturnDate,
+            cancellationToken);
+
+        if (!legalStatus.IsEligible)
+        {
+            return OperationResult.Failure(
+                "Xe không còn đủ giấy tờ pháp lý cho toàn bộ thời gian thuê: " +
+                string.Join("; ", legalStatus.Reasons));
         }
 
         if (booking.Vehicle.Status != VehicleStatus.Available)
