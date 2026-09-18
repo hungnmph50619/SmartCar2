@@ -80,5 +80,7 @@ public sealed class StaffOperationsAuthorizationTests
             .ToHashSet(StringComparer.Ordinal);
 
         Assert.DoesNotContain("MoveConflictingBooking", publicActions);
+        Assert.DoesNotContain("CancelConflictingBooking", publicActions);
+        Assert.DoesNotContain("CreateForCustomer", publicActions);
     }
 }
