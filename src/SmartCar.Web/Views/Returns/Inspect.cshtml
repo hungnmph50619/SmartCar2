@@ -218,16 +218,10 @@ else
 
                 @if (handoverSignedPaths.Count == 0 && Model.Status != BookingStatus.Completed)
                 {
-                    <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="signed-upload-card signed-upload mb-3">
-                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
-                        <div class="d-flex gap-2 align-items-center flex-wrap">
-                            <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm signed-file-input" multiple required />
-                            <button class="btn btn-sm btn-outline-success" type="submit">Tải bản ký</button>
-                            <span class="badge text-bg-secondary signed-file-count">Chưa chọn</span>
-                        </div>
-                        <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
-                        <div class="signed-preview"></div>
-                    </form>
+                    <div class="alert alert-danger mb-3">
+                        <strong>Thiếu bản ký giao xe từ bước trước.</strong>
+                        Không thể tải bù bản ký giao sau khi chuyến đã bắt đầu. Đây là dữ liệu bất thường cần đối soát hồ sơ trước khi quyết toán.
+                    </div>
                 }
 
                 @if (!string.IsNullOrWhiteSpace(Model.Handover.Notes))
@@ -301,7 +295,7 @@ else
                     <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="signed-upload-card signed-upload mb-3">
                         <input type="hidden" name="bookingId" value="@Model.BookingId" />
                         <div class="d-flex gap-2 align-items-center flex-wrap">
-                            <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm signed-file-input" multiple required />
+                            <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control form-control-sm signed-file-input" multiple required data-file-draft-key="return-@Model.BookingId-signed-documents" />
                             <button class="btn btn-sm btn-outline-success" type="submit">Tải bản ký</button>
                             <span class="badge text-bg-secondary signed-file-count">Chưa chọn</span>
                         </div>
