@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
-using SmartCar.Application.Features.Extensions;
 using SmartCar.Application.Features.Payments;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
@@ -21,18 +20,15 @@ public sealed class AdminPaymentsController : Controller
     private const string LegacyDepositDeductionPrefix = "EXT-COMP-";
 
     private readonly IPaymentService _paymentService;
-    private readonly IExtensionService _extensionService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
 
     public AdminPaymentsController(
         IPaymentService paymentService,
-        IExtensionService extensionService,
         IAuditService auditService,
         ApplicationDbContext dbContext)
     {
         _paymentService = paymentService;
-        _extensionService = extensionService;
         _auditService = auditService;
         _dbContext = dbContext;
     }
