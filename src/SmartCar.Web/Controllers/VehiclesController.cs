@@ -86,7 +86,8 @@ public sealed class VehiclesController : Controller
                 model.FuelType,
                 model.MinDailyPrice,
                 model.MaxDailyPrice,
-                model.MinManufactureYear),
+                model.MinManufactureYear,
+                PickupMethod: VehiclePickupMethod.StorePickup),
             cancellationToken);
 
         IEnumerable<VehicleDto> sortedVehicles = model.SortBy switch
