@@ -484,14 +484,23 @@ internal sealed class ExtensionService : IExtensionService
         DateTime requestedReturnDate,
         CancellationToken cancellationToken)
     {
+        var storeBoundary = requestedReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        var deliveryBoundary = requestedReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+
         return await _dbContext.Bookings
             .AsNoTracking()
             .Where(other =>
                 other.VehicleId == vehicleId &&
                 other.BookingId != currentBookingId &&
                 BlockingStatuses.Contains(other.Status) &&
-                other.PickupDate < requestedReturnDate &&
-                other.ReturnDate > currentReturnDate)
+                other.ReturnDate > currentReturnDate &&
+                (
+                    other.PickupMethod == VehiclePickupMethod.Delivery
+                        ? other.PickupDate < deliveryBoundary
+                        : other.PickupDate < storeBoundary
+                ))
             .OrderBy(other => other.PickupDate)
             .Select(other => new ConflictInfo(
                 other.BookingId,
