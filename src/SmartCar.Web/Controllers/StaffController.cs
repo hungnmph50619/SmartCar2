@@ -556,12 +556,22 @@ public sealed class StaffController : Controller
             TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
-        var handoverRentalPaid = booking.Payments
+        var grossHandoverRentalPaid = booking.Payments
             .Where(item =>
                 item.Status == PaymentStatus.Paid &&
                 item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(item => item.Amount);
-        var handoverDepositPaid = booking.Payments
+        var handoverRentalRefundPlanned = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.VehicleSwapRefund &&
+                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(item => item.Amount);
+        var effectiveHandoverRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossHandoverRentalPaid,
+            handoverRentalRefundPlanned);
+
+        var grossHandoverDepositPaid = booking.Payments
             .Where(item =>
                 item.Type == PaymentType.Deposit &&
                 item.Status == PaymentStatus.Paid)
@@ -572,6 +582,9 @@ public sealed class StaffController : Controller
                 item.Method == PaymentMethods.DepositRefund &&
                 item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(item => item.Amount);
+        var effectiveHandoverDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossHandoverDepositPaid,
+            handoverDepositRefundPlanned);
 
         var requiredHandoverRentalAmount = Math.Max(
             0m,
@@ -579,9 +592,9 @@ public sealed class StaffController : Controller
 
         if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
                 requiredHandoverRentalAmount,
-                handoverRentalPaid,
+                effectiveHandoverRentalPaid,
                 booking.DepositAmount,
-                Math.Max(0m, handoverDepositPaid - handoverDepositRefundPlanned)))
+                effectiveHandoverDepositPaid))
         {
             TempData["ErrorMessage"] =
                 "Không thể bắt đầu chuyến vì hệ thống không còn ghi nhận đủ tiền thuê và tiền cọc.";
