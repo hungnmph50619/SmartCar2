@@ -112,12 +112,14 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label asp-for="PickupDate" class="form-label fw-semibold">Thời gian nhận *</label>
-                        <input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-pickup" />
+                        <input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-pickup"
+                               min="@DateTime.Now.AddMinutes(BookingDateRules.MinimumPickupLeadMinutes).ToString("yyyy-MM-ddTHH:mm")" />
                         <span asp-validation-for="PickupDate" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
                         <label asp-for="ReturnDate" class="form-label fw-semibold">Thời gian trả dự kiến *</label>
-                        <input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-return" />
+                        <input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-return"
+                               min="@Model.PickupDate.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm")" />
                         <span asp-validation-for="ReturnDate" class="text-danger small"></span>
                     </div>
                 </div>
@@ -317,7 +319,28 @@
                 duration.textContent = `${hours.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} giờ · ${billableDays} ngày tính phí`;
             };
 
+            const toLocalMinute = value => {
+                const pad = number => String(number).padStart(2, '0');
+                return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+            };
+
+            const syncDateLimits = () => {
+                const earliestPickup = new Date(Date.now() + @BookingDateRules.MinimumPickupLeadMinutes * 60000);
+                earliestPickup.setSeconds(0, 0);
+                earliestPickup.setMinutes(earliestPickup.getMinutes() + 1);
+                pickup.min = toLocalMinute(earliestPickup);
+
+                if (pickup.value) {
+                    const selectedPickup = new Date(pickup.value);
+                    if (Number.isFinite(selectedPickup.valueOf())) {
+                        selectedPickup.setMinutes(selectedPickup.getMinutes() + 1);
+                        returned.min = toLocalMinute(selectedPickup);
+                    }
+                }
+            };
+
             const onTimeChanged = () => {
+                syncDateLimits();
                 renderDuration();
                 clearVehicle(validRange()
                     ? 'Thời gian đã thay đổi. Hãy tìm và chọn lại xe khả dụng.'
@@ -369,6 +392,7 @@
                 if (!event.target.closest('[data-autocomplete="vehicle"]')) hideResults(vehicleResults);
             });
 
+            syncDateLimits();
             renderDuration();
             vehicleSearch.disabled = !validRange();
         })();
