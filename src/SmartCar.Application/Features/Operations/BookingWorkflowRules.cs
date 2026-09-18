@@ -32,11 +32,17 @@ public static class BookingWorkflowRules
         CancellableBeforeHandoverStatuses.Contains(status);
 
     public static bool HasRequiredUpfrontPayment(
+        decimal requiredRental,
         decimal rentalPaid,
         decimal requiredDeposit,
         decimal depositPaid) =>
-        rentalPaid > 0m &&
+        CalculateOutstandingRental(requiredRental, rentalPaid) == 0m &&
         CalculateOutstandingDeposit(requiredDeposit, depositPaid) == 0m;
+
+    public static decimal CalculateOutstandingRental(
+        decimal requiredRental,
+        decimal rentalPaid) =>
+        Math.Max(0m, Math.Max(0m, requiredRental) - Math.Max(0m, rentalPaid));
 
     public static decimal CalculateOutstandingDeposit(
         decimal requiredDeposit,
