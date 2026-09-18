@@ -302,7 +302,8 @@
                         <input type="hidden" name="bookingId" value="@b.BookingId" />
                         <label for="handover-signed-files" class="form-label fw-semibold">Tải bản ký biên bản giao xe</label>
                         <input id="handover-signed-files" name="signedDocuments" type="file"
-                               accept="image/jpeg,image/png,image/webp" multiple required class="form-control" />
+                               accept="image/jpeg,image/png,image/webp" multiple required class="form-control"
+                               data-file-draft-key="handover-@b.BookingId-signed-documents" />
                         <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh. Nếu tải lại, chọn đủ các trang để thay bộ bản ký cũ.</div>
                         <button type="submit" class="btn btn-outline-success mt-2">Tải bản ký giao xe</button>
                     </form>
@@ -543,7 +544,8 @@
                     <input type="hidden" name="bookingId" value="@b.BookingId" />
                     <label for="return-signed-files" class="form-label fw-semibold">Tải bản ký biên bản trả xe</label>
                     <input id="return-signed-files" name="signedDocuments" type="file"
-                           accept="image/jpeg,image/png,image/webp" multiple required class="form-control" />
+                           accept="image/jpeg,image/png,image/webp" multiple required class="form-control"
+                           data-file-draft-key="return-@b.BookingId-signed-documents" />
                     <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh. Nếu tải lại, chọn đủ các trang để thay bộ bản ký cũ.</div>
                     <button type="submit" class="btn btn-outline-success mt-2">Tải bản ký trả xe</button>
                 </form>
