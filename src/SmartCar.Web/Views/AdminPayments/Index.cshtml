@@ -57,7 +57,7 @@
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
     <div>
         <h1 class="h3 mb-1">Quản lý tài chính</h1>
-        <p class="text-muted mb-0">Thu tiền, đối soát và hoàn tiền theo từng đơn.</p>
+        <p class="text-muted mb-0">Admin theo dõi tài chính và duyệt hoàn tiền; đối soát tiền khách chuyển thuộc Staff.</p>
     </div>
 </div>
 
@@ -283,22 +283,10 @@ else
                             <td>
                                 @if (payment.Status == PaymentStatus.AwaitingConfirmation)
                                 {
-                                    <div class="d-flex gap-2 flex-wrap align-items-start">
-                                        <form asp-action="ConfirmQr" method="post" data-confirm="Bạn đã kiểm tra và nhận đúng số tiền?">
-                                            <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                            <input type="hidden" name="section" value="@currentSection" />
-                                            <button class="btn btn-sm btn-success" type="submit">Xác nhận đã nhận</button>
-                                        </form>
-                                        <details style="min-width:150px">
-                                            <summary class="btn btn-sm btn-outline-danger">Yêu cầu gửi lại</summary>
-                                            <form asp-action="RejectQr" method="post" class="border rounded p-2 mt-2 bg-light" style="min-width:260px">
-                                                <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                                <input type="hidden" name="section" value="@currentSection" />
-                                                <textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Lý do cho khách"></textarea>
-                                                <button class="btn btn-sm btn-danger w-100" type="submit">Gửi lý do</button>
-                                            </form>
-                                        </details>
-                                        <a class="btn btn-sm btn-link text-decoration-none" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">Xem đơn</a>
+                                    <div class="small">
+                                        <span class="text-warning fw-semibold">Chờ Staff đối soát giao dịch.</span>
+                                        <div class="text-muted">Admin theo dõi, không xác nhận tiền thay cho nhân viên vận hành.</div>
+                                        <a class="btn btn-sm btn-link text-decoration-none px-0" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">Xem đơn</a>
                                     </div>
                                 }
                                 else if (payment.Status == PaymentStatus.Pending)
