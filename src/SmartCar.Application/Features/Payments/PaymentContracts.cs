@@ -32,11 +32,11 @@ public interface IPaymentService
 
     Task<OperationResult> ConfirmQrPaymentAsync(
         int paymentId,
-        string adminId,
+        string actorId,
         CancellationToken cancellationToken = default);
 
     Task<OperationResult> RejectQrPaymentAsync(
         int paymentId,
-        string adminId,
+        string actorId,
         CancellationToken cancellationToken = default);
 }
