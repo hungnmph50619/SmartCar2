@@ -461,6 +461,15 @@ internal sealed class ReturnService : IReturnService
         string? maintenanceNote,
         CancellationToken cancellationToken = default)
     {
+        maintenanceNote = string.IsNullOrWhiteSpace(maintenanceNote)
+            ? null
+            : maintenanceNote.Trim();
+
+        if (maintenanceNote?.Length > 1000)
+        {
+            return OperationResult.Failure("Nội dung bảo trì tối đa 1000 ký tự.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
