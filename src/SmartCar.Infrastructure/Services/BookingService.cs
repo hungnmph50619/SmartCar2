@@ -179,7 +179,7 @@ internal sealed class BookingService : IBookingService
         if (hasConflict)
         {
             return BookingMutationResult.Failure(
-                "Xe vừa được khách khác đặt trong khoảng thời gian này.");
+                "Xe không còn đủ khoảng trống vận hành giữa các lượt thuê (kiểm tra/vệ sinh và thời gian giao xe nếu có). Vui lòng chọn xe hoặc thời gian khác.");
         }
 
         var numberOfDays = Math.Max(
@@ -305,7 +305,7 @@ internal sealed class BookingService : IBookingService
 
         if (hasConflict)
         {
-            return OperationResult.Failure("Xe đã phát sinh lịch thuê khác bị trùng thời gian.");
+            return OperationResult.Failure("Xe đã phát sinh lịch thuê khác không đủ khoảng đệm vận hành trước/sau chuyến này.");
         }
 
         booking.Status = BookingStatus.PendingPayment;
