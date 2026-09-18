@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -44,6 +45,10 @@ public sealed class StaffBookingOperationsController : Controller
             return Challenge();
         }
 
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var booking = await _dbContext.Bookings
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
         if (booking is null)
@@ -89,6 +94,7 @@ public sealed class StaffBookingOperationsController : Controller
         booking.StaffReviewedAt = DateTime.UtcNow;
         booking.StaffReviewedByStaffId = staffId;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
             staffId,
