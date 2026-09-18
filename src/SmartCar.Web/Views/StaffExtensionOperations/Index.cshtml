@@ -136,8 +136,15 @@ else
                                         <label class="form-label">
                                             Xe thay thế khách đã đồng ý
                                         </label>
+                                        <input class="form-control mb-2"
+                                               type="search"
+                                               maxlength="100"
+                                               autocomplete="off"
+                                               data-replacement-vehicle-filter
+                                               placeholder="Tìm theo tên xe hoặc biển số..." />
                                         <select class="form-select"
                                                 name="replacementVehicleId"
+                                                data-replacement-vehicle-select
                                                 required>
                                             <option value="">Chọn xe...</option>
                                             @foreach (var alternative in conflict.Alternatives)
@@ -197,4 +204,40 @@ else
             </div>
         }
     </div>
+}
+
+
+@section Scripts {
+    <script>
+        (() => {
+            const normalize = value => (value || '')
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+
+            document.querySelectorAll('[data-replacement-vehicle-filter]').forEach(input => {
+                const form = input.closest('form');
+                const select = form?.querySelector('[data-replacement-vehicle-select]');
+                if (!select) return;
+
+                input.addEventListener('input', () => {
+                    const query = normalize(input.value);
+                    Array.from(select.options).forEach((option, index) => {
+                        if (index === 0) {
+                            option.hidden = false;
+                            return;
+                        }
+                        option.hidden = query.length > 0 &&
+                            !normalize(option.textContent).includes(query);
+                    });
+
+                    const selected = select.selectedOptions[0];
+                    if (selected?.hidden) {
+                        select.value = '';
+                    }
+                });
+            });
+        })();
+    </script>
 }
