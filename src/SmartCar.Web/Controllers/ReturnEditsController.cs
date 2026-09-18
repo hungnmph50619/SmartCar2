@@ -70,6 +70,8 @@ public sealed class ReturnEditsController : Controller
             ReturnedAt = booking.VehicleReturn.ReturnedAt,
             Mileage = booking.VehicleReturn.Mileage,
             FuelLevel = booking.VehicleReturn.FuelLevel.TrimEnd('%').Trim(),
+            ExteriorCondition = booking.VehicleReturn.ExteriorCondition,
+            InteriorCondition = booking.VehicleReturn.InteriorCondition,
             AccessoryStatus = parsedAccessory.AccessoryStatus,
             MissingAccessories = parsedAccessory.MissingAccessories,
             HasDamage = booking.VehicleReturn.HasDamage,
@@ -205,6 +207,8 @@ public sealed class ReturnEditsController : Controller
             booking.VehicleReturn.ReturnedAt = model.ReturnedAt;
             booking.VehicleReturn.Mileage = model.Mileage!.Value;
             booking.VehicleReturn.FuelLevel = $"{fuelPercent}%";
+            booking.VehicleReturn.ExteriorCondition = Normalize(model.ExteriorCondition);
+            booking.VehicleReturn.InteriorCondition = Normalize(model.InteriorCondition);
             booking.VehicleReturn.HasDamage = model.HasDamage;
             booking.VehicleReturn.AccessoryStatus = normalizedAccessory;
             booking.VehicleReturn.Notes = BuildReturnNotes(model.AccessoryStatus, model.MissingAccessories, model.Notes);
