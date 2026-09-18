@@ -369,11 +369,12 @@ public sealed class AdminExtensionsController : Controller
                 Status = PaymentStatus.Pending
             });
 
-            if (conflict.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup)
+            if (conflict.Status == BookingStatus.ReadyForPickup)
             {
-                conflict.Status = BookingStatus.PendingPayment;
-                conflict.ReservationExpiresAt = DateTime.UtcNow
-                    .AddMinutes(RentalPolicy.BookingPaymentHoldMinutes);
+                // Đơn đã từng thanh toán đủ nhưng đổi xe phát sinh thu thêm:
+                // quay về Paid để chặn bàn giao, KHÔNG đưa về PendingPayment vì hold ban đầu
+                // có thể làm hết hạn cả booking đã được duyệt/chấp nhận trước đó.
+                conflict.Status = BookingStatus.Paid;
             }
         }
 
