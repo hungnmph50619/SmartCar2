@@ -341,14 +341,23 @@ public sealed class StaffController : Controller
         var requiredRentalAmount = Math.Max(
             0m,
             booking.TotalAmount - booking.AdditionalAmount);
-        var rentalPaidBefore = booking.Payments
+        var grossRentalPaidBefore = booking.Payments
             .Where(item =>
                 item.Status == PaymentStatus.Paid &&
                 item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(item => item.Amount);
+        var rentalRefundPlanned = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.VehicleSwapRefund &&
+                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(item => item.Amount);
+        var effectiveRentalPaidBefore = BookingWorkflowRules.CalculateEffectivePaid(
+            grossRentalPaidBefore,
+            rentalRefundPlanned);
         var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
             requiredRentalAmount,
-            rentalPaidBefore);
+            effectiveRentalPaidBefore);
 
         var pendingRentals = upfrontPayments
             .Where(item =>
@@ -386,14 +395,23 @@ public sealed class StaffController : Controller
             staleRental.TransactionCode = null;
         }
 
-        var depositPaidBefore = booking.Payments
+        var grossDepositPaidBefore = booking.Payments
             .Where(item =>
                 item.Type == PaymentType.Deposit &&
                 item.Status == PaymentStatus.Paid)
             .Sum(item => item.Amount);
+        var depositRefundPlanned = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.DepositRefund &&
+                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(item => item.Amount);
+        var effectiveDepositPaidBefore = BookingWorkflowRules.CalculateEffectivePaid(
+            grossDepositPaidBefore,
+            depositRefundPlanned);
         var outstandingDeposit = BookingWorkflowRules.CalculateOutstandingDeposit(
             booking.DepositAmount,
-            depositPaidBefore);
+            effectiveDepositPaidBefore);
 
         var pendingDeposits = upfrontPayments
             .Where(item =>
@@ -444,20 +462,26 @@ public sealed class StaffController : Controller
             staleSwapAdjustment.TransactionCode = null;
         }
 
-        var rentalPaid = booking.Payments
+        var grossRentalPaid = booking.Payments
             .Where(item =>
                 item.Status == PaymentStatus.Paid &&
                 item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(item => item.Amount);
-        var depositPaid = booking.Payments
+        var grossDepositPaid = booking.Payments
             .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
             .Sum(item => item.Amount);
+        var effectiveRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossRentalPaid,
+            rentalRefundPlanned);
+        var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossDepositPaid,
+            depositRefundPlanned);
 
         if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
                 requiredRentalAmount,
-                rentalPaid,
+                effectiveRentalPaid,
                 booking.DepositAmount,
-                depositPaid))
+                effectiveDepositPaid))
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Đơn chưa có đủ khoản tiền thuê hoặc tiền cọc cần thu nên không thể ghi Paid.";
