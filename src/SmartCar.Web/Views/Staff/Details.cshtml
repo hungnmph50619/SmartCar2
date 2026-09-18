@@ -1,9 +1,7 @@
 @model SmartCar.Web.ViewModels.StaffBookingDetailsViewModel
-@using Microsoft.EntityFrameworkCore
 @using SmartCar.Domain.Enums
 @using SmartCar.Domain.Constants
 @using SmartCar.Application.Features.Operations
-@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext Db
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     ViewData["Title"] = $"Xử lý đơn #{Model.Booking.BookingId}";
@@ -28,11 +26,9 @@
         payment.Type == PaymentType.Rental &&
         payment.Status == PaymentStatus.AwaitingConfirmation);
     var hasOpenRefund = Model.HasUnapprovedRefund || Model.HasApprovedRefund;
-
-    var staffReview = await Db.Bookings.AsNoTracking()
-        .Where(item => item.BookingId == b.BookingId)
-        .Select(item => new { item.StaffReviewedAt, item.StaffReviewedByStaffId })
-        .FirstOrDefaultAsync();
+    var hasUnsettledPreHandoverPayment = b.Payments.Any(payment =>
+        payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment &&
+        payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
 
     var paymentBankName = Configuration["PaymentQr:BankName"]?.Trim() ?? "Vietcombank";
     var paymentAccountNumber = Configuration["PaymentQr:AccountNumber"]?.Trim() ?? string.Empty;
@@ -94,7 +90,7 @@
             <div class="d-flex gap-3 align-items-start">
                 <span class="staff-step-number">1</span>
                 <div class="flex-grow-1">
-                    @if (staffReview?.StaffReviewedAt is null)
+                    @if (Model.StaffReviewedAt is null)
                     {
                         <h2 class="h5 mb-2">Kiểm tra đơn & gửi Admin duyệt</h2>
                         <p class="text-muted mb-3">Đây là thao tác duy nhất cho bước kiểm tra. Hệ thống kiểm tra KYC, xe và lịch hiện tại rồi ghi trạng thái review thật lên đơn.</p>
@@ -108,7 +104,7 @@
                         <h2 class="h5 mb-2">Đã kiểm tra · đang chờ Admin duyệt</h2>
                         <div class="alert alert-success mb-0">
                             <strong>✓ Bước Staff đã hoàn tất.</strong>
-                            Đã kiểm tra lúc @staffReview.StaffReviewedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm").
+                            Đã kiểm tra lúc @Model.StaffReviewedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm").
                             Không cần và không thể gửi duyệt lần hai.
                         </div>
                     }
@@ -192,11 +188,21 @@
                 <span class="staff-step-number">3</span>
                 <div class="flex-grow-1">
                     <h2 class="h5">Chuẩn bị xe</h2>
-                    <p class="text-muted">Kiểm tra xe thực tế trước khi xác nhận sẵn sàng bàn giao.</p>
-                    <form asp-action="MarkReady" method="post" data-confirm="Xác nhận xe đã được kiểm tra thực tế và sẵn sàng để giao cho khách?">
-                        <input type="hidden" name="bookingId" value="@b.BookingId" />
-                        <button class="btn btn-primary">Xe đã sẵn sàng</button>
-                    </form>
+                    @if (hasUnsettledPreHandoverPayment)
+                    {
+                        <div class="alert alert-warning">
+                            Đơn còn khoản tiền trước giao xe chưa hoàn tất hoặc đang chờ đối soát.
+                            Không được chuyển sang sẵn sàng bàn giao cho đến khi khoản này được xử lý xong.
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Kiểm tra xe thực tế trước khi xác nhận sẵn sàng bàn giao.</p>
+                        <form asp-action="MarkReady" method="post" data-confirm="Xác nhận xe đã được kiểm tra thực tế và sẵn sàng để giao cho khách?">
+                            <input type="hidden" name="bookingId" value="@b.BookingId" />
+                            <button class="btn btn-primary">Xe đã sẵn sàng</button>
+                        </form>
+                    }
                 </div>
             </div>
         </section>
