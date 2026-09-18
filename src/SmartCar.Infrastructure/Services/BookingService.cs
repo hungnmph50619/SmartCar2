@@ -522,6 +522,28 @@ internal sealed class BookingService : IBookingService
                 $"(dự kiến trả {previousActiveBooking.ReturnDate:dd/MM/yyyy HH:mm}). Xe phải được trả và hoàn tất kiểm tra trước.");
         }
 
+        var customerActive = await _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(user =>
+                user.Id == booking.CustomerId &&
+                user.IsActive,
+                cancellationToken);
+
+        if (!customerActive)
+        {
+            return OperationResult.Failure(
+                "Tài khoản khách hàng không còn hoạt động nên chưa thể xác nhận xe sẵn sàng.");
+        }
+
+        if (!await _documentService.HasValidRentalDocumentsAsync(
+                booking.CustomerId,
+                booking.ReturnDate,
+                cancellationToken))
+        {
+            return OperationResult.Failure(
+                "CCCD/GPLX của khách không còn được xác minh hợp lệ đến ngày trả nên chưa thể xác nhận xe sẵn sàng.");
+        }
+
         var legalStatus = await _vehicleDocumentService.GetRentalLegalStatusAsync(
             booking.VehicleId,
             booking.PickupDate,
