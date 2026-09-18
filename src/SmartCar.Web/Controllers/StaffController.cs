@@ -162,6 +162,7 @@ public sealed class StaffController : Controller
         return View(new StaffBookingDetailsViewModel
         {
             Booking = booking,
+            StaffReviewedAt = records.StaffReviewedAt,
             HandoverIdentityVerified = records.Handover?.CustomerIdentityVerified == true,
             HandoverIdentityVerifiedBy = ResolveStaffName(staffNames, records.Handover?.IdentityVerifiedByStaffId),
             HandoverIdentityVerifiedAt = records.Handover?.IdentityVerifiedAt,
