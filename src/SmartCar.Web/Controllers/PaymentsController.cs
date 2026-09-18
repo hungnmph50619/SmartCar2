@@ -90,6 +90,7 @@ public sealed class PaymentsController : Controller
             bookingId,
             customerId,
             type,
+            customerId,
             cancellationToken);
 
         if (result.Succeeded && type == PaymentType.Rental)
