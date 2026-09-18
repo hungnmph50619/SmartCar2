@@ -650,26 +650,40 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var booking = await _dbContext.Bookings
             .Include(item => item.VehicleReturn)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
         if (booking?.VehicleReturn is null)
         {
+            await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Không tìm thấy biên bản trả xe.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+        if (booking.VehicleReturn.SignedDocumentVerified)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Bản ký trả xe đã được nhân viên xác minh trước đó.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
         if (!booking.VehicleReturn.CustomerIdentityVerified)
         {
+            await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Chưa xác minh đúng CCCD của người trả xe.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
         if (FindSignedPaths(booking.VehicleReturn.ImagePaths, ReturnSignedMarker).Count == 0)
         {
+            await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Chưa có ảnh/scan biên bản trả xe đã ký.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
         if (booking.Status != BookingStatus.PendingInspection)
         {
+            await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Đơn không còn ở bước kiểm tra trả xe.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
@@ -679,6 +693,7 @@ public sealed class StaffController : Controller
         booking.VehicleReturn.SignedDocumentVerifiedByStaffId = staffId;
         booking.VehicleReturn.SignedDocumentVerifiedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         await WriteAuditAsync(
             "StaffVerifySignedReturn",
             nameof(VehicleReturn),
