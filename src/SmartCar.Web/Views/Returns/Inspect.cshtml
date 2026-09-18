@@ -1,8 +1,6 @@
 ﻿@model SmartCar.Web.ViewModels.ReturnInspectionViewModel
-@using Microsoft.EntityFrameworkCore
 @using SmartCar.Domain.Enums
 @using SmartCar.Domain.Constants
-@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext Db
 
 @{
     ViewData["Title"] = $"Đối chiếu giao - trả #{Model.BookingId}";
@@ -20,43 +18,6 @@
         ? $"{(fuelDifference.Value > 0 ? "+" : string.Empty)}{fuelDifference.Value}%"
         : null;
     var fuelReduced = fuelDifference.HasValue && fuelDifference.Value < 0;
-
-    const string overdueCompPrefix = "OVERDUE-COMP-";
-    const string overdueDebtPrefix = "OVERDUE-DEBT-";
-    var overduePaymentRows = await Db.Payments
-        .AsNoTracking()
-        .Where(payment =>
-            payment.BookingId == Model.BookingId &&
-            payment.Type == PaymentType.AdditionalCharge &&
-            payment.TransactionCode != null &&
-            (payment.TransactionCode.StartsWith(overdueCompPrefix) ||
-             payment.TransactionCode.StartsWith(overdueDebtPrefix)))
-        .Select(payment => new { payment.Amount, payment.TransactionCode })
-        .ToListAsync();
-
-    int? ParseAffectedBookingId(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code)) return null;
-        var prefix = code.StartsWith(overdueCompPrefix, StringComparison.OrdinalIgnoreCase)
-            ? overdueCompPrefix
-            : code.StartsWith(overdueDebtPrefix, StringComparison.OrdinalIgnoreCase)
-                ? overdueDebtPrefix
-                : null;
-        if (prefix is null) return null;
-
-        var parts = code[prefix.Length..].Split('-', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 2 && int.TryParse(parts[1], out var affectedId)
-            ? affectedId
-            : null;
-    }
-
-    var overdueImpacts = overduePaymentRows
-        .Select(row => new { AffectedBookingId = ParseAffectedBookingId(row.TransactionCode), row.Amount })
-        .Where(row => row.AffectedBookingId.HasValue)
-        .GroupBy(row => row.AffectedBookingId!.Value)
-        .Select(group => new { BookingId = group.Key, CompensationAmount = group.Sum(row => row.Amount) })
-        .OrderBy(item => item.BookingId)
-        .ToList();
 
     var handoverSignedPaths = Model.Handover.ImagePaths
         .Where(path => path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase))
@@ -343,7 +304,7 @@ else
     </div>
 </div>
 
-@if (overdueImpacts.Count > 0)
+@if (Model.OverdueImpacts.Count > 0)
 {
     <div class="card card-body shadow-sm border-danger mb-4">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
@@ -354,7 +315,7 @@ else
             <span class="badge bg-danger">Đã xử lý vi phạm</span>
         </div>
 
-        @foreach (var impact in overdueImpacts)
+        @foreach (var impact in Model.OverdueImpacts)
         {
             <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap border rounded p-3 mb-2">
                 <div>
