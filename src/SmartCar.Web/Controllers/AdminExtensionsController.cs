@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Extensions;
-using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -30,18 +29,15 @@ public sealed class AdminExtensionsController : Controller
     };
 
     private readonly IExtensionService _extensionService;
-    private readonly IBookingOperationService _bookingOperationService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
 
     public AdminExtensionsController(
         IExtensionService extensionService,
-        IBookingOperationService bookingOperationService,
         IAuditService auditService,
         ApplicationDbContext dbContext)
     {
         _extensionService = extensionService;
-        _bookingOperationService = bookingOperationService;
         _auditService = auditService;
         _dbContext = dbContext;
     }
@@ -66,81 +62,6 @@ public sealed class AdminExtensionsController : Controller
 
         ViewBag.ConflictResolutions = conflictResolutions;
         return View(extensions);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CancelConflictingBooking(
-        int extensionId,
-        bool customerContacted,
-        CancellationToken cancellationToken)
-    {
-        if (!customerContacted)
-        {
-            TempData["ErrorMessage"] = "Vui lòng xác nhận đã liên hệ khách B và khách không chấp nhận phương án đổi xe.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var extension = await _dbContext.BookingExtensions
-            .Include(item => item.Booking)
-            .FirstOrDefaultAsync(item => item.BookingExtensionId == extensionId, cancellationToken);
-
-        if (extension is null ||
-            extension.Status != BookingExtensionStatus.Pending ||
-            !IsForceMajeure(extension.CustomerNote))
-        {
-            TempData["ErrorMessage"] = "Yêu cầu gia hạn không còn hợp lệ để xử lý xung đột.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var conflict = await FindConflictingBookingAsync(extension, cancellationToken);
-        if (conflict is null)
-        {
-            TempData["ErrorMessage"] = "Đơn B không còn xung đột.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        var conflictBookingId = conflict.BookingId;
-
-        var cancelResult = await _bookingOperationService.CancelByAdminAsync(
-            adminId,
-            new CancelBookingRequest(
-                conflictBookingId,
-                $"SmartCar phải hủy do đơn #{extension.BookingId} phát sinh gia hạn bất khả kháng có minh chứng và khách không chấp nhận phương án đổi xe."),
-            cancellationToken);
-
-        if (!cancelResult.Succeeded)
-        {
-            TempData["ErrorMessage"] = string.Join("; ", cancelResult.Errors);
-            return RedirectToAction(nameof(Index));
-        }
-
-        _dbContext.Notifications.Add(new Notification
-        {
-            UserId = extension.Booking.CustomerId,
-            Title = "Đã xử lý đơn thuê kế tiếp",
-            Message =
-                $"Đơn #{extension.BookingId}: SmartCar đã xử lý xung đột với đơn #{conflictBookingId}. " +
-                "Trường hợp bất khả kháng có minh chứng không bị tự động khấu trừ tiền cọc chỉ vì đơn kế tiếp phải hủy."
-        });
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await _auditService.WriteAsync(
-            adminId,
-            "ResolveExtensionConflictByCancellation",
-            nameof(Booking),
-            conflictBookingId.ToString(),
-            $"Hủy đơn #{conflictBookingId} do xung đột gia hạn bất khả kháng của đơn #{extension.BookingId}. " +
-            $"Tổng khoản hoàn theo chính sách: {cancelResult.RefundAmount:N0} đồng. Không tạo bồi thường tự động và không khấu trừ cọc A.",
-            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken: cancellationToken);
-
-        TempData["SuccessMessage"] =
-            "Đã hủy đơn B và tạo khoản hoàn theo chính sách. Không khấu trừ cọc A vì đây là trường hợp bất khả kháng có minh chứng.";
-
-        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
