@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Handovers;
@@ -33,7 +34,9 @@ internal sealed class HandoverService : IHandoverService
         }
 
         await using var transaction = await _dbContext.Database
-            .BeginTransactionAsync(cancellationToken);
+            .BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -98,9 +101,11 @@ internal sealed class HandoverService : IHandoverService
                 "Cần chụp và lưu đủ CCCD mặt trước + mặt sau của khách đang có mặt tại quầy trước khi lập biên bản giao xe.");
         }
 
-        var rentalPaid = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Rental &&
-            payment.Status == PaymentStatus.Paid);
+        var rentalPaidAmount = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Rental &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
 
         var depositPaidAmount = booking.Payments
             .Where(payment =>
@@ -115,8 +120,17 @@ internal sealed class HandoverService : IHandoverService
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
 
-        var depositSatisfied = booking.DepositAmount <= 0 ||
-            Math.Max(0m, depositPaidAmount - depositRefundPlanned) >= booking.DepositAmount;
+        var effectiveDepositPaid = Math.Max(
+            0m,
+            depositPaidAmount - depositRefundPlanned);
+        var requiredRentalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - booking.AdditionalAmount);
+        var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
+            requiredRentalAmount,
+            rentalPaidAmount,
+            booking.DepositAmount,
+            effectiveDepositPaid);
 
         var hasOpenSwapPayment = booking.Payments.Any(payment =>
             payment.Type == PaymentType.VehicleSwapAdjustment &&
@@ -128,7 +142,7 @@ internal sealed class HandoverService : IHandoverService
                 "Khách cần thanh toán xong chênh lệch đổi xe trước khi giao xe.");
         }
 
-        if (!rentalPaid || !depositSatisfied)
+        if (!upfrontSatisfied)
         {
             return OperationResult.Failure(
                 "Khách phải thanh toán đủ tiền thuê và tiền cọc trước khi giao xe.");
