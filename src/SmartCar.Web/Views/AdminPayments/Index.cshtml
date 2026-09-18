@@ -64,7 +64,7 @@
 <div class="nav nav-pills gap-2 mb-4">
     @if (currentSection == "review")
     {
-        <a class="nav-link active" asp-action="Index" asp-route-status="@PaymentStatus.AwaitingConfirmation">Cần đối soát</a>
+        <a class="nav-link active" asp-action="Index" asp-route-status="@PaymentStatus.AwaitingConfirmation">Chờ Staff đối soát</a>
     }
     <a class="nav-link @(currentSection == "collection" ? "active" : "")" asp-action="Index" asp-route-section="collection">Tiền thu</a>
     <a class="nav-link @(currentSection == "adjustment" ? "active" : "")" asp-action="Index" asp-route-section="adjustment">Phát sinh</a>
