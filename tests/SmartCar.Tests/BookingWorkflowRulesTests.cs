@@ -261,4 +261,22 @@ public sealed class BookingWorkflowRulesTests
                 grossPaid,
                 refundedOrPlanned));
     }
+
+
+    [Theory]
+    [InlineData(0, 0, true)]
+    [InlineData(500000, 500000, true)]
+    [InlineData(500000, 0, false)]
+    [InlineData(0, 500000, false)]
+    public void IsExtensionPaymentLedgerConsistent_RequiresPaidMoneyAndEffectiveExtensionToMatch(
+        decimal paidExtensionAmount,
+        decimal effectivePaidExtensionAmount,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.IsExtensionPaymentLedgerConsistent(
+                paidExtensionAmount,
+                effectivePaidExtensionAmount));
+    }
 }
