@@ -62,7 +62,9 @@ else
                             out var depositAmount)
                             ? depositAmount
                             : 0m;
-                    var displayedAmount = payment.Amount + bundledDeposit;
+                    // The payment service already includes the matching deposit in Amount.
+                    var displayedAmount = payment.Amount;
+                    var rentalAmount = displayedAmount - bundledDeposit;
                     <tr>
                         <td>
                             <a class="fw-semibold text-decoration-none"
@@ -81,7 +83,7 @@ else
                             @if (bundledDeposit > 0)
                             {
                                 <div class="small text-muted">
-                                    Gồm @payment.Amount.ToString("N0") đ tiền thuê/phí + @bundledDeposit.ToString("N0") đ cọc.
+                                    Gồm @rentalAmount.ToString("N0") đ tiền thuê/phí + @bundledDeposit.ToString("N0") đ cọc.
                                 </div>
                             }
                             else
