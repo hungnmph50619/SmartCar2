@@ -28,6 +28,9 @@ public sealed class ReturnInspectionViewModel
     public IReadOnlyList<ChargeSummaryDto> AdditionalCharges { get; init; }
         = Array.Empty<ChargeSummaryDto>();
 
+    public IReadOnlyList<OverdueImpactViewModel> OverdueImpacts { get; init; }
+        = Array.Empty<OverdueImpactViewModel>();
+
 
     // ==============================
     // XÁC MINH NGHIỆP VỤ NHÂN VIÊN
@@ -127,3 +130,7 @@ public sealed class InspectionSnapshotViewModel
             : null;
     }
 }
+
+public sealed record OverdueImpactViewModel(
+    int BookingId,
+    decimal CompensationAmount);
