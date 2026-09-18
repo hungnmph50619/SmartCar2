@@ -172,6 +172,7 @@ internal sealed class BookingService : IBookingService
             request.VehicleId,
             request.PickupDate,
             request.ReturnDate,
+            request.PickupMethod,
             null,
             cancellationToken);
 
@@ -298,6 +299,7 @@ internal sealed class BookingService : IBookingService
             booking.VehicleId,
             booking.PickupDate,
             booking.ReturnDate,
+            booking.PickupMethod,
             booking.BookingId,
             cancellationToken);
 
@@ -723,16 +725,34 @@ internal sealed class BookingService : IBookingService
         int vehicleId,
         DateTime pickupDate,
         DateTime returnDate,
+        VehiclePickupMethod pickupMethod,
         int? excludedBookingId,
-        CancellationToken cancellationToken) =>
-        _dbContext.Bookings.AnyAsync(
+        CancellationToken cancellationToken)
+    {
+        var preparationBeforeRequested = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(pickupMethod));
+        var storePreparation = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        var deliveryPreparation = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+
+        var requestedPickupBoundary = pickupDate - preparationBeforeRequested;
+        var requestedReturnWithStorePreparation = returnDate + storePreparation;
+        var requestedReturnWithDeliveryPreparation = returnDate + deliveryPreparation;
+
+        return _dbContext.Bookings.AnyAsync(
             booking =>
                 booking.VehicleId == vehicleId &&
                 (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
                 BlockingStatuses.Contains(booking.Status) &&
-                pickupDate < booking.ReturnDate &&
-                returnDate > booking.PickupDate,
+                requestedPickupBoundary < booking.ReturnDate &&
+                (
+                    booking.PickupMethod == VehiclePickupMethod.Delivery
+                        ? requestedReturnWithDeliveryPreparation > booking.PickupDate
+                        : requestedReturnWithStorePreparation > booking.PickupDate
+                ),
             cancellationToken);
+    }
 
     private Task<bool> HasValidVehicleDocumentAsync(
         int vehicleId,
