@@ -106,35 +106,8 @@ public sealed class StaffPaymentsController : Controller
         var result = await _paymentService.RejectQrPaymentAsync(
             paymentId,
             staffId,
+            reason,
             cancellationToken);
-
-        if (result.Succeeded)
-        {
-            var payment = await _dbContext.Payments
-                .AsNoTracking()
-                .Include(item => item.Booking)
-                .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
-
-            if (payment is not null)
-            {
-                var notification = await _dbContext.Notifications
-                    .Where(item =>
-                        item.UserId == payment.Booking.CustomerId &&
-                        item.Title == "Chưa xác nhận được chuyển khoản")
-                    .OrderByDescending(item => item.NotificationId)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                if (notification is not null)
-                {
-                    notification.Message =
-                        $"SmartCar chưa thể xác nhận giao dịch của đơn #{payment.BookingId}. " +
-                        $"Lý do: {reason}. Vui lòng kiểm tra lại và gửi xác nhận lần nữa.";
-                    notification.IsRead = false;
-                    notification.ReadAt = null;
-                    await _dbContext.SaveChangesAsync(cancellationToken);
-                }
-            }
-        }
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? "Đã từ chối giao dịch và gửi lý do cho khách."
