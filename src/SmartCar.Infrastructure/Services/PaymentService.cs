@@ -194,8 +194,8 @@ internal sealed class PaymentService : IPaymentService
             var requiredRentalAmount = booking.RentalAmount + storedDeliveryFee;
             var rentalPaidBefore = booking.Payments
                 .Where(item =>
-                    item.Type == PaymentType.Rental &&
-                    item.Status == PaymentStatus.Paid)
+                    item.Status == PaymentStatus.Paid &&
+                    item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
                 .Sum(item => item.Amount);
             var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
                 requiredRentalAmount,
@@ -355,8 +355,8 @@ internal sealed class PaymentService : IPaymentService
                 booking.TotalAmount - booking.AdditionalAmount);
             var rentalPaidBefore = booking.Payments
                 .Where(item =>
-                    item.Type == PaymentType.Rental &&
-                    item.Status == PaymentStatus.Paid)
+                    item.Status == PaymentStatus.Paid &&
+                    item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
                 .Sum(item => item.Amount);
             var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
                 requiredRentalAmount,
@@ -445,8 +445,8 @@ internal sealed class PaymentService : IPaymentService
 
             var rentalPaid = booking.Payments
                 .Where(item =>
-                    item.Type == PaymentType.Rental &&
-                    item.Status == PaymentStatus.Paid)
+                    item.Status == PaymentStatus.Paid &&
+                    item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
                 .Sum(item => item.Amount);
             var depositPaidAfter = booking.Payments
                 .Where(item =>
