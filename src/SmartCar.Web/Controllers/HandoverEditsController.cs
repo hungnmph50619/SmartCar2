@@ -12,7 +12,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class HandoverEditsController : Controller
 {
     private const string SignedMarker = "signed-handover-";
@@ -45,7 +45,7 @@ public sealed class HandoverEditsController : Controller
         if (booking?.Handover is null)
         {
             TempData["ErrorMessage"] = "Không tìm thấy biên bản giao xe.";
-            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
+            return RedirectToAction("Details", "Staff", new { id = bookingId });
         }
 
         if (!CanEdit(booking.Status, booking.Handover.ImagePaths))
