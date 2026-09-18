@@ -59,6 +59,18 @@
         </div>
 
         <div class="col-md-6">
+            <label asp-for="ExteriorCondition" class="form-label fw-semibold">Tình trạng ngoại thất</label>
+            <textarea asp-for="ExteriorCondition" class="form-control" rows="3" maxlength="1500"></textarea>
+            <span asp-validation-for="ExteriorCondition" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-6">
+            <label asp-for="InteriorCondition" class="form-label fw-semibold">Tình trạng nội thất</label>
+            <textarea asp-for="InteriorCondition" class="form-control" rows="3" maxlength="1500"></textarea>
+            <span asp-validation-for="InteriorCondition" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-6">
             <label asp-for="AccessoryStatus" class="form-label fw-semibold">Phụ kiện khi trả</label>
             <select asp-for="AccessoryStatus" id="return-accessories-status" class="form-select" required>
                 <option value="Đủ">Đủ như lúc giao</option>
