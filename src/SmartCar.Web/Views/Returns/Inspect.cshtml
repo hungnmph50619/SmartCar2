@@ -667,7 +667,17 @@ else
             <p class="text-muted">Đủ hồ sơ và các phụ phí phải thu riêng đã được thanh toán. Hệ thống sẽ chuyển sang <strong>quyết toán tiền cọc</strong>; chỉ các khoản được phép khấu trừ từ cọc theo hồ sơ nghiệp vụ mới được trừ trước khi xác định số tiền hoàn thực tế.</p>
             <form asp-controller="Returns" asp-action="Complete" method="post" data-loading-form data-confirm="Xác nhận đã đối chiếu đủ hồ sơ giao - trả và chuyển sang quyết toán cọc?">
                 <input type="hidden" name="BookingId" value="@Model.BookingId" />
-                <input type="hidden" name="reviewConfirmed" value="true" />
+                <div class="form-check mb-3">
+                    <input class="form-check-input"
+                           type="checkbox"
+                           name="reviewConfirmed"
+                           value="true"
+                           id="inspectionReviewConfirmed"
+                           required />
+                    <label class="form-check-label" for="inspectionReviewConfirmed">
+                        Tôi đã đối chiếu đầy đủ biên bản giao - trả, ảnh chứng cứ, bản ký và các khoản cần thu trước khi quyết toán.
+                    </label>
+                </div>
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="inspectionRequiresMaintenance" />
                     <label class="form-check-label" for="inspectionRequiresMaintenance">Xe cần bảo trì hoặc sửa chữa</label>
