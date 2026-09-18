@@ -72,7 +72,8 @@ public sealed class SecureDocumentStorage : ISecureDocumentStorage
 
             fullPath = candidate;
         }
-        else if (storedPath.StartsWith("/uploads/documents/", StringComparison.OrdinalIgnoreCase))
+        else if (storedPath.StartsWith("/uploads/documents/", StringComparison.OrdinalIgnoreCase) ||
+                 IsLegacySignedRentalDocument(storedPath))
         {
             var relative = storedPath.TrimStart('/')
                 .Replace('/', Path.DirectorySeparatorChar);
@@ -111,6 +112,22 @@ public sealed class SecureDocumentStorage : ISecureDocumentStorage
         {
             File.Delete(fullPath);
         }
+    }
+
+    private static bool IsLegacySignedRentalDocument(string storedPath)
+    {
+        var normalized = storedPath.Replace('\\', '/');
+        var inRentalEvidenceFolder =
+            normalized.StartsWith("/uploads/handovers/", StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith("/uploads/returns/", StringComparison.OrdinalIgnoreCase);
+        if (!inRentalEvidenceFolder)
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(normalized);
+        return fileName.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase) ||
+               fileName.Contains("signed-return-", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SanitizeSegment(string value)
