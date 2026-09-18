@@ -49,6 +49,9 @@ public static class BookingWorkflowRules
         decimal depositPaid) =>
         Math.Max(0m, Math.Max(0m, requiredDeposit) - Math.Max(0m, depositPaid));
 
+    public static bool IsOpenRefundStatus(PaymentStatus status) =>
+        status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved;
+
     public static bool CanStaffReview(
         BookingStatus status,
         DateTime? staffReviewedAt) =>
