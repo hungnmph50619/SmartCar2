@@ -13,7 +13,6 @@ public sealed class StaffOperationsAuthorizationTests
     [InlineData(typeof(ReturnsController))]
     [InlineData(typeof(ReturnEditsController))]
     [InlineData(typeof(AdminSignedDocumentsController))]
-    [InlineData(typeof(AdminRentalDocumentsController))]
     [InlineData(typeof(ReturnHandoverPreviewController))]
     [InlineData(typeof(StaffWorkflowDiagnosticsController))]
     [InlineData(typeof(StaffCounterIdentityEvidenceController))]
@@ -54,4 +53,39 @@ public sealed class StaffOperationsAuthorizationTests
         Assert.Contains(RoleNames.Staff, roles);
         Assert.Contains(RoleNames.Customer, roles);
     }
+
+    [Fact]
+    public void AdminRentalDocuments_ReadsAllowAdminButUploadsRemainStaffOnly()
+    {
+        var controllerRoles = typeof(AdminRentalDocumentsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .SelectMany(attribute => (attribute.Roles ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains(RoleNames.Admin, controllerRoles);
+        Assert.Contains(RoleNames.Staff, controllerRoles);
+
+        foreach (var methodName in new[]
+                 {
+                     nameof(AdminRentalDocumentsController.UploadHandoverSigned),
+                     nameof(AdminRentalDocumentsController.UploadReturnSigned)
+                 })
+        {
+            var method = typeof(AdminRentalDocumentsController).GetMethod(methodName);
+            Assert.NotNull(method);
+
+            var methodRoles = method!
+                .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>()
+                .SelectMany(attribute => (attribute.Roles ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .ToHashSet(StringComparer.Ordinal);
+
+            Assert.Contains(RoleNames.Staff, methodRoles);
+            Assert.DoesNotContain(RoleNames.Admin, methodRoles);
+        }
+    }
+
 }
