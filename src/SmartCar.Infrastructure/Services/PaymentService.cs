@@ -305,6 +305,13 @@ internal sealed class PaymentService : IPaymentService
 
         var submittedAmount = payment.Amount + (bundledDeposit?.Amount ?? 0m);
 
+        if (booking.Status == BookingStatus.PendingPayment &&
+            paymentType is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+        {
+            booking.ReservationExpiresAt = DateTime.UtcNow
+                .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
+        }
+
         await NotifyStaffAsync(
             "Có giao dịch chờ đối soát",
             paymentType == PaymentType.Rental
