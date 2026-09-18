@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Operations;
+using SmartCar.Application.Features.VehicleDocuments;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -25,17 +26,20 @@ public sealed class StaffController : Controller
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
     private readonly IUserBankAccountService _bankAccountService;
+    private readonly IVehicleDocumentService _vehicleDocumentService;
 
     public StaffController(
         ApplicationDbContext dbContext,
         IBookingService bookingService,
         IAuditService auditService,
-        IUserBankAccountService bankAccountService)
+        IUserBankAccountService bankAccountService,
+        IVehicleDocumentService vehicleDocumentService)
     {
         _dbContext = dbContext;
         _bookingService = bookingService;
         _auditService = auditService;
         _bankAccountService = bankAccountService;
+        _vehicleDocumentService = vehicleDocumentService;
     }
 
     [HttpGet]
@@ -601,8 +605,24 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
+        var legalStatus = await _vehicleDocumentService.GetRentalLegalStatusAsync(
+            booking.VehicleId,
+            booking.PickupDate,
+            booking.ReturnDate,
+            cancellationToken);
+
+        if (!legalStatus.IsEligible)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Không thể bàn giao xe vì giấy tờ pháp lý không còn đủ hiệu lực cho toàn bộ chuyến: " +
+                string.Join("; ", legalStatus.Reasons);
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
         if (DateTime.Now < booking.PickupDate)
         {
+            await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] =
                 $"Chưa đến giờ nhận xe đã đặt ({booking.PickupDate:dd/MM/yyyy HH:mm}). Không thể bắt đầu chuyến sớm hơn lịch.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
