@@ -603,7 +603,7 @@ else
         </div>
 
 
-        <div class="mt-2">
+        <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
 
             <span class="badge @(Model.AdditionalChargePaid
                                   ? "bg-success"
@@ -611,9 +611,32 @@ else
 
                 @(Model.AdditionalChargePaid
                     ? "Đã thanh toán"
-                    : "Chưa thanh toán")
+                    : Model.AdditionalChargeAwaitingConfirmation
+                        ? "Đang chờ đối soát QR"
+                        : "Chưa thanh toán")
 
             </span>
+
+            @if (!Model.AdditionalChargePaid && Model.AdditionalChargeAwaitingConfirmation)
+            {
+                <span class="small text-muted">
+                    Không thu tiền mặt khi giao dịch QR đang chờ Admin xác nhận.
+                </span>
+            }
+            else if (!Model.AdditionalChargePaid && Model.AdditionalAmount > 0)
+            {
+                <form asp-controller="Returns"
+                      asp-action="CollectAdditionalChargeCash"
+                      method="post"
+                      class="d-inline"
+                      data-loading-form
+                      data-confirm="Xác nhận nhân viên đã thực nhận đủ phụ phí bằng tiền mặt?">
+                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                    <button class="btn btn-sm btn-success" type="submit">
+                        Thu đủ phụ phí tiền mặt
+                    </button>
+                </form>
+            }
 
         </div>
     }
