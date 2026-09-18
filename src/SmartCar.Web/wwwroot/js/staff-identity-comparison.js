@@ -83,7 +83,8 @@
         const backSrc = isKyc
             ? `/StaffCounterIdentityEvidence/KycCitizen?bookingId=${bookingId}&side=back`
             : `/StaffCounterIdentityEvidence/CurrentHandoverCitizen?bookingId=${bookingId}&side=back`;
-        const sideAttr = isKyc ? '' : 'data-current-side';
+        const frontSideAttr = isKyc ? '' : ' data-current-side="front"';
+        const backSideAttr = isKyc ? '' : ' data-current-side="back"';
 
         return `<div class="col-lg-6">
             <div class="border rounded-3 p-2 h-100 bg-body">
@@ -92,14 +93,14 @@
                     <div class="col-sm-6">
                         <div class="small text-muted mb-1">Mặt trước</div>
                         <div class="staff-secure-doc-frame">
-                            <img ${sideAttr}="front" src="${frontSrc}" alt="CCCD mặt trước - ${title}" loading="lazy" />
+                            <img${frontSideAttr} src="${frontSrc}" alt="CCCD mặt trước - ${title}" loading="lazy" />
                             <span class="small text-muted staff-secure-doc-empty">Chưa có ảnh khả dụng</span>
                         </div>
                     </div>
                     <div class="col-sm-6">
                         <div class="small text-muted mb-1">Mặt sau</div>
                         <div class="staff-secure-doc-frame">
-                            <img ${sideAttr}="back" src="${backSrc}" alt="CCCD mặt sau - ${title}" loading="lazy" />
+                            <img${backSideAttr} src="${backSrc}" alt="CCCD mặt sau - ${title}" loading="lazy" />
                             <span class="small text-muted staff-secure-doc-empty">Chưa có ảnh khả dụng</span>
                         </div>
                     </div>
