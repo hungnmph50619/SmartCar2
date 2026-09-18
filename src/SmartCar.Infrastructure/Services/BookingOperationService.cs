@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
@@ -67,7 +68,9 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (!customerContacted)
             return OperationResult.Failure("Hãy xác nhận đã liên hệ khách trước khi ghi nhận không đến nhận xe.");
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
@@ -185,7 +188,9 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (string.IsNullOrWhiteSpace(request.Reason))
             return RefundResult.Failure("Vui lòng nhập lý do hủy đơn.");
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
         var query = _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
