@@ -17,6 +17,7 @@ public sealed class StaffOperationsAuthorizationTests
     [InlineData(typeof(ReturnHandoverPreviewController))]
     [InlineData(typeof(StaffWorkflowDiagnosticsController))]
     [InlineData(typeof(StaffCounterIdentityEvidenceController))]
+    [InlineData(typeof(StaffPaymentsController))]
     public void OperationalControllers_AreExplicitlyStaffOnly(Type controllerType)
     {
         var authorizeAttributes = controllerType
@@ -53,5 +54,18 @@ public sealed class StaffOperationsAuthorizationTests
         Assert.Contains(RoleNames.Admin, roles);
         Assert.Contains(RoleNames.Staff, roles);
         Assert.Contains(RoleNames.Customer, roles);
+    }
+
+
+    [Fact]
+    public void AdminPaymentsController_DoesNotExposeIncomingPaymentReconciliationActions()
+    {
+        var publicActions = typeof(AdminPaymentsController)
+            .GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain("ConfirmQr", publicActions);
+        Assert.DoesNotContain("RejectQr", publicActions);
     }
 }
