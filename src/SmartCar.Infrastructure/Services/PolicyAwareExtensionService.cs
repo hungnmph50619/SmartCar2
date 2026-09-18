@@ -157,9 +157,4 @@ internal sealed class PolicyAwareExtensionService : IExtensionService
         string reason,
         CancellationToken cancellationToken = default) =>
         _inner.RejectAsync(extensionId, adminId, reason, cancellationToken);
-
-    public Task<OperationResult> MarkPaidAsync(
-        int bookingId,
-        CancellationToken cancellationToken = default) =>
-        _inner.MarkPaidAsync(bookingId, cancellationToken);
 }
