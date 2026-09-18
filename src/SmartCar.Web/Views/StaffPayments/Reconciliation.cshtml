@@ -3,6 +3,9 @@
 
 @{
     ViewData["Title"] = "Đối soát chuyển khoản";
+    var actionablePayments = Model
+        .Where(payment => payment.Type != PaymentType.Deposit)
+        .ToList();
 
     string TypeText(PaymentType type) => type switch
     {
@@ -23,10 +26,10 @@
             Admin chỉ theo dõi và duyệt các yêu cầu cần phê duyệt.
         </p>
     </div>
-    <span class="badge bg-warning text-dark fs-6">@Model.Count giao dịch chờ</span>
+    <span class="badge bg-warning text-dark fs-6">@actionablePayments.Count giao dịch chờ</span>
 </div>
 
-@if (Model.Count == 0)
+@if (actionablePayments.Count == 0)
 {
     <div class="alert alert-success">
         Không có giao dịch QR/chuyển khoản nào đang chờ đối soát.
@@ -47,8 +50,17 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                @foreach (var payment in Model)
+                @foreach (var payment in actionablePayments)
                 {
+                    var bundledDeposit = payment.Type == PaymentType.Rental
+                        ? Model
+                            .Where(item =>
+                                item.BookingId == payment.BookingId &&
+                                item.Type == PaymentType.Deposit &&
+                                item.Status == PaymentStatus.AwaitingConfirmation)
+                            .Sum(item => item.Amount)
+                        : 0m;
+                    var displayedAmount = payment.Amount + bundledDeposit;
                     <tr>
                         <td>
                             <a class="fw-semibold text-decoration-none"
@@ -64,9 +76,18 @@ else
                         </td>
                         <td>
                             @TypeText(payment.Type)
-                            <div class="small text-muted">Đang chờ xác nhận tiền thực nhận.</div>
+                            @if (bundledDeposit > 0)
+                            {
+                                <div class="small text-muted">
+                                    Gồm @payment.Amount.ToString("N0") đ tiền thuê/phí + @bundledDeposit.ToString("N0") đ cọc.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="small text-muted">Đang chờ xác nhận tiền thực nhận.</div>
+                            }
                         </td>
-                        <td class="text-end fw-bold">@payment.Amount.ToString("N0") đ</td>
+                        <td class="text-end fw-bold">@displayedAmount.ToString("N0") đ</td>
                         <td>
                             <div class="d-flex gap-2 flex-wrap align-items-start">
                                 <form asp-controller="StaffPayments"
