@@ -36,6 +36,15 @@
         extension.Status is BookingExtensionStatus.Pending
             or BookingExtensionStatus.NeedsEvidence
             or BookingExtensionStatus.Approved);
+    var approvedExtension = b.Extensions
+        .Where(extension => extension.Status == BookingExtensionStatus.Approved)
+        .OrderByDescending(extension => extension.RequestedReturnDate)
+        .FirstOrDefault();
+    var extensionNeedsEvidence = b.Extensions.Any(extension =>
+        extension.Status == BookingExtensionStatus.NeedsEvidence);
+    var extensionAwaitingConfirmation = b.Payments.Any(payment =>
+        payment.Type == PaymentType.Extension &&
+        payment.Status == PaymentStatus.AwaitingConfirmation);
 
     var paymentBankName = Configuration["PaymentQr:BankName"]?.Trim() ?? "Vietcombank";
     var paymentAccountNumber = Configuration["PaymentQr:AccountNumber"]?.Trim() ?? string.Empty;
@@ -372,8 +381,51 @@
                     {
                         <div class="alert alert-warning mb-3">
                             Đơn đang có yêu cầu gia hạn chưa kết thúc. Không tạo thêm yêu cầu trùng.
-                            Admin sẽ duyệt/từ chối; nếu có xung đột bất khả kháng, Staff xử lý phương án xe thay thế ở mục <strong>Xung đột gia hạn</strong>.
+                            Admin duyệt/từ chối; nếu có xung đột bất khả kháng, Staff xử lý phương án xe thay thế ở mục <strong>Xung đột gia hạn</strong>.
                         </div>
+
+                        @if (approvedExtension is not null)
+                        {
+                            <div class="border rounded-3 p-3 mb-3">
+                                <div class="fw-semibold">Gia hạn đã được Admin duyệt · chờ thanh toán</div>
+                                <div class="small text-muted mb-2">
+                                    Trả mới @approvedExtension.RequestedReturnDate.ToString("dd/MM/yyyy HH:mm")
+                                    · phí @approvedExtension.AdditionalAmount.ToString("N0") đ.
+                                    Thời gian mới chỉ có hiệu lực sau khi tiền được ghi nhận.
+                                </div>
+
+                                @if (extensionAwaitingConfirmation)
+                                {
+                                    <div class="alert alert-info py-2 mb-2">
+                                        Khách đã báo chuyển khoản/QR. Không thu tiền mặt cùng lúc; Staff phải đối soát giao dịch trước.
+                                    </div>
+                                    <a class="btn btn-sm btn-outline-primary"
+                                       asp-controller="StaffPayments"
+                                       asp-action="Reconciliation">
+                                        Mở đối soát chuyển khoản
+                                    </a>
+                                }
+                                else
+                                {
+                                    <form asp-controller="StaffPayments"
+                                          asp-action="CollectExtensionCash"
+                                          method="post"
+                                          data-loading-form
+                                          data-confirm="Xác nhận bạn đã thực nhận đủ phí gia hạn bằng tiền mặt? Sau thao tác này thời gian trả mới sẽ có hiệu lực.">
+                                        <input type="hidden" name="bookingId" value="@b.BookingId" />
+                                        <button class="btn btn-success" type="submit">
+                                            Thu phí gia hạn tiền mặt
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+                        }
+                        else if (extensionNeedsEvidence)
+                        {
+                            <div class="alert alert-info py-2">
+                                Admin đang yêu cầu bổ sung minh chứng. Với yêu cầu bất khả kháng, khách phải tự gửi ảnh và vị trí trực tiếp từ tài khoản/thiết bị của họ; Staff không nhập GPS thay khách.
+                            </div>
+                        }
                     }
                     else
                     {
