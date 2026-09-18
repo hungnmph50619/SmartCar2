@@ -28,6 +28,104 @@ public sealed class StaffPaymentsController : Controller
         _auditService = auditService;
     }
 
+    [HttpGet]
+    public async Task<IActionResult> Reconciliation(
+        CancellationToken cancellationToken)
+    {
+        var payments = await _paymentService.GetAdminPaymentsAsync(
+            PaymentStatus.AwaitingConfirmation,
+            null,
+            cancellationToken);
+
+        return View(payments
+            .Where(payment =>
+                payment.Type != PaymentType.Refund &&
+                payment.Status == PaymentStatus.AwaitingConfirmation)
+            .OrderBy(payment => payment.PaymentId)
+            .ToList());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmQr(
+        int paymentId,
+        CancellationToken cancellationToken)
+    {
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var result = await _paymentService.ConfirmQrPaymentAsync(
+            paymentId,
+            staffId,
+            cancellationToken);
+
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã đối soát và xác nhận nhận được tiền."
+            : string.Join("; ", result.Errors);
+
+        return RedirectToAction(nameof(Reconciliation));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RejectQr(
+        int paymentId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        reason = reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["ErrorMessage"] =
+                "Vui lòng nhập lý do yêu cầu khách kiểm tra/gửi lại giao dịch.";
+            return RedirectToAction(nameof(Reconciliation));
+        }
+
+        if (reason.Length > 500)
+        {
+            TempData["ErrorMessage"] = "Lý do tối đa 500 ký tự.";
+            return RedirectToAction(nameof(Reconciliation));
+        }
+
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var result = await _paymentService.RejectQrPaymentAsync(
+            paymentId,
+            staffId,
+            cancellationToken);
+
+        if (result.Succeeded)
+        {
+            var payment = await _dbContext.Payments
+                .AsNoTracking()
+                .Include(item => item.Booking)
+                .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
+
+            if (payment is not null)
+            {
+                var notification = await _dbContext.Notifications
+                    .Where(item =>
+                        item.UserId == payment.Booking.CustomerId &&
+                        item.Title == "Chưa xác nhận được chuyển khoản")
+                    .OrderByDescending(item => item.NotificationId)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (notification is not null)
+                {
+                    notification.Message =
+                        $"SmartCar chưa thể xác nhận giao dịch của đơn #{payment.BookingId}. " +
+                        $"Lý do: {reason}. Vui lòng kiểm tra lại và gửi xác nhận lần nữa.";
+                    notification.IsRead = false;
+                    notification.ReadAt = null;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+            }
+        }
+
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã từ chối giao dịch và gửi lý do cho khách."
+            : string.Join("; ", result.Errors);
+
+        return RedirectToAction(nameof(Reconciliation));
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SubmitCounterQr(
@@ -115,7 +213,7 @@ public sealed class StaffPaymentsController : Controller
                 paymentAudit.Action = "StaffSubmitCounterQr";
                 paymentAudit.Description =
                     $"Nhân viên tại quầy xác nhận khách đã thực hiện chuyển khoản/QR cho đơn #{bookingId}; " +
-                    $"giao dịch chờ Admin đối soát tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút.";
+                    $"giao dịch chờ Staff đối soát tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút.";
                 paymentAudit.IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
                 correctedExistingAudit = true;
             }
@@ -131,13 +229,13 @@ public sealed class StaffPaymentsController : Controller
                 nameof(Payment),
                 rentalPaymentId > 0 ? rentalPaymentId.ToString() : bookingId.ToString(),
                 $"Nhân viên tại quầy xác nhận khách đã thực hiện chuyển khoản/QR cho đơn #{bookingId}; " +
-                $"giao dịch chờ Admin đối soát tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút.",
+                $"giao dịch chờ Staff đối soát tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút.",
                 ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken: cancellationToken);
         }
 
         TempData["SuccessMessage"] =
-            $"Đã ghi nhận khách báo chuyển khoản. Admin có tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
+            $"Đã ghi nhận khách báo chuyển khoản. Staff có tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
         return RedirectToStaffDetails(bookingId);
     }
 
