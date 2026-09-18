@@ -80,7 +80,7 @@
             <div>
                 @for (var i = 0; i < signedDocumentPaths.Count; i++)
                 {
-                    <a href="@signedDocumentPaths[i]" target="_blank" rel="noopener">Xem trang @(i + 1)</a>
+                    <a href="@Url.Action("Page", "RentalSignedDocumentFiles", new { bookingId = booking.BookingId, handover = true, index = i })" target="_blank" rel="noopener">Xem trang @(i + 1)</a>
                 }
             </div>
         </div>
