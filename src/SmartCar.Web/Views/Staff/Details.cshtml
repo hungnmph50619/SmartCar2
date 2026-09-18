@@ -32,6 +32,10 @@
     var hasPendingSwapAdjustment = b.Payments.Any(payment =>
         payment.Type == PaymentType.VehicleSwapAdjustment &&
         payment.Status == PaymentStatus.Pending);
+    var hasOpenExtension = b.Extensions.Any(extension =>
+        extension.Status is BookingExtensionStatus.Pending
+            or BookingExtensionStatus.NeedsEvidence
+            or BookingExtensionStatus.Approved);
 
     var paymentBankName = Configuration["PaymentQr:BankName"]?.Trim() ?? "Vietcombank";
     var paymentAccountNumber = Configuration["PaymentQr:AccountNumber"]?.Trim() ?? string.Empty;
@@ -363,6 +367,54 @@
             <div class="d-flex gap-3 align-items-start">
                 <span class="staff-step-number">5</span>
                 <div class="flex-grow-1">
+                    <h2 class="h5">Gia hạn trong chuyến</h2>
+                    @if (hasOpenExtension)
+                    {
+                        <div class="alert alert-warning mb-3">
+                            Đơn đang có yêu cầu gia hạn chưa kết thúc. Không tạo thêm yêu cầu trùng.
+                            Admin sẽ duyệt/từ chối; nếu có xung đột bất khả kháng, Staff xử lý phương án xe thay thế ở mục <strong>Xung đột gia hạn</strong>.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-light border small">
+                            <strong>Khách gọi điện xin gia hạn thông thường:</strong> Staff có thể ghi nhận yêu cầu tại đây.
+                            Trường hợp khách khai <strong>bất khả kháng</strong>, yêu cầu khách gửi trực tiếp từ tài khoản của họ để ảnh minh chứng và vị trí GPS được lấy từ thiết bị khách; không dùng vị trí trình duyệt của nhân viên thay cho vị trí khách.
+                        </div>
+                        <form asp-controller="StaffExtensionRequests"
+                              asp-action="CreateForCustomer"
+                              method="post"
+                              class="row g-3"
+                              data-loading-form
+                              data-confirm="Xác nhận bạn đang ghi nhận đúng yêu cầu gia hạn thông thường mà khách vừa cung cấp?">
+                            <input type="hidden" name="bookingId" value="@b.BookingId" />
+                            <div class="col-md-5">
+                                <label class="form-label">Thời gian trả mới</label>
+                                <input class="form-control"
+                                       name="requestedReturnDate"
+                                       type="datetime-local"
+                                       min="@b.ReturnDate.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm")"
+                                       value="@b.ReturnDate.AddMinutes(1).ToString("yyyy-MM-ddTHH:mm")"
+                                       required />
+                            </div>
+                            <div class="col-md-7">
+                                <label class="form-label">Lý do khách cung cấp</label>
+                                <input class="form-control"
+                                       name="note"
+                                       maxlength="500"
+                                       required
+                                       placeholder="VD: Khách cần thêm 1 ngày và đã gọi xác nhận..." />
+                            </div>
+                            <div class="col-12 d-flex justify-content-end">
+                                <button class="btn btn-outline-primary" type="submit">
+                                    Ghi nhận yêu cầu & gửi Admin duyệt
+                                </button>
+                            </div>
+                        </form>
+                    }
+
+                    <hr />
+
                     <h2 class="h5">Nhận xe trả</h2>
                     <p class="text-muted">Lập biên bản trả, đối chiếu người trả và ảnh tình trạng thực tế.</p>
                     @if (!b.HasReturn)
