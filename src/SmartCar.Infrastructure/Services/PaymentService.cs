@@ -121,6 +121,15 @@ internal sealed class PaymentService : IPaymentService
                 "Khoản này đã báo chuyển và đang chờ SmartCar xác nhận.");
         }
 
+        if (paymentType == PaymentType.Rental &&
+            booking.Payments.Any(item =>
+                item.Type == PaymentType.Deposit &&
+                item.Status == PaymentStatus.AwaitingConfirmation))
+        {
+            return OperationResult.Failure(
+                "Tiền cọc của đơn đang chờ SmartCar đối soát. Không tạo thêm yêu cầu chuyển khoản để tránh thu trùng.");
+        }
+
         var payment = booking.Payments.FirstOrDefault(item =>
             item.Type == paymentType &&
             item.Status == PaymentStatus.Pending);
@@ -199,33 +208,43 @@ internal sealed class PaymentService : IPaymentService
 
         if (paymentType == PaymentType.Rental && booking.DepositAmount > 0)
         {
-            bundledDeposit = booking.Payments
-                .FirstOrDefault(item =>
+            var depositPaid = booking.Payments
+                .Where(item =>
                     item.Type == PaymentType.Deposit &&
-                    item.Status != PaymentStatus.Paid);
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
 
-            if (bundledDeposit is null &&
-                !booking.Payments.Any(item =>
-                    item.Type == PaymentType.Deposit &&
-                    item.Status == PaymentStatus.Paid))
+            var outstandingDeposit = BookingWorkflowRules.CalculateOutstandingDeposit(
+                booking.DepositAmount,
+                depositPaid);
+
+            if (outstandingDeposit > 0m)
             {
-                bundledDeposit = new Payment
+                bundledDeposit = booking.Payments
+                    .FirstOrDefault(item =>
+                        item.Type == PaymentType.Deposit &&
+                        item.Status == PaymentStatus.Pending);
+
+                if (bundledDeposit is null)
                 {
-                    BookingId = booking.BookingId,
-                    Type = PaymentType.Deposit,
-                    Amount = booking.DepositAmount,
-                    Method = PaymentMethods.BankQr,
-                    Status = PaymentStatus.AwaitingConfirmation
-                };
-                booking.Payments.Add(bundledDeposit);
-            }
-            else if (bundledDeposit is not null)
-            {
-                bundledDeposit.Amount = booking.DepositAmount;
-                bundledDeposit.Method = PaymentMethods.BankQr;
-                bundledDeposit.Status = PaymentStatus.AwaitingConfirmation;
-                bundledDeposit.PaidAt = null;
-                bundledDeposit.TransactionCode = null;
+                    bundledDeposit = new Payment
+                    {
+                        BookingId = booking.BookingId,
+                        Type = PaymentType.Deposit,
+                        Amount = outstandingDeposit,
+                        Method = PaymentMethods.BankQr,
+                        Status = PaymentStatus.AwaitingConfirmation
+                    };
+                    booking.Payments.Add(bundledDeposit);
+                }
+                else
+                {
+                    bundledDeposit.Amount = outstandingDeposit;
+                    bundledDeposit.Method = PaymentMethods.BankQr;
+                    bundledDeposit.Status = PaymentStatus.AwaitingConfirmation;
+                    bundledDeposit.PaidAt = null;
+                    bundledDeposit.TransactionCode = null;
+                }
             }
         }
 
@@ -317,18 +336,64 @@ internal sealed class PaymentService : IPaymentService
 
         if (originalType == PaymentType.Rental)
         {
+            var depositPaidBefore = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+
+            var outstandingDeposit = BookingWorkflowRules.CalculateOutstandingDeposit(
+                booking.DepositAmount,
+                depositPaidBefore);
+
             bundledDeposit = booking.Payments
                 .FirstOrDefault(item =>
                     item.Type == PaymentType.Deposit &&
                     item.Status == PaymentStatus.AwaitingConfirmation);
 
-            if (booking.DepositAmount > 0 && bundledDeposit is not null)
+            if (outstandingDeposit > 0m)
             {
-                bundledDeposit.Amount = booking.DepositAmount;
+                if (bundledDeposit is null)
+                {
+                    return OperationResult.Failure(
+                        $"Đơn còn thiếu {outstandingDeposit:N0} đồng tiền cọc nhưng không có giao dịch cọc đang chờ đối soát. Không xác nhận tiền thuê để tránh chuyển đơn sang Đã thanh toán sai.");
+                }
+
+                if (bundledDeposit.Amount != outstandingDeposit)
+                {
+                    return OperationResult.Failure(
+                        $"Khoản cọc chờ đối soát ({bundledDeposit.Amount:N0} đồng) không khớp phần cọc còn thiếu ({outstandingDeposit:N0} đồng). Vui lòng xử lý lại giao dịch trước khi xác nhận.");
+                }
+
                 bundledDeposit.Method = PaymentMethods.BankQr;
                 bundledDeposit.Status = PaymentStatus.Paid;
                 bundledDeposit.PaidAt = paidAt;
                 bundledDeposit.TransactionCode = transactionCode;
+            }
+            else if (bundledDeposit is not null)
+            {
+                return OperationResult.Failure(
+                    "Tiền cọc của đơn đã đủ nhưng vẫn còn một giao dịch cọc chờ xác nhận. Vui lòng xử lý giao dịch bất thường này trước để tránh thu trùng.");
+            }
+
+            var rentalPaid = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Rental &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+            var depositPaidAfter = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+
+            if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
+                    rentalPaid,
+                    booking.DepositAmount,
+                    depositPaidAfter))
+            {
+                return OperationResult.Failure(
+                    "Chưa đủ tiền thuê hoặc tiền cọc. Không chuyển đơn sang Đã thanh toán.");
             }
 
             booking.Status = BookingStatus.Paid;
