@@ -135,6 +135,32 @@ internal sealed class PaymentService : IPaymentService
             item.Type == paymentType &&
             item.Status == PaymentStatus.Pending);
 
+        if (payment is null && paymentType == PaymentType.Rental)
+        {
+            var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
+            var rentalPaidBefore = booking.Payments
+                .Where(item =>
+                    item.Status == PaymentStatus.Paid &&
+                    item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                .Sum(item => item.Amount);
+            var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
+                requiredRentalAmount,
+                rentalPaidBefore);
+
+            if (outstandingRental > 0m)
+            {
+                payment = new Payment
+                {
+                    BookingId = booking.BookingId,
+                    Type = PaymentType.Rental,
+                    Amount = outstandingRental,
+                    Method = PaymentMethods.NotSelected,
+                    Status = PaymentStatus.Pending
+                };
+                booking.Payments.Add(payment);
+            }
+        }
+
         if (payment is null &&
             paymentType == PaymentType.AdditionalCharge &&
             booking.AdditionalAmount > 0)
@@ -176,22 +202,10 @@ internal sealed class PaymentService : IPaymentService
 
         if (paymentType == PaymentType.Rental)
         {
+            var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
             var storedDeliveryFee = Math.Max(
                 0m,
-                booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
-
-            if (booking.PickupMethod == VehiclePickupMethod.Delivery &&
-                storedDeliveryFee <= 0m &&
-                booking.DeliveryLatitude.HasValue &&
-                booking.DeliveryLongitude.HasValue)
-            {
-                storedDeliveryFee = RentalPolicy.CalculateDeliveryFee(
-                    booking.PickupMethod,
-                    booking.DeliveryLatitude,
-                    booking.DeliveryLongitude);
-            }
-
-            var requiredRentalAmount = booking.RentalAmount + storedDeliveryFee;
+                requiredRentalAmount - booking.RentalAmount);
             var rentalPaidBefore = booking.Payments
                 .Where(item =>
                     item.Status == PaymentStatus.Paid &&
@@ -274,17 +288,17 @@ internal sealed class PaymentService : IPaymentService
                     bundledDeposit.PaidAt = null;
                     bundledDeposit.TransactionCode = null;
                 }
+            }
 
-                foreach (var staleDeposit in booking.Payments.Where(item =>
-                             item != bundledDeposit &&
-                             item.Type == PaymentType.Deposit &&
-                             item.Status == PaymentStatus.Pending))
-                {
-                    staleDeposit.Status = PaymentStatus.Failed;
-                    staleDeposit.Method = PaymentMethods.NotSelected;
-                    staleDeposit.PaidAt = null;
-                    staleDeposit.TransactionCode = null;
-                }
+            foreach (var staleDeposit in booking.Payments.Where(item =>
+                         item != bundledDeposit &&
+                         item.Type == PaymentType.Deposit &&
+                         item.Status == PaymentStatus.Pending))
+            {
+                staleDeposit.Status = PaymentStatus.Failed;
+                staleDeposit.Method = PaymentMethods.NotSelected;
+                staleDeposit.PaidAt = null;
+                staleDeposit.TransactionCode = null;
             }
         }
 
@@ -350,9 +364,7 @@ internal sealed class PaymentService : IPaymentService
 
         if (originalType == PaymentType.Rental)
         {
-            var requiredRentalAmount = Math.Max(
-                0m,
-                booking.TotalAmount - booking.AdditionalAmount);
+            var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
             var rentalPaidBefore = booking.Payments
                 .Where(item =>
                     item.Status == PaymentStatus.Paid &&
@@ -454,9 +466,7 @@ internal sealed class PaymentService : IPaymentService
                     item.Status == PaymentStatus.Paid)
                 .Sum(item => item.Amount);
 
-            var requiredRentalAmountAfter = Math.Max(
-                0m,
-                booking.TotalAmount - booking.AdditionalAmount);
+            var requiredRentalAmountAfter = GetRequiredRentalPaymentAmount(booking);
 
             if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
                     requiredRentalAmountAfter,
@@ -829,6 +839,26 @@ internal sealed class PaymentService : IPaymentService
                 Message = message
             });
         }
+    }
+
+    private static decimal GetRequiredRentalPaymentAmount(Booking booking)
+    {
+        var deliveryFee = Math.Max(
+            0m,
+            booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
+
+        if (booking.PickupMethod == VehiclePickupMethod.Delivery &&
+            deliveryFee <= 0m &&
+            booking.DeliveryLatitude.HasValue &&
+            booking.DeliveryLongitude.HasValue)
+        {
+            deliveryFee = RentalPolicy.CalculateDeliveryFee(
+                booking.PickupMethod,
+                booking.DeliveryLatitude,
+                booking.DeliveryLongitude);
+        }
+
+        return Math.Max(0m, booking.RentalAmount + deliveryFee);
     }
 
     private static string GetPaymentLabel(PaymentType type) => type switch
