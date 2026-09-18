@@ -150,14 +150,9 @@
             }
             else
             {
-                <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="border rounded bg-light p-3 mb-3">
-                    <input type="hidden" name="bookingId" value="@booking.BookingId" />
-                    <div class="input-group input-group-sm">
-                        <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control" multiple required oninvalid="this.setCustomValidity('Vui lòng chọn ít nhất một ảnh bản ký.')" oninput="this.setCustomValidity('')" />
-                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
-                    </div>
-                    <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
-                </form>
+                <div class="alert alert-warning py-2">
+                    Chưa có bản ký giao xe. Đây là hồ sơ chỉ đọc của Admin; Staff phải bổ sung và xác minh tài liệu ở màn vận hành.
+                </div>
             }
             <div class="row g-2">
                 @foreach (var image in Model.Handover.ImagePaths.Take(6))
@@ -205,14 +200,9 @@
             }
             else
             {
-                <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="border rounded bg-light p-3 mb-3">
-                    <input type="hidden" name="bookingId" value="@booking.BookingId" />
-                    <div class="input-group input-group-sm">
-                        <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control" multiple required oninvalid="this.setCustomValidity('Vui lòng chọn ít nhất một ảnh bản ký.')" oninput="this.setCustomValidity('')" />
-                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
-                    </div>
-                    <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
-                </form>
+                <div class="alert alert-warning py-2">
+                    Chưa có bản ký trả xe. Admin chỉ xem hồ sơ; Staff phải bổ sung và xác minh tài liệu ở màn vận hành.
+                </div>
             }
             <div class="row g-2">
                 @foreach (var image in Model.Return.ImagePaths.Take(6))
