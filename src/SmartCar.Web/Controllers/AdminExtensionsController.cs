@@ -4,14 +4,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
-using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Extensions;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
-using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -19,7 +17,6 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminExtensionsController : Controller
 {
-    private const long MaximumEvidenceImageBytes = 5 * 1024 * 1024;
     private const string ForceMajeureMarker = "[FORCE_MAJEURE]";
 
     private static readonly BookingStatus[] BlockingStatuses =
@@ -33,26 +30,20 @@ public sealed class AdminExtensionsController : Controller
     };
 
     private readonly IExtensionService _extensionService;
-    private readonly IBookingService _bookingService;
     private readonly IBookingOperationService _bookingOperationService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
-    private readonly ISecureDocumentStorage _secureDocumentStorage;
 
     public AdminExtensionsController(
         IExtensionService extensionService,
-        IBookingService bookingService,
         IBookingOperationService bookingOperationService,
         IAuditService auditService,
-        ApplicationDbContext dbContext,
-        ISecureDocumentStorage secureDocumentStorage)
+        ApplicationDbContext dbContext)
     {
         _extensionService = extensionService;
-        _bookingService = bookingService;
         _bookingOperationService = bookingOperationService;
         _auditService = auditService;
         _dbContext = dbContext;
-        _secureDocumentStorage = secureDocumentStorage;
     }
 
     [HttpGet]
@@ -75,110 +66,6 @@ public sealed class AdminExtensionsController : Controller
 
         ViewBag.ConflictResolutions = conflictResolutions;
         return View(extensions);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateForCustomer(
-        int bookingId,
-        DateTime requestedReturnDate,
-        string? note,
-        bool isForceMajeure,
-        string? evidenceNote,
-        string? customerLiveLocation,
-        IFormFile? evidenceImage,
-        CancellationToken cancellationToken)
-    {
-        var booking = await _bookingService.GetAdminBookingAsync(bookingId, cancellationToken);
-        if (booking is null)
-        {
-            return NotFound();
-        }
-
-        if (booking.Status != BookingStatus.Rented)
-        {
-            TempData["ErrorMessage"] = "Chỉ đơn đang thuê mới được ghi nhận yêu cầu gia hạn.";
-            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
-        }
-
-        if (requestedReturnDate <= booking.ReturnDate)
-        {
-            TempData["ErrorMessage"] = "Giờ trả mới phải sau giờ trả hiện tại.";
-            return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
-        }
-
-        if (isForceMajeure)
-        {
-            if (string.IsNullOrWhiteSpace(note))
-            {
-                TempData["ErrorMessage"] = "Vui lòng ghi rõ lý do bất khả kháng.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            if (evidenceImage is null || evidenceImage.Length == 0)
-            {
-                TempData["ErrorMessage"] = "Bất khả kháng phải có ảnh minh chứng.";
-                return RedirectToAction(nameof(Index));
-            }
-
-            if (string.IsNullOrWhiteSpace(customerLiveLocation))
-            {
-                TempData["ErrorMessage"] = "Bất khả kháng phải có vị trí hiện tại.";
-                return RedirectToAction(nameof(Index));
-            }
-        }
-
-        var (imagePath, imageError) = await SaveEvidenceImageAsync(
-            bookingId,
-            evidenceImage,
-            cancellationToken);
-
-        if (imageError is not null)
-        {
-            TempData["ErrorMessage"] = imageError;
-            return RedirectToAction(nameof(Index));
-        }
-
-        var phoneNote = string.IsNullOrWhiteSpace(note)
-            ? "SmartCar ghi nhận yêu cầu qua điện thoại."
-            : $"SmartCar ghi nhận yêu cầu qua điện thoại. {note.Trim()}";
-        var liveLocation = isForceMajeure && !string.IsNullOrWhiteSpace(customerLiveLocation)
-            ? $"Vị trí trực tiếp khách cung cấp: {customerLiveLocation.Trim()}"
-            : null;
-
-        var result = await _extensionService.RequestAsync(
-            booking.CustomerId,
-            new RequestExtensionRequest(
-                bookingId,
-                requestedReturnDate,
-                phoneNote,
-                isForceMajeure,
-                ComposeEvidence(evidenceNote, imagePath, liveLocation)),
-            cancellationToken);
-
-        if (!result.Succeeded)
-        {
-            DeleteSavedEvidenceImage(imagePath);
-        }
-
-        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã ghi nhận yêu cầu gia hạn."
-            : string.Join("; ", result.Errors);
-
-        if (result.Succeeded)
-        {
-            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            await _auditService.WriteAsync(
-                adminId,
-                "CreateExtensionForCustomer",
-                nameof(BookingExtension),
-                bookingId.ToString(),
-                $"Ghi nhận yêu cầu gia hạn qua điện thoại cho đơn #{bookingId} đến {requestedReturnDate:dd/MM/yyyy HH:mm}. Loại: {(isForceMajeure ? "bất khả kháng" : "thông thường")}.",
-                ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-                cancellationToken: cancellationToken);
-        }
-
-        return RedirectToAction("Details", "AdminBookings", new { id = bookingId });
     }
 
     [HttpPost]
@@ -435,128 +322,8 @@ public sealed class AdminExtensionsController : Controller
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    private static void SetSinglePendingPaymentAmount(
-        ICollection<Payment> payments,
-        PaymentType type,
-        decimal amount)
-    {
-        var pending = payments
-            .Where(item => item.Type == type && item.Status == PaymentStatus.Pending)
-            .OrderBy(item => item.PaymentId)
-            .ToList();
-
-        var primary = pending.FirstOrDefault();
-        if (amount > 0m)
-        {
-            if (primary is null)
-            {
-                primary = new Payment
-                {
-                    Type = type,
-                    Amount = amount,
-                    Method = PaymentMethods.NotSelected,
-                    Status = PaymentStatus.Pending
-                };
-                payments.Add(primary);
-            }
-            else
-            {
-                primary.Amount = amount;
-                primary.Method = PaymentMethods.NotSelected;
-                primary.PaidAt = null;
-                primary.TransactionCode = null;
-            }
-        }
-
-        foreach (var stale in pending.Where(item => item != primary))
-        {
-            stale.Status = PaymentStatus.Failed;
-            stale.Method = PaymentMethods.NotSelected;
-            stale.PaidAt = null;
-            stale.TransactionCode = null;
-        }
-    }
-
-    private static void FailPendingPayments(
-        IEnumerable<Payment> payments,
-        PaymentType type)
-    {
-        foreach (var payment in payments.Where(item =>
-                     item.Type == type &&
-                     item.Status == PaymentStatus.Pending))
-        {
-            payment.Status = PaymentStatus.Failed;
-            payment.Method = PaymentMethods.NotSelected;
-            payment.PaidAt = null;
-            payment.TransactionCode = null;
-        }
-    }
-
-    private async Task<(string? Path, string? Error)> SaveEvidenceImageAsync(
-        int bookingId,
-        IFormFile? image,
-        CancellationToken cancellationToken)
-    {
-        if (image is null || image.Length == 0)
-        {
-            return (null, null);
-        }
-
-        var validationError = await ImageFileValidator.ValidateAsync(
-            image,
-            MaximumEvidenceImageBytes,
-            cancellationToken);
-
-        if (validationError is not null)
-        {
-            return (null, $"Ảnh minh chứng: {validationError}");
-        }
-
-        var storedPath = await _secureDocumentStorage.SaveAsync(
-            image,
-            $"extension-evidence-booking-{bookingId}",
-            cancellationToken);
-
-        return (storedPath, null);
-    }
-
-    private void DeleteSavedEvidenceImage(string? imagePath) =>
-        _secureDocumentStorage.Delete(imagePath);
-
-    private static string ComposeEvidence(
-        string? evidenceNote,
-        string? imagePath,
-        string? liveLocationText)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(evidenceNote))
-        {
-            parts.AddRange(
-                evidenceNote
-                    .Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(line => line.Trim())
-                    .Where(line => line.Length > 0));
-        }
-
-        if (!string.IsNullOrWhiteSpace(liveLocationText))
-        {
-            parts.Add(liveLocationText);
-        }
-
-        if (!string.IsNullOrWhiteSpace(imagePath))
-        {
-            parts.Add($"Ảnh minh chứng: {imagePath}");
-        }
-
-        return string.Join(" | ", parts);
-    }
-
     private static bool IsForceMajeure(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
         value.Contains(ForceMajeureMarker, StringComparison.Ordinal);
 
-    private static string AppendText(string? current, string addition) =>
-        string.IsNullOrWhiteSpace(current)
-            ? addition
-            : $"{current.Trim()} {addition}";
 }
