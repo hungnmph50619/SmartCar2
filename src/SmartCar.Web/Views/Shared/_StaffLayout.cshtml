@@ -39,6 +39,7 @@
                     <a class="admin-nav-link @(currentController == "Staff" && currentAction == "CounterRental" ? "active" : string.Empty)" asp-controller="Staff" asp-action="CounterRental"><span class="admin-nav-icon">＋</span><span>Thuê tại quầy</span></a>
                     <a class="admin-nav-link @(currentController == "StaffCustomers" ? "active" : string.Empty)" asp-controller="StaffCustomers" asp-action="Index"><span class="admin-nav-icon">◎</span><span>Khách hàng</span></a>
                     <a class="admin-nav-link @(currentController == "StaffPayments" && currentAction == "Reconciliation" ? "active" : string.Empty)" asp-controller="StaffPayments" asp-action="Reconciliation"><span class="admin-nav-icon">⇄</span><span>Đối soát chuyển khoản</span></a>
+                    <a class="admin-nav-link @(currentController == "StaffExtensionOperations" ? "active" : string.Empty)" asp-controller="StaffExtensionOperations" asp-action="Index"><span class="admin-nav-icon">↔</span><span>Xung đột gia hạn</span></a>
                     <a class="admin-nav-link @(currentController == "Staff" && currentAction == "Refunds" ? "active" : string.Empty)" asp-controller="Staff" asp-action="Refunds"><span class="admin-nav-icon">₫</span><span>Hoàn tiền đã duyệt</span></a>
                 </div>
             </div>
