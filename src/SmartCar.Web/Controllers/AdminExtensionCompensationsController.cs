@@ -164,7 +164,11 @@ public sealed class AdminExtensionCompensationsController : Controller
                 Status = PaymentStatus.AwaitingRefund
             });
 
-            cancelledBooking.RefundAmount += compensationAmount;
+            cancelledBooking.RefundAmount = cancelledBooking.Payments
+                .Where(payment =>
+                    payment.Type == PaymentType.Refund &&
+                    BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                .Sum(payment => payment.Amount);
             cancelledBooking.RefundReason = AppendText(
                 cancelledBooking.RefundReason,
                 $"Bồi thường thiệt hại thực tế {compensationAmount:N0} đồng do đơn #{extension.BookingId} ảnh hưởng. " +
@@ -369,7 +373,11 @@ public sealed class AdminExtensionCompensationsController : Controller
             Method = PaymentMethods.CompensationRefund,
             Status = PaymentStatus.AwaitingRefund
         });
-        affectedBooking.RefundAmount += contractCompensation;
+        affectedBooking.RefundAmount = affectedBooking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+            .Sum(payment => payment.Amount);
         affectedBooking.RefundReason = AppendText(
             affectedBooking.RefundReason,
             $"Bồi thường {contractCompensation:N0} đồng bằng giá hợp đồng do đơn #{renterBookingId} cố tình không trả xe đúng hạn làm ảnh hưởng.");
