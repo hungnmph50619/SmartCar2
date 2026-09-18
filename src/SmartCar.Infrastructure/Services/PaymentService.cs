@@ -550,6 +550,40 @@ internal sealed class PaymentService : IPaymentService
                 payment.Type = PaymentType.Deposit;
                 payment.Amount = depositTopUp;
             }
+
+            if (booking.Status == BookingStatus.PendingPayment)
+            {
+                var rentalPaidAfterSwap = booking.Payments
+                    .Where(item =>
+                        item.Status == PaymentStatus.Paid &&
+                        item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                    .Sum(item => item.Amount);
+                var depositPaidAfterSwap = booking.Payments
+                    .Where(item =>
+                        item.Type == PaymentType.Deposit &&
+                        item.Status == PaymentStatus.Paid)
+                    .Sum(item => item.Amount);
+                var depositRefundPlanned = booking.Payments
+                    .Where(item =>
+                        item.Type == PaymentType.Refund &&
+                        item.Method == PaymentMethods.DepositRefund &&
+                        item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+                    .Sum(item => item.Amount);
+                var effectiveDepositPaid = Math.Max(
+                    0m,
+                    depositPaidAfterSwap - depositRefundPlanned);
+                var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
+
+                if (BookingWorkflowRules.HasRequiredUpfrontPayment(
+                        requiredRentalAmount,
+                        rentalPaidAfterSwap,
+                        booking.DepositAmount,
+                        effectiveDepositPaid))
+                {
+                    booking.Status = BookingStatus.Paid;
+                    booking.ReservationExpiresAt = null;
+                }
+            }
         }
 
         _dbContext.Notifications.Add(new Notification
