@@ -351,7 +351,7 @@ else
                 </div>
                 <div class="d-flex align-items-center gap-3 flex-wrap">
                     <strong class="text-danger">@impact.CompensationAmount.ToString("N0") đ</strong>
-                    <a class="btn btn-sm btn-outline-danger" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@impact.BookingId">Xem đơn #@impact.BookingId</a>
+                    <a class="btn btn-sm btn-outline-danger" asp-controller="Staff" asp-action="Details" asp-route-id="@impact.BookingId">Xem đơn #@impact.BookingId</a>
                 </div>
             </div>
         }
@@ -659,7 +659,7 @@ else if (Model.Status == BookingStatus.Completed)
 {
     <div class="alert alert-success d-flex justify-content-between align-items-center gap-2 flex-wrap">
         <strong>Chuyến đã hoàn tất.</strong>
-        <a class="btn btn-sm btn-success" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Xem hồ sơ chuyến</a>
+        <a class="btn btn-sm btn-success" asp-controller="Staff" asp-action="Details" asp-route-id="@Model.BookingId">Về hồ sơ vận hành</a>
     </div>
 }
 
