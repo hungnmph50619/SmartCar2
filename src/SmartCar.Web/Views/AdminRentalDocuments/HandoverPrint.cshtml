@@ -12,7 +12,8 @@
         : !string.IsNullOrWhiteSpace(Model.SignedDocumentPath)
             ? new[] { Model.SignedDocumentPath }
             : Array.Empty<string>();
-    var awaitingSignature = booking.Status == BookingStatus.ReadyForPickup && signedDocumentPaths.Count == 0;
+    var isStaff = User.IsInRole(SmartCar.Domain.Constants.RoleNames.Staff);
+    var awaitingSignature = isStaff && booking.Status == BookingStatus.ReadyForPickup && signedDocumentPaths.Count == 0;
     var includedDays = Math.Max(1, booking.NumberOfDays);
     var effectiveIncludedKilometers = Math.Max(Model.IncludedKilometers, includedDays * RentalPolicy.IncludedKilometersPerDay);
     const string signedAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
