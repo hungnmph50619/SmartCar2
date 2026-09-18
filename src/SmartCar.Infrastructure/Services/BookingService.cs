@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -429,9 +430,11 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure("Không tìm thấy đơn thuê.");
         }
 
-        var rentalPaid = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Rental &&
-            payment.Status == PaymentStatus.Paid);
+        var rentalPaid = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Rental &&
+                payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
 
         var paidDeposit = booking.Payments
             .Where(payment =>
@@ -444,16 +447,18 @@ internal sealed class BookingService : IBookingService
                 payment.Method == PaymentMethods.DepositRefund &&
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
-        var depositSatisfied = booking.DepositAmount <= 0 ||
-            Math.Max(0m, paidDeposit - depositRefundPlanned) >= booking.DepositAmount;
+        var effectiveDepositPaid = Math.Max(0m, paidDeposit - depositRefundPlanned);
+        var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
+            rentalPaid,
+            booking.DepositAmount,
+            effectiveDepositPaid);
 
         var hasOpenSwapPayment = booking.Payments.Any(payment =>
             payment.Type == PaymentType.VehicleSwapAdjustment &&
             payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
 
         if (booking.Status != BookingStatus.Paid ||
-            !rentalPaid ||
-            !depositSatisfied ||
+            !upfrontSatisfied ||
             hasOpenSwapPayment)
         {
             return OperationResult.Failure(
