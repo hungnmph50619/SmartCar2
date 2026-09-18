@@ -316,14 +316,52 @@ public sealed class StaffController : Controller
         var paidAt = DateTime.UtcNow;
         var transactionCode = $"CASH-{bookingId}-{paidAt:yyyyMMddHHmmss}";
 
-        foreach (var rentalPayment in upfrontPayments.Where(item =>
-                     item.Type == PaymentType.Rental &&
-                     item.Status == PaymentStatus.Pending))
+        var requiredRentalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - booking.AdditionalAmount);
+        var rentalPaidBefore = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Rental &&
+                item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
+            requiredRentalAmount,
+            rentalPaidBefore);
+
+        var pendingRentals = upfrontPayments
+            .Where(item =>
+                item.Type == PaymentType.Rental &&
+                item.Status == PaymentStatus.Pending)
+            .OrderBy(item => item.PaymentId)
+            .ToList();
+
+        Payment? rentalCollectedNow = null;
+        if (outstandingRental > 0m)
         {
-            rentalPayment.Status = PaymentStatus.Paid;
-            rentalPayment.Method = PaymentMethods.Cash;
-            rentalPayment.PaidAt = paidAt;
-            rentalPayment.TransactionCode = transactionCode;
+            rentalCollectedNow = pendingRentals.FirstOrDefault();
+            if (rentalCollectedNow is null)
+            {
+                rentalCollectedNow = new Payment
+                {
+                    BookingId = booking.BookingId,
+                    Type = PaymentType.Rental
+                };
+                booking.Payments.Add(rentalCollectedNow);
+            }
+
+            rentalCollectedNow.Amount = outstandingRental;
+            rentalCollectedNow.Status = PaymentStatus.Paid;
+            rentalCollectedNow.Method = PaymentMethods.Cash;
+            rentalCollectedNow.PaidAt = paidAt;
+            rentalCollectedNow.TransactionCode = transactionCode;
+        }
+
+        foreach (var staleRental in pendingRentals.Where(item => item != rentalCollectedNow))
+        {
+            staleRental.Status = PaymentStatus.Failed;
+            staleRental.Method = PaymentMethods.NotSelected;
+            staleRental.PaidAt = null;
+            staleRental.TransactionCode = null;
         }
 
         var depositPaidBefore = booking.Payments
@@ -380,6 +418,7 @@ public sealed class StaffController : Controller
             .Sum(item => item.Amount);
 
         if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
+                requiredRentalAmount,
                 rentalPaid,
                 booking.DepositAmount,
                 depositPaid))
@@ -474,7 +513,12 @@ public sealed class StaffController : Controller
                 item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(item => item.Amount);
 
+        var requiredHandoverRentalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - booking.AdditionalAmount);
+
         if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
+                requiredHandoverRentalAmount,
                 handoverRentalPaid,
                 booking.DepositAmount,
                 Math.Max(0m, handoverDepositPaid - handoverDepositRefundPlanned)))
