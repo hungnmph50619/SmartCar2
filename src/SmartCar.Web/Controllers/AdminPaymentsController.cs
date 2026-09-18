@@ -358,9 +358,11 @@ public sealed class AdminPaymentsController : Controller
                 if (pendingAutomaticCompensation is not null)
                 {
                     pendingAutomaticCompensation.Status = PaymentStatus.Failed;
-                    affectedBooking.RefundAmount = Math.Max(
-                        0m,
-                        affectedBooking.RefundAmount - pendingAutomaticCompensation.Amount);
+                    affectedBooking.RefundAmount = affectedBooking.Payments
+                        .Where(payment =>
+                            payment.Type == PaymentType.Refund &&
+                            BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                        .Sum(payment => payment.Amount);
                     affectedBooking.RefundReason = AppendText(
                         affectedBooking.RefundReason,
                         "Đã hủy khoản hỗ trợ tự động cũ: trường hợp bất khả kháng chỉ hoàn các khoản khách đã thanh toán; không tự động lấy cọc khách A để bồi thường.");
@@ -404,7 +406,11 @@ public sealed class AdminPaymentsController : Controller
                     Method = PaymentMethods.DepositRefund,
                     Status = PaymentStatus.AwaitingRefund
                 });
-                currentBooking.RefundAmount += depositCorrection;
+                currentBooking.RefundAmount = currentBooking.Payments
+                    .Where(payment =>
+                        payment.Type == PaymentType.Refund &&
+                        BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                    .Sum(payment => payment.Amount);
                 currentBooking.RefundReason = AppendText(
                     currentBooking.RefundReason,
                     $"Điều chỉnh chính sách bất khả kháng: hoàn bổ sung {depositCorrection:N0} đồng cọc; không áp dụng khoản khấu trừ tự động cho đơn kế tiếp.");
