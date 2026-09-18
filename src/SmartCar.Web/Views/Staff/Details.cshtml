@@ -12,10 +12,14 @@
         && Model.HandoverSignedDocumentVerified
         && Model.ReturnIdentityVerified
         && Model.ReturnSignedDocumentVerified;
-    var canCancelBeforeHandover = !b.HasHandover && b.Status is BookingStatus.PendingConfirmation
-        or BookingStatus.PendingPayment
-        or BookingStatus.Paid
-        or BookingStatus.ReadyForPickup;
+    var hasPaymentAwaitingConfirmation = b.Payments.Any(payment =>
+        payment.Status == PaymentStatus.AwaitingConfirmation);
+    var canCancelBeforeHandover = !b.HasHandover
+        && !hasPaymentAwaitingConfirmation
+        && b.Status is BookingStatus.PendingConfirmation
+            or BookingStatus.PendingPayment
+            or BookingStatus.Paid
+            or BookingStatus.ReadyForPickup;
     var canMarkNoShow = b.Status == BookingStatus.ReadyForPickup
         && !b.HasHandover
         && DateTime.Now >= b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes);
