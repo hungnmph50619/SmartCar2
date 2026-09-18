@@ -64,11 +64,12 @@
             <input type="hidden" name="bookingId" value="@booking.BookingId" />
             <div class="signed-upload-panel">
                 <div class="upload-row">
-                    <input id="signed-documents" type="file" name="signedDocuments" accept="@signedAccept" multiple required />
-                    <button type="submit">Tải các trang đã ký & bắt đầu chuyến</button>
+                    <input id="signed-documents" type="file" name="signedDocuments" accept="@signedAccept" multiple required
+                           data-file-draft-key="handover-@booking.BookingId-signed-documents" />
+                    <button type="submit">Tải các trang đã ký</button>
                     <span id="signed-document-count" class="signed-count">Chưa chọn trang ký</span>
                 </div>
-                <div class="hint">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
+                <div class="hint">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh. Tải xong, quay lại màn xử lý đơn để mở bản ký và xác minh; chuyến chỉ bắt đầu sau bước xác minh đó.</div>
                 <div id="signed-document-preview" class="signed-preview"></div>
             </div>
         </form>
