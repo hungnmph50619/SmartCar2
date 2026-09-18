@@ -77,6 +77,7 @@ internal sealed class PaymentService : IPaymentService
         int bookingId,
         string customerId,
         PaymentType paymentType,
+        string actorId,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(customerId))
@@ -315,11 +316,11 @@ internal sealed class PaymentService : IPaymentService
         await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
-            customerId,
+            actorId,
             "SubmitQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
-            $"Khách báo đã chuyển {submittedAmount:N0} đồng cho {GetPaymentLabel(paymentType)} của đơn #{booking.BookingId}.",
+            $"Ghi nhận đã báo chuyển {submittedAmount:N0} đồng cho {GetPaymentLabel(paymentType)} của đơn #{booking.BookingId}.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
