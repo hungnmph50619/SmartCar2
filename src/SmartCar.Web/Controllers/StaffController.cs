@@ -522,6 +522,37 @@ public sealed class StaffController : Controller
             TempData["ErrorMessage"] = "Chưa có ảnh/scan biên bản giao xe đã ký.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
+
+        if (booking.Status is BookingStatus.Rented or BookingStatus.PendingInspection)
+        {
+            if (!booking.Handover.SignedDocumentVerified)
+            {
+                var recoveryStaffId = CurrentUserId();
+                booking.Handover.SignedDocumentVerified = true;
+                booking.Handover.SignedDocumentVerifiedByStaffId = recoveryStaffId;
+                booking.Handover.SignedDocumentVerifiedAt = DateTime.UtcNow;
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+
+                await WriteAuditAsync(
+                    "StaffRecoverSignedHandoverVerification",
+                    nameof(VehicleHandover),
+                    bookingId,
+                    $"Nhân viên mở và đối chiếu lại bản ký giao xe lịch sử của đơn #{bookingId}; chỉ phục hồi cờ xác minh hồ sơ, không thay đổi thời điểm bàn giao hay trạng thái chuyến.",
+                    cancellationToken);
+
+                TempData["SuccessMessage"] =
+                    "Đã xác minh lại bản ký giao xe lịch sử. Trạng thái chuyến và thời điểm bàn giao không bị thay đổi.";
+            }
+            else
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["SuccessMessage"] = "Bản ký giao xe đã được xác minh trước đó.";
+            }
+
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
         if (booking.Status != BookingStatus.ReadyForPickup)
         {
             TempData["ErrorMessage"] = "Đơn không còn ở trạng thái sẵn sàng giao xe.";
