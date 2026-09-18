@@ -81,9 +81,14 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
         var booking = await _dbContext.Bookings
             .AsNoTracking()
             .Where(item => item.BookingId == bookingId)
-            .Select(item => new { item.CustomerId })
+            .Select(item => new { item.CustomerId, item.Status })
             .FirstOrDefaultAsync(cancellationToken);
         if (booking is null)
+        {
+            return NotFound();
+        }
+
+        if (booking.Status != BookingStatus.ReadyForPickup)
         {
             return NotFound();
         }
@@ -126,9 +131,14 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
         var booking = await _dbContext.Bookings
             .AsNoTracking()
             .Where(item => item.BookingId == bookingId)
-            .Select(item => new { item.CustomerId })
+            .Select(item => new { item.CustomerId, item.Status })
             .FirstOrDefaultAsync(cancellationToken);
         if (booking is null)
+        {
+            return NotFound();
+        }
+
+        if (booking.Status != BookingStatus.ReadyForPickup)
         {
             return NotFound();
         }
