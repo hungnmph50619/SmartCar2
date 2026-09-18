@@ -39,5 +39,6 @@ public interface IPaymentService
     Task<OperationResult> RejectQrPaymentAsync(
         int paymentId,
         string actorId,
+        string rejectionReason,
         CancellationToken cancellationToken = default);
 }
