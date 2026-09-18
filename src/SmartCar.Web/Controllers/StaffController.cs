@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Documents;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Application.Features.VehicleDocuments;
 using SmartCar.Domain.Constants;
@@ -27,19 +28,22 @@ public sealed class StaffController : Controller
     private readonly IAuditService _auditService;
     private readonly IUserBankAccountService _bankAccountService;
     private readonly IVehicleDocumentService _vehicleDocumentService;
+    private readonly IDocumentService _documentService;
 
     public StaffController(
         ApplicationDbContext dbContext,
         IBookingService bookingService,
         IAuditService auditService,
         IUserBankAccountService bankAccountService,
-        IVehicleDocumentService vehicleDocumentService)
+        IVehicleDocumentService vehicleDocumentService,
+        IDocumentService documentService)
     {
         _dbContext = dbContext;
         _bookingService = bookingService;
         _auditService = auditService;
         _bankAccountService = bankAccountService;
         _vehicleDocumentService = vehicleDocumentService;
+        _documentService = documentService;
     }
 
     [HttpGet]
@@ -602,6 +606,32 @@ public sealed class StaffController : Controller
         {
             TempData["ErrorMessage"] =
                 "Không thể bắt đầu chuyến vì hệ thống không còn ghi nhận đủ tiền thuê và tiền cọc.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        if (!await _documentService.HasValidRentalDocumentsAsync(
+                booking.CustomerId,
+                booking.ReturnDate,
+                cancellationToken))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Không thể bàn giao xe vì CCCD/GPLX của khách không còn được xác minh hợp lệ đến ngày trả.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
+        var customerActive = await _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(user =>
+                user.Id == booking.CustomerId &&
+                user.IsActive,
+                cancellationToken);
+
+        if (!customerActive)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Không thể bàn giao xe vì tài khoản khách hàng không còn hoạt động.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
