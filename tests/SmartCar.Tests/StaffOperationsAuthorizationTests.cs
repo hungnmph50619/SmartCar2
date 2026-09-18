@@ -34,4 +34,23 @@ public sealed class StaffOperationsAuthorizationTests
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Contains(RoleNames.Admin, StringComparer.Ordinal));
     }
+
+
+    [Fact]
+    public void RentalSignedDocumentFilesController_AllowsReadOnlyAccessForAdminAndStaff()
+    {
+        var authorizeAttributes = typeof(RentalSignedDocumentFilesController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToArray();
+
+        Assert.NotEmpty(authorizeAttributes);
+        var roles = authorizeAttributes
+            .SelectMany(attribute => (attribute.Roles ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains(RoleNames.Admin, roles);
+        Assert.Contains(RoleNames.Staff, roles);
+    }
 }
