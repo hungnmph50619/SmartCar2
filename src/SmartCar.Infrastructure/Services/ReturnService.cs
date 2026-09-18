@@ -550,6 +550,10 @@ internal sealed class ReturnService : IReturnService
         var effectiveRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
             grossRentalPaid,
             rentalRefundPlanned);
+        var effectiveTripRevenuePaid =
+            BookingWorkflowRules.CalculateEffectiveTripRevenuePaid(
+                effectiveRentalPaid,
+                paidExtensionAmount);
 
         var grossDepositPaid = booking.Payments
             .Where(payment =>
@@ -579,7 +583,7 @@ internal sealed class ReturnService : IReturnService
             booking.TotalAmount - booking.AdditionalAmount);
         var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
             requiredRentalAmount,
-            effectiveRentalPaid,
+            effectiveTripRevenuePaid,
             booking.DepositAmount,
             effectiveDepositPaid);
 
