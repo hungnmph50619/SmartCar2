@@ -31,6 +31,18 @@ public static class BookingWorkflowRules
         !hasPaymentAwaitingConfirmation &&
         CancellableBeforeHandoverStatuses.Contains(status);
 
+    public static bool HasRequiredUpfrontPayment(
+        decimal rentalPaid,
+        decimal requiredDeposit,
+        decimal depositPaid) =>
+        rentalPaid > 0m &&
+        CalculateOutstandingDeposit(requiredDeposit, depositPaid) == 0m;
+
+    public static decimal CalculateOutstandingDeposit(
+        decimal requiredDeposit,
+        decimal depositPaid) =>
+        Math.Max(0m, Math.Max(0m, requiredDeposit) - Math.Max(0m, depositPaid));
+
     public static bool CanStaffReview(
         BookingStatus status,
         DateTime? staffReviewedAt) =>
