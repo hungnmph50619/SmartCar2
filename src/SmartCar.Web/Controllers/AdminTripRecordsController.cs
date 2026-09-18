@@ -89,7 +89,9 @@ public sealed class AdminTripRecordsController : Controller
                     .Where(path => !path.Contains(HandoverSignedMarker, StringComparison.OrdinalIgnoreCase))
                     .ToArray(),
                 SignedDocumentPaths = signedHandoverPaths,
-                SignedDocumentPath = signedHandoverPaths.FirstOrDefault()
+                SignedDocumentPath = signedHandoverPaths.FirstOrDefault(),
+                SignedDocumentVerified = records.Handover.SignedDocumentVerified,
+                SignedDocumentVerifiedAt = records.Handover.SignedDocumentVerifiedAt
             },
             Return = new ReturnDocumentViewModel
             {
@@ -106,7 +108,9 @@ public sealed class AdminTripRecordsController : Controller
                     .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
                     .ToArray(),
                 SignedDocumentPaths = signedReturnPaths,
-                SignedDocumentPath = signedReturnPaths.FirstOrDefault()
+                SignedDocumentPath = signedReturnPaths.FirstOrDefault(),
+                SignedDocumentVerified = records.VehicleReturn.SignedDocumentVerified,
+                SignedDocumentVerifiedAt = records.VehicleReturn.SignedDocumentVerifiedAt
             }
         };
 
