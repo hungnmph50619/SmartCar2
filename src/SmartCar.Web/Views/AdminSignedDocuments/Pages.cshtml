@@ -110,11 +110,7 @@ else
 
             <div class="card-body text-center bg-light">
 
-                <img asp-controller="RentalSignedDocumentFiles"
-                     asp-action="Page"
-                     asp-route-bookingId="@Model.BookingId"
-                     asp-route-handover="@Model.IsHandover"
-                     asp-route-index="@index"
+                <img src="@Url.Action("Page", "RentalSignedDocumentFiles", new { bookingId = Model.BookingId, handover = Model.IsHandover, index })"
                      alt="@Model.DocumentTitle trang @(index + 1)"
                      class="img-fluid border rounded bg-white"
                      style="max-height:1100px;object-fit:contain;" />
