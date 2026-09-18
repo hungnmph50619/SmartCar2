@@ -5,10 +5,13 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Identity;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
@@ -26,6 +29,7 @@ public sealed class ProfileSettingsController : Controller
     private readonly IAuditService _auditService;
     private readonly IUserBankAccountService _bankAccountService;
     private readonly IDocumentService _documentService;
+    private readonly ApplicationDbContext _dbContext;
 
     public ProfileSettingsController(
         UserManager<ApplicationUser> userManager,
@@ -33,7 +37,8 @@ public sealed class ProfileSettingsController : Controller
         IWebHostEnvironment environment,
         IAuditService auditService,
         IUserBankAccountService bankAccountService,
-        IDocumentService documentService)
+        IDocumentService documentService,
+        ApplicationDbContext dbContext)
     {
         _userManager = userManager;
         _signInManager = signInManager;
@@ -41,6 +46,7 @@ public sealed class ProfileSettingsController : Controller
         _auditService = auditService;
         _bankAccountService = bankAccountService;
         _documentService = documentService;
+        _dbContext = dbContext;
     }
 
     [HttpPost]
@@ -134,6 +140,27 @@ public sealed class ProfileSettingsController : Controller
         if (user is null)
         {
             return Challenge();
+        }
+
+        var hasApprovedRefund = await _dbContext.Payments
+            .AsNoTracking()
+            .AnyAsync(
+                payment =>
+                    payment.Booking.CustomerId == user.Id &&
+                    payment.Type == PaymentType.Refund &&
+                    payment.Status == PaymentStatus.RefundApproved,
+                cancellationToken);
+
+        if (hasApprovedRefund)
+        {
+            TempData["ErrorMessage"] =
+                "Bạn đang có khoản hoàn tiền đã được Admin duyệt và chờ nhân viên chuyển tiền. " +
+                "Không thể đổi tài khoản nhận hoàn cho đến khi lần hoàn này hoàn tất.";
+            return RedirectToProfile(
+                "banking",
+                returnVehicleId,
+                pickupDate,
+                returnDate);
         }
 
         if (!ModelState.IsValid)
