@@ -85,7 +85,10 @@ public sealed class StaffLookupsController : Controller
         }
 
         var vehicles = await _vehicleService.SearchAvailableAsync(
-            new VehicleSearchRequest(pickupDate, returnDate),
+            new VehicleSearchRequest(
+                pickupDate,
+                returnDate,
+                PickupMethod: VehiclePickupMethod.StorePickup),
             cancellationToken);
 
         var keyword = term?.Trim();
