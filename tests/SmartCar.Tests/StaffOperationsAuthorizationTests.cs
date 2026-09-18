@@ -19,6 +19,7 @@ public sealed class StaffOperationsAuthorizationTests
     [InlineData(typeof(StaffCounterIdentityEvidenceController))]
     [InlineData(typeof(StaffPaymentsController))]
     [InlineData(typeof(StaffExtensionOperationsController))]
+    [InlineData(typeof(StaffExtensionRequestsController))]
     public void OperationalControllers_AreExplicitlyStaffOnly(Type controllerType)
     {
         var authorizeAttributes = controllerType
