@@ -2,6 +2,7 @@
 @using Microsoft.EntityFrameworkCore
 @using SmartCar.Domain.Enums
 @using SmartCar.Domain.Constants
+@using SmartCar.Application.Features.Operations
 @inject SmartCar.Infrastructure.Persistence.ApplicationDbContext Db
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
@@ -300,7 +301,8 @@
             <details>
                 <summary class="text-danger fw-semibold">Khách yêu cầu hủy trước khi lập biên bản giao</summary>
                 <div class="alert alert-light border mt-3 small">
-                    Hệ thống tính mức hoàn theo thời điểm hủy. Khoản hoàn phát sinh chỉ chuyển sang <strong>chờ Admin duyệt</strong>; Staff không thể tự duyệt và cũng chưa được coi là đã chuyển tiền.
+                    <div>@CancellationRefundPolicy.GetVietnamesePolicySummary()</div>
+                    <div class="mt-1">Nếu xe chưa bàn giao, phần cọc còn lại được hoàn 100%. Khoản hoàn phát sinh chỉ chuyển sang <strong>chờ Admin duyệt</strong>; Staff không thể tự duyệt và cũng chưa được coi là đã chuyển tiền.</div>
                 </div>
                 <form asp-controller="StaffBookingOperations" asp-action="Cancel" method="post" class="row g-2" data-confirm="Xác nhận khách yêu cầu hủy? Hệ thống sẽ khóa đơn, giải phóng lịch và tính khoản hoàn theo chính sách hiện tại.">
                     <input type="hidden" name="BookingId" value="@b.BookingId" />
