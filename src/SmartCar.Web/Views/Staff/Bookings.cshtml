@@ -21,7 +21,7 @@
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
     <div>
         <h1 class="h3 mb-1">Đơn thuộc nghiệp vụ nhân viên</h1>
-        <p class="text-muted mb-0">Kiểm tra đơn mới, xử lý thanh toán tại quầy, giao/nhận xe và hoàn tiền đã được duyệt.</p>
+        <p class="text-muted mb-0">Mỗi đơn có một màn xử lý duy nhất để tránh thao tác trùng hoặc gửi duyệt hai lần.</p>
     </div>
     <a class="btn btn-primary" asp-controller="Staff" asp-action="CounterRental">+ Thuê tại quầy</a>
 </div>
@@ -92,14 +92,7 @@
                         <td><strong>@item.GrandTotalAmount.ToString("N0") đ</strong><div class="small text-muted">Thuê/phí: @item.TotalAmount.ToString("N0") đ</div>@if (item.DepositAmount > 0){<div class="small text-muted">Cọc: @item.DepositAmount.ToString("N0") đ</div>}</td>
                         <td><span class="badge @badgeClass">@item.Status.ToVietnamese()</span></td>
                         <td class="text-end">
-                            @if (item.Status == BookingStatus.PendingConfirmation)
-                            {
-                                <form asp-controller="StaffBookingOperations" asp-action="ReviewForApproval" method="post" class="d-inline" data-confirm="Kiểm tra tự động lại KYC, trạng thái xe và lịch thuê rồi gửi quản trị viên duyệt?">
-                                    <input type="hidden" name="bookingId" value="@item.BookingId" />
-                                    <button class="btn btn-sm btn-success">Kiểm tra & gửi duyệt</button>
-                                </form>
-                            }
-                            <a class="btn btn-sm btn-outline-primary" asp-controller="Staff" asp-action="Details" asp-route-id="@item.BookingId">Mở đơn</a>
+                            <a class="btn btn-sm btn-primary" asp-controller="Staff" asp-action="Details" asp-route-id="@item.BookingId">Mở xử lý</a>
                         </td>
                     </tr>
                 }

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -171,13 +172,14 @@ internal sealed class BookingService : IBookingService
             request.VehicleId,
             request.PickupDate,
             request.ReturnDate,
+            request.PickupMethod,
             null,
             cancellationToken);
 
         if (hasConflict)
         {
             return BookingMutationResult.Failure(
-                "Xe vừa được khách khác đặt trong khoảng thời gian này.");
+                "Xe không còn đủ khoảng trống vận hành giữa các lượt thuê (kiểm tra/vệ sinh và thời gian giao xe nếu có). Vui lòng chọn xe hoặc thời gian khác.");
         }
 
         var numberOfDays = Math.Max(
@@ -297,12 +299,13 @@ internal sealed class BookingService : IBookingService
             booking.VehicleId,
             booking.PickupDate,
             booking.ReturnDate,
+            booking.PickupMethod,
             booking.BookingId,
             cancellationToken);
 
         if (hasConflict)
         {
-            return OperationResult.Failure("Xe đã phát sinh lịch thuê khác bị trùng thời gian.");
+            return OperationResult.Failure("Xe đã phát sinh lịch thuê khác không đủ khoảng đệm vận hành trước/sau chuyến này.");
         }
 
         booking.Status = BookingStatus.PendingPayment;
@@ -429,11 +432,22 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure("Không tìm thấy đơn thuê.");
         }
 
-        var rentalPaid = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Rental &&
-            payment.Status == PaymentStatus.Paid);
+        var grossRentalPaid = booking.Payments
+            .Where(payment =>
+                payment.Status == PaymentStatus.Paid &&
+                payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+            .Sum(payment => payment.Amount);
+        var rentalRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.VehicleSwapRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var effectiveRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossRentalPaid,
+            rentalRefundPlanned);
 
-        var paidDeposit = booking.Payments
+        var grossDepositPaid = booking.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Deposit &&
                 payment.Status == PaymentStatus.Paid)
@@ -444,16 +458,24 @@ internal sealed class BookingService : IBookingService
                 payment.Method == PaymentMethods.DepositRefund &&
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
-        var depositSatisfied = booking.DepositAmount <= 0 ||
-            Math.Max(0m, paidDeposit - depositRefundPlanned) >= booking.DepositAmount;
+        var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossDepositPaid,
+            depositRefundPlanned);
+        var requiredRentalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - booking.AdditionalAmount);
+        var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
+            requiredRentalAmount,
+            effectiveRentalPaid,
+            booking.DepositAmount,
+            effectiveDepositPaid);
 
         var hasOpenSwapPayment = booking.Payments.Any(payment =>
             payment.Type == PaymentType.VehicleSwapAdjustment &&
             payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
 
         if (booking.Status != BookingStatus.Paid ||
-            !rentalPaid ||
-            !depositSatisfied ||
+            !upfrontSatisfied ||
             hasOpenSwapPayment)
         {
             return OperationResult.Failure(
@@ -718,16 +740,34 @@ internal sealed class BookingService : IBookingService
         int vehicleId,
         DateTime pickupDate,
         DateTime returnDate,
+        VehiclePickupMethod pickupMethod,
         int? excludedBookingId,
-        CancellationToken cancellationToken) =>
-        _dbContext.Bookings.AnyAsync(
+        CancellationToken cancellationToken)
+    {
+        var preparationBeforeRequested = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(pickupMethod));
+        var storePreparation = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        var deliveryPreparation = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+
+        var requestedPickupBoundary = pickupDate - preparationBeforeRequested;
+        var requestedReturnWithStorePreparation = returnDate + storePreparation;
+        var requestedReturnWithDeliveryPreparation = returnDate + deliveryPreparation;
+
+        return _dbContext.Bookings.AnyAsync(
             booking =>
                 booking.VehicleId == vehicleId &&
                 (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
                 BlockingStatuses.Contains(booking.Status) &&
-                pickupDate < booking.ReturnDate &&
-                returnDate > booking.PickupDate,
+                requestedPickupBoundary < booking.ReturnDate &&
+                (
+                    booking.PickupMethod == VehiclePickupMethod.Delivery
+                        ? requestedReturnWithDeliveryPreparation > booking.PickupDate
+                        : requestedReturnWithStorePreparation > booking.PickupDate
+                ),
             cancellationToken);
+    }
 
     private Task<bool> HasValidVehicleDocumentAsync(
         int vehicleId,

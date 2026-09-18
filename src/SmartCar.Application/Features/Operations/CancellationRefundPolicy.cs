@@ -55,6 +55,11 @@ public static class CancellationRefundPolicy
         return 0m;
     }
 
+    public static string GetVietnamesePolicySummary() =>
+        "Hoàn tiền thuê theo thời điểm hủy: trong 60 phút sau thanh toán và còn ít nhất 24 giờ trước giờ nhận: 100%; " +
+        "từ 7 ngày trở lên: 90%; từ 48 giờ đến dưới 7 ngày: 70%; từ 24 đến dưới 48 giờ: 50%; " +
+        "từ 6 đến dưới 24 giờ: 20%; dưới 6 giờ: 0%.";
+
     public static string GetVietnameseDescription(decimal refundRate) => refundRate switch
     {
         1.00m => "Hủy trong 60 phút sau khi thanh toán và còn ít nhất 24 giờ trước giờ nhận xe: hoàn 100% tiền thuê.",

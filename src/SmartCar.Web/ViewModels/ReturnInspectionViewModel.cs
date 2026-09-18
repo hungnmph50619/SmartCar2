@@ -21,12 +21,17 @@ public sealed class ReturnInspectionViewModel
 
     public bool AdditionalChargePaid { get; init; }
 
+    public bool AdditionalChargeAwaitingConfirmation { get; init; }
+
     public PaymentStatus? RefundStatus { get; init; }
 
     public decimal RefundAmount { get; init; }
 
     public IReadOnlyList<ChargeSummaryDto> AdditionalCharges { get; init; }
         = Array.Empty<ChargeSummaryDto>();
+
+    public IReadOnlyList<OverdueImpactViewModel> OverdueImpacts { get; init; }
+        = Array.Empty<OverdueImpactViewModel>();
 
 
     // ==============================
@@ -127,3 +132,7 @@ public sealed class InspectionSnapshotViewModel
             : null;
     }
 }
+
+public sealed record OverdueImpactViewModel(
+    int BookingId,
+    decimal CompensationAmount);

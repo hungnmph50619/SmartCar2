@@ -57,14 +57,14 @@
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
     <div>
         <h1 class="h3 mb-1">Quản lý tài chính</h1>
-        <p class="text-muted mb-0">Thu tiền, đối soát và hoàn tiền theo từng đơn.</p>
+        <p class="text-muted mb-0">Admin theo dõi tài chính và duyệt hoàn tiền; đối soát tiền khách chuyển thuộc Staff.</p>
     </div>
 </div>
 
 <div class="nav nav-pills gap-2 mb-4">
     @if (currentSection == "review")
     {
-        <a class="nav-link active" asp-action="Index" asp-route-status="@PaymentStatus.AwaitingConfirmation">Cần đối soát</a>
+        <a class="nav-link active" asp-action="Index" asp-route-status="@PaymentStatus.AwaitingConfirmation">Chờ Staff đối soát</a>
     }
     <a class="nav-link @(currentSection == "collection" ? "active" : "")" asp-action="Index" asp-route-section="collection">Tiền thu</a>
     <a class="nav-link @(currentSection == "adjustment" ? "active" : "")" asp-action="Index" asp-route-section="adjustment">Phát sinh</a>
@@ -207,7 +207,9 @@ else if (currentSection == "refund")
                                 {
                                     @if (bank is null)
                                     {
-                                        <div class="text-warning small mb-2">Khách chưa có tài khoản nhận hoàn mặc định.</div>
+                                        <div class="text-warning small mb-2">
+                                            Khách chưa có tài khoản nhận hoàn mặc định. Không thể duyệt hoàn.
+                                        </div>
                                     }
                                     else
                                     {
@@ -215,11 +217,11 @@ else if (currentSection == "refund")
                                             <strong>@bank.BankName</strong> · @bank.MaskedAccountNumber<br />
                                             @bank.AccountHolderName
                                         </div>
+                                        <form asp-action="ApproveRefundBatch" method="post" data-confirm="Xác nhận duyệt toàn bộ khoản hoàn của đơn này cho nhân viên thực hiện? Sau khi duyệt, khách sẽ tạm thời không thể đổi tài khoản nhận hoàn cho đến khi chuyển tiền xong.">
+                                            <input type="hidden" name="bookingId" value="@first.BookingId" />
+                                            <button class="btn btn-sm btn-warning" type="submit">Duyệt hoàn @shownTotal.ToString("N0") đ</button>
+                                        </form>
                                     }
-                                    <form asp-action="ApproveRefundBatch" method="post" data-confirm="Xác nhận duyệt toàn bộ khoản hoàn của đơn này cho nhân viên thực hiện?">
-                                        <input type="hidden" name="bookingId" value="@first.BookingId" />
-                                        <button class="btn btn-sm btn-warning" type="submit">Duyệt hoàn @shownTotal.ToString("N0") đ</button>
-                                    </form>
                                 }
                                 else if (rowStatus == PaymentStatus.RefundApproved)
                                 {
@@ -283,22 +285,10 @@ else
                             <td>
                                 @if (payment.Status == PaymentStatus.AwaitingConfirmation)
                                 {
-                                    <div class="d-flex gap-2 flex-wrap align-items-start">
-                                        <form asp-action="ConfirmQr" method="post" data-confirm="Bạn đã kiểm tra và nhận đúng số tiền?">
-                                            <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                            <input type="hidden" name="section" value="@currentSection" />
-                                            <button class="btn btn-sm btn-success" type="submit">Xác nhận đã nhận</button>
-                                        </form>
-                                        <details style="min-width:150px">
-                                            <summary class="btn btn-sm btn-outline-danger">Yêu cầu gửi lại</summary>
-                                            <form asp-action="RejectQr" method="post" class="border rounded p-2 mt-2 bg-light" style="min-width:260px">
-                                                <input type="hidden" name="paymentId" value="@payment.PaymentId" />
-                                                <input type="hidden" name="section" value="@currentSection" />
-                                                <textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Lý do cho khách"></textarea>
-                                                <button class="btn btn-sm btn-danger w-100" type="submit">Gửi lý do</button>
-                                            </form>
-                                        </details>
-                                        <a class="btn btn-sm btn-link text-decoration-none" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">Xem đơn</a>
+                                    <div class="small">
+                                        <span class="text-warning fw-semibold">Chờ Staff đối soát giao dịch.</span>
+                                        <div class="text-muted">Admin theo dõi, không xác nhận tiền thay cho nhân viên vận hành.</div>
+                                        <a class="btn btn-sm btn-link text-decoration-none px-0" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">Xem đơn</a>
                                     </div>
                                 }
                                 else if (payment.Status == PaymentStatus.Pending)

@@ -1,0 +1,142 @@
+@model IReadOnlyList<SmartCar.Application.Features.Payments.AdminPaymentListItemDto>
+@using SmartCar.Domain.Enums
+
+@{
+    ViewData["Title"] = "Đối soát chuyển khoản";
+    var actionablePayments = Model
+        .Where(payment => payment.Type != PaymentType.Deposit)
+        .ToList();
+    var bundledDepositByBooking =
+        ViewBag.BundledDepositByBooking as IReadOnlyDictionary<int, decimal>
+        ?? new Dictionary<int, decimal>();
+
+    string TypeText(PaymentType type) => type switch
+    {
+        PaymentType.Rental => "Tiền thuê / cọc",
+        PaymentType.Extension => "Gia hạn",
+        PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
+        PaymentType.AdditionalCharge => "Phụ phí",
+        PaymentType.TrafficFine => "Phạt / vi phạm",
+        _ => type.ToString()
+    };
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <h1 class="h3 mb-1">Đối soát chuyển khoản</h1>
+        <p class="text-muted mb-0">
+            Staff kiểm tra tiền thực nhận rồi xác nhận hoặc yêu cầu khách gửi lại.
+            Admin chỉ theo dõi và duyệt các yêu cầu cần phê duyệt.
+        </p>
+    </div>
+    <span class="badge bg-warning text-dark fs-6">@actionablePayments.Count giao dịch chờ</span>
+</div>
+
+@if (actionablePayments.Count == 0)
+{
+    <div class="alert alert-success">
+        Không có giao dịch QR/chuyển khoản nào đang chờ đối soát.
+    </div>
+}
+else
+{
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Đơn</th>
+                        <th>Khách / xe</th>
+                        <th>Khoản</th>
+                        <th class="text-end">Số tiền</th>
+                        <th style="min-width:320px">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var payment in actionablePayments)
+                {
+                    var bundledDeposit =
+                        payment.Type == PaymentType.Rental &&
+                        bundledDepositByBooking.TryGetValue(
+                            payment.BookingId,
+                            out var depositAmount)
+                            ? depositAmount
+                            : 0m;
+                    var displayedAmount = payment.Amount + bundledDeposit;
+                    <tr>
+                        <td>
+                            <a class="fw-semibold text-decoration-none"
+                               asp-controller="Staff"
+                               asp-action="Details"
+                               asp-route-id="@payment.BookingId">
+                                #@payment.BookingId
+                            </a>
+                        </td>
+                        <td>
+                            <strong>@payment.CustomerName</strong><br />
+                            <small class="text-muted">@payment.VehicleName · @payment.LicensePlate</small>
+                        </td>
+                        <td>
+                            @TypeText(payment.Type)
+                            @if (bundledDeposit > 0)
+                            {
+                                <div class="small text-muted">
+                                    Gồm @payment.Amount.ToString("N0") đ tiền thuê/phí + @bundledDeposit.ToString("N0") đ cọc.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="small text-muted">Đang chờ xác nhận tiền thực nhận.</div>
+                            }
+                        </td>
+                        <td class="text-end fw-bold">@displayedAmount.ToString("N0") đ</td>
+                        <td>
+                            <div class="d-flex gap-2 flex-wrap align-items-start">
+                                <form asp-controller="StaffPayments"
+                                      asp-action="ConfirmQr"
+                                      method="post"
+                                      data-loading-form
+                                      data-confirm="Xác nhận bạn đã kiểm tra tài khoản và SmartCar thực nhận đúng khoản tiền này?">
+                                    <input type="hidden" name="paymentId" value="@payment.PaymentId" />
+                                    <button class="btn btn-sm btn-success" type="submit">
+                                        Xác nhận đã nhận tiền
+                                    </button>
+                                </form>
+
+                                <details style="min-width:160px">
+                                    <summary class="btn btn-sm btn-outline-danger">
+                                        Không khớp / gửi lại
+                                    </summary>
+                                    <form asp-controller="StaffPayments"
+                                          asp-action="RejectQr"
+                                          method="post"
+                                          class="border rounded p-2 mt-2 bg-light"
+                                          style="min-width:280px">
+                                        <input type="hidden" name="paymentId" value="@payment.PaymentId" />
+                                        <textarea name="reason"
+                                                  class="form-control form-control-sm mb-2"
+                                                  maxlength="500"
+                                                  rows="2"
+                                                  required
+                                                  placeholder="VD: chưa thấy tiền vào tài khoản, sai số tiền..."></textarea>
+                                        <button class="btn btn-sm btn-danger w-100" type="submit">
+                                            Gửi lý do cho khách
+                                        </button>
+                                    </form>
+                                </details>
+
+                                <a class="btn btn-sm btn-outline-secondary"
+                                   asp-controller="Staff"
+                                   asp-action="Details"
+                                   asp-route-id="@payment.BookingId">
+                                    Xem đơn
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

@@ -1,0 +1,119 @@
+@model SmartCar.Web.ViewModels.AdminHoldRestrictionListViewModel
+@using SmartCar.Application.Features.Operations
+@{
+    ViewData["Title"] = "Hạn chế giữ chỗ";
+    var now = DateTime.UtcNow;
+}
+
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
+    <div>
+        <div class="text-uppercase small text-primary fw-semibold">Chống giữ xe lặp</div>
+        <h1 class="h3 mb-1">Hạn chế giữ chỗ trong 24 giờ</h1>
+        <p class="text-muted mb-0">Mỗi dòng dựa trên BookingHoldEvent thật. Admin chỉ gỡ khi đã kiểm tra trường hợp ngoại lệ và phải nhập lý do để audit.</p>
+    </div>
+    <a class="btn btn-outline-secondary" asp-action="Index">Quay lại quản lý đơn</a>
+</div>
+
+<div class="alert alert-light border shadow-sm">
+    <strong>Chính sách đang áp dụng:</strong>
+    lần timeout đầu cùng xe → @BookingHoldAbusePolicy.FirstVehicleCooldownMinutes phút;
+    lần thứ hai cùng xe → @BookingHoldAbusePolicy.RepeatedVehicleCooldownMinutes phút;
+    từ @BookingHoldAbusePolicy.AccountBlockAfterTimeouts lần timeout/24 giờ → khóa tạo giữ chỗ mới @BookingHoldAbusePolicy.AccountBlockHours giờ.
+    Các event đã được Admin waive không còn tính vào policy.
+</div>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="alert alert-success">Không có sự kiện giữ chỗ hết hạn chưa được gỡ trong 24 giờ gần nhất.</div>
+}
+else
+{
+    <div class="d-grid gap-3">
+        @foreach (var item in Model.Items)
+        {
+            var accountBlocked = item.AccountBlockedUntil.HasValue && item.AccountBlockedUntil.Value > now;
+            <article class="card shadow-sm border-0 rounded-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                        <div>
+                            <h2 class="h5 mb-1">@item.CustomerName</h2>
+                            <div class="small text-muted">@item.CustomerEmail · @(item.CustomerPhone ?? "Chưa có SĐT")</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge @(accountBlocked ? "text-bg-danger" : "text-bg-warning")">
+                                @item.TimeoutCount24Hours timeout / 24h
+                            </span>
+                            @if (accountBlocked)
+                            {
+                                <div class="small text-danger mt-1">Đang khóa tạo booking mới</div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">Timeout gần nhất</div>
+                                <strong>@item.LatestTimeoutAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">Khóa tài khoản đến</div>
+                                <strong>@(accountBlocked ? item.AccountBlockedUntil!.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "Không khóa toàn tài khoản")</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">Số xe có lịch sử timeout</div>
+                                <strong>@item.VehicleCooldowns.Count</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr><th>Xe</th><th>Số lần</th><th>Cooldown</th></tr></thead>
+                            <tbody>
+                            @foreach (var vehicle in item.VehicleCooldowns)
+                            {
+                                var cooling = vehicle.CooldownUntil.HasValue && vehicle.CooldownUntil.Value > now;
+                                <tr>
+                                    <td><strong>@vehicle.VehicleName</strong><div class="small text-muted">@vehicle.LicensePlate</div></td>
+                                    <td>@vehicle.TimeoutCount24Hours</td>
+                                    <td>
+                                        @if (cooling)
+                                        {
+                                            <span class="text-danger">đến @vehicle.CooldownUntil!.Value.ToLocalTime().ToString("dd/MM HH:mm")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Đã hết cooldown hiện tại</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <details>
+                        <summary class="text-primary fw-semibold">Gỡ hạn chế / bỏ tính lịch sử timeout hiện tại</summary>
+                        <div class="alert alert-warning small mt-3 mb-2">
+                            Thao tác này waive toàn bộ BookingHoldEvent chưa gỡ của khách trong 24 giờ gần nhất. Chỉ dùng khi Admin đã xác minh đây là ngoại lệ hợp lý; lịch sử vẫn còn trong DB và AuditLog.
+                        </div>
+                        <form asp-action="WaiveHoldRestriction" method="post" class="row g-2" data-confirm="Gỡ hạn chế giữ chỗ hiện tại cho khách này? Hành động sẽ được ghi audit.">
+                            <input type="hidden" name="customerId" value="@item.CustomerId" />
+                            <div class="col-lg-9">
+                                <input type="text" name="reason" class="form-control" minlength="10" maxlength="500" required placeholder="Lý do gỡ hạn chế (tối thiểu 10 ký tự)" />
+                            </div>
+                            <div class="col-lg-3 d-grid">
+                                <button class="btn btn-outline-danger" type="submit">Gỡ hạn chế</button>
+                            </div>
+                        </form>
+                    </details>
+                </div>
+            </article>
+        }
+    </div>
+}

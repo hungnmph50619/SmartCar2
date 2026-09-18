@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Payments;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -76,6 +77,7 @@ internal sealed class PaymentService : IPaymentService
         int bookingId,
         string customerId,
         PaymentType paymentType,
+        string actorId,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(customerId))
@@ -121,9 +123,44 @@ internal sealed class PaymentService : IPaymentService
                 "Khoản này đã báo chuyển và đang chờ SmartCar xác nhận.");
         }
 
+        if (paymentType == PaymentType.Rental &&
+            booking.Payments.Any(item =>
+                item.Type == PaymentType.Deposit &&
+                item.Status == PaymentStatus.AwaitingConfirmation))
+        {
+            return OperationResult.Failure(
+                "Tiền cọc của đơn đang chờ SmartCar đối soát. Không tạo thêm yêu cầu chuyển khoản để tránh thu trùng.");
+        }
+
         var payment = booking.Payments.FirstOrDefault(item =>
             item.Type == paymentType &&
             item.Status == PaymentStatus.Pending);
+
+        if (payment is null && paymentType == PaymentType.Rental)
+        {
+            var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
+            var rentalPaidBefore = booking.Payments
+                .Where(item =>
+                    item.Status == PaymentStatus.Paid &&
+                    item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                .Sum(item => item.Amount);
+            var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
+                requiredRentalAmount,
+                rentalPaidBefore);
+
+            if (outstandingRental > 0m)
+            {
+                payment = new Payment
+                {
+                    BookingId = booking.BookingId,
+                    Type = PaymentType.Rental,
+                    Amount = outstandingRental,
+                    Method = PaymentMethods.NotSelected,
+                    Status = PaymentStatus.Pending
+                };
+                booking.Payments.Add(payment);
+            }
+        }
 
         if (payment is null &&
             paymentType == PaymentType.AdditionalCharge &&
@@ -151,11 +188,6 @@ internal sealed class PaymentService : IPaymentService
                 : OperationResult.Failure("Không tìm thấy khoản thanh toán phù hợp.");
         }
 
-        if (payment.Amount <= 0)
-        {
-            return OperationResult.Failure("Số tiền thanh toán phải lớn hơn 0.");
-        }
-
         if (paymentType == PaymentType.TrafficFine)
         {
             if (payment.VehicleIncidentId is null ||
@@ -169,25 +201,46 @@ internal sealed class PaymentService : IPaymentService
             }
         }
 
-        if (paymentType == PaymentType.Rental &&
-            booking.PickupMethod == VehiclePickupMethod.Delivery)
+        if (paymentType == PaymentType.Rental)
         {
+            var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
             var storedDeliveryFee = Math.Max(
                 0m,
-                booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
+                requiredRentalAmount - booking.RentalAmount);
+            var rentalPaidBefore = booking.Payments
+                .Where(item =>
+                    item.Status == PaymentStatus.Paid &&
+                    item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                .Sum(item => item.Amount);
+            var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
+                requiredRentalAmount,
+                rentalPaidBefore);
 
-            if (storedDeliveryFee <= 0m &&
-                booking.DeliveryLatitude.HasValue &&
-                booking.DeliveryLongitude.HasValue)
+            if (outstandingRental <= 0m)
             {
-                storedDeliveryFee = RentalPolicy.CalculateDeliveryFee(
-                    booking.PickupMethod,
-                    booking.DeliveryLatitude,
-                    booking.DeliveryLongitude);
+                return OperationResult.Failure(
+                    "Tiền thuê/phí giao của đơn đã được thanh toán đủ.");
             }
 
-            payment.Amount = booking.RentalAmount + storedDeliveryFee;
-            booking.TotalAmount = booking.RentalAmount + storedDeliveryFee + booking.AdditionalAmount;
+            payment.Amount = outstandingRental;
+            booking.TotalAmount =
+                requiredRentalAmount + booking.AdditionalAmount;
+
+            foreach (var staleRental in booking.Payments.Where(item =>
+                         item != payment &&
+                         item.Type == PaymentType.Rental &&
+                         item.Status == PaymentStatus.Pending))
+            {
+                staleRental.Status = PaymentStatus.Failed;
+                staleRental.Method = PaymentMethods.NotSelected;
+                staleRental.PaidAt = null;
+                staleRental.TransactionCode = null;
+            }
+        }
+
+        if (payment.Amount <= 0)
+        {
+            return OperationResult.Failure("Số tiền thanh toán phải lớn hơn 0.");
         }
 
         payment.Method = PaymentMethods.BankQr;
@@ -199,40 +252,68 @@ internal sealed class PaymentService : IPaymentService
 
         if (paymentType == PaymentType.Rental && booking.DepositAmount > 0)
         {
-            bundledDeposit = booking.Payments
-                .FirstOrDefault(item =>
+            var depositPaid = booking.Payments
+                .Where(item =>
                     item.Type == PaymentType.Deposit &&
-                    item.Status != PaymentStatus.Paid);
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
 
-            if (bundledDeposit is null &&
-                !booking.Payments.Any(item =>
-                    item.Type == PaymentType.Deposit &&
-                    item.Status == PaymentStatus.Paid))
+            var outstandingDeposit = BookingWorkflowRules.CalculateOutstandingDeposit(
+                booking.DepositAmount,
+                depositPaid);
+
+            if (outstandingDeposit > 0m)
             {
-                bundledDeposit = new Payment
+                bundledDeposit = booking.Payments
+                    .FirstOrDefault(item =>
+                        item.Type == PaymentType.Deposit &&
+                        item.Status == PaymentStatus.Pending);
+
+                if (bundledDeposit is null)
                 {
-                    BookingId = booking.BookingId,
-                    Type = PaymentType.Deposit,
-                    Amount = booking.DepositAmount,
-                    Method = PaymentMethods.BankQr,
-                    Status = PaymentStatus.AwaitingConfirmation
-                };
-                booking.Payments.Add(bundledDeposit);
+                    bundledDeposit = new Payment
+                    {
+                        BookingId = booking.BookingId,
+                        Type = PaymentType.Deposit,
+                        Amount = outstandingDeposit,
+                        Method = PaymentMethods.BankQr,
+                        Status = PaymentStatus.AwaitingConfirmation
+                    };
+                    booking.Payments.Add(bundledDeposit);
+                }
+                else
+                {
+                    bundledDeposit.Amount = outstandingDeposit;
+                    bundledDeposit.Method = PaymentMethods.BankQr;
+                    bundledDeposit.Status = PaymentStatus.AwaitingConfirmation;
+                    bundledDeposit.PaidAt = null;
+                    bundledDeposit.TransactionCode = null;
+                }
             }
-            else if (bundledDeposit is not null)
+
+            foreach (var staleDeposit in booking.Payments.Where(item =>
+                         item != bundledDeposit &&
+                         item.Type == PaymentType.Deposit &&
+                         item.Status == PaymentStatus.Pending))
             {
-                bundledDeposit.Amount = booking.DepositAmount;
-                bundledDeposit.Method = PaymentMethods.BankQr;
-                bundledDeposit.Status = PaymentStatus.AwaitingConfirmation;
-                bundledDeposit.PaidAt = null;
-                bundledDeposit.TransactionCode = null;
+                staleDeposit.Status = PaymentStatus.Failed;
+                staleDeposit.Method = PaymentMethods.NotSelected;
+                staleDeposit.PaidAt = null;
+                staleDeposit.TransactionCode = null;
             }
         }
 
         var submittedAmount = payment.Amount + (bundledDeposit?.Amount ?? 0m);
 
-        await NotifyAdminsAsync(
-            "Có giao dịch chờ xác nhận",
+        if (booking.Status == BookingStatus.PendingPayment &&
+            paymentType is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+        {
+            booking.ReservationExpiresAt = DateTime.UtcNow
+                .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
+        }
+
+        await NotifyStaffAsync(
+            "Có giao dịch chờ đối soát",
             paymentType == PaymentType.Rental
                 ? $"Đơn #{booking.BookingId} báo đã chuyển {submittedAmount:N0} đồng gồm tiền thuê/phí giao và cọc."
                 : $"Đơn #{booking.BookingId} báo đã chuyển {submittedAmount:N0} đồng cho {GetPaymentLabel(payment.Type)}.",
@@ -242,11 +323,11 @@ internal sealed class PaymentService : IPaymentService
         await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
-            customerId,
+            actorId,
             "SubmitQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
-            $"Khách báo đã chuyển {submittedAmount:N0} đồng cho {GetPaymentLabel(paymentType)} của đơn #{booking.BookingId}.",
+            $"Ghi nhận đã báo chuyển {submittedAmount:N0} đồng cho {GetPaymentLabel(paymentType)} của đơn #{booking.BookingId}.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -254,7 +335,7 @@ internal sealed class PaymentService : IPaymentService
 
     public async Task<OperationResult> ConfirmQrPaymentAsync(
         int paymentId,
-        string adminId,
+        string actorId,
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -288,8 +369,39 @@ internal sealed class PaymentService : IPaymentService
         var booking = payment.Booking;
         var originalType = payment.Type;
         var confirmedAmount = payment.Amount;
+        var lateReconciliation =
+            BookingWorkflowRules.CanReconcileTransferAfterReservationExpiry(
+                booking.Status,
+                originalType);
+        decimal lateRentalRefund = 0m;
+        decimal lateDepositRefund = 0m;
 
-        var stateError = ValidateAdminConfirmationState(booking, originalType);
+        if (originalType == PaymentType.Rental)
+        {
+            var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
+            var rentalPaidBefore = booking.Payments
+                .Where(item =>
+                    item.Status == PaymentStatus.Paid &&
+                    item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                .Sum(item => item.Amount);
+            var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
+                requiredRentalAmount,
+                rentalPaidBefore);
+
+            if (outstandingRental <= 0m)
+            {
+                return OperationResult.Failure(
+                    "Tiền thuê/phí giao đã đủ; không xác nhận thêm giao dịch để tránh thu trùng.");
+            }
+
+            if (confirmedAmount != outstandingRental)
+            {
+                return OperationResult.Failure(
+                    $"Giao dịch tiền thuê/phí giao ({confirmedAmount:N0} đồng) không khớp số còn thiếu ({outstandingRental:N0} đồng). Vui lòng xử lý lại trước khi xác nhận.");
+            }
+        }
+
+        var stateError = ValidateReconciliationState(booking, originalType);
         if (stateError is not null)
         {
             return OperationResult.Failure(stateError);
@@ -317,22 +429,79 @@ internal sealed class PaymentService : IPaymentService
 
         if (originalType == PaymentType.Rental)
         {
+            var depositPaidBefore = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+
+            var outstandingDeposit = BookingWorkflowRules.CalculateOutstandingDeposit(
+                booking.DepositAmount,
+                depositPaidBefore);
+
             bundledDeposit = booking.Payments
                 .FirstOrDefault(item =>
                     item.Type == PaymentType.Deposit &&
                     item.Status == PaymentStatus.AwaitingConfirmation);
 
-            if (booking.DepositAmount > 0 && bundledDeposit is not null)
+            if (outstandingDeposit > 0m)
             {
-                bundledDeposit.Amount = booking.DepositAmount;
+                if (bundledDeposit is null)
+                {
+                    return OperationResult.Failure(
+                        $"Đơn còn thiếu {outstandingDeposit:N0} đồng tiền cọc nhưng không có giao dịch cọc đang chờ đối soát. Không xác nhận tiền thuê để tránh chuyển đơn sang Đã thanh toán sai.");
+                }
+
+                if (bundledDeposit.Amount != outstandingDeposit)
+                {
+                    return OperationResult.Failure(
+                        $"Khoản cọc chờ đối soát ({bundledDeposit.Amount:N0} đồng) không khớp phần cọc còn thiếu ({outstandingDeposit:N0} đồng). Vui lòng xử lý lại giao dịch trước khi xác nhận.");
+                }
+
                 bundledDeposit.Method = PaymentMethods.BankQr;
                 bundledDeposit.Status = PaymentStatus.Paid;
                 bundledDeposit.PaidAt = paidAt;
                 bundledDeposit.TransactionCode = transactionCode;
             }
+            else if (bundledDeposit is not null)
+            {
+                return OperationResult.Failure(
+                    "Tiền cọc của đơn đã đủ nhưng vẫn còn một giao dịch cọc chờ xác nhận. Vui lòng xử lý giao dịch bất thường này trước để tránh thu trùng.");
+            }
 
-            booking.Status = BookingStatus.Paid;
-            booking.ReservationExpiresAt = null;
+            var rentalPaid = booking.Payments
+                .Where(item =>
+                    item.Status == PaymentStatus.Paid &&
+                    item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                .Sum(item => item.Amount);
+            var depositPaidAfter = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Deposit &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+
+            var requiredRentalAmountAfter = GetRequiredRentalPaymentAmount(booking);
+
+            if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
+                    requiredRentalAmountAfter,
+                    rentalPaid,
+                    booking.DepositAmount,
+                    depositPaidAfter))
+            {
+                return OperationResult.Failure(
+                    "Chưa đủ tiền thuê hoặc tiền cọc. Không chuyển đơn sang Đã thanh toán.");
+            }
+
+            if (lateReconciliation)
+            {
+                lateRentalRefund = payment.Amount;
+                lateDepositRefund = bundledDeposit?.Amount ?? 0m;
+            }
+            else
+            {
+                booking.Status = BookingStatus.Paid;
+                booking.ReservationExpiresAt = null;
+            }
         }
         else if (originalType == PaymentType.Extension)
         {
@@ -403,13 +572,76 @@ internal sealed class PaymentService : IPaymentService
                 payment.Type = PaymentType.Deposit;
                 payment.Amount = depositTopUp;
             }
+
+            if (lateReconciliation)
+            {
+                lateRentalRefund = rentalAdjustment;
+                lateDepositRefund = depositTopUp;
+            }
+            else if (booking.Status == BookingStatus.PendingPayment)
+            {
+                var grossRentalPaidAfterSwap = booking.Payments
+                    .Where(item =>
+                        item.Status == PaymentStatus.Paid &&
+                        item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                    .Sum(item => item.Amount);
+                var rentalRefundPlanned = booking.Payments
+                    .Where(item =>
+                        item.Type == PaymentType.Refund &&
+                        item.Method == PaymentMethods.VehicleSwapRefund &&
+                        item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+                    .Sum(item => item.Amount);
+                var effectiveRentalPaidAfterSwap = BookingWorkflowRules.CalculateEffectivePaid(
+                    grossRentalPaidAfterSwap,
+                    rentalRefundPlanned);
+
+                var grossDepositPaidAfterSwap = booking.Payments
+                    .Where(item =>
+                        item.Type == PaymentType.Deposit &&
+                        item.Status == PaymentStatus.Paid)
+                    .Sum(item => item.Amount);
+                var depositRefundPlanned = booking.Payments
+                    .Where(item =>
+                        item.Type == PaymentType.Refund &&
+                        item.Method == PaymentMethods.DepositRefund &&
+                        item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+                    .Sum(item => item.Amount);
+                var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+                    grossDepositPaidAfterSwap,
+                    depositRefundPlanned);
+                var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
+
+                if (BookingWorkflowRules.HasRequiredUpfrontPayment(
+                        requiredRentalAmount,
+                        effectiveRentalPaidAfterSwap,
+                        booking.DepositAmount,
+                        effectiveDepositPaid))
+                {
+                    booking.Status = BookingStatus.Paid;
+                    booking.ReservationExpiresAt = null;
+                }
+            }
+        }
+
+        var lateRefundTotal = 0m;
+        if (lateReconciliation)
+        {
+            lateRefundTotal = AddLateReconciliationRefunds(
+                booking,
+                lateRentalRefund,
+                lateDepositRefund);
+            booking.ReservationExpiresAt = null;
         }
 
         _dbContext.Notifications.Add(new Notification
         {
             UserId = booking.CustomerId,
-            Title = "Thanh toán đã được xác nhận",
-            Message = originalType switch
+            Title = lateReconciliation
+                ? "Đã đối soát tiền chuyển sau khi đơn hết hạn"
+                : "Thanh toán đã được xác nhận",
+            Message = lateReconciliation
+                ? $"Đơn #{booking.BookingId} đã hết thời gian giữ chỗ nên không được khôi phục. SmartCar xác nhận đã nhận {lateRefundTotal:N0} đồng sau khi đơn hết hạn; khoản này đã chuyển sang quy trình chờ Admin duyệt hoàn tiền."
+                : originalType switch
             {
                 PaymentType.Rental =>
                     $"Đơn #{booking.BookingId}: đã xác nhận {(payment.Amount + (bundledDeposit?.Amount ?? 0m)):N0} đồng tiền thuê/phí giao và cọc.",
@@ -430,11 +662,15 @@ internal sealed class PaymentService : IPaymentService
         await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
-            adminId,
-            "ConfirmQrPayment",
+            actorId,
+            lateReconciliation
+                ? "ConfirmLateQrPaymentAfterExpiry"
+                : "ConfirmQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
-            $"Xác nhận {GetPaymentLabel(originalType)} {confirmedAmount:N0} đồng cho đơn #{booking.BookingId}.",
+            lateReconciliation
+                ? $"Xác nhận giao dịch đến sau khi đơn #{booking.BookingId} đã hết hạn: thực nhận {lateRefundTotal:N0} đồng; không khôi phục booking và đã tạo khoản chờ hoàn."
+                : $"Xác nhận {GetPaymentLabel(originalType)} {confirmedAmount:N0} đồng cho đơn #{booking.BookingId}.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -442,7 +678,7 @@ internal sealed class PaymentService : IPaymentService
 
     public async Task<OperationResult> RejectQrPaymentAsync(
         int paymentId,
-        string adminId,
+        string actorId,
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -465,8 +701,13 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Giao dịch không ở trạng thái chờ xác nhận QR.");
         }
 
-        payment.Status = PaymentStatus.Pending;
-        payment.Method = PaymentMethods.NotSelected;
+        var expiredBooking = payment.Booking.Status == BookingStatus.Expired;
+        payment.Status = expiredBooking
+            ? PaymentStatus.Failed
+            : PaymentStatus.Pending;
+        payment.Method = expiredBooking
+            ? PaymentMethods.BankQr
+            : PaymentMethods.NotSelected;
         payment.PaidAt = null;
         payment.TransactionCode = null;
 
@@ -479,8 +720,12 @@ internal sealed class PaymentService : IPaymentService
 
             if (bundledDeposit is not null)
             {
-                bundledDeposit.Status = PaymentStatus.Pending;
-                bundledDeposit.Method = PaymentMethods.NotSelected;
+                bundledDeposit.Status = expiredBooking
+                    ? PaymentStatus.Failed
+                    : PaymentStatus.Pending;
+                bundledDeposit.Method = expiredBooking
+                    ? PaymentMethods.BankQr
+                    : PaymentMethods.NotSelected;
                 bundledDeposit.PaidAt = null;
                 bundledDeposit.TransactionCode = null;
             }
@@ -490,97 +735,21 @@ internal sealed class PaymentService : IPaymentService
         {
             UserId = payment.Booking.CustomerId,
             Title = "Chưa xác nhận được chuyển khoản",
-            Message =
-                $"SmartCar chưa xác nhận được {GetPaymentLabel(payment.Type)} của đơn #{payment.BookingId}. " +
-                "Vui lòng kiểm tra và gửi lại xác nhận."
+            Message = expiredBooking
+                ? $"Đơn #{payment.BookingId} đã hết thời gian giữ chỗ và SmartCar không ghi nhận được tiền cho giao dịch đã báo chuyển. Giao dịch được đóng, booking vẫn hết hạn."
+                : $"SmartCar chưa xác nhận được {GetPaymentLabel(payment.Type)} của đơn #{payment.BookingId}. " +
+                  "Vui lòng kiểm tra và gửi lại xác nhận."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
-            adminId,
+            actorId,
             "RejectQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
             $"Từ chối xác nhận {GetPaymentLabel(payment.Type)} của đơn #{payment.BookingId}.",
-            cancellationToken: cancellationToken);
-
-        return OperationResult.Success();
-    }
-
-    public async Task<OperationResult> ConfirmRefundAsync(
-        int paymentId,
-        string adminId,
-        string? transactionCode,
-        CancellationToken cancellationToken = default)
-    {
-        if (!string.IsNullOrWhiteSpace(transactionCode) && transactionCode.Trim().Length > 100)
-        {
-            return OperationResult.Failure("Mã giao dịch hoàn tiền tối đa 100 ký tự.");
-        }
-
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
-
-        var payment = await _dbContext.Payments
-            .Include(item => item.Booking)
-            .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
-
-        if (payment is null)
-        {
-            return OperationResult.Failure("Không tìm thấy khoản hoàn tiền.");
-        }
-
-        if (payment.Type != PaymentType.Refund ||
-            payment.Status != PaymentStatus.AwaitingRefund)
-        {
-            return OperationResult.Failure("Khoản hoàn tiền không còn ở trạng thái chờ xử lý.");
-        }
-
-        var refundPurpose = payment.Method;
-
-        payment.Status = PaymentStatus.Refunded;
-        if (refundPurpose is not (
-            PaymentMethods.DepositRefund or
-            PaymentMethods.VehicleSwapRefund or
-            PaymentMethods.CompensationRefund))
-        {
-            payment.Method = PaymentMethods.BankTransferRefund;
-        }
-
-        payment.PaidAt = DateTime.UtcNow;
-        payment.TransactionCode = string.IsNullOrWhiteSpace(transactionCode)
-            ? $"RF{DateTime.UtcNow:yyyyMMddHHmmssfff}{payment.BookingId}"
-            : transactionCode.Trim();
-
-        var purposeText = payment.Method switch
-        {
-            PaymentMethods.DepositRefund => "hoàn cọc",
-            PaymentMethods.VehicleSwapRefund => "hoàn chênh lệch đổi xe",
-            PaymentMethods.CompensationRefund => "hỗ trợ/bồi thường",
-            _ => "hoàn tiền"
-        };
-
-        _dbContext.Notifications.Add(new Notification
-        {
-            UserId = payment.Booking.CustomerId,
-            Title = "Hoàn tiền thành công",
-            Message =
-                $"Đơn #{payment.BookingId}: SmartCar đã {purposeText} {payment.Amount:N0} đồng. " +
-                $"Mã giao dịch: {payment.TransactionCode}."
-        });
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        await _auditService.WriteAsync(
-            adminId,
-            "Refund",
-            nameof(Payment),
-            payment.PaymentId.ToString(),
-            $"{purposeText} {payment.Amount:N0} đồng cho đơn #{payment.BookingId}. Mã giao dịch: {payment.TransactionCode}.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
@@ -625,7 +794,7 @@ internal sealed class PaymentService : IPaymentService
             _ => null
         };
 
-    private static string? ValidateAdminConfirmationState(
+    private static string? ValidateReconciliationState(
         Booking booking,
         PaymentType type) =>
         type switch
@@ -634,7 +803,10 @@ internal sealed class PaymentService : IPaymentService
                 "Không xác nhận tiền cọc riêng.",
 
             PaymentType.Rental
-                when booking.Status != BookingStatus.PendingPayment =>
+                when booking.Status != BookingStatus.PendingPayment &&
+                     !BookingWorkflowRules.CanReconcileTransferAfterReservationExpiry(
+                         booking.Status,
+                         type) =>
                 "Đơn không còn ở trạng thái chờ thanh toán trước khi nhận xe.",
 
             PaymentType.Extension
@@ -646,7 +818,10 @@ internal sealed class PaymentService : IPaymentService
                 when booking.Status is not (
                     BookingStatus.PendingPayment or
                     BookingStatus.Paid or
-                    BookingStatus.ReadyForPickup) =>
+                    BookingStatus.ReadyForPickup) &&
+                     !BookingWorkflowRules.CanReconcileTransferAfterReservationExpiry(
+                         booking.Status,
+                         type) =>
                 "Đơn không còn ở trạng thái đối soát chênh lệch đổi xe.",
 
             PaymentType.AdditionalCharge
@@ -663,13 +838,13 @@ internal sealed class PaymentService : IPaymentService
             _ => null
         };
 
-    private async Task NotifyAdminsAsync(
+    private async Task NotifyStaffAsync(
         string title,
         string message,
         CancellationToken cancellationToken)
     {
         var roleId = await _dbContext.Roles
-            .Where(role => role.Name == RoleNames.Admin)
+            .Where(role => role.Name == RoleNames.Staff)
             .Select(role => role.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -678,20 +853,94 @@ internal sealed class PaymentService : IPaymentService
             return;
         }
 
-        var adminIds = await _dbContext.UserRoles
+        var staffIds = await _dbContext.UserRoles
             .Where(item => item.RoleId == roleId)
             .Select(item => item.UserId)
             .ToListAsync(cancellationToken);
 
-        foreach (var adminId in adminIds)
+        foreach (var staffId in staffIds)
         {
             _dbContext.Notifications.Add(new Notification
             {
-                UserId = adminId,
+                UserId = staffId,
                 Title = title,
                 Message = message
             });
         }
+    }
+
+    private static decimal AddLateReconciliationRefunds(
+        Booking booking,
+        decimal rentalAmount,
+        decimal depositAmount)
+    {
+        rentalAmount = Math.Max(0m, rentalAmount);
+        depositAmount = Math.Max(0m, depositAmount);
+
+        if (rentalAmount > 0m)
+        {
+            booking.Payments.Add(new Payment
+            {
+                BookingId = booking.BookingId,
+                Type = PaymentType.Refund,
+                Amount = rentalAmount,
+                Method = PaymentMethods.BankTransferRefund,
+                Status = PaymentStatus.AwaitingRefund
+            });
+        }
+
+        if (depositAmount > 0m)
+        {
+            booking.Payments.Add(new Payment
+            {
+                BookingId = booking.BookingId,
+                Type = PaymentType.Refund,
+                Amount = depositAmount,
+                Method = PaymentMethods.DepositRefund,
+                Status = PaymentStatus.AwaitingRefund
+            });
+        }
+
+        var lateRefundTotal = rentalAmount + depositAmount;
+        booking.RefundAmount = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(item.Status))
+            .Sum(item => item.Amount);
+
+        if (lateRefundTotal > 0m)
+        {
+            booking.RefundReason = AppendText(
+                booking.RefundReason,
+                $"Hoàn {lateRefundTotal:N0} đồng đã thực nhận sau khi đơn hết thời gian giữ chỗ; booking không được khôi phục.");
+        }
+
+        return lateRefundTotal;
+    }
+
+    private static string AppendText(string? current, string addition) =>
+        string.IsNullOrWhiteSpace(current)
+            ? addition
+            : $"{current.Trim()} {addition}";
+
+    private static decimal GetRequiredRentalPaymentAmount(Booking booking)
+    {
+        var deliveryFee = Math.Max(
+            0m,
+            booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
+
+        if (booking.PickupMethod == VehiclePickupMethod.Delivery &&
+            deliveryFee <= 0m &&
+            booking.DeliveryLatitude.HasValue &&
+            booking.DeliveryLongitude.HasValue)
+        {
+            deliveryFee = RentalPolicy.CalculateDeliveryFee(
+                booking.PickupMethod,
+                booking.DeliveryLatitude,
+                booking.DeliveryLongitude);
+        }
+
+        return Math.Max(0m, booking.RentalAmount + deliveryFee);
     }
 
     private static string GetPaymentLabel(PaymentType type) => type switch

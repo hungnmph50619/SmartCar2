@@ -2,9 +2,11 @@ namespace SmartCar.Application.Features.Bookings;
 
 public static class BookingDateRules
 {
+    public const int MinimumPickupLeadMinutes = 5;
+
     public static bool IsValidRange(DateTime pickupDate, DateTime returnDate)
     {
-        var minimumPickupTime = DateTime.Now.AddMinutes(5);
+        var minimumPickupTime = DateTime.Now.AddMinutes(MinimumPickupLeadMinutes);
         return pickupDate >= minimumPickupTime && pickupDate < returnDate;
     }
 

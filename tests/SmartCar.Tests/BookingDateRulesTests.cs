@@ -57,4 +57,38 @@ public sealed class BookingDateRulesTests
             existingPickup,
             existingReturn));
     }
+
+    [Fact]
+    public void CounterRentalView_UsesSharedServerPickupLeadRule()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var viewPath = Path.Combine(
+            repositoryRoot,
+            "src",
+            "SmartCar.Web",
+            "Views",
+            "Staff",
+            "CounterRental.cshtml");
+        var source = File.ReadAllText(viewPath);
+
+        Assert.Contains("BookingDateRules.MinimumPickupLeadMinutes", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Date.now() + 4 * 60000", source, StringComparison.Ordinal);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? current = new(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            if (Directory.Exists(Path.Combine(current.FullName, "src")) &&
+                Directory.Exists(Path.Combine(current.FullName, "tests")))
+            {
+                return current.FullName;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Không tìm thấy thư mục gốc của repository SmartCar.");
+    }
 }

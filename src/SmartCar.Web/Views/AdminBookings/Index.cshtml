@@ -29,12 +29,18 @@
         <p class="text-muted mb-0">Admin duyệt đơn mới và theo dõi tổng thể. Chuẩn bị xe, bàn giao, nhận trả, kiểm tra và xử lý đơn do Staff thực hiện.</p>
     </div>
 
-    @if (pendingConfirmationCount > 0)
-    {
-        <span class="badge bg-warning text-dark fs-6">
-            @pendingConfirmationCount đơn chờ duyệt
-        </span>
-    }
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <a class="btn btn-outline-danger"
+           asp-action="HoldRestrictions">
+            Hạn chế giữ chỗ
+        </a>
+        @if (pendingConfirmationCount > 0)
+        {
+            <span class="badge bg-warning text-dark fs-6">
+                @pendingConfirmationCount đơn chờ duyệt
+            </span>
+        }
+    </div>
 </div>
 
 <div class="alert alert-info py-2">

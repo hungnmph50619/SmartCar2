@@ -108,7 +108,4 @@ public interface IExtensionService
         string reason,
         CancellationToken cancellationToken = default);
 
-    Task<OperationResult> MarkPaidAsync(
-        int bookingId,
-        CancellationToken cancellationToken = default);
 }

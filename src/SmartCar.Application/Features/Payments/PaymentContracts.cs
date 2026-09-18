@@ -28,15 +28,16 @@ public interface IPaymentService
         int bookingId,
         string customerId,
         PaymentType paymentType,
+        string actorId,
         CancellationToken cancellationToken = default);
 
     Task<OperationResult> ConfirmQrPaymentAsync(
         int paymentId,
-        string adminId,
+        string actorId,
         CancellationToken cancellationToken = default);
 
     Task<OperationResult> RejectQrPaymentAsync(
         int paymentId,
-        string adminId,
+        string actorId,
         CancellationToken cancellationToken = default);
 }

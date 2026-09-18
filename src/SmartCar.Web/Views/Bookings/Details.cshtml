@@ -1,5 +1,6 @@
 @model SmartCar.Application.Features.Bookings.BookingDetailsDto
 @using SmartCar.Domain.Constants
+@using SmartCar.Application.Features.Operations
 @using SmartCar.Domain.Entities
 @using SmartCar.Domain.Enums
 
@@ -32,8 +33,9 @@
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
     var hasOpenExtension = Model.Extensions.Any(extension =>
         extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence or BookingExtensionStatus.Approved);
-    var canCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or
-        BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var canCancel = !hasAwaitingConfirmation &&
+        Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or
+            BookingStatus.Paid or BookingStatus.ReadyForPickup;
     var canReview = Model.Status == BookingStatus.Completed && !Model.HasReview;
     var supportPhone = ViewBag.SmartCarSupportPhone as string ?? "0982223792";
     var storeAddress = ViewBag.StoreAddress as string ?? "SmartCar";
@@ -351,7 +353,14 @@
                             <div class="d-flex gap-2 flex-wrap mt-2">
                                 @for (var index = 0; index < handoverSignedPaths.Count; index++)
                                 {
-                                    <a class="btn btn-sm btn-outline-success" href="@handoverSignedPaths[index]" target="_blank" rel="noopener">Xem trang @(index + 1)</a>
+                                    <a class="btn btn-sm btn-outline-success"
+                                       asp-controller="RentalSignedDocumentFiles"
+                                       asp-action="Page"
+                                       asp-route-bookingId="@Model.BookingId"
+                                       asp-route-handover="true"
+                                       asp-route-index="@index"
+                                       target="_blank"
+                                       rel="noopener">Xem trang @(index + 1)</a>
                                 }
                             </div>
                         </div>
@@ -414,7 +423,14 @@
                             <div class="d-flex gap-2 flex-wrap mt-2">
                                 @for (var index = 0; index < returnSignedPaths.Count; index++)
                                 {
-                                    <a class="btn btn-sm btn-outline-success" href="@returnSignedPaths[index]" target="_blank" rel="noopener">Xem trang @(index + 1)</a>
+                                    <a class="btn btn-sm btn-outline-success"
+                                       asp-controller="RentalSignedDocumentFiles"
+                                       asp-action="Page"
+                                       asp-route-bookingId="@Model.BookingId"
+                                       asp-route-handover="false"
+                                       asp-route-index="@index"
+                                       target="_blank"
+                                       rel="noopener">Xem trang @(index + 1)</a>
                                 }
                             </div>
                         </div>
@@ -653,7 +669,8 @@
             <div class="card border-danger shadow-sm mb-4">
                 <div class="card-header bg-white text-danger"><strong>Hủy đơn</strong></div>
                 <div class="card-body">
-                    <p class="small text-muted">Cọc được hoàn nếu xe chưa bàn giao. Tiền thuê áp dụng chính sách hủy.</p>
+                    <p class="small text-muted mb-1">Nếu xe chưa bàn giao, phần cọc còn lại được hoàn 100%.</p>
+                    <p class="small text-muted">@CancellationRefundPolicy.GetVietnamesePolicySummary()</p>
                     <form asp-controller="BookingOperations" asp-action="Cancel" method="post">
                         <input type="hidden" name="BookingId" value="@Model.BookingId" />
                         <textarea name="Reason" class="form-control mb-2" maxlength="500" required placeholder="Lý do hủy"></textarea>

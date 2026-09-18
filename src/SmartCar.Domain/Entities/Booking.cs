@@ -29,8 +29,12 @@ public class Booking
     public BookingStatus Status { get; set; } = BookingStatus.PendingConfirmation;
 
     // Thời điểm hệ thống ngừng giữ lịch xe cho đơn đang chờ xác nhận/chờ thanh toán.
-    // Null khi đơn đã qua giai đoạn giữ chỗ hoặc đang chờ đối soát chuyển khoản.
     public DateTime? ReservationExpiresAt { get; set; }
+
+    // Workflow state thật cho bước Staff kiểm tra trước khi Admin duyệt.
+    // AuditLog vẫn giữ lịch sử, nhưng không còn bị dùng thay cho trạng thái nghiệp vụ.
+    public DateTime? StaffReviewedAt { get; set; }
+    public string? StaffReviewedByStaffId { get; set; }
 
     public string? CancelReason { get; set; }
     public string? CancelledBy { get; set; }

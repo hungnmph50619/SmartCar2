@@ -69,6 +69,10 @@ internal sealed class ExtensionService : IExtensionService
         RequestExtensionRequest request,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var booking = await _dbContext.Bookings
             .Include(item => item.Extensions)
             .Include(item => item.Vehicle)
@@ -162,6 +166,7 @@ internal sealed class ExtensionService : IExtensionService
 
         await NotifyAdminsAsync(adminTitle, adminMessage, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -256,6 +261,10 @@ internal sealed class ExtensionService : IExtensionService
         string reason,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         if (string.IsNullOrWhiteSpace(reason))
         {
             return OperationResult.Failure("Vui lòng nêu rõ minh chứng/thông tin cần khách bổ sung.");
@@ -284,6 +293,7 @@ internal sealed class ExtensionService : IExtensionService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -294,6 +304,10 @@ internal sealed class ExtensionService : IExtensionService
         string? customerNote = null,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         if (string.IsNullOrWhiteSpace(evidenceNote))
         {
             return OperationResult.Failure("Vui lòng mô tả minh chứng/tình trạng và vị trí hiện tại.");
@@ -341,6 +355,7 @@ internal sealed class ExtensionService : IExtensionService
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -350,6 +365,10 @@ internal sealed class ExtensionService : IExtensionService
         string reason,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         if (string.IsNullOrWhiteSpace(reason))
         {
             return OperationResult.Failure("Vui lòng nhập lý do từ chối gia hạn.");
@@ -379,47 +398,7 @@ internal sealed class ExtensionService : IExtensionService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        return OperationResult.Success();
-    }
-
-    public async Task<OperationResult> MarkPaidAsync(
-        int bookingId,
-        CancellationToken cancellationToken = default)
-    {
-        var extension = await _dbContext.BookingExtensions
-            .Include(item => item.Booking)
-            .Where(item =>
-                item.BookingId == bookingId &&
-                (item.Status == BookingExtensionStatus.Approved ||
-                 item.Status == BookingExtensionStatus.Paid))
-            .OrderByDescending(item => item.RequestedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (extension is null)
-        {
-            return OperationResult.Failure("Không tìm thấy gia hạn đã duyệt để hoàn tất.");
-        }
-
-        var booking = extension.Booking;
-        if (booking.Status != BookingStatus.Rented)
-        {
-            return OperationResult.Failure("Đơn không còn ở trạng thái đang thuê để áp dụng gia hạn.");
-        }
-
-        if (booking.ReturnDate < extension.RequestedReturnDate)
-        {
-            booking.ReturnDate = extension.RequestedReturnDate;
-            booking.NumberOfDays = Math.Max(
-                1,
-                (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
-            booking.RentalAmount += extension.AdditionalAmount;
-            booking.TotalAmount += extension.AdditionalAmount;
-        }
-
-        extension.Status = BookingExtensionStatus.Paid;
-        extension.PaidAt ??= DateTime.UtcNow;
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -484,14 +463,23 @@ internal sealed class ExtensionService : IExtensionService
         DateTime requestedReturnDate,
         CancellationToken cancellationToken)
     {
+        var storeBoundary = requestedReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        var deliveryBoundary = requestedReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+
         return await _dbContext.Bookings
             .AsNoTracking()
             .Where(other =>
                 other.VehicleId == vehicleId &&
                 other.BookingId != currentBookingId &&
                 BlockingStatuses.Contains(other.Status) &&
-                other.PickupDate < requestedReturnDate &&
-                other.ReturnDate > currentReturnDate)
+                other.ReturnDate > currentReturnDate &&
+                (
+                    other.PickupMethod == VehiclePickupMethod.Delivery
+                        ? other.PickupDate < deliveryBoundary
+                        : other.PickupDate < storeBoundary
+                ))
             .OrderBy(other => other.PickupDate)
             .Select(other => new ConflictInfo(
                 other.BookingId,

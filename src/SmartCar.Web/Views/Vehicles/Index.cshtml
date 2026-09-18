@@ -1,6 +1,7 @@
 @model IReadOnlyList<SmartCar.Application.Features.Vehicles.VehicleDto>
 @using Microsoft.AspNetCore.Mvc.Rendering
 @using SmartCar.Web.ViewModels
+@using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Tìm xe";
     var search = ViewBag.Search as VehicleSearchViewModel ?? new VehicleSearchViewModel();
@@ -109,7 +110,7 @@
             <div>
                 <span class="section-eyebrow">TÌM XE CÒN TRỐNG</span>
                 <h1 id="vehicle-search-title" class="h3 mb-1">Chọn thời gian thuê xe</h1>
-                <p class="text-muted mb-0">Hệ thống chỉ hiển thị xe sẵn sàng trong đúng khoảng thời gian bạn chọn.</p>
+                <p class="text-muted mb-0">Hệ thống chỉ hiển thị xe còn đủ lịch thuê và tối thiểu @RentalPolicy.VehicleTurnaroundMinutes phút để nhận xe trả, kiểm tra và vệ sinh giữa hai chuyến.</p>
             </div>
             <span class="vehicle-search-format">Ngày/tháng/năm · Giờ 24 giờ</span>
         </div>

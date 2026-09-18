@@ -13,7 +13,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class AdminRentalDocumentsController : Controller
 {
     private const long MaximumSignedDocumentBytes = 8 * 1024 * 1024;
@@ -23,18 +23,18 @@ public sealed class AdminRentalDocumentsController : Controller
 
     private readonly IBookingService _bookingService;
     private readonly ApplicationDbContext _dbContext;
-    private readonly IWebHostEnvironment _environment;
+    private readonly ISecureDocumentStorage _secureDocumentStorage;
     private readonly IAuditService _auditService;
 
     public AdminRentalDocumentsController(
         IBookingService bookingService,
         ApplicationDbContext dbContext,
-        IWebHostEnvironment environment,
+        ISecureDocumentStorage secureDocumentStorage,
         IAuditService auditService)
     {
         _bookingService = bookingService;
         _dbContext = dbContext;
-        _environment = environment;
+        _secureDocumentStorage = secureDocumentStorage;
         _auditService = auditService;
     }
 
@@ -395,22 +395,16 @@ public sealed class AdminRentalDocumentsController : Controller
             return paths;
         }
 
-        var relativeFolder = $"uploads/{documentFolder}/{bookingId}";
-        var folder = Path.Combine(_environment.WebRootPath, relativeFolder);
-        Directory.CreateDirectory(folder);
+        var secureOwnerId = $"{marker}{documentFolder}-{bookingId}";
 
         try
         {
             foreach (var file in selectedFiles)
             {
-                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-                var fileName = $"{marker}{Guid.NewGuid():N}{extension}";
-                var fullPath = Path.Combine(folder, fileName);
-
-                await using var stream = System.IO.File.Create(fullPath);
-                await file.CopyToAsync(stream, cancellationToken);
-
-                paths.Add($"/{relativeFolder}/{fileName}");
+                paths.Add(await _secureDocumentStorage.SaveAsync(
+                    file,
+                    secureOwnerId,
+                    cancellationToken));
             }
         }
         catch
@@ -430,22 +424,8 @@ public sealed class AdminRentalDocumentsController : Controller
         }
     }
 
-    private void DeletePhysicalFile(string? relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath))
-        {
-            return;
-        }
-
-        var fullPath = Path.Combine(
-            _environment.WebRootPath,
-            relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-
-        if (System.IO.File.Exists(fullPath))
-        {
-            System.IO.File.Delete(fullPath);
-        }
-    }
+    private void DeletePhysicalFile(string? relativePath) =>
+        _secureDocumentStorage.Delete(relativePath);
 
     private Task WriteAuditAsync(
         string action,

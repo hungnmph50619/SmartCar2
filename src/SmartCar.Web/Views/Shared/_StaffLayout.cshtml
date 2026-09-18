@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="~/css/blue-theme.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/SmartCar.Web.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/admin-layout.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/staff-form-hardening.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
 </head>
 <body class="admin-body">
@@ -37,6 +38,8 @@
                     <a class="admin-nav-link @(bookingFlowActive ? "active" : string.Empty)" asp-controller="Staff" asp-action="Bookings"><span class="admin-nav-icon">▤</span><span>Xử lý đơn thuê</span></a>
                     <a class="admin-nav-link @(currentController == "Staff" && currentAction == "CounterRental" ? "active" : string.Empty)" asp-controller="Staff" asp-action="CounterRental"><span class="admin-nav-icon">＋</span><span>Thuê tại quầy</span></a>
                     <a class="admin-nav-link @(currentController == "StaffCustomers" ? "active" : string.Empty)" asp-controller="StaffCustomers" asp-action="Index"><span class="admin-nav-icon">◎</span><span>Khách hàng</span></a>
+                    <a class="admin-nav-link @(currentController == "StaffPayments" && currentAction == "Reconciliation" ? "active" : string.Empty)" asp-controller="StaffPayments" asp-action="Reconciliation"><span class="admin-nav-icon">⇄</span><span>Đối soát chuyển khoản</span></a>
+                    <a class="admin-nav-link @(currentController == "StaffExtensionOperations" ? "active" : string.Empty)" asp-controller="StaffExtensionOperations" asp-action="Index"><span class="admin-nav-icon">↔</span><span>Xung đột gia hạn</span></a>
                     <a class="admin-nav-link @(currentController == "Staff" && currentAction == "Refunds" ? "active" : string.Empty)" asp-controller="Staff" asp-action="Refunds"><span class="admin-nav-icon">₫</span><span>Hoàn tiền đã duyệt</span></a>
                 </div>
             </div>
@@ -78,6 +81,9 @@
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/form-guardrails.js" asp-append-version="true"></script>
+    <script src="~/js/staff-form-hardening.js" asp-append-version="true"></script>
+    <script src="~/js/staff-identity-comparison.js" asp-append-version="true"></script>
     <script>(()=>{const sidebar=document.getElementById('adminSidebar'),toggle=document.getElementById('adminSidebarToggle'),backdrop=document.getElementById('adminSidebarBackdrop');const closeSidebar=()=>{sidebar?.classList.remove('open');backdrop?.classList.remove('show')};toggle?.addEventListener('click',()=>{sidebar?.classList.toggle('open');backdrop?.classList.toggle('show')});backdrop?.addEventListener('click',closeSidebar);sidebar?.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>{if(window.innerWidth<992)closeSidebar()}));window.addEventListener('resize',()=>{if(window.innerWidth>=992)closeSidebar()})})();</script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

@@ -16,7 +16,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Staff + "," + RoleNames.Admin)]
+[Authorize(Roles = RoleNames.Staff)]
 public sealed class StaffCustomersController : Controller
 {
     private readonly IAccountService _accountService;

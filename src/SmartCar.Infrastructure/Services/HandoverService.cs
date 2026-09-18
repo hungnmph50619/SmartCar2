@@ -1,6 +1,8 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Handovers;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -26,8 +28,15 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Không xác định được nhân viên đã trực tiếp kiểm tra người nhận xe.");
         }
 
+        if (request.IdentityFaceSessionId == Guid.Empty)
+        {
+            return OperationResult.Failure("Cần chụp ảnh khuôn mặt người nhận xe trực tiếp trước khi lập biên bản.");
+        }
+
         await using var transaction = await _dbContext.Database
-            .BeginTransactionAsync(cancellationToken);
+            .BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -50,11 +59,64 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Đơn đã có biên bản giao xe.");
         }
 
-        var rentalPaid = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Rental &&
-            payment.Status == PaymentStatus.Paid);
+        var faceSession = await _dbContext.Set<IdentityCaptureSession>()
+            .FirstOrDefaultAsync(item =>
+                item.IdentityCaptureSessionId == request.IdentityFaceSessionId,
+                cancellationToken);
 
-        var depositPaidAmount = booking.Payments
+        if (faceSession is null ||
+            faceSession.Purpose != IdentityCapturePurposes.Handover ||
+            faceSession.BookingId != booking.BookingId ||
+            faceSession.TargetCustomerId != booking.CustomerId ||
+            !faceSession.CanConsume(DateTime.UtcNow) ||
+            !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
+        {
+            return OperationResult.Failure(
+                "Ảnh mặt người nhận không hợp lệ, không thuộc đúng đơn/khách hoặc đã được dùng. Vui lòng chụp lại tại quầy.");
+        }
+
+        var counterEvidence = await _dbContext.Set<IdentityCaptureSession>()
+            .Where(item =>
+                item.BookingId == booking.BookingId &&
+                item.TargetCustomerId == booking.CustomerId &&
+                item.CreatedByUserId == request.IdentityVerifiedByStaffId &&
+                !item.ConsumedAt.HasValue &&
+                item.CompletedAt.HasValue &&
+                item.ExpiresAt > DateTime.UtcNow &&
+                item.ImagePath != null &&
+                item.CaptureMethod == IdentityCaptureMethods.StaffCounterDocument &&
+                (item.Purpose == IdentityCapturePurposes.HandoverCitizenFront ||
+                 item.Purpose == IdentityCapturePurposes.HandoverCitizenBack))
+            .OrderByDescending(item => item.CompletedAt)
+            .ToListAsync(cancellationToken);
+
+        var citizenFrontSession = counterEvidence
+            .FirstOrDefault(item => item.Purpose == IdentityCapturePurposes.HandoverCitizenFront);
+        var citizenBackSession = counterEvidence
+            .FirstOrDefault(item => item.Purpose == IdentityCapturePurposes.HandoverCitizenBack);
+
+        if (citizenFrontSession is null || citizenBackSession is null)
+        {
+            return OperationResult.Failure(
+                "Cần chụp và lưu đủ CCCD mặt trước + mặt sau của khách đang có mặt tại quầy trước khi lập biên bản giao xe.");
+        }
+
+        var grossRentalPaidAmount = booking.Payments
+            .Where(payment =>
+                payment.Status == PaymentStatus.Paid &&
+                payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+            .Sum(payment => payment.Amount);
+        var rentalRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.VehicleSwapRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var effectiveRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossRentalPaidAmount,
+            rentalRefundPlanned);
+
+        var grossDepositPaidAmount = booking.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Deposit &&
                 payment.Status == PaymentStatus.Paid)
@@ -67,8 +129,17 @@ internal sealed class HandoverService : IHandoverService
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
 
-        var depositSatisfied = booking.DepositAmount <= 0 ||
-            Math.Max(0m, depositPaidAmount - depositRefundPlanned) >= booking.DepositAmount;
+        var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossDepositPaidAmount,
+            depositRefundPlanned);
+        var requiredRentalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - booking.AdditionalAmount);
+        var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
+            requiredRentalAmount,
+            effectiveRentalPaid,
+            booking.DepositAmount,
+            effectiveDepositPaid);
 
         var hasOpenSwapPayment = booking.Payments.Any(payment =>
             payment.Type == PaymentType.VehicleSwapAdjustment &&
@@ -80,7 +151,7 @@ internal sealed class HandoverService : IHandoverService
                 "Khách cần thanh toán xong chênh lệch đổi xe trước khi giao xe.");
         }
 
-        if (!rentalPaid || !depositSatisfied)
+        if (!upfrontSatisfied)
         {
             return OperationResult.Failure(
                 "Khách phải thanh toán đủ tiền thuê và tiền cọc trước khi giao xe.");
@@ -91,16 +162,13 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
 
-        if (request.HandoverAt > DateTime.Now.AddMinutes(5))
+        // Đây chỉ là thời điểm Staff chuẩn bị/lưu biên bản nháp. Chuyến chưa bắt đầu ở đây.
+        // Thời điểm giao thực tế được chốt bằng server time khi xác minh bản ký.
+        var preparedAt = DateTime.Now;
+        if (!BookingWorkflowRules.CanPrepareHandover(preparedAt, booking.ReturnDate))
         {
-            return OperationResult.Failure("Thời gian giao xe không được ở tương lai.");
-        }
-
-        // Demo: allow an actual handover before the scheduled pickup time.
-
-        if (request.HandoverAt >= booking.ReturnDate)
-        {
-            return OperationResult.Failure("Thời gian giao xe phải trước thời gian trả xe đã đặt.");
+            return OperationResult.Failure(
+                "Đã đến hoặc quá thời gian trả xe của đơn, không thể chuẩn bị biên bản giao.");
         }
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
@@ -132,13 +200,14 @@ internal sealed class HandoverService : IHandoverService
 
         booking.Handover = new VehicleHandover
         {
-            HandoverAt = request.HandoverAt,
+            HandoverAt = preparedAt,
             Mileage = request.Mileage,
             FuelLevel = $"{fuelPercent}%",
             ExteriorCondition = Normalize(request.ExteriorCondition),
             InteriorCondition = Normalize(request.InteriorCondition),
             Accessories = Normalize(request.Accessories),
             ImagePaths = Normalize(request.ImagePaths),
+            ReceiverFaceImagePath = faceSession.ImagePath,
             Notes = Normalize(request.Notes),
             IncludedKilometers = rentalDays * RentalPolicy.IncludedKilometersPerDay,
             ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
@@ -151,8 +220,10 @@ internal sealed class HandoverService : IHandoverService
             IdentityVerifiedAt = verifiedAt
         };
 
-        // Biên bản + kết quả kiểm tra đúng người được lưu trong cùng transaction.
-        // Không thể có trạng thái đã có biên bản nhưng mất cờ xác minh chỉ vì request sau bị lỗi.
+        faceSession.ConsumedAt = verifiedAt;
+        citizenFrontSession.ConsumedAt = verifiedAt;
+        citizenBackSession.ConsumedAt = verifiedAt;
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
@@ -178,4 +249,3 @@ internal sealed class HandoverService : IHandoverService
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
-

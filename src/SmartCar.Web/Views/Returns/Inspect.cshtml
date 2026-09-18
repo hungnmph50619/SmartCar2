@@ -1,8 +1,6 @@
 ﻿@model SmartCar.Web.ViewModels.ReturnInspectionViewModel
-@using Microsoft.EntityFrameworkCore
 @using SmartCar.Domain.Enums
 @using SmartCar.Domain.Constants
-@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext Db
 
 @{
     ViewData["Title"] = $"Đối chiếu giao - trả #{Model.BookingId}";
@@ -20,43 +18,6 @@
         ? $"{(fuelDifference.Value > 0 ? "+" : string.Empty)}{fuelDifference.Value}%"
         : null;
     var fuelReduced = fuelDifference.HasValue && fuelDifference.Value < 0;
-
-    const string overdueCompPrefix = "OVERDUE-COMP-";
-    const string overdueDebtPrefix = "OVERDUE-DEBT-";
-    var overduePaymentRows = await Db.Payments
-        .AsNoTracking()
-        .Where(payment =>
-            payment.BookingId == Model.BookingId &&
-            payment.Type == PaymentType.AdditionalCharge &&
-            payment.TransactionCode != null &&
-            (payment.TransactionCode.StartsWith(overdueCompPrefix) ||
-             payment.TransactionCode.StartsWith(overdueDebtPrefix)))
-        .Select(payment => new { payment.Amount, payment.TransactionCode })
-        .ToListAsync();
-
-    int? ParseAffectedBookingId(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code)) return null;
-        var prefix = code.StartsWith(overdueCompPrefix, StringComparison.OrdinalIgnoreCase)
-            ? overdueCompPrefix
-            : code.StartsWith(overdueDebtPrefix, StringComparison.OrdinalIgnoreCase)
-                ? overdueDebtPrefix
-                : null;
-        if (prefix is null) return null;
-
-        var parts = code[prefix.Length..].Split('-', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 2 && int.TryParse(parts[1], out var affectedId)
-            ? affectedId
-            : null;
-    }
-
-    var overdueImpacts = overduePaymentRows
-        .Select(row => new { AffectedBookingId = ParseAffectedBookingId(row.TransactionCode), row.Amount })
-        .Where(row => row.AffectedBookingId.HasValue)
-        .GroupBy(row => row.AffectedBookingId!.Value)
-        .Select(group => new { BookingId = group.Key, CompensationAmount = group.Sum(row => row.Amount) })
-        .OrderBy(item => item.BookingId)
-        .ToList();
 
     var handoverSignedPaths = Model.Handover.ImagePaths
         .Where(path => path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase))
@@ -166,8 +127,21 @@
 @if (awaitingRefund)
 {
     <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <span><strong>Đã kiểm tra xong.</strong> Chờ quyết toán cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong>.</span>
-        <a class="btn btn-sm btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Xử lý hoàn cọc</a>
+        <span>
+            <strong>Đã kiểm tra xong.</strong>
+            @if (Model.RefundStatus == PaymentStatus.RefundApproved)
+            {
+                <text>Admin đã duyệt khoản hoàn <strong>@Model.RefundAmount.ToString("N0") đ</strong>. Nhân viên có thể thực hiện chuyển tiền.</text>
+            }
+            else
+            {
+                <text>Khoản hoàn <strong>@Model.RefundAmount.ToString("N0") đ</strong> đang chờ Admin duyệt.</text>
+            }
+        </span>
+        @if (Model.RefundStatus == PaymentStatus.RefundApproved)
+        {
+            <a class="btn btn-sm btn-warning" asp-controller="Staff" asp-action="Refunds">Thực hiện hoàn tiền</a>
+        }
     </div>
 }
 else
@@ -229,7 +203,14 @@ else
                         <div class="d-flex gap-2 flex-wrap mt-1">
                             @for (var index = 0; index < handoverSignedPaths.Count; index++)
                             {
-                                <a class="btn btn-sm btn-outline-success" href="@handoverSignedPaths[index]" target="_blank" rel="noopener">Trang @(index + 1)</a>
+                                <a class="btn btn-sm btn-outline-success"
+                                   asp-controller="RentalSignedDocumentFiles"
+                                   asp-action="Page"
+                                   asp-route-bookingId="@Model.BookingId"
+                                   asp-route-handover="true"
+                                   asp-route-index="@index"
+                                   target="_blank"
+                                   rel="noopener">Trang @(index + 1)</a>
                             }
                         </div>
                     </div>
@@ -302,7 +283,14 @@ else
                         <div class="d-flex gap-2 flex-wrap mt-1">
                             @for (var index = 0; index < returnSignedPaths.Count; index++)
                             {
-                                <a class="btn btn-sm btn-outline-success" href="@returnSignedPaths[index]" target="_blank" rel="noopener">Trang @(index + 1)</a>
+                                <a class="btn btn-sm btn-outline-success"
+                                   asp-controller="RentalSignedDocumentFiles"
+                                   asp-action="Page"
+                                   asp-route-bookingId="@Model.BookingId"
+                                   asp-route-handover="false"
+                                   asp-route-index="@index"
+                                   target="_blank"
+                                   rel="noopener">Trang @(index + 1)</a>
                             }
                         </div>
                     </div>
@@ -343,7 +331,7 @@ else
     </div>
 </div>
 
-@if (overdueImpacts.Count > 0)
+@if (Model.OverdueImpacts.Count > 0)
 {
     <div class="card card-body shadow-sm border-danger mb-4">
         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
@@ -354,7 +342,7 @@ else
             <span class="badge bg-danger">Đã xử lý vi phạm</span>
         </div>
 
-        @foreach (var impact in overdueImpacts)
+        @foreach (var impact in Model.OverdueImpacts)
         {
             <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap border rounded p-3 mb-2">
                 <div>
@@ -363,7 +351,7 @@ else
                 </div>
                 <div class="d-flex align-items-center gap-3 flex-wrap">
                     <strong class="text-danger">@impact.CompensationAmount.ToString("N0") đ</strong>
-                    <a class="btn btn-sm btn-outline-danger" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@impact.BookingId">Xem đơn #@impact.BookingId</a>
+                    <a class="btn btn-sm btn-outline-danger" asp-controller="Staff" asp-action="Details" asp-route-id="@impact.BookingId">Xem đơn #@impact.BookingId</a>
                 </div>
             </div>
         }
@@ -615,7 +603,7 @@ else
         </div>
 
 
-        <div class="mt-2">
+        <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
 
             <span class="badge @(Model.AdditionalChargePaid
                                   ? "bg-success"
@@ -623,9 +611,32 @@ else
 
                 @(Model.AdditionalChargePaid
                     ? "Đã thanh toán"
-                    : "Chưa thanh toán")
+                    : Model.AdditionalChargeAwaitingConfirmation
+                        ? "Đang chờ đối soát QR"
+                        : "Chưa thanh toán")
 
             </span>
+
+            @if (!Model.AdditionalChargePaid && Model.AdditionalChargeAwaitingConfirmation)
+            {
+                <span class="small text-muted">
+                    Không thu tiền mặt khi giao dịch QR đang chờ Admin xác nhận.
+                </span>
+            }
+            else if (!Model.AdditionalChargePaid && Model.AdditionalAmount > 0)
+            {
+                <form asp-controller="Returns"
+                      asp-action="CollectAdditionalChargeCash"
+                      method="post"
+                      class="d-inline"
+                      data-loading-form
+                      data-confirm="Xác nhận nhân viên đã thực nhận đủ phụ phí bằng tiền mặt?">
+                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                    <button class="btn btn-sm btn-success" type="submit">
+                        Thu đủ phụ phí tiền mặt
+                    </button>
+                </form>
+            }
 
         </div>
     }
@@ -671,7 +682,7 @@ else if (Model.Status == BookingStatus.Completed)
 {
     <div class="alert alert-success d-flex justify-content-between align-items-center gap-2 flex-wrap">
         <strong>Chuyến đã hoàn tất.</strong>
-        <a class="btn btn-sm btn-success" asp-controller="AdminTripRecords" asp-action="Details" asp-route-id="@Model.BookingId">Xem hồ sơ chuyến</a>
+        <a class="btn btn-sm btn-success" asp-controller="Staff" asp-action="Details" asp-route-id="@Model.BookingId">Về hồ sơ vận hành</a>
     </div>
 }
 

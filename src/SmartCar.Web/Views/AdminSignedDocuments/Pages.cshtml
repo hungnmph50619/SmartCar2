@@ -85,8 +85,6 @@ else
 
     @for (var index = 0; index < Model.Paths.Count; index++)
     {
-        var path = Model.Paths[index];
-
         <section class="card shadow-sm">
 
             <div class="card-header bg-white
@@ -98,7 +96,11 @@ else
                 </strong>
 
                 <a class="btn btn-sm btn-outline-primary"
-                   href="@path"
+                   asp-controller="RentalSignedDocumentFiles"
+                   asp-action="Page"
+                   asp-route-bookingId="@Model.BookingId"
+                   asp-route-handover="@Model.IsHandover"
+                   asp-route-index="@index"
                    target="_blank"
                    rel="noopener">
                     Mở ảnh gốc
@@ -108,7 +110,7 @@ else
 
             <div class="card-body text-center bg-light">
 
-                <img src="@path"
+                <img src="@Url.Action("Page", "RentalSignedDocumentFiles", new { bookingId = Model.BookingId, handover = Model.IsHandover, index })"
                      alt="@Model.DocumentTitle trang @(index + 1)"
                      class="img-fluid border rounded bg-white"
                      style="max-height:1100px;object-fit:contain;" />

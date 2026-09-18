@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
@@ -39,6 +40,12 @@ internal sealed class ReturnService : IReturnService
                 "Không xác định được nhân viên đã trực tiếp kiểm tra người trả xe.");
         }
 
+        if (request.IdentityFaceSessionId == Guid.Empty)
+        {
+            return OperationResult.Failure(
+                "Cần chụp ảnh khuôn mặt người trả xe trực tiếp trước khi lập biên bản.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
@@ -66,18 +73,63 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Đơn đã có biên bản trả xe.");
         }
 
+        var extensionPayments = booking.Payments
+            .Where(payment => payment.Type == PaymentType.Extension)
+            .ToList();
+
+        if (extensionPayments.Any(payment =>
+                BookingWorkflowRules.BlocksVehicleReturnForExtensionPayment(payment.Status)))
+        {
+            return OperationResult.Failure(
+                "Đơn đang có tiền gia hạn chuyển khoản/QR chờ Admin đối soát. " +
+                "Cần xác nhận hoặc từ chối giao dịch trước khi nhận xe trả để tránh thất lạc tiền khách đã chuyển.");
+        }
+
+        var paidExtensionAmount = extensionPayments
+            .Where(payment => payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+        var effectivePaidExtensionAmount = booking.Extensions
+            .Where(extension => extension.Status == BookingExtensionStatus.Paid)
+            .Sum(extension => extension.AdditionalAmount);
+
+        if (!BookingWorkflowRules.IsExtensionPaymentLedgerConsistent(
+                paidExtensionAmount,
+                effectivePaidExtensionAmount))
+        {
+            return OperationResult.Failure(
+                "Dữ liệu gia hạn đang lệch giữa tiền đã thu và yêu cầu gia hạn có hiệu lực. " +
+                "Vui lòng đối soát dữ liệu gia hạn trước khi lập biên bản trả xe.");
+        }
+
+        var faceSession = await _dbContext.Set<IdentityCaptureSession>()
+            .FirstOrDefaultAsync(item =>
+                item.IdentityCaptureSessionId == request.IdentityFaceSessionId,
+                cancellationToken);
+
+        if (faceSession is null ||
+            faceSession.Purpose != IdentityCapturePurposes.Return ||
+            faceSession.BookingId != booking.BookingId ||
+            faceSession.TargetCustomerId != booking.CustomerId ||
+            !faceSession.CanConsume(DateTime.UtcNow) ||
+            !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
+        {
+            return OperationResult.Failure(
+                "Ảnh mặt người trả không hợp lệ, không thuộc đúng đơn/khách hoặc đã được dùng. Vui lòng chụp lại tại quầy.");
+        }
+
         if (request.Mileage < booking.Handover.Mileage)
         {
             return OperationResult.Failure(
                 $"Số km trả xe không được nhỏ hơn lúc giao ({booking.Handover.Mileage:N0} km).");
         }
 
-        if (request.ReturnedAt < booking.Handover.HandoverAt)
+        // ReturnedAt là thời điểm nghiệp vụ thực tế, vì vậy lấy từ server khi Staff lưu biên bản.
+        // Không tin một timestamp tùy ý từ trình duyệt để tránh tính sai phí trả muộn.
+        var actualReturnedAt = DateTime.Now;
+        if (actualReturnedAt < booking.Handover.HandoverAt)
         {
             return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
         }
-
-        // Demo: allow a future return timestamp to exercise return/deposit scenarios.
 
         var evidencePaths = SplitImagePaths(request.ImagePaths)
             .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
@@ -102,7 +154,7 @@ internal sealed class ReturnService : IReturnService
                 "Đã ghi nhận hư hỏng mới thì biên bản trả xe phải có ít nhất một ảnh hư hỏng.");
         }
 
-        var accessoryStatus = Normalize(request.InteriorCondition);
+        var accessoryStatus = Normalize(request.AccessoryStatus);
         if (accessoryStatus is null ||
             (accessoryStatus != AccessoriesComplete &&
              !accessoryStatus.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase)))
@@ -119,7 +171,7 @@ internal sealed class ReturnService : IReturnService
         var drivenKilometers = request.Mileage - booking.Handover.Mileage;
         var elapsedDays = Math.Max(
             1,
-            (int)Math.Ceiling((request.ReturnedAt - booking.Handover.HandoverAt).TotalHours / 24d));
+            (int)Math.Ceiling((actualReturnedAt - booking.Handover.HandoverAt).TotalHours / 24d));
         var maximumReasonableKilometers = elapsedDays * MaximumReasonableKilometersPerDay;
 
         if (drivenKilometers > maximumReasonableKilometers)
@@ -134,8 +186,8 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Mức nhiên liệu khi trả phải là số từ 0 đến 100%.");
         }
 
-        var lateMinutes = request.ReturnedAt > booking.ReturnDate
-            ? (int)Math.Ceiling((request.ReturnedAt - booking.ReturnDate).TotalMinutes)
+        var lateMinutes = actualReturnedAt > booking.ReturnDate
+            ? (int)Math.Ceiling((actualReturnedAt - booking.ReturnDate).TotalMinutes)
             : 0;
         var lateDays = lateMinutes > 0
             ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
@@ -155,21 +207,24 @@ internal sealed class ReturnService : IReturnService
         var identityVerifiedAt = DateTime.UtcNow;
         var vehicleReturn = new VehicleReturn
         {
-            ReturnedAt = request.ReturnedAt,
+            ReturnedAt = actualReturnedAt,
             Mileage = request.Mileage,
             FuelLevel = $"{fuelPercent}%",
-            ExteriorCondition = null,
-            InteriorCondition = null,
+            ExteriorCondition = Normalize(request.ExteriorCondition),
+            InteriorCondition = Normalize(request.InteriorCondition),
             HasDamage = request.HasDamage,
             IsLateReturn = lateMinutes > 0,
             LateMinutes = lateMinutes,
             LateFee = lateFee,
             ImagePaths = string.Join(';', evidencePaths),
+            ReturnerFaceImagePath = faceSession.ImagePath,
             Notes = BuildReturnNotes(accessoryStatus, request.Notes),
             CustomerIdentityVerified = true,
             IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
             IdentityVerifiedAt = identityVerifiedAt
         };
+
+        faceSession.ConsumedAt = identityVerifiedAt;
 
         var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
@@ -199,11 +254,23 @@ internal sealed class ReturnService : IReturnService
         }
 
         foreach (var extension in booking.Extensions.Where(extension =>
-                     extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence))
+                     BookingWorkflowRules.ShouldCancelExtensionWhenVehicleReturns(extension.Status)))
         {
+            var previousStatus = extension.Status;
             extension.Status = BookingExtensionStatus.Cancelled;
-            extension.AdminNote = "Yêu cầu tự động đóng vì xe đã được trả.";
+            extension.AdminNote = previousStatus == BookingExtensionStatus.Approved
+                ? "Gia hạn đã được duyệt nhưng chưa thanh toán nên chưa có hiệu lực; tự động đóng vì xe đã được trả."
+                : "Yêu cầu tự động đóng vì xe đã được trả.";
             extension.DecidedAt = DateTime.UtcNow;
+        }
+
+        foreach (var payment in extensionPayments.Where(payment =>
+                     payment.Status == PaymentStatus.Pending))
+        {
+            payment.Status = PaymentStatus.Failed;
+            payment.Method = PaymentMethods.NotSelected;
+            payment.PaidAt = null;
+            payment.TransactionCode = null;
         }
 
         booking.VehicleReturn = vehicleReturn;
@@ -223,7 +290,6 @@ internal sealed class ReturnService : IReturnService
             });
         }
 
-        // Biên bản trả + kết quả đối chiếu đúng người được lưu cùng một transaction.
         await _dbContext.SaveChangesAsync(cancellationToken);
         await RecalculateChargesAsync(booking, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -423,10 +489,69 @@ internal sealed class ReturnService : IReturnService
                 "Chưa đủ hồ sơ: phải xác minh đúng người nhận/trả và bản ký giao/trả trước khi quyết toán.");
         }
 
-        var rentalPaid = booking.Payments.Any(payment =>
-            payment.Type == PaymentType.Rental && payment.Status == PaymentStatus.Paid);
+        var extensionPayments = booking.Payments
+            .Where(payment => payment.Type == PaymentType.Extension)
+            .ToList();
 
-        var depositPaid = booking.Payments
+        if (extensionPayments.Any(payment =>
+                BookingWorkflowRules.BlocksVehicleReturnForExtensionPayment(payment.Status)))
+        {
+            return OperationResult.Failure(
+                "Còn tiền gia hạn chuyển khoản/QR đang chờ đối soát. Cần xử lý giao dịch trước khi quyết toán.");
+        }
+
+        var paidExtensionAmount = extensionPayments
+            .Where(payment => payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+        var effectivePaidExtensionAmount = booking.Extensions
+            .Where(extension => extension.Status == BookingExtensionStatus.Paid)
+            .Sum(extension => extension.AdditionalAmount);
+
+        if (!BookingWorkflowRules.IsExtensionPaymentLedgerConsistent(
+                paidExtensionAmount,
+                effectivePaidExtensionAmount))
+        {
+            return OperationResult.Failure(
+                "Dữ liệu gia hạn đang lệch giữa tiền đã thu và yêu cầu gia hạn có hiệu lực. " +
+                "Không quyết toán tự động để tránh mất quyền lợi của khách.");
+        }
+
+        foreach (var extension in booking.Extensions.Where(extension =>
+                     BookingWorkflowRules.ShouldCancelExtensionWhenVehicleReturns(extension.Status)))
+        {
+            var previousStatus = extension.Status;
+            extension.Status = BookingExtensionStatus.Cancelled;
+            extension.AdminNote = previousStatus == BookingExtensionStatus.Approved
+                ? "Gia hạn đã được duyệt nhưng chưa thanh toán nên chưa có hiệu lực; tự động đóng khi quyết toán xe đã trả."
+                : "Yêu cầu tự động đóng vì chuyến thuê đã kết thúc.";
+            extension.DecidedAt = DateTime.UtcNow;
+        }
+
+        foreach (var payment in extensionPayments.Where(payment =>
+                     payment.Status == PaymentStatus.Pending))
+        {
+            payment.Status = PaymentStatus.Failed;
+            payment.Method = PaymentMethods.NotSelected;
+            payment.PaidAt = null;
+            payment.TransactionCode = null;
+        }
+
+        var grossRentalPaid = booking.Payments
+            .Where(payment =>
+                payment.Status == PaymentStatus.Paid &&
+                payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+            .Sum(payment => payment.Amount);
+        var rentalRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.VehicleSwapRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var effectiveRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossRentalPaid,
+            rentalRefundPlanned);
+
+        var grossDepositPaid = booking.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Deposit &&
                 payment.Status == PaymentStatus.Paid)
@@ -446,11 +571,17 @@ internal sealed class ReturnService : IReturnService
                 payment.Status == PaymentStatus.Paid)
             .Sum(payment => payment.Amount);
 
-        var depositSatisfied = booking.DepositAmount <= 0 ||
-            Math.Max(0m, depositPaid - depositAlreadyRefundedOrPlanned) >= booking.DepositAmount;
-
-        var extensionPaid = booking.Extensions.All(extension =>
-            extension.Status != BookingExtensionStatus.Approved);
+        var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossDepositPaid,
+            depositAlreadyRefundedOrPlanned);
+        var requiredRentalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - booking.AdditionalAmount);
+        var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
+            requiredRentalAmount,
+            effectiveRentalPaid,
+            booking.DepositAmount,
+            effectiveDepositPaid);
 
         var cashAdditionalPaid = booking.Payments
             .Where(payment =>
@@ -465,32 +596,22 @@ internal sealed class ReturnService : IReturnService
             payment.Method != PaymentMethods.DepositDeduction &&
             payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
 
-        var swapAdjustmentPaid = booking.Payments.All(payment =>
-            payment.Type != PaymentType.VehicleSwapAdjustment ||
-            payment.Status == PaymentStatus.Paid);
+        var hasOpenSwapAdjustment = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.VehicleSwapAdjustment &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
 
-        if (!rentalPaid ||
-            !depositSatisfied ||
-            !extensionPaid ||
+        if (!upfrontSatisfied ||
             !additionalPaid ||
             hasOpenAdditionalPayment ||
-            !swapAdjustmentPaid)
+            hasOpenSwapAdjustment)
         {
             return OperationResult.Failure(
-                "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền cọc.");
-        }
-
-        foreach (var extension in booking.Extensions.Where(extension =>
-                     extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence))
-        {
-            extension.Status = BookingExtensionStatus.Cancelled;
-            extension.AdminNote = "Yêu cầu tự động đóng vì chuyến thuê đã kết thúc.";
-            extension.DecidedAt = DateTime.UtcNow;
+                "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền thuê/cọc.");
         }
 
         var depositAvailableBeforeNewDeduction = Math.Max(
             0m,
-            depositPaid - depositAlreadyRefundedOrPlanned - depositAlreadyDeducted);
+            effectiveDepositPaid - depositAlreadyDeducted);
         var reservedCompensation = booking.Extensions.Sum(extension =>
             CompensationLedger.SumReservedAmount(extension.CustomerNote));
         var compensationNotYetApplied = Math.Max(0m, reservedCompensation - depositAlreadyDeducted);
@@ -526,8 +647,13 @@ internal sealed class ReturnService : IReturnService
                 Status = PaymentStatus.AwaitingRefund
             });
 
-            booking.RefundAmount += depositToRefund;
         }
+
+        booking.RefundAmount = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+            .Sum(payment => payment.Amount);
 
         if (totalDepositDeducted > 0)
         {
@@ -544,9 +670,17 @@ internal sealed class ReturnService : IReturnService
                 $"Hoàn cọc còn lại sau khi kiểm tra xe: {depositToRefund:N0} đồng.");
         }
 
-        booking.Vehicle.Status = requiresMaintenance
-            ? VehicleStatus.Maintenance
-            : VehicleStatus.Available;
+        if (requiresMaintenance)
+        {
+            booking.Vehicle.Status = VehicleStatus.Maintenance;
+        }
+        else
+        {
+            booking.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
+                _dbContext,
+                booking.Vehicle,
+                cancellationToken: cancellationToken);
+        }
 
         if (requiresMaintenance)
         {
@@ -565,7 +699,7 @@ internal sealed class ReturnService : IReturnService
 
         var hasPendingRefund = booking.Payments.Any(payment =>
             payment.Type == PaymentType.Refund &&
-            payment.Status == PaymentStatus.AwaitingRefund);
+            BookingWorkflowRules.IsOpenRefundStatus(payment.Status));
         booking.Status = hasPendingRefund
             ? BookingStatus.AwaitingRefund
             : BookingStatus.Completed;
@@ -715,4 +849,3 @@ internal sealed class ReturnService : IReturnService
             ? addition
             : $"{current.Trim()} {addition}";
 }
-

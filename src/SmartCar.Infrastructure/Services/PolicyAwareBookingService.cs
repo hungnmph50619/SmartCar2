@@ -30,6 +30,33 @@ internal sealed class PolicyAwareBookingService : IBookingService
     {
         await _policy.ExpireStaleReservationsAsync(cancellationToken);
 
+        if (await _policy.HasActiveUnpaidHoldAsync(customerId, cancellationToken))
+        {
+            return BookingMutationResult.Failure(
+                "Bạn đang có một đơn chưa thanh toán vẫn giữ lịch xe. Hãy hoàn tất hoặc chờ đơn đó hết hạn trước khi tạo thêm đơn giữ chỗ.");
+        }
+
+        var holdRestriction = await _policy.GetHoldRestrictionAsync(
+            customerId,
+            request.VehicleId,
+            cancellationToken);
+        var utcNow = DateTime.UtcNow;
+
+        if (holdRestriction.IsAccountBlocked(utcNow))
+        {
+            var remaining = holdRestriction.AccountBlockedUntil!.Value - utcNow;
+            return BookingMutationResult.Failure(
+                $"Tài khoản tạm thời không được tạo giữ chỗ mới do có {holdRestriction.TimeoutCount24Hours} lần để đơn tự hết hạn trong 24 giờ gần nhất. " +
+                $"Vui lòng thử lại sau khoảng {FormatRemaining(remaining)} hoặc liên hệ SmartCar nếu cần Admin kiểm tra và gỡ hạn chế có lý do.");
+        }
+
+        if (holdRestriction.IsVehicleCoolingDown(utcNow))
+        {
+            var remaining = holdRestriction.SameVehicleCooldownUntil!.Value - utcNow;
+            return BookingMutationResult.Failure(
+                $"Xe này đang trong thời gian chờ sau lần giữ chỗ hết hạn của tài khoản. Vui lòng thử lại sau khoảng {FormatRemaining(remaining)} hoặc chọn xe khác.");
+        }
+
         var trafficFineDebt = await _policy.GetOutstandingTrafficFineDebtAsync(
             customerId,
             cancellationToken);
@@ -71,8 +98,6 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 $"{blockedUntil.Value:dd/MM/yyyy HH:mm}.");
         }
 
-        // Chụp cấu hình trước khi tạo booking. Giá trị này được lưu riêng trên booking
-        // để các lần thay đổi policy sau đó không làm thay đổi lịch sử đơn cũ.
         var depositHoldDaysApplied = await GetConfiguredDepositHoldDaysAsync(cancellationToken);
 
         var result = await _inner.CreateAsync(customerId, request, cancellationToken);
@@ -116,6 +141,8 @@ internal sealed class PolicyAwareBookingService : IBookingService
             createdBooking.ReservationExpiresAt = null;
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            // Đây là lỗi cạnh tranh lịch phát sinh trong lúc tạo, không phải hành vi khách bỏ hold,
+            // nên không ghi BookingHoldEvent và không phạt cooldown.
             return BookingMutationResult.Failure(
                 "Xe vừa có lịch thuê khác và không còn đủ thời gian xoay vòng. Vui lòng chọn khung giờ hoặc xe khác.");
         }
@@ -175,6 +202,13 @@ internal sealed class PolicyAwareBookingService : IBookingService
         if (booking.Status == BookingStatus.Expired)
         {
             return OperationResult.Failure("Đơn đã hết thời gian giữ chỗ và lịch xe đã được giải phóng.");
+        }
+
+        if (!booking.StaffReviewedAt.HasValue ||
+            string.IsNullOrWhiteSpace(booking.StaffReviewedByStaffId))
+        {
+            return OperationResult.Failure(
+                "Đơn chưa hoàn tất bước Staff kiểm tra và gửi duyệt. Admin không được bỏ qua bước vận hành này.");
         }
 
         if (await _policy.HasBufferedConflictAsync(
@@ -262,5 +296,21 @@ internal sealed class PolicyAwareBookingService : IBookingService
         return values.Count == 0
             ? DepositHoldPolicy.DefaultDays
             : DepositHoldPolicy.NormalizeDays(values[0]);
+    }
+
+    private static string FormatRemaining(TimeSpan remaining)
+    {
+        if (remaining <= TimeSpan.Zero)
+        {
+            return "vài giây";
+        }
+
+        if (remaining.TotalHours >= 1)
+        {
+            var hours = (int)Math.Ceiling(remaining.TotalHours);
+            return $"{hours} giờ";
+        }
+
+        return $"{Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes))} phút";
     }
 }

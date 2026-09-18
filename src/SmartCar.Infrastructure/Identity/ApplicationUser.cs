@@ -10,6 +10,11 @@ public class ApplicationUser : IdentityUser
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    // Ảnh mặt xác minh KYC được lưu trong SecureDocumentStorage, không phải avatar công khai.
+    public string? IdentityFaceImagePath { get; set; }
+    public DateTime? IdentityFaceCapturedAt { get; set; }
+    public string? IdentityFaceCaptureMethod { get; set; }
+
     // Các trường dưới đây chỉ được sử dụng cho tài khoản Staff/Nhân viên.
     // Customer/Admin có thể để null để không làm thay đổi luồng tài khoản hiện có.
     public string? EmployeeCode { get; set; }

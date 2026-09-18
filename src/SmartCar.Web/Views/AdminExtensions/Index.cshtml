@@ -155,10 +155,13 @@ else
                                     <div class="row g-2 mt-2">
                                         @for (var imageIndex = 0; imageIndex < evidence.ImagePaths.Count; imageIndex++)
                                         {
-                                            var imagePath = evidence.ImagePaths[imageIndex];
+                                            var evidenceUrl = Url.Action(
+                                                "Image",
+                                                "ExtensionEvidenceFiles",
+                                                new { extensionId = item.BookingExtensionId, index = imageIndex });
                                             <div class="col-6 col-md-4">
-                                                <a href="@imagePath" target="_blank" rel="noopener" class="d-block text-decoration-none">
-                                                    <img src="@imagePath" alt="Ảnh minh chứng @(imageIndex + 1)" class="img-thumbnail w-100" style="height:130px;object-fit:cover" />
+                                                <a href="@evidenceUrl" target="_blank" rel="noopener" class="d-block text-decoration-none">
+                                                    <img src="@evidenceUrl" alt="Ảnh minh chứng @(imageIndex + 1)" class="img-thumbnail w-100" style="height:130px;object-fit:contain;background:#f8f9fa" />
                                                     <div class="small text-muted mt-1">Ảnh @(imageIndex + 1)</div>
                                                 </a>
                                             </div>
@@ -194,35 +197,16 @@ else
 
                             @if (item.IsForceMajeure)
                             {
-                                <div class="border rounded p-3 mb-3">
-                                    <div class="fw-bold mb-1">1. Đề xuất xe thay thế cho khách có đơn kế tiếp</div>
-                                    <div class="small text-muted mb-3">Liên hệ khách trước. Chỉ xác nhận đổi xe sau khi khách đồng ý chiếc xe thay thế và phần chênh lệch giá (nếu có).</div>
-                                    @if (conflictResolution.Alternatives.Count > 0)
-                                    {
-                                        <form asp-controller="AdminExtensions" asp-action="MoveConflictingBooking" method="post" class="row g-2" data-swap-form data-confirm="Xác nhận khách có đơn kế tiếp đã đồng ý xe thay thế và chênh lệch giá?">
-                                            <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
-                                            <input type="hidden" name="customerAccepted" value="true" />
-                                            <div class="col-12">
-                                                <select name="replacementVehicleId" class="form-select" required data-swap-select>
-                                                    <option value="">Chọn xe thay thế...</option>
-                                                    @foreach (var alternative in conflictResolution.Alternatives)
-                                                    {
-                                                        var currentUpfront = alternative.CurrentRentalAmount + RentalPolicy.CalculateDeposit(alternative.CurrentRentalAmount);
-                                                        var newUpfront = alternative.EstimatedRentalAmount + RentalPolicy.CalculateDeposit(alternative.EstimatedRentalAmount);
-                                                        var totalDifference = newUpfront - currentUpfront;
-                                                        var priceText = totalDifference == 0 ? "không chênh lệch" : totalDifference > 0 ? $"thu thêm {totalDifference:N0} đ" : $"hoàn {Math.Abs(totalDifference):N0} đ";
-                                                        <option value="@alternative.VehicleId" data-current="@currentUpfront" data-new="@newUpfront" data-difference="@totalDifference">@alternative.VehicleName · @alternative.LicensePlate · @priceText</option>
-                                                    }
-                                                </select>
-                                            </div>
-                                            <div class="col-12"><div class="alert alert-light border py-2 mb-0 d-none" data-swap-summary></div></div>
-                                            <div class="col-12"><button class="btn btn-primary w-100" type="submit">Xác nhận đổi xe</button></div>
-                                        </form>
-                                    }
-                                    else
-                                    {
-                                        <div class="alert alert-warning py-2 mb-0">Hiện không có xe thay thế phù hợp lịch của đơn kế tiếp.</div>
-                                    }
+                                <div class="alert alert-info mb-3">
+                                    <strong>Phần đổi xe đã chuyển sang Staff.</strong>
+                                    <div class="small mt-1">
+                                        Nhân viên chịu trách nhiệm liên hệ khách có đơn kế tiếp, chọn xe thay thế phù hợp
+                                        và ghi nhận đổi xe. Admin chỉ tiếp tục duyệt/từ chối gia hạn sau khi xung đột vận hành
+                                        đã được xử lý hoặc thực hiện quyết định tài chính khi khách không chấp nhận phương án thay thế.
+                                    </div>
+                                    <div class="small mt-2">
+                                        Hiện có <strong>@conflictResolution.Alternatives.Count</strong> xe thay thế phù hợp theo lịch tại thời điểm tải trang.
+                                    </div>
                                 </div>
 
                                 <div class="border border-danger rounded p-3 mb-3">

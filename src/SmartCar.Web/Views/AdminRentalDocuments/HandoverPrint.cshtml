@@ -53,7 +53,7 @@
         {
             <a class="back edit" href="/HandoverEdits/Edit?bookingId=@booking.BookingId">← Chỉnh sửa biên bản</a>
         }
-        <a class="back" href="/AdminBookings/Index">Danh sách đơn</a>
+        <a class="back" href="/Staff/Details/@booking.BookingId">Quay lại xử lý đơn</a>
     </div>
 
     @if (awaitingSignature)
@@ -80,7 +80,7 @@
             <div>
                 @for (var i = 0; i < signedDocumentPaths.Count; i++)
                 {
-                    <a href="@signedDocumentPaths[i]" target="_blank" rel="noopener">Xem trang @(i + 1)</a>
+                    <a href="@Url.Action("Page", "RentalSignedDocumentFiles", new { bookingId = booking.BookingId, handover = true, index = i })" target="_blank" rel="noopener">Xem trang @(i + 1)</a>
                 }
             </div>
         </div>

@@ -3,6 +3,7 @@ using SmartCar.Application.Common;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Application.Features.VehicleDocuments;
 using SmartCar.Domain.Entities;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 
@@ -66,14 +67,26 @@ internal sealed class VehicleService : IVehicleService
             return Array.Empty<VehicleDto>();
         }
 
+        var preparationBeforeRequested = TimeSpan.FromMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(request.PickupMethod));
+        var requestedPickupBoundary = request.PickupDate - preparationBeforeRequested;
+        var requestedReturnWithStorePreparation = request.ReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        var requestedReturnWithDeliveryPreparation = request.ReturnDate.AddMinutes(
+            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+
         var query = VehicleQuery()
             .Where(vehicle =>
                 vehicle.Status == VehicleStatus.Available ||
                 vehicle.Status == VehicleStatus.Rented)
             .Where(vehicle => !vehicle.Bookings.Any(booking =>
                 BlockingBookingStatuses.Contains(booking.Status) &&
-                request.PickupDate < booking.ReturnDate &&
-                request.ReturnDate > booking.PickupDate))
+                requestedPickupBoundary < booking.ReturnDate &&
+                (
+                    booking.PickupMethod == VehiclePickupMethod.Delivery
+                        ? requestedReturnWithDeliveryPreparation > booking.PickupDate
+                        : requestedReturnWithStorePreparation > booking.PickupDate
+                )))
             // Phạt nguội là nghĩa vụ tài chính gắn với chuyến thuê/khách cũ,
             // không phải hỏng hóc vật lý của xe nên không được chặn xe tiếp tục cho thuê.
             .Where(vehicle => !vehicle.Incidents.Any(incident =>

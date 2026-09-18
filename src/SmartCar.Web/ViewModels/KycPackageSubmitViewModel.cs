@@ -9,6 +9,9 @@ public sealed class KycPackageSubmitViewModel
 
     public KycDrivingLicenseInputViewModel DrivingLicenseVerification { get; set; } = new();
 
+    [Required(ErrorMessage = "Vui lòng chụp ảnh khuôn mặt trực tiếp để xác minh danh tính.")]
+    public Guid? FaceCaptureSessionId { get; set; }
+
     public bool ConfirmSamePerson { get; set; }
 }
 

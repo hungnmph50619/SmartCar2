@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
@@ -67,7 +68,9 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (!customerContacted)
             return OperationResult.Failure("Hãy xác nhận đã liên hệ khách trước khi ghi nhận không đến nhận xe.");
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
@@ -113,7 +116,9 @@ internal sealed class BookingOperationService : IBookingOperationService
         var remainingDeposit = Math.Max(0m, depositPaid - depositRefundAlreadyPlanned);
         var newRefundAmount = revenueRefund + remainingDeposit;
         var existingRefundTotal = booking.Payments
-            .Where(payment => payment.Type == PaymentType.Refund)
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
             .Sum(payment => payment.Amount);
 
         booking.Status = BookingStatus.NoShow;
@@ -185,7 +190,9 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (string.IsNullOrWhiteSpace(request.Reason))
             return RefundResult.Failure("Vui lòng nhập lý do hủy đơn.");
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
         var query = _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
@@ -202,10 +209,21 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (booking is null)
             return RefundResult.Failure("Không tìm thấy đơn thuê.");
 
+        var hasPaymentAwaitingConfirmation = booking.Payments.Any(payment =>
+            payment.Type != PaymentType.Refund &&
+            payment.Status == PaymentStatus.AwaitingConfirmation);
+
         if (!BookingWorkflowRules.CanCancelBeforeHandover(
                 booking.Status,
-                booking.Handover is not null))
+                booking.Handover is not null,
+                hasPaymentAwaitingConfirmation))
         {
+            if (hasPaymentAwaitingConfirmation)
+            {
+                return RefundResult.Failure(
+                    "Đơn đang có khoản chuyển khoản/QR chờ đối soát. Cần xác nhận hoặc từ chối giao dịch trước khi hủy để tránh thất lạc tiền khách đã chuyển.");
+            }
+
             return RefundResult.Failure(
                 booking.Handover is not null
                     ? "Đơn đã lập biên bản giao xe nên không thể hủy. Nếu giao xe chưa hoàn tất, hãy xử lý hồ sơ bàn giao thay vì hủy đơn."
@@ -280,7 +298,9 @@ internal sealed class BookingOperationService : IBookingOperationService
 
         var newRefundAmount = refundableRevenueAmount + depositToRefund;
         var existingRefundTotal = booking.Payments
-            .Where(payment => payment.Type == PaymentType.Refund)
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
             .Sum(payment => payment.Amount);
 
         booking.Status = BookingStatus.Cancelled;

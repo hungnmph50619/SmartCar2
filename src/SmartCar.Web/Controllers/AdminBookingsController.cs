@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -17,15 +18,18 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminBookingsController : Controller
 {
     private readonly IBookingService _bookingService;
+    private readonly IBookingReviewService _bookingReviewService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
 
     public AdminBookingsController(
         IBookingService bookingService,
+        IBookingReviewService bookingReviewService,
         IAuditService auditService,
         ApplicationDbContext dbContext)
     {
         _bookingService = bookingService;
+        _bookingReviewService = bookingReviewService;
         _auditService = auditService;
         _dbContext = dbContext;
     }
@@ -65,22 +69,195 @@ public sealed class AdminBookingsController : Controller
         return booking is null ? NotFound() : View(booking);
     }
 
+    [HttpGet]
+    public async Task<IActionResult> HoldRestrictions(CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var windowStart = now.AddHours(-BookingHoldAbusePolicy.RollingWindowHours);
+        var events = await _dbContext.Set<BookingHoldEvent>()
+            .AsNoTracking()
+            .Where(item =>
+                !item.IsWaived &&
+                item.OccurredAt >= windowStart &&
+                item.OccurredAt <= now)
+            .OrderByDescending(item => item.OccurredAt)
+            .ToListAsync(cancellationToken);
+
+        if (events.Count == 0)
+        {
+            return View(new AdminHoldRestrictionListViewModel());
+        }
+
+        var customerIds = events.Select(item => item.CustomerId).Distinct().ToList();
+        var vehicleIds = events.Select(item => item.VehicleId).Distinct().ToList();
+
+        var customers = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => customerIds.Contains(user.Id))
+            .Select(user => new
+            {
+                user.Id,
+                user.FullName,
+                user.Email,
+                user.PhoneNumber
+            })
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+
+        var vehicles = await _dbContext.Vehicles
+            .AsNoTracking()
+            .Where(vehicle => vehicleIds.Contains(vehicle.VehicleId))
+            .Select(vehicle => new
+            {
+                vehicle.VehicleId,
+                vehicle.VehicleName,
+                vehicle.LicensePlate
+            })
+            .ToDictionaryAsync(item => item.VehicleId, cancellationToken);
+
+        var items = events
+            .GroupBy(item => item.CustomerId)
+            .Select(group =>
+            {
+                customers.TryGetValue(group.Key, out var customer);
+                var allTimes = group.Select(item => item.OccurredAt).ToArray();
+                var accountRestriction = BookingHoldAbusePolicy.Evaluate(
+                    now,
+                    allTimes,
+                    Array.Empty<DateTime>());
+
+                var cooldowns = group
+                    .GroupBy(item => item.VehicleId)
+                    .Select(vehicleGroup =>
+                    {
+                        vehicles.TryGetValue(vehicleGroup.Key, out var vehicle);
+                        var vehicleTimes = vehicleGroup.Select(item => item.OccurredAt).ToArray();
+                        var restriction = BookingHoldAbusePolicy.Evaluate(
+                            now,
+                            allTimes,
+                            vehicleTimes);
+
+                        return new AdminVehicleCooldownViewModel
+                        {
+                            VehicleId = vehicleGroup.Key,
+                            VehicleName = vehicle?.VehicleName ?? $"Xe #{vehicleGroup.Key}",
+                            LicensePlate = vehicle?.LicensePlate ?? string.Empty,
+                            TimeoutCount24Hours = vehicleTimes.Length,
+                            CooldownUntil = restriction.SameVehicleCooldownUntil
+                        };
+                    })
+                    .OrderByDescending(item => item.CooldownUntil)
+                    .ToList();
+
+                return new AdminHoldRestrictionItemViewModel
+                {
+                    CustomerId = group.Key,
+                    CustomerName = customer?.FullName ?? "Khách hàng",
+                    CustomerEmail = customer?.Email,
+                    CustomerPhone = customer?.PhoneNumber,
+                    TimeoutCount24Hours = accountRestriction.TimeoutCount24Hours,
+                    LatestTimeoutAt = allTimes.Max(),
+                    AccountBlockedUntil = accountRestriction.AccountBlockedUntil,
+                    VehicleCooldowns = cooldowns
+                };
+            })
+            .OrderByDescending(item => item.AccountBlockedUntil.HasValue)
+            .ThenByDescending(item => item.TimeoutCount24Hours)
+            .ThenByDescending(item => item.LatestTimeoutAt)
+            .ToList();
+
+        return View(new AdminHoldRestrictionListViewModel { Items = items });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> WaiveHoldRestriction(
+        string customerId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        customerId = customerId?.Trim() ?? string.Empty;
+        reason = reason?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(customerId) || reason.Length < 10)
+        {
+            TempData["ErrorMessage"] =
+                "Cần chọn đúng khách hàng và nhập lý do gỡ hạn chế tối thiểu 10 ký tự.";
+            return RedirectToAction(nameof(HoldRestrictions));
+        }
+
+        var now = DateTime.UtcNow;
+        var windowStart = now.AddHours(-BookingHoldAbusePolicy.RollingWindowHours);
+        var activeEvents = await _dbContext.Set<BookingHoldEvent>()
+            .Where(item =>
+                item.CustomerId == customerId &&
+                !item.IsWaived &&
+                item.OccurredAt >= windowStart &&
+                item.OccurredAt <= now)
+            .ToListAsync(cancellationToken);
+
+        if (activeEvents.Count == 0)
+        {
+            TempData["ErrorMessage"] = "Khách hàng hiện không có lịch sử timeout chưa được gỡ trong 24 giờ gần nhất.";
+            return RedirectToAction(nameof(HoldRestrictions));
+        }
+
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        foreach (var holdEvent in activeEvents)
+        {
+            holdEvent.IsWaived = true;
+            holdEvent.WaivedByAdminId = adminId;
+            holdEvent.WaivedAt = now;
+            holdEvent.WaiveReason = reason;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.WriteAsync(
+            adminId,
+            "WaiveBookingHoldRestriction",
+            nameof(BookingHoldEvent),
+            customerId,
+            $"Admin gỡ {activeEvents.Count} sự kiện giữ chỗ hết hạn chưa waive trong 24 giờ gần nhất. Lý do: {reason}",
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
+
+        TempData["SuccessMessage"] =
+            $"Đã gỡ hạn chế giữ chỗ hiện tại của khách và ghi audit cho {activeEvents.Count} lần timeout.";
+        return RedirectToAction(nameof(HoldRestrictions));
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Confirm(int id, CancellationToken cancellationToken)
     {
-        var staffReviewed = await _dbContext.AuditLogs
+        var staffReview = await _dbContext.Bookings
             .AsNoTracking()
-            .AnyAsync(log =>
-                log.Action == "StaffReviewedBooking" &&
-                log.EntityName == "Booking" &&
-                log.EntityId == id.ToString(),
-                cancellationToken);
+            .Where(item => item.BookingId == id)
+            .Select(item => new
+            {
+                item.StaffReviewedAt,
+                item.StaffReviewedByStaffId
+            })
+            .FirstOrDefaultAsync(cancellationToken);
 
-        if (!staffReviewed)
+        if (staffReview is null)
+        {
+            return NotFound();
+        }
+
+        if (!staffReview.StaffReviewedAt.HasValue ||
+            string.IsNullOrWhiteSpace(staffReview.StaffReviewedByStaffId))
         {
             TempData["ErrorMessage"] =
-                "Đơn chưa có bước kiểm tra của nhân viên. Nhân viên phải kiểm tra KYC, xe và lịch thuê trước khi quản trị viên duyệt.";
+                "Đơn chưa được nhân viên kiểm tra và gửi duyệt. Quản trị viên không thể bỏ qua bước vận hành này.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var currentReview = await _bookingReviewService.ValidateForStaffReviewAsync(id, cancellationToken);
+        if (!currentReview.Succeeded)
+        {
+            TempData["ErrorMessage"] =
+                "Đơn không còn đủ điều kiện duyệt theo dữ liệu hiện tại: " +
+                string.Join("; ", currentReview.Errors);
             return RedirectToAction(nameof(Details), new { id });
         }
 
@@ -92,7 +269,7 @@ public sealed class AdminBookingsController : Controller
             await WriteAuditAsync(
                 "AdminApproveBooking",
                 id,
-                $"Quản trị viên duyệt đơn thuê #{id} sau bước kiểm tra của nhân viên và chuyển sang Chờ thanh toán.",
+                $"Quản trị viên duyệt đơn thuê #{id} sau bước Staff review có trạng thái lưu trên Booking và re-check KYC/xe/lịch hiện tại; chuyển sang Chờ thanh toán.",
                 cancellationToken);
         }
 

@@ -5,12 +5,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
-using SmartCar.Application.Features.Extensions;
 using SmartCar.Application.Features.Payments;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 
 namespace SmartCar.Web.Controllers;
 
@@ -21,20 +22,20 @@ public sealed class AdminPaymentsController : Controller
     private const string LegacyDepositDeductionPrefix = "EXT-COMP-";
 
     private readonly IPaymentService _paymentService;
-    private readonly IExtensionService _extensionService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
+    private readonly IUserBankAccountService _bankAccountService;
 
     public AdminPaymentsController(
         IPaymentService paymentService,
-        IExtensionService extensionService,
         IAuditService auditService,
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IUserBankAccountService bankAccountService)
     {
         _paymentService = paymentService;
-        _extensionService = extensionService;
         _auditService = auditService;
         _dbContext = dbContext;
+        _bankAccountService = bankAccountService;
     }
 
     [HttpGet]
@@ -44,8 +45,6 @@ public sealed class AdminPaymentsController : Controller
         string? section,
         CancellationToken cancellationToken)
     {
-        await RepairLegacyForceMajeureCompensationAsync(cancellationToken);
-
         var reviewAll =
             string.IsNullOrWhiteSpace(section) &&
             !type.HasValue &&
@@ -80,110 +79,6 @@ public sealed class AdminPaymentsController : Controller
         }).ToList();
 
         return View(filtered);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ConfirmQr(
-        int paymentId,
-        string? section,
-        CancellationToken cancellationToken)
-    {
-        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        var result = await _paymentService.ConfirmQrPaymentAsync(
-            paymentId,
-            adminId,
-            cancellationToken);
-
-        if (result.Succeeded)
-        {
-            var payment = await _dbContext.Payments
-                .AsNoTracking()
-                .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
-
-            if (payment?.Type == PaymentType.Extension)
-            {
-                var extensionResult = await _extensionService.MarkPaidAsync(
-                    payment.BookingId,
-                    cancellationToken);
-
-                if (!extensionResult.Succeeded)
-                {
-                    TempData["ErrorMessage"] =
-                        "Đã xác nhận tiền gia hạn nhưng chưa cập nhật được ngày trả mới: " +
-                        string.Join("; ", extensionResult.Errors);
-                    return RedirectToAction(nameof(Index), new { section = section ?? "adjustment" });
-                }
-            }
-        }
-
-        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã xác nhận nhận được tiền."
-            : string.Join("; ", result.Errors);
-
-        return RedirectToAction(nameof(Index), new { section = section ?? "collection" });
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RejectQr(
-        int paymentId,
-        string? section,
-        string reason,
-        CancellationToken cancellationToken)
-    {
-        reason = reason?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(reason))
-        {
-            TempData["ErrorMessage"] = "Vui lòng nhập lý do yêu cầu khách gửi lại xác nhận thanh toán.";
-            return RedirectToAction(nameof(Index), new { section = section ?? "collection" });
-        }
-
-        if (reason.Length > 500)
-        {
-            TempData["ErrorMessage"] = "Lý do tối đa 500 ký tự.";
-            return RedirectToAction(nameof(Index), new { section = section ?? "collection" });
-        }
-
-        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        var result = await _paymentService.RejectQrPaymentAsync(
-            paymentId,
-            adminId,
-            cancellationToken);
-
-        if (result.Succeeded)
-        {
-            var payment = await _dbContext.Payments
-                .AsNoTracking()
-                .Include(item => item.Booking)
-                .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
-
-            if (payment is not null)
-            {
-                var notification = await _dbContext.Notifications
-                    .Where(item =>
-                        item.UserId == payment.Booking.CustomerId &&
-                        item.Title == "Chưa xác nhận được chuyển khoản")
-                    .OrderByDescending(item => item.NotificationId)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                if (notification is not null)
-                {
-                    notification.Message =
-                        $"SmartCar chưa thể xác nhận giao dịch của đơn #{payment.BookingId}. " +
-                        $"Lý do: {reason}. Vui lòng kiểm tra lại và gửi xác nhận lần nữa.";
-                    notification.IsRead = false;
-                    notification.ReadAt = null;
-                    await _dbContext.SaveChangesAsync(cancellationToken);
-                }
-            }
-        }
-
-        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã gửi lý do để khách kiểm tra và gửi lại."
-            : string.Join("; ", result.Errors);
-
-        return RedirectToAction(nameof(Index), new { section = section ?? "collection" });
     }
 
     [HttpPost]
@@ -226,6 +121,17 @@ public sealed class AdminPaymentsController : Controller
         if (awaitingApproval.Any(item => item.Amount <= 0))
         {
             TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ. Vui lòng kiểm tra dữ liệu.";
+            return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
+        var refundBankAccount = await _bankAccountService.GetDefaultAsync(
+            booking.CustomerId,
+            cancellationToken);
+        if (refundBankAccount is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền. Chưa được duyệt hoàn.";
             return RedirectToAction(nameof(Index), new { section = "refund" });
         }
 
@@ -386,9 +292,11 @@ public sealed class AdminPaymentsController : Controller
                 if (pendingAutomaticCompensation is not null)
                 {
                     pendingAutomaticCompensation.Status = PaymentStatus.Failed;
-                    affectedBooking.RefundAmount = Math.Max(
-                        0m,
-                        affectedBooking.RefundAmount - pendingAutomaticCompensation.Amount);
+                    affectedBooking.RefundAmount = affectedBooking.Payments
+                        .Where(payment =>
+                            payment.Type == PaymentType.Refund &&
+                            BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                        .Sum(payment => payment.Amount);
                     affectedBooking.RefundReason = AppendText(
                         affectedBooking.RefundReason,
                         "Đã hủy khoản hỗ trợ tự động cũ: trường hợp bất khả kháng chỉ hoàn các khoản khách đã thanh toán; không tự động lấy cọc khách A để bồi thường.");
@@ -432,7 +340,11 @@ public sealed class AdminPaymentsController : Controller
                     Method = PaymentMethods.DepositRefund,
                     Status = PaymentStatus.AwaitingRefund
                 });
-                currentBooking.RefundAmount += depositCorrection;
+                currentBooking.RefundAmount = currentBooking.Payments
+                    .Where(payment =>
+                        payment.Type == PaymentType.Refund &&
+                        BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                    .Sum(payment => payment.Amount);
                 currentBooking.RefundReason = AppendText(
                     currentBooking.RefundReason,
                     $"Điều chỉnh chính sách bất khả kháng: hoàn bổ sung {depositCorrection:N0} đồng cọc; không áp dụng khoản khấu trừ tự động cho đơn kế tiếp.");

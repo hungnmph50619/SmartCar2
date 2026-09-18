@@ -90,10 +90,13 @@ public sealed class PaymentsController : Controller
             bookingId,
             customerId,
             type,
+            customerId,
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? "Đã gửi thông tin chuyển khoản. Vui lòng chờ SmartCar xác nhận."
+            ? type == PaymentType.Rental
+                ? $"Đã báo chuyển khoản. SmartCar có tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; trạng thái này không giữ xe vô thời hạn."
+                : "Đã gửi thông tin chuyển khoản. Vui lòng chờ SmartCar xác nhận."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction(

@@ -136,7 +136,14 @@
                     <div class="d-flex gap-2 flex-wrap mt-2">
                         @for (var index = 0; index < handoverSignedPaths.Count; index++)
                         {
-                            <a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="@handoverSignedPaths[index]">Trang @(index + 1)</a>
+                            <a class="btn btn-sm btn-outline-success"
+                               target="_blank"
+                               rel="noopener"
+                               asp-controller="RentalSignedDocumentFiles"
+                               asp-action="Page"
+                               asp-route-bookingId="@booking.BookingId"
+                               asp-route-handover="true"
+                               asp-route-index="@index">Trang @(index + 1)</a>
                         }
                     </div>
                 </div>
@@ -184,7 +191,14 @@
                     <div class="d-flex gap-2 flex-wrap mt-2">
                         @for (var index = 0; index < returnSignedPaths.Count; index++)
                         {
-                            <a class="btn btn-sm btn-outline-success" target="_blank" rel="noopener" href="@returnSignedPaths[index]">Trang @(index + 1)</a>
+                            <a class="btn btn-sm btn-outline-success"
+                               target="_blank"
+                               rel="noopener"
+                               asp-controller="RentalSignedDocumentFiles"
+                               asp-action="Page"
+                               asp-route-bookingId="@booking.BookingId"
+                               asp-route-handover="false"
+                               asp-route-index="@index">Trang @(index + 1)</a>
                         }
                     </div>
                 </div>

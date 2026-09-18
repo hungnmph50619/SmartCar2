@@ -1,4 +1,5 @@
 @model SmartCar.Web.ViewModels.ProfileViewModel
+@using SmartCar.Domain.Constants
 @{
     var returnVehicleId = ViewBag.ReturnVehicleId is int vehicleId ? vehicleId : (int?)null;
     var returnPickupDate = ViewBag.ReturnPickupDate is DateTime pickup ? pickup : (DateTime?)null;
@@ -10,7 +11,7 @@
 }
 
 <div class="alert alert-light border shadow-sm mb-4">
-    <strong>Chuẩn bị 4 ảnh:</strong> CCCD mặt trước + mặt sau và GPLX mặt trước + mặt sau. Hỗ trợ JPG, PNG, WEBP; tối đa <strong>5 MB/ảnh</strong>. Đây là lần xác minh đầu tiên nên Quản trị viên sẽ đối chiếu toàn bộ hồ sơ trong một lần.
+    <strong>Chuẩn bị hồ sơ:</strong> CCCD mặt trước + mặt sau, GPLX mặt trước + mặt sau và <strong>ảnh khuôn mặt chụp trực tiếp</strong>. Ảnh giấy tờ hỗ trợ JPG/PNG/WEBP tối đa 5 MB/ảnh. Ảnh khuôn mặt không được chọn từ thư viện trong luồng Customer.
 </div>
 
 <form asp-controller="KycPackage"
@@ -29,7 +30,7 @@
 
     <section class="card border-0 shadow-sm mb-4" id="kycCitizenSection">
         <div class="card-header bg-white border-0 p-4 pb-2">
-            <div class="text-uppercase small text-primary fw-semibold">Bước 1/2</div>
+            <div class="text-uppercase small text-primary fw-semibold">Bước 1/3</div>
             <h3 class="h4 fw-bold mb-1">Căn cước công dân</h3>
             <p class="text-muted mb-0">Nhập thông tin cần cho xác minh danh tính và thời hạn thuê xe.</p>
         </div>
@@ -47,13 +48,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold" for="CitizenDateOfBirth">Ngày sinh</label>
-                    <input id="CitizenDateOfBirth"
-                           name="CitizenIdVerification.DateOfBirth"
-                           type="date"
-                           class="form-control"
-                           max="@latestDateOfBirth"
-                           value="@Model.CitizenIdVerification.DateOfBirth?.ToString("yyyy-MM-dd")"
-                           required />
+                    <input id="CitizenDateOfBirth" name="CitizenIdVerification.DateOfBirth" type="date" class="form-control" max="@latestDateOfBirth" value="@Model.CitizenIdVerification.DateOfBirth?.ToString("yyyy-MM-dd")" required />
                     <span asp-validation-for="CitizenIdVerification.DateOfBirth" class="kyc-client-error d-block"></span>
                 </div>
                 <div class="col-md-4">
@@ -68,13 +63,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold" for="CitizenExpiryDate">Ngày hết hạn</label>
-                    <input id="CitizenExpiryDate"
-                           name="CitizenIdVerification.ExpiryDate"
-                           type="date"
-                           class="form-control"
-                           min="@minimumExpiryDate"
-                           value="@Model.CitizenIdVerification.ExpiryDate?.ToString("yyyy-MM-dd")"
-                           required />
+                    <input id="CitizenExpiryDate" name="CitizenIdVerification.ExpiryDate" type="date" class="form-control" min="@minimumExpiryDate" value="@Model.CitizenIdVerification.ExpiryDate?.ToString("yyyy-MM-dd")" required />
                     <span asp-validation-for="CitizenIdVerification.ExpiryDate" class="kyc-client-error d-block"></span>
                 </div>
             </div>
@@ -82,39 +71,30 @@
             <div class="row g-3 mt-2">
                 <div class="col-md-6">
                     <label class="kyc-upload-card" data-upload-card>
-                        <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="citizenFrontImageError" required />
+                        <input asp-for="CitizenIdVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="citizenFrontImageError" data-file-draft-key="kyc-citizen-front" required />
                         <img alt="Xem trước CCCD mặt trước" class="kyc-upload-preview" data-upload-preview />
-                        <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
-                        <strong>CCCD mặt trước</strong>
-                        <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
-                        <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                        <span class="kyc-upload-icon" data-upload-placeholder>＋</span><strong>CCCD mặt trước</strong><span class="kyc-upload-name" data-upload-name>Chọn ảnh</span><small>JPG, PNG, WEBP · tối đa 5 MB</small>
                     </label>
                     <span asp-validation-for="CitizenIdVerification.FrontImage" id="citizenFrontImageError" class="kyc-client-error d-block"></span>
                 </div>
                 <div class="col-md-6">
                     <label class="kyc-upload-card" data-upload-card>
-                        <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="citizenBackImageError" required />
+                        <input asp-for="CitizenIdVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="citizenBackImageError" data-file-draft-key="kyc-citizen-back" required />
                         <img alt="Xem trước CCCD mặt sau" class="kyc-upload-preview" data-upload-preview />
-                        <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
-                        <strong>CCCD mặt sau</strong>
-                        <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
-                        <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                        <span class="kyc-upload-icon" data-upload-placeholder>＋</span><strong>CCCD mặt sau</strong><span class="kyc-upload-name" data-upload-name>Chọn ảnh</span><small>JPG, PNG, WEBP · tối đa 5 MB</small>
                     </label>
                     <span asp-validation-for="CitizenIdVerification.BackImage" id="citizenBackImageError" class="kyc-client-error d-block"></span>
                 </div>
             </div>
-
-            <div class="d-flex justify-content-end mt-4">
-                <button type="button" class="btn btn-outline-primary" data-scroll-to="#kycLicenseSection">Tiếp tục điền GPLX ↓</button>
-            </div>
+            <div class="d-flex justify-content-end mt-4"><button type="button" class="btn btn-outline-primary" data-scroll-to="#kycLicenseSection">Tiếp tục điền GPLX ↓</button></div>
         </div>
     </section>
 
     <section class="card border-0 shadow-sm mb-4" id="kycLicenseSection">
         <div class="card-header bg-white border-0 p-4 pb-2">
-            <div class="text-uppercase small text-primary fw-semibold">Bước 2/2</div>
+            <div class="text-uppercase small text-primary fw-semibold">Bước 2/3</div>
             <h3 class="h4 fw-bold mb-1">Giấy phép lái xe</h3>
-            <p class="text-muted mb-0">Nhập số GPLX, hạng GPLX và thời hạn; Quản trị viên sẽ đối chiếu tên trực tiếp trên ảnh với CCCD.</p>
+            <p class="text-muted mb-0">Quản trị viên sẽ đối chiếu GPLX với CCCD và ảnh khuôn mặt ở bước tiếp theo.</p>
         </div>
         <div class="card-body p-4">
             <div class="row g-3">
@@ -134,13 +114,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold" for="LicenseExpiryDate">Ngày hết hạn</label>
-                    <input id="LicenseExpiryDate"
-                           name="DrivingLicenseVerification.ExpiryDate"
-                           type="date"
-                           class="form-control"
-                           min="@minimumExpiryDate"
-                           value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("yyyy-MM-dd")"
-                           required />
+                    <input id="LicenseExpiryDate" name="DrivingLicenseVerification.ExpiryDate" type="date" class="form-control" min="@minimumExpiryDate" value="@Model.DrivingLicenseVerification.ExpiryDate?.ToString("yyyy-MM-dd")" required />
                     <span asp-validation-for="DrivingLicenseVerification.ExpiryDate" class="kyc-client-error d-block"></span>
                 </div>
             </div>
@@ -148,23 +122,17 @@
             <div class="row g-3 mt-2">
                 <div class="col-md-6">
                     <label class="kyc-upload-card" data-upload-card>
-                        <input asp-for="DrivingLicenseVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="licenseFrontImageError" required />
+                        <input asp-for="DrivingLicenseVerification.FrontImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="licenseFrontImageError" data-file-draft-key="kyc-license-front" required />
                         <img alt="Xem trước GPLX mặt trước" class="kyc-upload-preview" data-upload-preview />
-                        <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
-                        <strong>GPLX mặt trước</strong>
-                        <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
-                        <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                        <span class="kyc-upload-icon" data-upload-placeholder>＋</span><strong>GPLX mặt trước</strong><span class="kyc-upload-name" data-upload-name>Chọn ảnh</span><small>JPG, PNG, WEBP · tối đa 5 MB</small>
                     </label>
                     <span asp-validation-for="DrivingLicenseVerification.FrontImage" id="licenseFrontImageError" class="kyc-client-error d-block"></span>
                 </div>
                 <div class="col-md-6">
                     <label class="kyc-upload-card" data-upload-card>
-                        <input asp-for="DrivingLicenseVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="licenseBackImageError" required />
+                        <input asp-for="DrivingLicenseVerification.BackImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="visually-hidden" data-upload-input data-client-error-id="licenseBackImageError" data-file-draft-key="kyc-license-back" required />
                         <img alt="Xem trước GPLX mặt sau" class="kyc-upload-preview" data-upload-preview />
-                        <span class="kyc-upload-icon" data-upload-placeholder>＋</span>
-                        <strong>GPLX mặt sau</strong>
-                        <span class="kyc-upload-name" data-upload-name>Chọn ảnh</span>
-                        <small>JPG, PNG, WEBP · tối đa 5 MB</small>
+                        <span class="kyc-upload-icon" data-upload-placeholder>＋</span><strong>GPLX mặt sau</strong><span class="kyc-upload-name" data-upload-name>Chọn ảnh</span><small>JPG, PNG, WEBP · tối đa 5 MB</small>
                     </label>
                     <span asp-validation-for="DrivingLicenseVerification.BackImage" id="licenseBackImageError" class="kyc-client-error d-block"></span>
                 </div>
@@ -172,23 +140,43 @@
         </div>
     </section>
 
+    <section class="card border-0 shadow-sm mb-4" id="kycFaceSection">
+        <div class="card-header bg-white border-0 p-4 pb-2">
+            <div class="text-uppercase small text-primary fw-semibold">Bước 3/3</div>
+            <h3 class="h4 fw-bold mb-1">Xác minh người thật</h3>
+            <p class="text-muted mb-0">Ảnh này dùng để Admin đối chiếu với CCCD và để Staff đối chiếu lại khi giao/trả xe.</p>
+        </div>
+        <div class="card-body p-4">
+            <partial name="_IdentityCaptureWidget" model="@(new SmartCar.Web.ViewModels.IdentityCaptureWidgetViewModel
+            {
+                Purpose = IdentityCapturePurposes.Kyc,
+                HiddenFieldName = "FaceCaptureSessionId",
+                Title = "Ảnh mặt KYC chụp trực tiếp",
+                HelpText = "Dùng camera trên thiết bị này hoặc quét QR sang điện thoại. Không có nút tải ảnh mặt có sẵn cho Customer.",
+                AllowStaffFallback = false
+            })" />
+        </div>
+    </section>
+
     <section class="card border-primary shadow-sm mb-4 kyc-submit-card">
         <div class="card-body p-4">
             <div class="form-check mb-2">
                 <input class="form-check-input" type="checkbox" value="true" id="confirmSamePerson" name="ConfirmSamePerson" data-confirm-same-person data-client-error-id="confirmSamePersonError" required />
-                <label class="form-check-label fw-semibold" for="confirmSamePerson">Tôi xác nhận CCCD và GPLX trên thuộc cùng một người và thông tin cung cấp là chính xác.</label>
+                <label class="form-check-label fw-semibold" for="confirmSamePerson">Tôi xác nhận CCCD, GPLX và người vừa chụp ảnh là cùng một người.</label>
             </div>
             <div id="confirmSamePersonError" class="kyc-client-error mb-2"></div>
             <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
                 <div>
-                    <h3 class="h5 fw-bold mb-1">Gửi một hồ sơ duy nhất cho Quản trị viên</h3>
-                    <p class="text-muted mb-0">Lần xác minh đầu tiên cần đủ thông tin và cả 4 ảnh. Quản trị viên sẽ duyệt hoặc yêu cầu cập nhật toàn bộ hồ sơ.</p>
+                    <h3 class="h5 fw-bold mb-1">Gửi hồ sơ cho Quản trị viên</h3>
+                    <p class="text-muted mb-0">Admin sẽ xem CCCD, GPLX và ảnh mặt cạnh nhau trước khi xác minh.</p>
                 </div>
                 <div class="text-lg-end">
                     <button class="btn btn-primary btn-lg" type="submit" data-kyc-submit data-loading-text="Đang gửi hồ sơ..." disabled>Gửi hồ sơ xác minh</button>
-                    <small class="text-muted d-block mt-2" data-submit-hint>Vui lòng hoàn tất thông tin, chọn đủ 4 ảnh và tích xác nhận.</small>
+                    <small class="text-muted d-block mt-2" data-submit-hint>Vui lòng hoàn tất thông tin, đủ 4 ảnh giấy tờ và chụp ảnh mặt trực tiếp.</small>
                 </div>
             </div>
         </div>
     </section>
 </form>
+
+<script src="~/js/kyc-face-submit-guard.js" asp-append-version="true"></script>

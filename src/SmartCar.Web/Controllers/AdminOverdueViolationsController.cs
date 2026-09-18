@@ -155,7 +155,11 @@ public sealed class AdminOverdueViolationsController : Controller
             Method = PaymentMethods.CompensationRefund,
             Status = PaymentStatus.AwaitingRefund
         });
-        affected.RefundAmount += contractCompensation;
+        affected.RefundAmount = affected.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+            .Sum(payment => payment.Amount);
         affected.RefundReason = AppendText(affected.RefundReason,
             $"Bồi thường {contractCompensation:N0} đồng bằng giá hợp đồng do đơn #{renterBookingId} giữ xe quá hạn sau khi bị từ chối gia hạn.");
 

@@ -40,7 +40,8 @@ public sealed record VehicleSearchRequest(
     string? FuelType = null,
     decimal? MinDailyPrice = null,
     decimal? MaxDailyPrice = null,
-    int? MinManufactureYear = null);
+    int? MinManufactureYear = null,
+    VehiclePickupMethod PickupMethod = VehiclePickupMethod.StorePickup);
 
 public sealed record CreateVehicleRequest(
     int BrandId,
