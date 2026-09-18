@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 
 namespace SmartCar.Web.Controllers;
