@@ -11,6 +11,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 
 namespace SmartCar.Web.Controllers;
 
@@ -23,15 +24,18 @@ public sealed class AdminPaymentsController : Controller
     private readonly IPaymentService _paymentService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
+    private readonly IUserBankAccountService _bankAccountService;
 
     public AdminPaymentsController(
         IPaymentService paymentService,
         IAuditService auditService,
-        ApplicationDbContext dbContext)
+        ApplicationDbContext dbContext,
+        IUserBankAccountService bankAccountService)
     {
         _paymentService = paymentService;
         _auditService = auditService;
         _dbContext = dbContext;
+        _bankAccountService = bankAccountService;
     }
 
     [HttpGet]
@@ -117,6 +121,17 @@ public sealed class AdminPaymentsController : Controller
         if (awaitingApproval.Any(item => item.Amount <= 0))
         {
             TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ. Vui lòng kiểm tra dữ liệu.";
+            return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
+        var refundBankAccount = await _bankAccountService.GetDefaultAsync(
+            booking.CustomerId,
+            cancellationToken);
+        if (refundBankAccount is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền. Chưa được duyệt hoàn.";
             return RedirectToAction(nameof(Index), new { section = "refund" });
         }
 
