@@ -27,6 +27,8 @@
 
     var hasSignedHandover = handoverSignedPaths.Count > 0;
     var hasSignedReturn = returnSignedPaths.Count > 0;
+    var handoverVerified = Model.Handover.SignedDocumentVerified;
+    var returnVerified = Model.Return.SignedDocumentVerified;
 
     const string overdueCompPrefix = "OVERDUE-COMP-";
     const string overdueDebtPrefix = "OVERDUE-DEBT-";
@@ -105,6 +107,11 @@
     <a class="btn btn-outline-secondary" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@booking.BookingId">Quay lại đơn</a>
 </div>
 
+<div class="alert alert-info mb-4">
+    <strong>Chế độ xem của Admin:</strong> đây là hồ sơ lịch sử để theo dõi và kiểm tra.
+    Việc lập/sửa biên bản, tải bản ký và xác minh chữ ký thuộc luồng vận hành của Staff.
+</div>
+
 <div class="card card-body shadow-sm mb-4">
     <h2 class="h5 mb-3">Thông tin</h2>
     <div class="row g-3">
@@ -119,15 +126,14 @@
         <div class="card card-body shadow-sm h-100">
             <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
                 <h2 class="h5 mb-0">Biên bản giao</h2>
-                <span class="badge @(hasSignedHandover ? "bg-success" : "bg-danger")">@(hasSignedHandover ? "Đã ký" : "Thiếu ký")</span>
+                <span class="badge @(handoverVerified ? "bg-success" : hasSignedHandover ? "bg-warning text-dark" : "bg-danger")">
+                    @(handoverVerified ? "Đã Staff xác minh" : hasSignedHandover ? "Đã tải · chưa xác minh" : "Thiếu bản ký")
+                </span>
             </div>
             <div class="row g-2 small mb-3">
                 <div class="col-4"><span class="text-muted">Thời gian</span><br /><strong>@Model.Handover.RecordedAt.ToString("dd/MM HH:mm")</strong></div>
                 <div class="col-4"><span class="text-muted">Km</span><br /><strong>@Model.Handover.Mileage.ToString("N0")</strong></div>
                 <div class="col-4"><span class="text-muted">Nhiên liệu</span><br /><strong>@Model.Handover.FuelLevel</strong></div>
-            </div>
-            <div class="d-flex gap-2 flex-wrap mb-3">
-                <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@booking.BookingId">In biên bản</a>
             </div>
             @if (hasSignedHandover)
             {
@@ -150,14 +156,9 @@
             }
             else
             {
-                <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned" method="post" enctype="multipart/form-data" class="border rounded bg-light p-3 mb-3">
-                    <input type="hidden" name="bookingId" value="@booking.BookingId" />
-                    <div class="input-group input-group-sm">
-                        <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control" multiple required oninvalid="this.setCustomValidity('Vui lòng chọn ít nhất một ảnh bản ký.')" oninput="this.setCustomValidity('')" />
-                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
-                    </div>
-                    <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
-                </form>
+                <div class="alert alert-warning small mb-3">
+                    Chưa có bản ký biên bản giao. Staff phải bổ sung và xác minh trong hồ sơ vận hành; Admin không tải thay.
+                </div>
             }
             <div class="row g-2">
                 @foreach (var image in Model.Handover.ImagePaths.Take(6))
@@ -173,7 +174,9 @@
         <div class="card card-body shadow-sm h-100">
             <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
                 <h2 class="h5 mb-0">Biên bản trả</h2>
-                <span class="badge @(hasSignedReturn ? "bg-success" : "bg-danger")">@(hasSignedReturn ? "Đã ký" : "Thiếu ký")</span>
+                <span class="badge @(returnVerified ? "bg-success" : hasSignedReturn ? "bg-warning text-dark" : "bg-danger")">
+                    @(returnVerified ? "Đã Staff xác minh" : hasSignedReturn ? "Đã tải · chưa xác minh" : "Thiếu bản ký")
+                </span>
             </div>
             <div class="row g-2 small mb-3">
                 <div class="col-4"><span class="text-muted">Thời gian</span><br /><strong>@Model.Return.RecordedAt.ToString("dd/MM HH:mm")</strong></div>
@@ -181,9 +184,6 @@
                 <div class="col-4"><span class="text-muted">Nhiên liệu</span><br /><strong>@Model.Return.FuelLevel</strong></div>
             </div>
             <div class="mb-2"><span class="text-muted">Đối chiếu:</span> <strong>@Model.DrivenKilometers.ToString("N0") km</strong> · Hư hỏng mới: <strong>@(Model.Return.HasDamage ? "Có" : "Không")</strong></div>
-            <div class="d-flex gap-2 flex-wrap mb-3">
-                <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@booking.BookingId">In biên bản</a>
-            </div>
             @if (hasSignedReturn)
             {
                 <div class="border border-success rounded bg-success bg-opacity-10 p-3 mb-3">
@@ -205,14 +205,9 @@
             }
             else
             {
-                <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned" method="post" enctype="multipart/form-data" class="border rounded bg-light p-3 mb-3">
-                    <input type="hidden" name="bookingId" value="@booking.BookingId" />
-                    <div class="input-group input-group-sm">
-                        <input type="file" name="signedDocuments" accept="image/jpeg,image/png,image/webp" class="form-control" multiple required oninvalid="this.setCustomValidity('Vui lòng chọn ít nhất một ảnh bản ký.')" oninput="this.setCustomValidity('')" />
-                        <button class="btn btn-outline-success" type="submit">Tải bản ký</button>
-                    </div>
-                    <div class="form-text">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
-                </form>
+                <div class="alert alert-warning small mb-3">
+                    Chưa có bản ký biên bản trả. Staff phải bổ sung và xác minh trong hồ sơ vận hành; Admin không tải thay.
+                </div>
             }
             <div class="row g-2">
                 @foreach (var image in Model.Return.ImagePaths.Take(6))
