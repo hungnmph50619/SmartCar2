@@ -156,48 +156,8 @@ function normalizeSignedBlock(headerRoot, bodyRoot, title) {
 }
 
 function initializeForceMajeureEvidenceUi() {
-    setupAdminPhoneExtensionForm();
     setupEvidenceFileInputs();
     setupLocationControls();
-}
-
-function setupAdminPhoneExtensionForm() {
-    const form = document.getElementById('admin-extension-phone-form');
-    if (!(form instanceof HTMLFormElement)) return;
-
-    form.action = '/AdminExtensionRequests/CreateForCustomer';
-
-    const locationInput = form.querySelector('input[name="customerLiveLocation"]');
-    if (locationInput instanceof HTMLInputElement) {
-        const column = locationInput.closest('.col-md-3') || locationInput.parentElement;
-        locationInput.type = 'hidden';
-        locationInput.readOnly = true;
-        locationInput.placeholder = '';
-
-        if (column && column.dataset.smartLocationColumnReady !== 'true') {
-            column.dataset.smartLocationColumnReady = 'true';
-            column.innerHTML = '';
-
-            const label = document.createElement('label');
-            label.className = 'form-label';
-            label.textContent = 'Vị trí hiện tại';
-
-            const hiddenLegacy = document.createElement('input');
-            hiddenLegacy.type = 'hidden';
-            hiddenLegacy.name = 'customerLiveLocation';
-
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'btn btn-outline-primary w-100 js-smart-current-location';
-            button.textContent = 'Lấy vị trí hiện tại';
-
-            const status = document.createElement('div');
-            status.className = 'form-text js-smart-location-status';
-            status.textContent = 'Chưa lấy vị trí.';
-
-            column.append(label, hiddenLegacy, button, status);
-        }
-    }
 }
 
 function setupEvidenceFileInputs() {
@@ -207,8 +167,7 @@ function setupEvidenceFileInputs() {
             const form = input.form;
             return form && (
                 form.querySelector('[name="evidenceNote"]') ||
-                form.action.includes('Extensions') ||
-                form.action.includes('AdminExtensionRequests'));
+                form.action.includes('Extensions'));
         });
 
     inputs.forEach(input => {
