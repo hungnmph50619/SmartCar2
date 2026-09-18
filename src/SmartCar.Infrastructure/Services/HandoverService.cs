@@ -103,8 +103,8 @@ internal sealed class HandoverService : IHandoverService
 
         var rentalPaidAmount = booking.Payments
             .Where(payment =>
-                payment.Type == PaymentType.Rental &&
-                payment.Status == PaymentStatus.Paid)
+                payment.Status == PaymentStatus.Paid &&
+                payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(payment => payment.Amount);
 
         var depositPaidAmount = booking.Payments
