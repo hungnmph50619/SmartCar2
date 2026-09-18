@@ -204,6 +204,13 @@ internal sealed class PolicyAwareBookingService : IBookingService
             return OperationResult.Failure("Đơn đã hết thời gian giữ chỗ và lịch xe đã được giải phóng.");
         }
 
+        if (!booking.StaffReviewedAt.HasValue ||
+            string.IsNullOrWhiteSpace(booking.StaffReviewedByStaffId))
+        {
+            return OperationResult.Failure(
+                "Đơn chưa hoàn tất bước Staff kiểm tra và gửi duyệt. Admin không được bỏ qua bước vận hành này.");
+        }
+
         if (await _policy.HasBufferedConflictAsync(
                 booking.VehicleId,
                 booking.PickupDate,
