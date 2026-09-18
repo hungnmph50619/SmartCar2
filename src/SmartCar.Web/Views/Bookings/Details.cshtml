@@ -326,7 +326,14 @@
                             <div class="d-flex gap-2 flex-wrap mt-2">
                                 @for (var index = 0; index < handoverSignedPaths.Count; index++)
                                 {
-                                    <a class="btn btn-sm btn-outline-success" href="@handoverSignedPaths[index]" target="_blank" rel="noopener">Xem trang @(index + 1)</a>
+                                    <a class="btn btn-sm btn-outline-success"
+                                       asp-controller="RentalSignedDocumentFiles"
+                                       asp-action="Page"
+                                       asp-route-bookingId="@Model.BookingId"
+                                       asp-route-handover="true"
+                                       asp-route-index="@index"
+                                       target="_blank"
+                                       rel="noopener">Xem trang @(index + 1)</a>
                                 }
                             </div>
                         </div>
@@ -389,7 +396,14 @@
                             <div class="d-flex gap-2 flex-wrap mt-2">
                                 @for (var index = 0; index < returnSignedPaths.Count; index++)
                                 {
-                                    <a class="btn btn-sm btn-outline-success" href="@returnSignedPaths[index]" target="_blank" rel="noopener">Xem trang @(index + 1)</a>
+                                    <a class="btn btn-sm btn-outline-success"
+                                       asp-controller="RentalSignedDocumentFiles"
+                                       asp-action="Page"
+                                       asp-route-bookingId="@Model.BookingId"
+                                       asp-route-handover="false"
+                                       asp-route-index="@index"
+                                       target="_blank"
+                                       rel="noopener">Xem trang @(index + 1)</a>
                                 }
                             </div>
                         </div>
