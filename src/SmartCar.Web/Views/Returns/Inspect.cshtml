@@ -33,9 +33,11 @@
         .ToList();
     var hasSignedDocuments = handoverSignedPaths.Count > 0 && returnSignedPaths.Count > 0;
     var canEditReturn =
-        !isStaff &&
+        isStaff &&
         Model.Status == BookingStatus.PendingInspection &&
-        returnSignedPaths.Count == 0;
+        returnSignedPaths.Count == 0 &&
+        !Model.AdditionalChargePaid &&
+        !Model.AdditionalChargeAwaitingConfirmation;
 
     const string accessoryLabel = "Phụ kiện khi trả:";
     const string noteSeparator = " | Ghi chú: ";
