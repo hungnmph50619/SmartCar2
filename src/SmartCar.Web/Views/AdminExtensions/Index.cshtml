@@ -155,10 +155,13 @@ else
                                     <div class="row g-2 mt-2">
                                         @for (var imageIndex = 0; imageIndex < evidence.ImagePaths.Count; imageIndex++)
                                         {
-                                            var imagePath = evidence.ImagePaths[imageIndex];
+                                            var evidenceUrl = Url.Action(
+                                                "Image",
+                                                "ExtensionEvidenceFiles",
+                                                new { extensionId = item.BookingExtensionId, index = imageIndex });
                                             <div class="col-6 col-md-4">
-                                                <a href="@imagePath" target="_blank" rel="noopener" class="d-block text-decoration-none">
-                                                    <img src="@imagePath" alt="Ảnh minh chứng @(imageIndex + 1)" class="img-thumbnail w-100" style="height:130px;object-fit:cover" />
+                                                <a href="@evidenceUrl" target="_blank" rel="noopener" class="d-block text-decoration-none">
+                                                    <img src="@evidenceUrl" alt="Ảnh minh chứng @(imageIndex + 1)" class="img-thumbnail w-100" style="height:130px;object-fit:contain;background:#f8f9fa" />
                                                     <div class="small text-muted mt-1">Ảnh @(imageIndex + 1)</div>
                                                 </a>
                                             </div>
