@@ -76,12 +76,20 @@ internal sealed class BookingReservationPolicy
                     : $"Đơn hết hạn sau {RentalPolicy.BookingPaymentHoldMinutes} phút chờ thanh toán.";
             booking.ReservationExpiresAt = null;
 
-            // Một booking đã hết hold không được để payment Pending/AwaitingConfirmation tiếp tục
-            // giữ trạng thái mập mờ. Chỉ đóng các khoản tiền thuê/cọc chưa thanh toán của hold này.
+            // Booking hết hold phải giải phóng lịch xe, nhưng KHÔNG được tự cho rằng
+            // tiền đang chờ đối soát là chưa vào tài khoản. Khoản AwaitingConfirmation được giữ
+            // nguyên để Staff đối soát muộn; nếu xác nhận đã nhận tiền thì hệ thống tạo refund,
+            // không hồi sinh booking đã Expired.
             foreach (var payment in booking.Payments.Where(payment =>
                          payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment &&
                          payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation))
             {
+                if (BookingWorkflowRules.PreserveForLateReconciliationOnReservationExpiry(
+                        payment.Status))
+                {
+                    continue;
+                }
+
                 payment.Status = PaymentStatus.Failed;
                 payment.PaidAt = null;
                 payment.TransactionCode = null;
@@ -107,7 +115,7 @@ internal sealed class BookingReservationPolicy
                 Message = oldStatus == BookingStatus.PendingConfirmation
                     ? $"Đơn #{booking.BookingId} đã hết thời gian chờ xác nhận và lịch xe đã được giải phóng."
                     : expiredDuringTransferReconciliation
-                        ? $"Đơn #{booking.BookingId} đã quá thời gian đối soát chuyển khoản và lịch xe đã được giải phóng. Nếu bạn thực sự đã chuyển tiền, vui lòng liên hệ SmartCar để kiểm tra giao dịch."
+                        ? $"Đơn #{booking.BookingId} đã quá thời gian đối soát chuyển khoản và lịch xe đã được giải phóng. Giao dịch bạn đã báo chuyển vẫn được giữ để Staff kiểm tra; nếu SmartCar xác nhận đã nhận tiền sau khi đơn hết hạn, khoản tiền đó sẽ được chuyển sang quy trình hoàn tiền thay vì khôi phục đơn."
                         : $"Đơn #{booking.BookingId} đã hết thời gian thanh toán và lịch xe đã được giải phóng."
             });
 
