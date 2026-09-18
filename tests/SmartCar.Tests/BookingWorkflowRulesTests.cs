@@ -198,4 +198,17 @@ public sealed class BookingWorkflowRulesTests
         Assert.True(BookingWorkflowRules.CanRecordReturn(now.AddMinutes(5), handoverAt, now));
         Assert.False(BookingWorkflowRules.CanRecordReturn(now.AddMinutes(6), handoverAt, now));
     }
+
+    [Theory]
+    [InlineData(PaymentStatus.AwaitingRefund, true)]
+    [InlineData(PaymentStatus.RefundApproved, true)]
+    [InlineData(PaymentStatus.Refunded, false)]
+    [InlineData(PaymentStatus.Failed, false)]
+    public void IsOpenRefundStatus_TracksApprovalUntilStaffTransfer(
+        PaymentStatus status,
+        bool expected)
+    {
+        Assert.Equal(expected, BookingWorkflowRules.IsOpenRefundStatus(status));
+    }
+
 }
