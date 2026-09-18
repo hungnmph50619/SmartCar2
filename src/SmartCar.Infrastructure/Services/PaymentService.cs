@@ -161,11 +161,6 @@ internal sealed class PaymentService : IPaymentService
                 : OperationResult.Failure("Không tìm thấy khoản thanh toán phù hợp.");
         }
 
-        if (payment.Amount <= 0)
-        {
-            return OperationResult.Failure("Số tiền thanh toán phải lớn hơn 0.");
-        }
-
         if (paymentType == PaymentType.TrafficFine)
         {
             if (payment.VehicleIncidentId is null ||
@@ -179,14 +174,14 @@ internal sealed class PaymentService : IPaymentService
             }
         }
 
-        if (paymentType == PaymentType.Rental &&
-            booking.PickupMethod == VehiclePickupMethod.Delivery)
+        if (paymentType == PaymentType.Rental)
         {
             var storedDeliveryFee = Math.Max(
                 0m,
                 booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
 
-            if (storedDeliveryFee <= 0m &&
+            if (booking.PickupMethod == VehiclePickupMethod.Delivery &&
+                storedDeliveryFee <= 0m &&
                 booking.DeliveryLatitude.HasValue &&
                 booking.DeliveryLongitude.HasValue)
             {
@@ -196,8 +191,41 @@ internal sealed class PaymentService : IPaymentService
                     booking.DeliveryLongitude);
             }
 
-            payment.Amount = booking.RentalAmount + storedDeliveryFee;
-            booking.TotalAmount = booking.RentalAmount + storedDeliveryFee + booking.AdditionalAmount;
+            var requiredRentalAmount = booking.RentalAmount + storedDeliveryFee;
+            var rentalPaidBefore = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Rental &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+            var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
+                requiredRentalAmount,
+                rentalPaidBefore);
+
+            if (outstandingRental <= 0m)
+            {
+                return OperationResult.Failure(
+                    "Tiền thuê/phí giao của đơn đã được thanh toán đủ.");
+            }
+
+            payment.Amount = outstandingRental;
+            booking.TotalAmount =
+                requiredRentalAmount + booking.AdditionalAmount;
+
+            foreach (var staleRental in booking.Payments.Where(item =>
+                         item != payment &&
+                         item.Type == PaymentType.Rental &&
+                         item.Status == PaymentStatus.Pending))
+            {
+                staleRental.Status = PaymentStatus.Failed;
+                staleRental.Method = PaymentMethods.NotSelected;
+                staleRental.PaidAt = null;
+                staleRental.TransactionCode = null;
+            }
+        }
+
+        if (payment.Amount <= 0)
+        {
+            return OperationResult.Failure("Số tiền thanh toán phải lớn hơn 0.");
         }
 
         payment.Method = PaymentMethods.BankQr;
@@ -245,6 +273,17 @@ internal sealed class PaymentService : IPaymentService
                     bundledDeposit.Status = PaymentStatus.AwaitingConfirmation;
                     bundledDeposit.PaidAt = null;
                     bundledDeposit.TransactionCode = null;
+                }
+
+                foreach (var staleDeposit in booking.Payments.Where(item =>
+                             item != bundledDeposit &&
+                             item.Type == PaymentType.Deposit &&
+                             item.Status == PaymentStatus.Pending))
+                {
+                    staleDeposit.Status = PaymentStatus.Failed;
+                    staleDeposit.Method = PaymentMethods.NotSelected;
+                    staleDeposit.PaidAt = null;
+                    staleDeposit.TransactionCode = null;
                 }
             }
         }
@@ -308,6 +347,33 @@ internal sealed class PaymentService : IPaymentService
         var booking = payment.Booking;
         var originalType = payment.Type;
         var confirmedAmount = payment.Amount;
+
+        if (originalType == PaymentType.Rental)
+        {
+            var requiredRentalAmount = Math.Max(
+                0m,
+                booking.TotalAmount - booking.AdditionalAmount);
+            var rentalPaidBefore = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Rental &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+            var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
+                requiredRentalAmount,
+                rentalPaidBefore);
+
+            if (outstandingRental <= 0m)
+            {
+                return OperationResult.Failure(
+                    "Tiền thuê/phí giao đã đủ; không xác nhận thêm giao dịch để tránh thu trùng.");
+            }
+
+            if (confirmedAmount != outstandingRental)
+            {
+                return OperationResult.Failure(
+                    $"Giao dịch tiền thuê/phí giao ({confirmedAmount:N0} đồng) không khớp số còn thiếu ({outstandingRental:N0} đồng). Vui lòng xử lý lại trước khi xác nhận.");
+            }
+        }
 
         var stateError = ValidateAdminConfirmationState(booking, originalType);
         if (stateError is not null)
@@ -388,7 +454,12 @@ internal sealed class PaymentService : IPaymentService
                     item.Status == PaymentStatus.Paid)
                 .Sum(item => item.Amount);
 
+            var requiredRentalAmountAfter = Math.Max(
+                0m,
+                booking.TotalAmount - booking.AdditionalAmount);
+
             if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
+                    requiredRentalAmountAfter,
                     rentalPaid,
                     booking.DepositAmount,
                     depositPaidAfter))
