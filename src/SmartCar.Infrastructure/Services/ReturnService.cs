@@ -534,13 +534,22 @@ internal sealed class ReturnService : IReturnService
             payment.TransactionCode = null;
         }
 
-        var rentalPaid = booking.Payments
+        var grossRentalPaid = booking.Payments
             .Where(payment =>
                 payment.Status == PaymentStatus.Paid &&
                 payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(payment => payment.Amount);
+        var rentalRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.VehicleSwapRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var effectiveRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossRentalPaid,
+            rentalRefundPlanned);
 
-        var depositPaid = booking.Payments
+        var grossDepositPaid = booking.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Deposit &&
                 payment.Status == PaymentStatus.Paid)
@@ -560,15 +569,15 @@ internal sealed class ReturnService : IReturnService
                 payment.Status == PaymentStatus.Paid)
             .Sum(payment => payment.Amount);
 
-        var effectiveDepositPaid = Math.Max(
-            0m,
-            depositPaid - depositAlreadyRefundedOrPlanned);
+        var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossDepositPaid,
+            depositAlreadyRefundedOrPlanned);
         var requiredRentalAmount = Math.Max(
             0m,
             booking.TotalAmount - booking.AdditionalAmount);
         var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
             requiredRentalAmount,
-            rentalPaid,
+            effectiveRentalPaid,
             booking.DepositAmount,
             effectiveDepositPaid);
 
@@ -600,7 +609,7 @@ internal sealed class ReturnService : IReturnService
 
         var depositAvailableBeforeNewDeduction = Math.Max(
             0m,
-            depositPaid - depositAlreadyRefundedOrPlanned - depositAlreadyDeducted);
+            effectiveDepositPaid - depositAlreadyDeducted);
         var reservedCompensation = booking.Extensions.Sum(extension =>
             CompensationLedger.SumReservedAmount(extension.CustomerNote));
         var compensationNotYetApplied = Math.Max(0m, reservedCompensation - depositAlreadyDeducted);
