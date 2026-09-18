@@ -406,7 +406,11 @@ public sealed class AdminExtensionsController : Controller
 
         if (totalRefund > 0)
         {
-            conflict.RefundAmount += totalRefund;
+            conflict.RefundAmount = conflict.Payments
+                .Where(payment =>
+                    payment.Type == PaymentType.Refund &&
+                    BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                .Sum(payment => payment.Amount);
             conflict.RefundReason = AppendText(
                 conflict.RefundReason,
                 $"Đổi xe: hoàn chênh lệch {totalRefund:N0} đồng.");
