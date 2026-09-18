@@ -205,6 +205,7 @@ public sealed class StaffExtensionCashWorkflowTests
         public Task<OperationResult> RejectQrPaymentAsync(
             int paymentId,
             string actorId,
+            string rejectionReason,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(OperationResult.Success());
     }
