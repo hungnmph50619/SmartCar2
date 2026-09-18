@@ -37,7 +37,7 @@ public sealed class StaffOperationsAuthorizationTests
 
 
     [Fact]
-    public void RentalSignedDocumentFilesController_AllowsReadOnlyAccessForAdminAndStaff()
+    public void RentalSignedDocumentFilesController_AllowsReadOnlyAccessForAdminStaffAndCustomer()
     {
         var authorizeAttributes = typeof(RentalSignedDocumentFilesController)
             .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
@@ -52,5 +52,6 @@ public sealed class StaffOperationsAuthorizationTests
 
         Assert.Contains(RoleNames.Admin, roles);
         Assert.Contains(RoleNames.Staff, roles);
+        Assert.Contains(RoleNames.Customer, roles);
     }
 }
