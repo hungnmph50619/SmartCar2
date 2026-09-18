@@ -647,8 +647,13 @@ internal sealed class ReturnService : IReturnService
                 Status = PaymentStatus.AwaitingRefund
             });
 
-            booking.RefundAmount += depositToRefund;
         }
+
+        booking.RefundAmount = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+            .Sum(payment => payment.Amount);
 
         if (totalDepositDeducted > 0)
         {
