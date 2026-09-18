@@ -365,6 +365,76 @@
                 <div class="flex-grow-1">
                     <h2 class="h5">Nhận xe trả</h2>
                     <p class="text-muted">Lập biên bản trả, đối chiếu người trả và ảnh tình trạng thực tế.</p>
+
+                    @if (!Model.HandoverSignedDocumentVerified)
+                    {
+                        <div class="alert alert-warning">
+                            <strong>Hồ sơ giao xe cũ chưa hoàn tất xác minh bản ký.</strong>
+                            Có thể phục hồi bước này bằng cách tải/mở đúng bản ký lịch sử và xác minh lại;
+                            hệ thống không thay đổi giờ bàn giao hoặc trạng thái chuyến.
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap mb-2">
+                            <a class="btn btn-sm btn-outline-primary"
+                               asp-controller="AdminRentalDocuments"
+                               asp-action="HandoverPrint"
+                               asp-route-bookingId="@b.BookingId">Mở biên bản giao</a>
+                            @if (Model.HandoverSignedPaths.Count > 0)
+                            {
+                                <a class="btn btn-sm btn-outline-secondary"
+                                   asp-controller="AdminSignedDocuments"
+                                   asp-action="Handover"
+                                   asp-route-bookingId="@b.BookingId"
+                                   target="_blank">Mở bản ký đã lưu</a>
+                            }
+                        </div>
+                        @if (Model.HandoverSignedPaths.Count == 0)
+                        {
+                            <form asp-controller="AdminRentalDocuments"
+                                  asp-action="UploadHandoverSigned"
+                                  method="post"
+                                  enctype="multipart/form-data"
+                                  class="border rounded-3 p-3 mb-3">
+                                <input type="hidden" name="bookingId" value="@b.BookingId" />
+                                <label class="form-label fw-semibold">Bổ sung bản ký giao xe lịch sử</label>
+                                <input name="signedDocuments"
+                                       type="file"
+                                       accept="image/jpeg,image/png,image/webp"
+                                       multiple
+                                       required
+                                       class="form-control" />
+                                <div class="form-text">Chỉ tải bản ký thật của chuyến này; 1–12 ảnh, tối đa 8 MB/ảnh.</div>
+                                <button class="btn btn-outline-success mt-2" type="submit">Lưu bản ký</button>
+                            </form>
+                        }
+                        else if (Model.HandoverIdentityVerified)
+                        {
+                            <form asp-action="VerifyHandoverSigned"
+                                  method="post"
+                                  class="border rounded-3 p-3 mb-3"
+                                  data-confirm="Xác nhận đã mở toàn bộ bản ký giao lịch sử và đối chiếu đúng khách?">
+                                <input type="hidden" name="bookingId" value="@b.BookingId" />
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           name="signedCopyConfirmed"
+                                           value="true"
+                                           id="recover-handover-signed-rented"
+                                           required />
+                                    <label class="form-check-label" for="recover-handover-signed-rented">
+                                        Tôi đã mở bản ký lịch sử và xác nhận đúng hồ sơ giao xe của đơn này.
+                                    </label>
+                                </div>
+                                <button class="btn btn-success" type="submit">Xác minh lại bản ký giao</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <div class="alert alert-danger">
+                                Biên bản giao còn thiếu xác minh danh tính người nhận.
+                                Hệ thống không tự đánh dấu lại mục này nếu không có căn cứ danh tính lịch sử.
+                            </div>
+                        }
+                    }
                     @if (!b.HasReturn)
                     {
                         <a class="btn btn-primary" asp-controller="Returns" asp-action="Create" asp-route-bookingId="@b.BookingId">Lập biên bản trả xe</a>
@@ -388,6 +458,77 @@
                     <div class="text-muted">Chỉ mở quyết toán khi cả hồ sơ giao và trả đều đủ danh tính + bản ký đã xác minh.</div>
                 </div>
             </div>
+
+            @if (!Model.HandoverIdentityVerified)
+            {
+                <div class="alert alert-danger">
+                    <strong>Hồ sơ giao xe thiếu xác minh danh tính người nhận.</strong>
+                    Đây là dữ liệu lịch sử quan trọng nên hệ thống không tự sửa cờ xác minh.
+                    Cần kiểm tra lại bằng chứng danh tính/audit của lần giao trước khi quyết toán.
+                </div>
+            }
+            else if (!Model.HandoverSignedDocumentVerified)
+            {
+                <div class="border rounded-4 p-3 mb-3">
+                    <div class="fw-semibold mb-1">Phục hồi bản ký giao xe lịch sử</div>
+                    <div class="small text-muted mb-3">
+                        Chỉ phục hồi cờ xác minh bản ký sau khi Staff mở và đối chiếu đúng tài liệu;
+                        không thay đổi giờ giao xe hay trạng thái chuyến.
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap mb-3">
+                        <a class="btn btn-sm btn-outline-primary"
+                           asp-controller="AdminRentalDocuments"
+                           asp-action="HandoverPrint"
+                           asp-route-bookingId="@b.BookingId">Mở biên bản giao</a>
+                        @if (Model.HandoverSignedPaths.Count > 0)
+                        {
+                            <a class="btn btn-sm btn-outline-secondary"
+                               asp-controller="AdminSignedDocuments"
+                               asp-action="Handover"
+                               asp-route-bookingId="@b.BookingId"
+                               target="_blank">Mở bản ký đã lưu</a>
+                        }
+                    </div>
+
+                    @if (Model.HandoverSignedPaths.Count == 0)
+                    {
+                        <form asp-controller="AdminRentalDocuments"
+                              asp-action="UploadHandoverSigned"
+                              method="post"
+                              enctype="multipart/form-data">
+                            <input type="hidden" name="bookingId" value="@b.BookingId" />
+                            <input name="signedDocuments"
+                                   type="file"
+                                   accept="image/jpeg,image/png,image/webp"
+                                   multiple
+                                   required
+                                   class="form-control" />
+                            <div class="form-text">Chọn đúng bản ký giao xe lịch sử, tối đa 12 ảnh · 8 MB/ảnh.</div>
+                            <button class="btn btn-outline-success mt-2" type="submit">Bổ sung bản ký giao</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <form asp-action="VerifyHandoverSigned"
+                              method="post"
+                              data-confirm="Xác nhận đã mở toàn bộ bản ký giao lịch sử và đối chiếu đúng khách?">
+                            <input type="hidden" name="bookingId" value="@b.BookingId" />
+                            <div class="form-check mb-2">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       name="signedCopyConfirmed"
+                                       value="true"
+                                       id="recover-handover-signed-inspection"
+                                       required />
+                                <label class="form-check-label" for="recover-handover-signed-inspection">
+                                    Tôi đã mở và đối chiếu đúng bản ký giao xe lịch sử.
+                                </label>
+                            </div>
+                            <button class="btn btn-success" type="submit">Xác minh lại bản ký giao</button>
+                        </form>
+                    }
+                </div>
+            }
 
             <div class="row g-3">
                 <div class="col-md-6">
