@@ -62,6 +62,16 @@ public static class BookingWorkflowRules
             or PaymentStatus.RefundApproved
             or PaymentStatus.Refunded;
 
+    public static bool PreserveForLateReconciliationOnReservationExpiry(
+        PaymentStatus status) =>
+        status == PaymentStatus.AwaitingConfirmation;
+
+    public static bool CanReconcileTransferAfterReservationExpiry(
+        BookingStatus bookingStatus,
+        PaymentType paymentType) =>
+        bookingStatus == BookingStatus.Expired &&
+        paymentType is PaymentType.Rental or PaymentType.VehicleSwapAdjustment;
+
     public static bool ShouldCancelExtensionWhenVehicleReturns(
         BookingExtensionStatus status) =>
         status is BookingExtensionStatus.Pending
