@@ -612,3 +612,64 @@
         <div class="alert alert-success"><strong>✓ Đơn đã hoàn tất.</strong> Không còn thao tác vận hành bắt buộc.</div>
     }
 </div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const maximumPages = 12;
+            const maximumBytes = 8 * 1024 * 1024;
+            const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+            const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+
+            const validateSignedInput = input => {
+                if (!input) return true;
+                const files = Array.from(input.files || []);
+                let message = '';
+
+                if (files.length > maximumPages) {
+                    message = `Chỉ được chọn tối đa ${maximumPages} ảnh bản ký.`;
+                }
+
+                if (!message) {
+                    const oversized = files.find(file => file.size > maximumBytes);
+                    if (oversized) {
+                        message = `Ảnh "${oversized.name}" vượt quá 8 MB.`;
+                    }
+                }
+
+                if (!message) {
+                    const invalid = files.find(file => {
+                        const name = file.name.toLowerCase();
+                        const extensionOk = allowedExtensions.some(extension => name.endsWith(extension));
+                        const typeOk = !file.type || allowedTypes.has(file.type.toLowerCase());
+                        return !extensionOk || !typeOk;
+                    });
+                    if (invalid) {
+                        message = `Ảnh "${invalid.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WebP.`;
+                    }
+                }
+
+                input.setCustomValidity(message);
+                return message === '';
+            };
+
+            ['handover-signed-files', 'return-signed-files'].forEach(id => {
+                const input = document.getElementById(id);
+                if (!input) return;
+
+                input.addEventListener('change', () => {
+                    validateSignedInput(input);
+                    if (!input.checkValidity()) input.reportValidity();
+                });
+
+                input.form?.addEventListener('submit', event => {
+                    if (!validateSignedInput(input)) {
+                        event.preventDefault();
+                        input.reportValidity();
+                    }
+                });
+            });
+        })();
+    </script>
+}
+
