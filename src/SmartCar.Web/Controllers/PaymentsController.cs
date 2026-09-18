@@ -93,22 +93,6 @@ public sealed class PaymentsController : Controller
             customerId,
             cancellationToken);
 
-        if (result.Succeeded && type == PaymentType.Rental)
-        {
-            var reconciliationExpiresAt = DateTime.UtcNow
-                .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
-            await _dbContext.Bookings
-                .Where(booking =>
-                    booking.BookingId == bookingId &&
-                    booking.CustomerId == customerId &&
-                    booking.Status == BookingStatus.PendingPayment)
-                .ExecuteUpdateAsync(
-                    setters => setters.SetProperty(
-                        booking => booking.ReservationExpiresAt,
-                        reconciliationExpiresAt),
-                    cancellationToken);
-        }
-
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? type == PaymentType.Rental
                 ? $"Đã báo chuyển khoản. SmartCar có tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; trạng thái này không giữ xe vô thời hạn."
