@@ -450,7 +450,11 @@ internal sealed class BookingService : IBookingService
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
         var effectiveDepositPaid = Math.Max(0m, paidDeposit - depositRefundPlanned);
+        var requiredRentalAmount = Math.Max(
+            0m,
+            booking.TotalAmount - booking.AdditionalAmount);
         var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
+            requiredRentalAmount,
             rentalPaid,
             booking.DepositAmount,
             effectiveDepositPaid);
