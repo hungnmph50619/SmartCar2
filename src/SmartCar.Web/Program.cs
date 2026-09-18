@@ -54,8 +54,11 @@ app.Use(async (context, next) =>
          context.Request.Path.StartsWithSegments("/uploads/returns", StringComparison.OrdinalIgnoreCase)) &&
         (requestPath.Contains("/signed-handover-", StringComparison.OrdinalIgnoreCase) ||
          requestPath.Contains("/signed-return-", StringComparison.OrdinalIgnoreCase));
+    var isExtensionEvidence = context.Request.Path.StartsWithSegments(
+        "/uploads/extensions",
+        StringComparison.OrdinalIgnoreCase);
 
-    if (isProtectedKycUpload || isLegacySignedRentalDocument)
+    if (isProtectedKycUpload || isLegacySignedRentalDocument || isExtensionEvidence)
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         return;
