@@ -6,6 +6,9 @@
     var actionablePayments = Model
         .Where(payment => payment.Type != PaymentType.Deposit)
         .ToList();
+    var bundledDepositByBooking =
+        ViewBag.BundledDepositByBooking as IReadOnlyDictionary<int, decimal>
+        ?? new Dictionary<int, decimal>();
 
     string TypeText(PaymentType type) => type switch
     {
@@ -52,14 +55,13 @@ else
                 <tbody>
                 @foreach (var payment in actionablePayments)
                 {
-                    var bundledDeposit = payment.Type == PaymentType.Rental
-                        ? Model
-                            .Where(item =>
-                                item.BookingId == payment.BookingId &&
-                                item.Type == PaymentType.Deposit &&
-                                item.Status == PaymentStatus.AwaitingConfirmation)
-                            .Sum(item => item.Amount)
-                        : 0m;
+                    var bundledDeposit =
+                        payment.Type == PaymentType.Rental &&
+                        bundledDepositByBooking.TryGetValue(
+                            payment.BookingId,
+                            out var depositAmount)
+                            ? depositAmount
+                            : 0m;
                     var displayedAmount = payment.Amount + bundledDeposit;
                     <tr>
                         <td>
