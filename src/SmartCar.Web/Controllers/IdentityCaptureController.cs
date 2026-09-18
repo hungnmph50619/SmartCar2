@@ -236,7 +236,10 @@ public sealed class IdentityCaptureController : Controller
             return NotFound();
         }
 
-        return PhysicalFile(fullPath, contentType);
+        Response.Headers.CacheControl = "private, no-store, max-age=0";
+        Response.Headers.Pragma = "no-cache";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return PhysicalFile(fullPath, contentType, enableRangeProcessing: false);
     }
 
     [AllowAnonymous]
