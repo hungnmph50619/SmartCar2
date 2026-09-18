@@ -294,4 +294,37 @@ public sealed class BookingWorkflowRulesTests
     {
         Assert.Equal(expected, BookingWorkflowRules.CountsTowardRefundTotal(status));
     }
+
+
+    [Theory]
+    [InlineData(PaymentStatus.AwaitingConfirmation, true)]
+    [InlineData(PaymentStatus.Pending, false)]
+    [InlineData(PaymentStatus.Paid, false)]
+    [InlineData(PaymentStatus.Failed, false)]
+    public void PreserveForLateReconciliationOnReservationExpiry_OnlyKeepsMoneyInFlight(
+        PaymentStatus status,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.PreserveForLateReconciliationOnReservationExpiry(status));
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.Expired, PaymentType.Rental, true)]
+    [InlineData(BookingStatus.Expired, PaymentType.VehicleSwapAdjustment, true)]
+    [InlineData(BookingStatus.Expired, PaymentType.Deposit, false)]
+    [InlineData(BookingStatus.PendingPayment, PaymentType.Rental, false)]
+    [InlineData(BookingStatus.Cancelled, PaymentType.Rental, false)]
+    public void CanReconcileTransferAfterReservationExpiry_OnlyAllowsExpiredPreHandoverMoneyInFlight(
+        BookingStatus bookingStatus,
+        PaymentType paymentType,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.CanReconcileTransferAfterReservationExpiry(
+                bookingStatus,
+                paymentType));
+    }
 }
