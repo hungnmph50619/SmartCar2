@@ -321,8 +321,8 @@ public sealed class StaffController : Controller
             booking.TotalAmount - booking.AdditionalAmount);
         var rentalPaidBefore = booking.Payments
             .Where(item =>
-                item.Type == PaymentType.Rental &&
-                item.Status == PaymentStatus.Paid)
+                item.Status == PaymentStatus.Paid &&
+                item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(item => item.Amount);
         var outstandingRental = BookingWorkflowRules.CalculateOutstandingRental(
             requiredRentalAmount,
@@ -411,7 +411,9 @@ public sealed class StaffController : Controller
         }
 
         var rentalPaid = booking.Payments
-            .Where(item => item.Type == PaymentType.Rental && item.Status == PaymentStatus.Paid)
+            .Where(item =>
+                item.Status == PaymentStatus.Paid &&
+                item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(item => item.Amount);
         var depositPaid = booking.Payments
             .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
