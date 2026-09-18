@@ -116,7 +116,9 @@ internal sealed class BookingOperationService : IBookingOperationService
         var remainingDeposit = Math.Max(0m, depositPaid - depositRefundAlreadyPlanned);
         var newRefundAmount = revenueRefund + remainingDeposit;
         var existingRefundTotal = booking.Payments
-            .Where(payment => payment.Type == PaymentType.Refund)
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
             .Sum(payment => payment.Amount);
 
         booking.Status = BookingStatus.NoShow;
@@ -296,7 +298,9 @@ internal sealed class BookingOperationService : IBookingOperationService
 
         var newRefundAmount = refundableRevenueAmount + depositToRefund;
         var existingRefundTotal = booking.Payments
-            .Where(payment => payment.Type == PaymentType.Refund)
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
             .Sum(payment => payment.Amount);
 
         booking.Status = BookingStatus.Cancelled;
