@@ -164,7 +164,7 @@
                 @foreach (var image in Model.Handover.ImagePaths.Take(6))
                 {
                     <div class="col-4">
-                        <a href="@image" target="_blank" rel="noopener"><img src="@image" class="img-fluid rounded border w-100" style="height:95px;object-fit:cover" alt="Ảnh giao xe" /></a>
+                        <a href="@image" target="_blank" rel="noopener"><img src="@image" class="img-fluid rounded border w-100" style="height:95px;object-fit:contain;background:#f8f9fa" alt="Ảnh giao xe" /></a>
                     </div>
                 }
             </div>
@@ -213,7 +213,7 @@
                 @foreach (var image in Model.Return.ImagePaths.Take(6))
                 {
                     <div class="col-4">
-                        <a href="@image" target="_blank" rel="noopener"><img src="@image" class="img-fluid rounded border w-100" style="height:95px;object-fit:cover" alt="Ảnh trả xe" /></a>
+                        <a href="@image" target="_blank" rel="noopener"><img src="@image" class="img-fluid rounded border w-100" style="height:95px;object-fit:contain;background:#f8f9fa" alt="Ảnh trả xe" /></a>
                     </div>
                 }
             </div>
