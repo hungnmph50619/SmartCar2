@@ -44,8 +44,8 @@ internal sealed class BookingReservationPolicy
             var transferAwaitingConfirmation =
                 booking.Status == BookingStatus.PendingPayment &&
                 booking.Payments.Any(payment =>
-                    payment.Type == PaymentType.Rental &&
-                    payment.Status == PaymentStatus.AwaitingConfirmation);
+                    payment.Status == PaymentStatus.AwaitingConfirmation &&
+                    payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment);
 
             if (!booking.ReservationExpiresAt.HasValue)
             {
@@ -79,7 +79,7 @@ internal sealed class BookingReservationPolicy
             // Một booking đã hết hold không được để payment Pending/AwaitingConfirmation tiếp tục
             // giữ trạng thái mập mờ. Chỉ đóng các khoản tiền thuê/cọc chưa thanh toán của hold này.
             foreach (var payment in booking.Payments.Where(payment =>
-                         payment.Type is PaymentType.Rental or PaymentType.Deposit &&
+                         payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment &&
                          payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation))
             {
                 payment.Status = PaymentStatus.Failed;
