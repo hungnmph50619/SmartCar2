@@ -95,6 +95,78 @@ internal sealed class BookingReservationPolicy
                 payment.TransactionCode = null;
             }
 
+            var refundCreatedAtExpiry = 0m;
+            if (oldStatus == BookingStatus.PendingPayment)
+            {
+                var grossRevenuePaid = booking.Payments
+                    .Where(payment =>
+                        payment.Status == PaymentStatus.Paid &&
+                        payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                    .Sum(payment => payment.Amount);
+                var revenueRefundAlreadyPlanned = booking.Payments
+                    .Where(payment =>
+                        payment.Type == PaymentType.Refund &&
+                        payment.Method != PaymentMethods.DepositRefund &&
+                        payment.Method != PaymentMethods.CompensationRefund &&
+                        BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                    .Sum(payment => payment.Amount);
+                var revenueToRefund = BookingWorkflowRules.CalculateEffectivePaid(
+                    grossRevenuePaid,
+                    revenueRefundAlreadyPlanned);
+
+                var grossDepositPaid = booking.Payments
+                    .Where(payment =>
+                        payment.Type == PaymentType.Deposit &&
+                        payment.Status == PaymentStatus.Paid)
+                    .Sum(payment => payment.Amount);
+                var depositRefundAlreadyPlanned = booking.Payments
+                    .Where(payment =>
+                        payment.Type == PaymentType.Refund &&
+                        payment.Method == PaymentMethods.DepositRefund &&
+                        BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                    .Sum(payment => payment.Amount);
+                var depositToRefund = BookingWorkflowRules.CalculateEffectivePaid(
+                    grossDepositPaid,
+                    depositRefundAlreadyPlanned);
+
+                if (revenueToRefund > 0m)
+                {
+                    booking.Payments.Add(new Payment
+                    {
+                        BookingId = booking.BookingId,
+                        Type = PaymentType.Refund,
+                        Amount = revenueToRefund,
+                        Method = PaymentMethods.BankTransferRefund,
+                        Status = PaymentStatus.AwaitingRefund
+                    });
+                }
+
+                if (depositToRefund > 0m)
+                {
+                    booking.Payments.Add(new Payment
+                    {
+                        BookingId = booking.BookingId,
+                        Type = PaymentType.Refund,
+                        Amount = depositToRefund,
+                        Method = PaymentMethods.DepositRefund,
+                        Status = PaymentStatus.AwaitingRefund
+                    });
+                }
+
+                refundCreatedAtExpiry = revenueToRefund + depositToRefund;
+                if (refundCreatedAtExpiry > 0m)
+                {
+                    booking.RefundAmount = booking.Payments
+                        .Where(payment =>
+                            payment.Type == PaymentType.Refund &&
+                            BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
+                        .Sum(payment => payment.Amount);
+                    booking.RefundReason = AppendText(
+                        booking.RefundReason,
+                        $"Đơn hết thời gian giữ chỗ trước khi bàn giao; hoàn toàn bộ {refundCreatedAtExpiry:N0} đồng đã thực thu còn lại.");
+                }
+            }
+
             var alreadyRecorded = await _dbContext.Set<BookingHoldEvent>()
                 .AnyAsync(item => item.BookingId == booking.BookingId, cancellationToken);
             if (!alreadyRecorded)
@@ -116,7 +188,9 @@ internal sealed class BookingReservationPolicy
                     ? $"Đơn #{booking.BookingId} đã hết thời gian chờ xác nhận và lịch xe đã được giải phóng."
                     : expiredDuringTransferReconciliation
                         ? $"Đơn #{booking.BookingId} đã quá thời gian đối soát chuyển khoản và lịch xe đã được giải phóng. Giao dịch bạn đã báo chuyển vẫn được giữ để Staff kiểm tra; nếu SmartCar xác nhận đã nhận tiền sau khi đơn hết hạn, khoản tiền đó sẽ được chuyển sang quy trình hoàn tiền thay vì khôi phục đơn."
-                        : $"Đơn #{booking.BookingId} đã hết thời gian thanh toán và lịch xe đã được giải phóng."
+                        : refundCreatedAtExpiry > 0m
+                            ? $"Đơn #{booking.BookingId} đã hết thời gian thanh toán và lịch xe đã được giải phóng. SmartCar đã ghi nhận {refundCreatedAtExpiry:N0} đồng đã thu trước đó vào quy trình chờ duyệt hoàn tiền."
+                            : $"Đơn #{booking.BookingId} đã hết thời gian thanh toán và lịch xe đã được giải phóng."
             });
 
             changed = true;
@@ -308,4 +382,10 @@ internal sealed class BookingReservationPolicy
             .SumAsync(payment => (decimal?)payment.Amount, cancellationToken)
             ?? 0m;
     }
+
+    private static string AppendText(string? current, string addition) =>
+        string.IsNullOrWhiteSpace(current)
+            ? addition
+            : $"{current.Trim()} {addition}";
+
 }
