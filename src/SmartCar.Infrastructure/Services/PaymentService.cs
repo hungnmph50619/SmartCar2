@@ -679,8 +679,20 @@ internal sealed class PaymentService : IPaymentService
     public async Task<OperationResult> RejectQrPaymentAsync(
         int paymentId,
         string actorId,
+        string rejectionReason,
         CancellationToken cancellationToken = default)
     {
+        rejectionReason = rejectionReason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(rejectionReason))
+        {
+            return OperationResult.Failure("Vui lòng nhập lý do từ chối giao dịch.");
+        }
+
+        if (rejectionReason.Length > 500)
+        {
+            return OperationResult.Failure("Lý do từ chối tối đa 500 ký tự.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
@@ -736,9 +748,10 @@ internal sealed class PaymentService : IPaymentService
             UserId = payment.Booking.CustomerId,
             Title = "Chưa xác nhận được chuyển khoản",
             Message = expiredBooking
-                ? $"Đơn #{payment.BookingId} đã hết thời gian giữ chỗ và SmartCar không ghi nhận được tiền cho giao dịch đã báo chuyển. Giao dịch được đóng, booking vẫn hết hạn."
+                ? $"Đơn #{payment.BookingId} đã hết thời gian giữ chỗ và SmartCar không ghi nhận được tiền cho giao dịch đã báo chuyển. " +
+                  $"Lý do đối soát: {rejectionReason}. Giao dịch được đóng, booking vẫn hết hạn."
                 : $"SmartCar chưa xác nhận được {GetPaymentLabel(payment.Type)} của đơn #{payment.BookingId}. " +
-                  "Vui lòng kiểm tra và gửi lại xác nhận."
+                  $"Lý do đối soát: {rejectionReason}. Vui lòng kiểm tra và gửi lại xác nhận."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -749,7 +762,7 @@ internal sealed class PaymentService : IPaymentService
             "RejectQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
-            $"Từ chối xác nhận {GetPaymentLabel(payment.Type)} của đơn #{payment.BookingId}.",
+            $"Từ chối xác nhận {GetPaymentLabel(payment.Type)} của đơn #{payment.BookingId}. Lý do: {rejectionReason}.",
             cancellationToken: cancellationToken);
 
         return OperationResult.Success();
