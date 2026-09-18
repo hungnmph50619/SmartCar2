@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -302,6 +303,10 @@ public sealed class ReturnsController : Controller
             DepositAmount = booking.DepositAmount,
             AdditionalAmount = booking.AdditionalAmount,
             AdditionalChargePaid = booking.AdditionalChargePaid,
+            AdditionalChargeAwaitingConfirmation = booking.Payments.Any(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.AwaitingConfirmation),
             RefundStatus = refundPayment?.Status,
             RefundAmount = refundPayment?.Amount ?? 0m,
             AdditionalCharges = booking.AdditionalCharges,
@@ -448,6 +453,131 @@ public sealed class ReturnsController : Controller
                 cancellationToken);
         }
 
+        return RedirectToAction(nameof(Inspect), new { bookingId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CollectAdditionalChargeCash(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(staffId))
+        {
+            return Challenge();
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking?.VehicleReturn is null || booking.Handover is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Không tìm thấy đủ hồ sơ giao - trả của đơn.";
+            return RedirectToAction(nameof(Inspect), new { bookingId });
+        }
+
+        if (booking.Status != BookingStatus.PendingInspection)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Chỉ được thu phụ phí khi đơn đang ở bước kiểm tra xe trả.";
+            return RedirectToAction(nameof(Inspect), new { bookingId });
+        }
+
+        if (!AllStaffChecksCompleted(booking.Handover, booking.VehicleReturn))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Chưa đủ xác minh người nhận/trả và bản ký giao/trả nên chưa được thu phụ phí.";
+            return RedirectToAction(nameof(Inspect), new { bookingId });
+        }
+
+        var surchargePayments = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction)
+            .ToList();
+
+        if (surchargePayments.Any(payment =>
+                payment.Status == PaymentStatus.AwaitingConfirmation))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Phụ phí đang có chuyển khoản/QR chờ Admin đối soát. Không được đồng thời thu tiền mặt.";
+            return RedirectToAction(nameof(Inspect), new { bookingId });
+        }
+
+        var paidAmount = surchargePayments
+            .Where(payment => payment.Status == PaymentStatus.Paid)
+            .Sum(payment => payment.Amount);
+        var outstandingAmount = Math.Max(0m, booking.AdditionalAmount - paidAmount);
+
+        if (booking.AdditionalAmount <= 0m || outstandingAmount <= 0m)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Đơn không còn phụ phí cần thu.";
+            return RedirectToAction(nameof(Inspect), new { bookingId });
+        }
+
+        var pendingPayments = surchargePayments
+            .Where(payment => payment.Status == PaymentStatus.Pending)
+            .OrderBy(payment => payment.PaymentId)
+            .ToList();
+
+        var payment = pendingPayments.FirstOrDefault();
+        if (payment is null)
+        {
+            payment = new Payment
+            {
+                BookingId = booking.BookingId,
+                Type = PaymentType.AdditionalCharge
+            };
+            booking.Payments.Add(payment);
+        }
+
+        var paidAt = DateTime.UtcNow;
+        payment.Amount = outstandingAmount;
+        payment.Method = PaymentMethods.Cash;
+        payment.Status = PaymentStatus.Paid;
+        payment.PaidAt = paidAt;
+        payment.TransactionCode = $"CASH-ADD-{booking.BookingId}-{paidAt:yyyyMMddHHmmssfff}";
+
+        foreach (var duplicate in pendingPayments.Where(item => item != payment))
+        {
+            duplicate.Status = PaymentStatus.Failed;
+            duplicate.Method = PaymentMethods.NotSelected;
+            duplicate.PaidAt = null;
+            duplicate.TransactionCode = null;
+        }
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Đã thanh toán phụ phí tại quầy",
+            Message =
+                $"Đơn #{booking.BookingId}: SmartCar đã ghi nhận {outstandingAmount:N0} đồng phụ phí bằng tiền mặt."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        await WriteAuditAsync(
+            "StaffCollectAdditionalChargeCash",
+            nameof(Payment),
+            bookingId,
+            $"Nhân viên thu {outstandingAmount:N0} đồng phụ phí bằng tiền mặt cho đơn #{bookingId}. Mã nội bộ: {payment.TransactionCode}.",
+            cancellationToken);
+
+        TempData["SuccessMessage"] =
+            $"Đã ghi nhận {outstandingAmount:N0} đ phụ phí tiền mặt.";
         return RedirectToAction(nameof(Inspect), new { bookingId });
     }
 
