@@ -283,9 +283,17 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Bookings));
         }
 
-        if (current.Status != BookingStatus.PendingPayment)
+        var currentHasPendingSwapAdjustment = current.Payments.Any(payment =>
+            payment.Type == PaymentType.VehicleSwapAdjustment &&
+            payment.Status == PaymentStatus.Pending);
+        var canReceiveCash =
+            current.Status == BookingStatus.PendingPayment ||
+            (current.Status == BookingStatus.Paid && currentHasPendingSwapAdjustment);
+
+        if (!canReceiveCash)
         {
-            TempData["ErrorMessage"] = "Chỉ được thu tiền mặt sau khi Admin đã duyệt và đơn đang Chờ thanh toán.";
+            TempData["ErrorMessage"] =
+                "Chỉ được thu tiền mặt khi đơn đang chờ thanh toán hoặc có chênh lệch đổi xe chưa thu.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
@@ -296,14 +304,21 @@ public sealed class StaffController : Controller
             .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
-        if (booking is null || booking.Status != BookingStatus.PendingPayment)
+        var bookingHasPendingSwapAdjustment = booking?.Payments.Any(payment =>
+            payment.Type == PaymentType.VehicleSwapAdjustment &&
+            payment.Status == PaymentStatus.Pending) == true;
+        var stillCanReceiveCash = booking is not null &&
+            (booking.Status == BookingStatus.PendingPayment ||
+             (booking.Status == BookingStatus.Paid && bookingHasPendingSwapAdjustment));
+
+        if (!stillCanReceiveCash)
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Trạng thái đơn đã thay đổi. Vui lòng tải lại trước khi thu tiền.";
+            TempData["ErrorMessage"] = "Trạng thái đơn hoặc khoản cần thu đã thay đổi. Vui lòng tải lại trước khi thu tiền.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
-        var upfrontPayments = booking.Payments
+        var upfrontPayments = booking!.Payments
             .Where(item => item.Type is PaymentType.Rental or PaymentType.Deposit)
             .ToList();
         var settlementPayments = booking.Payments
