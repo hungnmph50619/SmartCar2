@@ -73,7 +73,8 @@ public sealed class SecureDocumentStorage : ISecureDocumentStorage
             fullPath = candidate;
         }
         else if (storedPath.StartsWith("/uploads/documents/", StringComparison.OrdinalIgnoreCase) ||
-                 IsLegacySignedRentalDocument(storedPath))
+                 IsLegacySignedRentalDocument(storedPath) ||
+                 IsLegacyExtensionEvidence(storedPath))
         {
             var relative = storedPath.TrimStart('/')
                 .Replace('/', Path.DirectorySeparatorChar);
@@ -112,6 +113,14 @@ public sealed class SecureDocumentStorage : ISecureDocumentStorage
         {
             File.Delete(fullPath);
         }
+    }
+
+    private static bool IsLegacyExtensionEvidence(string storedPath)
+    {
+        var normalized = storedPath.Replace('\\', '/');
+        return normalized.StartsWith(
+            "/uploads/extensions/",
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsLegacySignedRentalDocument(string storedPath)
