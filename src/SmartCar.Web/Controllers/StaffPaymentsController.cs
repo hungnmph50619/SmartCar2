@@ -32,6 +32,22 @@ public sealed class StaffPaymentsController : Controller
             null,
             cancellationToken);
 
+        ViewBag.BundledDepositByBooking = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.AwaitingConfirmation)
+            .GroupBy(payment => payment.BookingId)
+            .Select(group => new
+            {
+                BookingId = group.Key,
+                Amount = group.Sum(payment => payment.Amount)
+            })
+            .ToDictionaryAsync(
+                item => item.BookingId,
+                item => item.Amount,
+                cancellationToken);
+
         return View(payments
             .Where(payment =>
                 payment.Type != PaymentType.Refund &&
