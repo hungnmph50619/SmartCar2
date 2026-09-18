@@ -101,13 +101,22 @@ internal sealed class HandoverService : IHandoverService
                 "Cần chụp và lưu đủ CCCD mặt trước + mặt sau của khách đang có mặt tại quầy trước khi lập biên bản giao xe.");
         }
 
-        var rentalPaidAmount = booking.Payments
+        var grossRentalPaidAmount = booking.Payments
             .Where(payment =>
                 payment.Status == PaymentStatus.Paid &&
                 payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(payment => payment.Amount);
+        var rentalRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.VehicleSwapRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var effectiveRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossRentalPaidAmount,
+            rentalRefundPlanned);
 
-        var depositPaidAmount = booking.Payments
+        var grossDepositPaidAmount = booking.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Deposit &&
                 payment.Status == PaymentStatus.Paid)
@@ -120,15 +129,15 @@ internal sealed class HandoverService : IHandoverService
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
 
-        var effectiveDepositPaid = Math.Max(
-            0m,
-            depositPaidAmount - depositRefundPlanned);
+        var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossDepositPaidAmount,
+            depositRefundPlanned);
         var requiredRentalAmount = Math.Max(
             0m,
             booking.TotalAmount - booking.AdditionalAmount);
         var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
             requiredRentalAmount,
-            rentalPaidAmount,
+            effectiveRentalPaid,
             booking.DepositAmount,
             effectiveDepositPaid);
 
