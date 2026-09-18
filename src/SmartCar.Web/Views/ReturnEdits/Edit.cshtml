@@ -135,7 +135,8 @@
             </div>
             <span id="new-return-image-count" class="badge text-bg-secondary">Chưa chọn ảnh</span>
         </div>
-        <input asp-for="NewImages" id="new-return-images" type="file" class="form-control" multiple accept="@imageAccept" />
+        <input asp-for="NewImages" id="new-return-images" type="file" class="form-control" multiple accept="@imageAccept"
+               data-file-draft-key="return-edit-@Model.BookingId-new-images" />
         <div class="form-text">JPG/PNG/WEBP · tối đa 25 ảnh · 5 MB/ảnh.</div>
         <div id="new-return-image-preview" class="d-flex flex-wrap gap-2 mt-3"></div>
     </div>
