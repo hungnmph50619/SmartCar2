@@ -519,8 +519,8 @@ public sealed class StaffController : Controller
         }
         var handoverRentalPaid = booking.Payments
             .Where(item =>
-                item.Type == PaymentType.Rental &&
-                item.Status == PaymentStatus.Paid)
+                item.Status == PaymentStatus.Paid &&
+                item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(item => item.Amount);
         var handoverDepositPaid = booking.Payments
             .Where(item =>
