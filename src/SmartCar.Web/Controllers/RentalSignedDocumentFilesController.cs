@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +8,7 @@ using SmartCar.Web.Services;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff + "," + RoleNames.Customer)]
 public sealed class RentalSignedDocumentFilesController : Controller
 {
     private const string HandoverSignedMarker = "signed-handover-";
@@ -34,6 +35,25 @@ public sealed class RentalSignedDocumentFilesController : Controller
         if (bookingId <= 0 || index < 0)
         {
             return BadRequest();
+        }
+
+        var bookingCustomerId = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.BookingId == bookingId)
+            .Select(item => item.CustomerId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(bookingCustomerId))
+        {
+            return NotFound();
+        }
+
+        if (User.IsInRole(RoleNames.Customer))
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!string.Equals(currentUserId, bookingCustomerId, StringComparison.Ordinal))
+            {
+                return Forbid();
+            }
         }
 
         string? imagePaths;
