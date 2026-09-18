@@ -432,13 +432,22 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure("Không tìm thấy đơn thuê.");
         }
 
-        var rentalPaid = booking.Payments
+        var grossRentalPaid = booking.Payments
             .Where(payment =>
                 payment.Status == PaymentStatus.Paid &&
                 payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(payment => payment.Amount);
+        var rentalRefundPlanned = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Method == PaymentMethods.VehicleSwapRefund &&
+                payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var effectiveRentalPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossRentalPaid,
+            rentalRefundPlanned);
 
-        var paidDeposit = booking.Payments
+        var grossDepositPaid = booking.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Deposit &&
                 payment.Status == PaymentStatus.Paid)
@@ -449,13 +458,15 @@ internal sealed class BookingService : IBookingService
                 payment.Method == PaymentMethods.DepositRefund &&
                 payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
             .Sum(payment => payment.Amount);
-        var effectiveDepositPaid = Math.Max(0m, paidDeposit - depositRefundPlanned);
+        var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+            grossDepositPaid,
+            depositRefundPlanned);
         var requiredRentalAmount = Math.Max(
             0m,
             booking.TotalAmount - booking.AdditionalAmount);
         var upfrontSatisfied = BookingWorkflowRules.HasRequiredUpfrontPayment(
             requiredRentalAmount,
-            rentalPaid,
+            effectiveRentalPaid,
             booking.DepositAmount,
             effectiveDepositPaid);
 
