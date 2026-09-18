@@ -434,8 +434,8 @@ internal sealed class BookingService : IBookingService
 
         var rentalPaid = booking.Payments
             .Where(payment =>
-                payment.Type == PaymentType.Rental &&
-                payment.Status == PaymentStatus.Paid)
+                payment.Status == PaymentStatus.Paid &&
+                payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(payment => payment.Amount);
 
         var paidDeposit = booking.Payments
