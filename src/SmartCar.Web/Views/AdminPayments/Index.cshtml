@@ -207,7 +207,9 @@ else if (currentSection == "refund")
                                 {
                                     @if (bank is null)
                                     {
-                                        <div class="text-warning small mb-2">Khách chưa có tài khoản nhận hoàn mặc định.</div>
+                                        <div class="text-warning small mb-2">
+                                            Khách chưa có tài khoản nhận hoàn mặc định. Không thể duyệt hoàn.
+                                        </div>
                                     }
                                     else
                                     {
@@ -215,11 +217,11 @@ else if (currentSection == "refund")
                                             <strong>@bank.BankName</strong> · @bank.MaskedAccountNumber<br />
                                             @bank.AccountHolderName
                                         </div>
+                                        <form asp-action="ApproveRefundBatch" method="post" data-confirm="Xác nhận duyệt toàn bộ khoản hoàn của đơn này cho nhân viên thực hiện? Sau khi duyệt, khách sẽ tạm thời không thể đổi tài khoản nhận hoàn cho đến khi chuyển tiền xong.">
+                                            <input type="hidden" name="bookingId" value="@first.BookingId" />
+                                            <button class="btn btn-sm btn-warning" type="submit">Duyệt hoàn @shownTotal.ToString("N0") đ</button>
+                                        </form>
                                     }
-                                    <form asp-action="ApproveRefundBatch" method="post" data-confirm="Xác nhận duyệt toàn bộ khoản hoàn của đơn này cho nhân viên thực hiện?">
-                                        <input type="hidden" name="bookingId" value="@first.BookingId" />
-                                        <button class="btn btn-sm btn-warning" type="submit">Duyệt hoàn @shownTotal.ToString("N0") đ</button>
-                                    </form>
                                 }
                                 else if (rowStatus == PaymentStatus.RefundApproved)
                                 {
