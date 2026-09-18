@@ -173,12 +173,6 @@ public sealed class StaffPaymentsController : Controller
             return RedirectToStaffDetails(bookingId);
         }
 
-        var bookingRow = await _dbContext.Bookings
-            .FirstAsync(item => item.BookingId == bookingId, cancellationToken);
-        bookingRow.ReservationExpiresAt = DateTime.UtcNow
-            .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
         TempData["SuccessMessage"] =
             $"Đã ghi nhận khách báo chuyển khoản. Staff có tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
         return RedirectToStaffDetails(bookingId);
