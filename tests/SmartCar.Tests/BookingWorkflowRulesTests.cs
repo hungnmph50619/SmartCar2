@@ -211,4 +211,35 @@ public sealed class BookingWorkflowRulesTests
         Assert.Equal(expected, BookingWorkflowRules.IsOpenRefundStatus(status));
     }
 
+
+
+    [Theory]
+    [InlineData(BookingExtensionStatus.Pending, true)]
+    [InlineData(BookingExtensionStatus.NeedsEvidence, true)]
+    [InlineData(BookingExtensionStatus.Approved, true)]
+    [InlineData(BookingExtensionStatus.Paid, false)]
+    [InlineData(BookingExtensionStatus.Rejected, false)]
+    [InlineData(BookingExtensionStatus.Cancelled, false)]
+    public void ShouldCancelExtensionWhenVehicleReturns_OnlyCancelsUnsettledRequests(
+        BookingExtensionStatus status,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.ShouldCancelExtensionWhenVehicleReturns(status));
+    }
+
+    [Theory]
+    [InlineData(PaymentStatus.AwaitingConfirmation, true)]
+    [InlineData(PaymentStatus.Pending, false)]
+    [InlineData(PaymentStatus.Paid, false)]
+    [InlineData(PaymentStatus.Failed, false)]
+    public void BlocksVehicleReturnForExtensionPayment_OnlyBlocksBankReconciliation(
+        PaymentStatus status,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.BlocksVehicleReturnForExtensionPayment(status));
+    }
 }
