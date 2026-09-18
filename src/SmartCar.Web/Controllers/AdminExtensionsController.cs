@@ -280,18 +280,70 @@ public sealed class AdminExtensionsController : Controller
         var newRentalPaymentAmount = newRentalAmount + deliveryFee;
         var overallDifference = (newRentalAmount + newDepositAmount) - (oldRentalAmount + oldDepositAmount);
 
-        var rentalPayment = conflict.Payments.FirstOrDefault(item => item.Type == PaymentType.Rental);
-        var depositPayment = conflict.Payments.FirstOrDefault(item => item.Type == PaymentType.Deposit);
-
-        if ((rentalPayment?.Status == PaymentStatus.AwaitingConfirmation && rentalPayment.Amount != newRentalPaymentAmount) ||
-            (depositPayment?.Status == PaymentStatus.AwaitingConfirmation && depositPayment.Amount != newDepositAmount))
+        var hasSettlementAwaitingConfirmation = conflict.Payments.Any(item =>
+            item.Status == PaymentStatus.AwaitingConfirmation &&
+            item.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment);
+        if (hasSettlementAwaitingConfirmation)
         {
-            TempData["ErrorMessage"] = "Đơn B đang chờ đối soát số tiền cũ. Hãy xử lý giao dịch trước khi đổi xe.";
+            TempData["ErrorMessage"] = "Đơn B đang có giao dịch trước giao xe chờ đối soát. Hãy xử lý giao dịch trước khi đổi xe.";
             return RedirectToAction(nameof(Index));
         }
 
-        var rentalPaidDifference = AdjustPaymentAmount(rentalPayment, newRentalPaymentAmount);
-        var depositPaidDifference = AdjustPaymentAmount(depositPayment, newDepositAmount);
+        var grossRentalPaid = conflict.Payments
+            .Where(item =>
+                item.Status == PaymentStatus.Paid &&
+                item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+            .Sum(item => item.Amount);
+        var rentalRefundPlanned = conflict.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.VehicleSwapRefund &&
+                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(item => item.Amount);
+        var effectiveRentalPaid = Math.Max(0m, grossRentalPaid - rentalRefundPlanned);
+
+        var grossDepositPaid = conflict.Payments
+            .Where(item =>
+                item.Type == PaymentType.Deposit &&
+                item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var depositRefundPlanned = conflict.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.DepositRefund &&
+                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(item => item.Amount);
+        var effectiveDepositPaid = Math.Max(0m, grossDepositPaid - depositRefundPlanned);
+
+        decimal rentalPaidDifference;
+        if (grossRentalPaid > 0m)
+        {
+            rentalPaidDifference = newRentalPaymentAmount - effectiveRentalPaid;
+            FailPendingPayments(conflict.Payments, PaymentType.Rental);
+        }
+        else
+        {
+            SetSinglePendingPaymentAmount(
+                conflict.Payments,
+                PaymentType.Rental,
+                newRentalPaymentAmount);
+            rentalPaidDifference = 0m;
+        }
+
+        decimal depositPaidDifference;
+        if (grossDepositPaid > 0m)
+        {
+            depositPaidDifference = newDepositAmount - effectiveDepositPaid;
+            FailPendingPayments(conflict.Payments, PaymentType.Deposit);
+        }
+        else
+        {
+            SetSinglePendingPaymentAmount(
+                conflict.Payments,
+                PaymentType.Deposit,
+                newDepositAmount);
+            depositPaidDifference = 0m;
+        }
 
         var oldVehicleName = conflict.Vehicle.VehicleName;
         var oldVehicleId = conflict.VehicleId;
@@ -317,9 +369,11 @@ public sealed class AdminExtensionsController : Controller
                 Status = PaymentStatus.Pending
             });
 
-            if (conflict.Status == BookingStatus.ReadyForPickup)
+            if (conflict.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup)
             {
-                conflict.Status = BookingStatus.Paid;
+                conflict.Status = BookingStatus.PendingPayment;
+                conflict.ReservationExpiresAt = DateTime.UtcNow
+                    .AddMinutes(RentalPolicy.BookingPaymentHoldMinutes);
             }
         }
 
@@ -644,24 +698,61 @@ public sealed class AdminExtensionsController : Controller
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    private static decimal AdjustPaymentAmount(Payment? payment, decimal newAmount)
+    private static void SetSinglePendingPaymentAmount(
+        ICollection<Payment> payments,
+        PaymentType type,
+        decimal amount)
     {
-        if (payment is null)
+        var pending = payments
+            .Where(item => item.Type == type && item.Status == PaymentStatus.Pending)
+            .OrderBy(item => item.PaymentId)
+            .ToList();
+
+        var primary = pending.FirstOrDefault();
+        if (amount > 0m)
         {
-            return 0m;
+            if (primary is null)
+            {
+                primary = new Payment
+                {
+                    Type = type,
+                    Amount = amount,
+                    Method = PaymentMethods.NotSelected,
+                    Status = PaymentStatus.Pending
+                };
+                payments.Add(primary);
+            }
+            else
+            {
+                primary.Amount = amount;
+                primary.Method = PaymentMethods.NotSelected;
+                primary.PaidAt = null;
+                primary.TransactionCode = null;
+            }
         }
 
-        if (payment.Status == PaymentStatus.Paid)
+        foreach (var stale in pending.Where(item => item != primary))
         {
-            return newAmount - payment.Amount;
+            stale.Status = PaymentStatus.Failed;
+            stale.Method = PaymentMethods.NotSelected;
+            stale.PaidAt = null;
+            stale.TransactionCode = null;
         }
+    }
 
-        if (payment.Status == PaymentStatus.Pending)
+    private static void FailPendingPayments(
+        IEnumerable<Payment> payments,
+        PaymentType type)
+    {
+        foreach (var payment in payments.Where(item =>
+                     item.Type == type &&
+                     item.Status == PaymentStatus.Pending))
         {
-            payment.Amount = newAmount;
+            payment.Status = PaymentStatus.Failed;
+            payment.Method = PaymentMethods.NotSelected;
+            payment.PaidAt = null;
+            payment.TransactionCode = null;
         }
-
-        return 0m;
     }
 
     private async Task<(string? Path, string? Error)> SaveEvidenceImageAsync(
