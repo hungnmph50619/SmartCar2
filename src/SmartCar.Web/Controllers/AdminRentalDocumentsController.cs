@@ -13,7 +13,7 @@ using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Staff)]
+[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff)]
 public sealed class AdminRentalDocumentsController : Controller
 {
     private const long MaximumSignedDocumentBytes = 8 * 1024 * 1024;
@@ -124,6 +124,7 @@ public sealed class AdminRentalDocumentsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UploadHandoverSigned(
     int bookingId,
@@ -209,6 +210,7 @@ public sealed class AdminRentalDocumentsController : Controller
     }
 
     [HttpPost]
+    [Authorize(Roles = RoleNames.Staff)]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UploadReturnSigned(
         int bookingId,
