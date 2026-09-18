@@ -81,7 +81,7 @@ internal sealed class ReturnService : IReturnService
                 BookingWorkflowRules.BlocksVehicleReturnForExtensionPayment(payment.Status)))
         {
             return OperationResult.Failure(
-                "Đơn đang có tiền gia hạn chuyển khoản/QR chờ Admin đối soát. " +
+                "Đơn đang có tiền gia hạn chuyển khoản/QR chờ Staff đối soát. " +
                 "Cần xác nhận hoặc từ chối giao dịch trước khi nhận xe trả để tránh thất lạc tiền khách đã chuyển.");
         }
 
