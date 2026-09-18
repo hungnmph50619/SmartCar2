@@ -614,7 +614,7 @@ else
             @if (!Model.AdditionalChargePaid && Model.AdditionalChargeAwaitingConfirmation)
             {
                 <span class="small text-muted">
-                    Không thu tiền mặt khi giao dịch QR đang chờ Admin xác nhận.
+                    Không thu tiền mặt khi giao dịch QR đang chờ Staff đối soát.
                 </span>
             }
             else if (!Model.AdditionalChargePaid && Model.AdditionalAmount > 0)
@@ -651,6 +651,13 @@ else
         @if (!hasSignedDocuments)
         {
             <div class="alert alert-warning mb-0">Cần đủ <strong>bản ký giao</strong> và <strong>bản ký trả</strong> trước khi tiếp tục.</div>
+        }
+        else if (!Model.AllStaffChecksCompleted)
+        {
+            <div class="alert alert-warning mb-0">
+                File bản ký đã có nhưng chưa hoàn tất xác minh danh tính/chữ ký giao - trả.
+                Hãy hoàn thành các bước xác minh ở hồ sơ vận hành trước khi quyết toán.
+            </div>
         }
         else if (hasUnpaidCharge)
         {
