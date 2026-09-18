@@ -37,7 +37,7 @@ public sealed class AdminExtensionsController : Controller
     private readonly IBookingOperationService _bookingOperationService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
-    private readonly IWebHostEnvironment _environment;
+    private readonly ISecureDocumentStorage _secureDocumentStorage;
 
     public AdminExtensionsController(
         IExtensionService extensionService,
@@ -45,14 +45,14 @@ public sealed class AdminExtensionsController : Controller
         IBookingOperationService bookingOperationService,
         IAuditService auditService,
         ApplicationDbContext dbContext,
-        IWebHostEnvironment environment)
+        ISecureDocumentStorage secureDocumentStorage)
     {
         _extensionService = extensionService;
         _bookingService = bookingService;
         _bookingOperationService = bookingOperationService;
         _auditService = auditService;
         _dbContext = dbContext;
-        _environment = environment;
+        _secureDocumentStorage = secureDocumentStorage;
     }
 
     [HttpGet]
@@ -684,39 +684,16 @@ public sealed class AdminExtensionsController : Controller
             return (null, $"Ảnh minh chứng: {validationError}");
         }
 
-        var relativeFolder = $"uploads/extensions/{bookingId}";
-        var physicalFolder = Path.Combine(_environment.WebRootPath, relativeFolder);
-        Directory.CreateDirectory(physicalFolder);
+        var storedPath = await _secureDocumentStorage.SaveAsync(
+            image,
+            $"extension-evidence-booking-{bookingId}",
+            cancellationToken);
 
-        var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-        var fileName = $"{Guid.NewGuid():N}{extension}";
-        var physicalPath = Path.Combine(physicalFolder, fileName);
-
-        await using var stream = new FileStream(
-            physicalPath,
-            FileMode.CreateNew,
-            FileAccess.Write,
-            FileShare.None);
-        await image.CopyToAsync(stream, cancellationToken);
-
-        return ($"/{relativeFolder}/{fileName}", null);
+        return (storedPath, null);
     }
 
-    private void DeleteSavedEvidenceImage(string? imagePath)
-    {
-        if (string.IsNullOrWhiteSpace(imagePath) ||
-            !imagePath.StartsWith("/uploads/extensions/", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        var relative = imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-        var physicalPath = Path.Combine(_environment.WebRootPath, relative);
-        if (System.IO.File.Exists(physicalPath))
-        {
-            System.IO.File.Delete(physicalPath);
-        }
-    }
+    private void DeleteSavedEvidenceImage(string? imagePath) =>
+        _secureDocumentStorage.Delete(imagePath);
 
     private static string ComposeEvidence(
         string? evidenceNote,
