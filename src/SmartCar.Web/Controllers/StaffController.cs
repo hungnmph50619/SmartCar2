@@ -315,12 +315,61 @@ public sealed class StaffController : Controller
 
         var paidAt = DateTime.UtcNow;
         var transactionCode = $"CASH-{bookingId}-{paidAt:yyyyMMddHHmmss}";
-        foreach (var payment in upfrontPayments.Where(item => item.Status == PaymentStatus.Pending))
+
+        foreach (var rentalPayment in upfrontPayments.Where(item =>
+                     item.Type == PaymentType.Rental &&
+                     item.Status == PaymentStatus.Pending))
         {
-            payment.Status = PaymentStatus.Paid;
-            payment.Method = PaymentMethods.Cash;
-            payment.PaidAt = paidAt;
-            payment.TransactionCode = transactionCode;
+            rentalPayment.Status = PaymentStatus.Paid;
+            rentalPayment.Method = PaymentMethods.Cash;
+            rentalPayment.PaidAt = paidAt;
+            rentalPayment.TransactionCode = transactionCode;
+        }
+
+        var depositPaidBefore = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Deposit &&
+                item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var outstandingDeposit = BookingWorkflowRules.CalculateOutstandingDeposit(
+            booking.DepositAmount,
+            depositPaidBefore);
+
+        var pendingDeposits = upfrontPayments
+            .Where(item =>
+                item.Type == PaymentType.Deposit &&
+                item.Status == PaymentStatus.Pending)
+            .OrderBy(item => item.PaymentId)
+            .ToList();
+
+        Payment? depositCollectedNow = null;
+        if (outstandingDeposit > 0m)
+        {
+            depositCollectedNow = pendingDeposits.FirstOrDefault();
+            if (depositCollectedNow is null)
+            {
+                depositCollectedNow = new Payment
+                {
+                    BookingId = booking.BookingId,
+                    Type = PaymentType.Deposit
+                };
+                booking.Payments.Add(depositCollectedNow);
+            }
+
+            depositCollectedNow.Amount = outstandingDeposit;
+            depositCollectedNow.Method = PaymentMethods.Cash;
+            depositCollectedNow.Status = PaymentStatus.Paid;
+            depositCollectedNow.PaidAt = paidAt;
+            depositCollectedNow.TransactionCode = transactionCode;
+        }
+
+        foreach (var staleDeposit in pendingDeposits.Where(item => item != depositCollectedNow))
+        {
+            // Khoản Pending dư là dữ liệu cũ/trùng. Không được biến thành Paid vì sẽ thu thừa cọc.
+            staleDeposit.Status = PaymentStatus.Failed;
+            staleDeposit.Method = PaymentMethods.NotSelected;
+            staleDeposit.PaidAt = null;
+            staleDeposit.TransactionCode = null;
         }
 
         var rentalPaid = booking.Payments
@@ -330,7 +379,10 @@ public sealed class StaffController : Controller
             .Where(item => item.Type == PaymentType.Deposit && item.Status == PaymentStatus.Paid)
             .Sum(item => item.Amount);
 
-        if (rentalPaid <= 0 || (booking.DepositAmount > 0 && depositPaid < booking.DepositAmount))
+        if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
+                rentalPaid,
+                booking.DepositAmount,
+                depositPaid))
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Đơn chưa có đủ khoản tiền thuê hoặc tiền cọc cần thu nên không thể ghi Paid.";
