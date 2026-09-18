@@ -7,12 +7,14 @@ namespace SmartCar.Tests;
 public sealed class BookingWorkflowRulesTests
 {
     [Theory]
-    [InlineData(1000000, 3000000, 0, false)]
-    [InlineData(1000000, 3000000, 2999999, false)]
-    [InlineData(1000000, 3000000, 3000000, true)]
-    [InlineData(1000000, 0, 0, true)]
-    [InlineData(0, 0, 0, false)]
-    public void HasRequiredUpfrontPayment_RequiresRentalAndFullDeposit(
+    [InlineData(1000000, 0, 3000000, 3000000, false)]
+    [InlineData(1000000, 999999, 3000000, 3000000, false)]
+    [InlineData(1000000, 1000000, 3000000, 2999999, false)]
+    [InlineData(1000000, 1000000, 3000000, 3000000, true)]
+    [InlineData(1000000, 1200000, 3000000, 3500000, true)]
+    [InlineData(1000000, 1000000, 0, 0, true)]
+    public void HasRequiredUpfrontPayment_RequiresFullRentalAndFullDeposit(
+        decimal requiredRental,
         decimal rentalPaid,
         decimal requiredDeposit,
         decimal depositPaid,
@@ -21,9 +23,27 @@ public sealed class BookingWorkflowRulesTests
         Assert.Equal(
             expected,
             BookingWorkflowRules.HasRequiredUpfrontPayment(
+                requiredRental,
                 rentalPaid,
                 requiredDeposit,
                 depositPaid));
+    }
+
+    [Theory]
+    [InlineData(1000000, 0, 1000000)]
+    [InlineData(1000000, 400000, 600000)]
+    [InlineData(1000000, 1000000, 0)]
+    [InlineData(1000000, 1200000, 0)]
+    public void CalculateOutstandingRental_NeverCreatesOverpayment(
+        decimal requiredRental,
+        decimal rentalPaid,
+        decimal expectedOutstanding)
+    {
+        Assert.Equal(
+            expectedOutstanding,
+            BookingWorkflowRules.CalculateOutstandingRental(
+                requiredRental,
+                rentalPaid));
     }
 
     [Theory]
