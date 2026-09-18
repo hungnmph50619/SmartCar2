@@ -45,9 +45,17 @@ app.UseHttpsRedirection();
 
 app.Use(async (context, next) =>
 {
-    if (context.Request.Path.StartsWithSegments(
-            "/uploads/documents",
-            StringComparison.OrdinalIgnoreCase))
+    var requestPath = context.Request.Path.Value ?? string.Empty;
+    var isProtectedKycUpload = context.Request.Path.StartsWithSegments(
+        "/uploads/documents",
+        StringComparison.OrdinalIgnoreCase);
+    var isLegacySignedRentalDocument =
+        (context.Request.Path.StartsWithSegments("/uploads/handovers", StringComparison.OrdinalIgnoreCase) ||
+         context.Request.Path.StartsWithSegments("/uploads/returns", StringComparison.OrdinalIgnoreCase)) &&
+        (requestPath.Contains("/signed-handover-", StringComparison.OrdinalIgnoreCase) ||
+         requestPath.Contains("/signed-return-", StringComparison.OrdinalIgnoreCase));
+
+    if (isProtectedKycUpload || isLegacySignedRentalDocument)
     {
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         return;
