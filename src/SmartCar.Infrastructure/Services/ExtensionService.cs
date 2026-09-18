@@ -69,6 +69,10 @@ internal sealed class ExtensionService : IExtensionService
         RequestExtensionRequest request,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var booking = await _dbContext.Bookings
             .Include(item => item.Extensions)
             .Include(item => item.Vehicle)
@@ -162,6 +166,7 @@ internal sealed class ExtensionService : IExtensionService
 
         await NotifyAdminsAsync(adminTitle, adminMessage, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -256,6 +261,10 @@ internal sealed class ExtensionService : IExtensionService
         string reason,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         if (string.IsNullOrWhiteSpace(reason))
         {
             return OperationResult.Failure("Vui lòng nêu rõ minh chứng/thông tin cần khách bổ sung.");
@@ -284,6 +293,7 @@ internal sealed class ExtensionService : IExtensionService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -294,6 +304,10 @@ internal sealed class ExtensionService : IExtensionService
         string? customerNote = null,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         if (string.IsNullOrWhiteSpace(evidenceNote))
         {
             return OperationResult.Failure("Vui lòng mô tả minh chứng/tình trạng và vị trí hiện tại.");
@@ -341,6 +355,7 @@ internal sealed class ExtensionService : IExtensionService
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
@@ -350,6 +365,10 @@ internal sealed class ExtensionService : IExtensionService
         string reason,
         CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         if (string.IsNullOrWhiteSpace(reason))
         {
             return OperationResult.Failure("Vui lòng nhập lý do từ chối gia hạn.");
@@ -379,6 +398,7 @@ internal sealed class ExtensionService : IExtensionService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
 
