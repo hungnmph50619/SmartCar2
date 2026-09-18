@@ -382,47 +382,6 @@ internal sealed class ExtensionService : IExtensionService
         return OperationResult.Success();
     }
 
-    public async Task<OperationResult> MarkPaidAsync(
-        int bookingId,
-        CancellationToken cancellationToken = default)
-    {
-        var extension = await _dbContext.BookingExtensions
-            .Include(item => item.Booking)
-            .Where(item =>
-                item.BookingId == bookingId &&
-                (item.Status == BookingExtensionStatus.Approved ||
-                 item.Status == BookingExtensionStatus.Paid))
-            .OrderByDescending(item => item.RequestedAt)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (extension is null)
-        {
-            return OperationResult.Failure("Không tìm thấy gia hạn đã duyệt để hoàn tất.");
-        }
-
-        var booking = extension.Booking;
-        if (booking.Status != BookingStatus.Rented)
-        {
-            return OperationResult.Failure("Đơn không còn ở trạng thái đang thuê để áp dụng gia hạn.");
-        }
-
-        if (booking.ReturnDate < extension.RequestedReturnDate)
-        {
-            booking.ReturnDate = extension.RequestedReturnDate;
-            booking.NumberOfDays = Math.Max(
-                1,
-                (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
-            booking.RentalAmount += extension.AdditionalAmount;
-            booking.TotalAmount += extension.AdditionalAmount;
-        }
-
-        extension.Status = BookingExtensionStatus.Paid;
-        extension.PaidAt ??= DateTime.UtcNow;
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return OperationResult.Success();
-    }
-
     private async Task<IReadOnlyList<ExtensionDto>> MapExtensionsAsync(
         IReadOnlyCollection<BookingExtension> extensions,
         CancellationToken cancellationToken)
