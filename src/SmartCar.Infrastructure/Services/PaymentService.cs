@@ -553,12 +553,22 @@ internal sealed class PaymentService : IPaymentService
 
             if (booking.Status == BookingStatus.PendingPayment)
             {
-                var rentalPaidAfterSwap = booking.Payments
+                var grossRentalPaidAfterSwap = booking.Payments
                     .Where(item =>
                         item.Status == PaymentStatus.Paid &&
                         item.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
                     .Sum(item => item.Amount);
-                var depositPaidAfterSwap = booking.Payments
+                var rentalRefundPlanned = booking.Payments
+                    .Where(item =>
+                        item.Type == PaymentType.Refund &&
+                        item.Method == PaymentMethods.VehicleSwapRefund &&
+                        item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+                    .Sum(item => item.Amount);
+                var effectiveRentalPaidAfterSwap = BookingWorkflowRules.CalculateEffectivePaid(
+                    grossRentalPaidAfterSwap,
+                    rentalRefundPlanned);
+
+                var grossDepositPaidAfterSwap = booking.Payments
                     .Where(item =>
                         item.Type == PaymentType.Deposit &&
                         item.Status == PaymentStatus.Paid)
@@ -569,14 +579,14 @@ internal sealed class PaymentService : IPaymentService
                         item.Method == PaymentMethods.DepositRefund &&
                         item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
                     .Sum(item => item.Amount);
-                var effectiveDepositPaid = Math.Max(
-                    0m,
-                    depositPaidAfterSwap - depositRefundPlanned);
+                var effectiveDepositPaid = BookingWorkflowRules.CalculateEffectivePaid(
+                    grossDepositPaidAfterSwap,
+                    depositRefundPlanned);
                 var requiredRentalAmount = GetRequiredRentalPaymentAmount(booking);
 
                 if (BookingWorkflowRules.HasRequiredUpfrontPayment(
                         requiredRentalAmount,
-                        rentalPaidAfterSwap,
+                        effectiveRentalPaidAfterSwap,
                         booking.DepositAmount,
                         effectiveDepositPaid))
                 {
