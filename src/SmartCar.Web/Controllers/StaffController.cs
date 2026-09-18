@@ -429,6 +429,7 @@ public sealed class StaffController : Controller
         var booking = await _dbContext.Bookings
             .Include(item => item.Handover)
             .Include(item => item.Vehicle)
+            .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
         if (booking?.Handover is null)
@@ -456,6 +457,33 @@ public sealed class StaffController : Controller
             TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
+        var handoverRentalPaid = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Rental &&
+                item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var handoverDepositPaid = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Deposit &&
+                item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+        var handoverDepositRefundPlanned = booking.Payments
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.DepositRefund &&
+                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved or PaymentStatus.Refunded)
+            .Sum(item => item.Amount);
+
+        if (!BookingWorkflowRules.HasRequiredUpfrontPayment(
+                handoverRentalPaid,
+                booking.DepositAmount,
+                Math.Max(0m, handoverDepositPaid - handoverDepositRefundPlanned)))
+        {
+            TempData["ErrorMessage"] =
+                "Không thể bắt đầu chuyến vì hệ thống không còn ghi nhận đủ tiền thuê và tiền cọc.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
         if (DateTime.Now < booking.PickupDate)
         {
             TempData["ErrorMessage"] =
