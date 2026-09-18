@@ -692,16 +692,22 @@ public sealed class ReturnsController : Controller
             await ValidateImageAsync(image, nameof(ReturnViewModel.Images), cancellationToken);
         }
 
-        var duplicates = await ImageFileValidator.FindDuplicateContentFileNamesAsync(
-            evidenceFiles.Select(item => item.File)
-                .Concat(selectedDamageImages)
-                .Concat(selectedOtherImages),
+        var duplicateCandidates = evidenceFiles
+            .Select(item => (item.FieldName, item.File))
+            .Concat(selectedDamageImages.Select(file =>
+                (nameof(ReturnViewModel.DamageImages), (IFormFile?)file)))
+            .Concat(selectedOtherImages.Select(file =>
+                (nameof(ReturnViewModel.Images), (IFormFile?)file)));
+
+        var duplicatesByField = await ImageFileValidator.FindDuplicateContentFieldsAsync(
+            duplicateCandidates,
             cancellationToken);
-        if (duplicates.Count > 0)
+        foreach (var duplicate in duplicatesByField)
         {
             ModelState.AddModelError(
-                nameof(ReturnViewModel.Images),
-                "Không được dùng cùng một ảnh cho nhiều vị trí/chứng cứ. Ảnh trùng nội dung: " + string.Join(", ", duplicates));
+                duplicate.Key,
+                "Không được dùng cùng một ảnh cho nhiều vị trí/chứng cứ. Ảnh trùng nội dung: " +
+                string.Join(", ", duplicate.Value));
         }
     }
 
