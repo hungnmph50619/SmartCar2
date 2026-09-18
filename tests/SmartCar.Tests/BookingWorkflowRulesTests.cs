@@ -242,4 +242,23 @@ public sealed class BookingWorkflowRulesTests
             expected,
             BookingWorkflowRules.BlocksVehicleReturnForExtensionPayment(status));
     }
+
+
+    [Theory]
+    [InlineData(1000000, 0, 1000000)]
+    [InlineData(1000000, 200000, 800000)]
+    [InlineData(1000000, 1000000, 0)]
+    [InlineData(1000000, 1500000, 0)]
+    [InlineData(-1000, 0, 0)]
+    public void CalculateEffectivePaid_SubtractsRefundsWithoutGoingNegative(
+        decimal grossPaid,
+        decimal refundedOrPlanned,
+        decimal expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.CalculateEffectivePaid(
+                grossPaid,
+                refundedOrPlanned));
+    }
 }
