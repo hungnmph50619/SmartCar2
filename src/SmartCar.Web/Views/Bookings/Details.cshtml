@@ -28,8 +28,9 @@
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
     var hasOpenExtension = Model.Extensions.Any(extension =>
         extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence or BookingExtensionStatus.Approved);
-    var canCancel = Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or
-        BookingStatus.Paid or BookingStatus.ReadyForPickup;
+    var canCancel = !hasAwaitingConfirmation &&
+        Model.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or
+            BookingStatus.Paid or BookingStatus.ReadyForPickup;
     var canReview = Model.Status == BookingStatus.Completed && !Model.HasReview;
     var supportPhone = ViewBag.SmartCarSupportPhone as string ?? "0982223792";
     var storeAddress = ViewBag.StoreAddress as string ?? "SmartCar";
