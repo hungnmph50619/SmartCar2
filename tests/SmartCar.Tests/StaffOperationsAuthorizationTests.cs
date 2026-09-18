@@ -18,6 +18,7 @@ public sealed class StaffOperationsAuthorizationTests
     [InlineData(typeof(StaffWorkflowDiagnosticsController))]
     [InlineData(typeof(StaffCounterIdentityEvidenceController))]
     [InlineData(typeof(StaffPaymentsController))]
+    [InlineData(typeof(StaffExtensionOperationsController))]
     public void OperationalControllers_AreExplicitlyStaffOnly(Type controllerType)
     {
         var authorizeAttributes = controllerType
@@ -67,5 +68,17 @@ public sealed class StaffOperationsAuthorizationTests
 
         Assert.DoesNotContain("ConfirmQr", publicActions);
         Assert.DoesNotContain("RejectQr", publicActions);
+    }
+
+
+    [Fact]
+    public void AdminExtensionsController_DoesNotExposeVehicleSwapOperation()
+    {
+        var publicActions = typeof(AdminExtensionsController)
+            .GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain("MoveConflictingBooking", publicActions);
     }
 }
