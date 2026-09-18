@@ -67,6 +67,12 @@ public static class BookingWorkflowRules
         PaymentStatus status) =>
         status == PaymentStatus.AwaitingConfirmation;
 
+    public static bool IsExtensionPaymentLedgerConsistent(
+        decimal paidExtensionAmount,
+        decimal effectivePaidExtensionAmount) =>
+        Math.Max(0m, paidExtensionAmount) ==
+        Math.Max(0m, effectivePaidExtensionAmount);
+
     public static bool CanStaffReview(
         BookingStatus status,
         DateTime? staffReviewedAt) =>
