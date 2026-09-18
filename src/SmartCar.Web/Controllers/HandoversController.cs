@@ -371,14 +371,26 @@ public sealed class HandoversController : Controller
             await ValidateImageAsync(image, nameof(HandoverViewModel.Images), cancellationToken);
         }
 
-        var duplicates = await ImageFileValidator.FindDuplicateContentFileNamesAsync(
-            required.Concat(additional),
+        var duplicateCandidates = new (string FieldName, IFormFile? File)[]
+        {
+            (nameof(HandoverViewModel.FrontImage), model.FrontImage),
+            (nameof(HandoverViewModel.RearImage), model.RearImage),
+            (nameof(HandoverViewModel.LeftImage), model.LeftImage),
+            (nameof(HandoverViewModel.RightImage), model.RightImage),
+            (nameof(HandoverViewModel.InteriorImage), model.InteriorImage),
+            (nameof(HandoverViewModel.OdometerImage), model.OdometerImage),
+            (nameof(HandoverViewModel.FuelImage), model.FuelImage)
+        }.Concat(additional.Select(file => (nameof(HandoverViewModel.Images), (IFormFile?)file)));
+
+        var duplicatesByField = await ImageFileValidator.FindDuplicateContentFieldsAsync(
+            duplicateCandidates,
             cancellationToken);
-        if (duplicates.Count > 0)
+        foreach (var duplicate in duplicatesByField)
         {
             ModelState.AddModelError(
-                nameof(HandoverViewModel.Images),
-                "Không được dùng cùng một ảnh cho nhiều vị trí. Ảnh trùng nội dung: " + string.Join(", ", duplicates));
+                duplicate.Key,
+                "Không được dùng cùng một ảnh cho nhiều vị trí. Ảnh trùng nội dung: " +
+                string.Join(", ", duplicate.Value));
         }
     }
 
