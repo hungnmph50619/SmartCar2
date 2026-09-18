@@ -78,7 +78,7 @@
     .signed-upload-card{border:1px solid #d8dde6;border-radius:.5rem;padding:.75rem;background:#f8fafc}
     .signed-preview{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}
     .signed-preview-card{position:relative;border:1px solid #dee2e6;border-radius:.5rem;background:#fff;padding:.25rem;width:108px}
-    .signed-preview-card img{display:block;width:98px;height:72px;object-fit:cover;border-radius:.35rem;background:#f1f3f5}
+    .signed-preview-card img{display:block;width:98px;height:72px;object-fit:contain;background:#f8f9fa;border-radius:.35rem;background:#f1f3f5}
     .signed-preview-card .caption{font-size:.72rem;color:#6c757d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.25rem}
     .remove-signed-page{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border:0;border-radius:50%;background:#dc3545;color:#fff;line-height:1;font-weight:700}
     .signed-links{border:1px solid #badbcc;background:#f0fff4;border-radius:.5rem;padding:.5rem .75rem}
@@ -241,7 +241,7 @@ else
                     {
                         <div class="col-6 col-md-4">
                             <a href="@image" target="_blank" rel="noopener" title="@EvidenceLabel(image)">
-                                <img src="@image" alt="@EvidenceLabel(image) lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
+                                <img src="@image" alt="@EvidenceLabel(image) lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:contain;background:#f8f9fa" />
                             </a>
                         </div>
                     }
@@ -321,7 +321,7 @@ else
                     {
                         <div class="col-6 col-md-4">
                             <a href="@image" target="_blank" rel="noopener" title="@EvidenceLabel(image)">
-                                <img src="@image" alt="@EvidenceLabel(image) lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
+                                <img src="@image" alt="@EvidenceLabel(image) lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:contain;background:#f8f9fa" />
                             </a>
                         </div>
                     }
