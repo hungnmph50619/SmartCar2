@@ -327,7 +327,7 @@ internal sealed class PaymentService : IPaymentService
 
     public async Task<OperationResult> ConfirmQrPaymentAsync(
         int paymentId,
-        string adminId,
+        string actorId,
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -387,7 +387,7 @@ internal sealed class PaymentService : IPaymentService
             }
         }
 
-        var stateError = ValidateAdminConfirmationState(booking, originalType);
+        var stateError = ValidateReconciliationState(booking, originalType);
         if (stateError is not null)
         {
             return OperationResult.Failure(stateError);
@@ -621,7 +621,7 @@ internal sealed class PaymentService : IPaymentService
         await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
-            adminId,
+            actorId,
             "ConfirmQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
@@ -633,7 +633,7 @@ internal sealed class PaymentService : IPaymentService
 
     public async Task<OperationResult> RejectQrPaymentAsync(
         int paymentId,
-        string adminId,
+        string actorId,
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -690,7 +690,7 @@ internal sealed class PaymentService : IPaymentService
         await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
-            adminId,
+            actorId,
             "RejectQrPayment",
             nameof(Payment),
             payment.PaymentId.ToString(),
@@ -739,7 +739,7 @@ internal sealed class PaymentService : IPaymentService
             _ => null
         };
 
-    private static string? ValidateAdminConfirmationState(
+    private static string? ValidateReconciliationState(
         Booking booking,
         PaymentType type) =>
         type switch
