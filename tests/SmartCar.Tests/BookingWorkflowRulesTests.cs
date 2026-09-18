@@ -279,4 +279,19 @@ public sealed class BookingWorkflowRulesTests
                 paidExtensionAmount,
                 effectivePaidExtensionAmount));
     }
+
+
+    [Theory]
+    [InlineData(PaymentStatus.AwaitingRefund, true)]
+    [InlineData(PaymentStatus.RefundApproved, true)]
+    [InlineData(PaymentStatus.Refunded, true)]
+    [InlineData(PaymentStatus.Failed, false)]
+    [InlineData(PaymentStatus.Pending, false)]
+    [InlineData(PaymentStatus.AwaitingConfirmation, false)]
+    public void CountsTowardRefundTotal_ExcludesFailedOrUnrelatedPayments(
+        PaymentStatus status,
+        bool expected)
+    {
+        Assert.Equal(expected, BookingWorkflowRules.CountsTowardRefundTotal(status));
+    }
 }
