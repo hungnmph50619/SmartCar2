@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Common;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Application.Features.Returns;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
@@ -590,7 +591,7 @@ internal sealed class ReturnService : IReturnService
 
         var hasPendingRefund = booking.Payments.Any(payment =>
             payment.Type == PaymentType.Refund &&
-            payment.Status == PaymentStatus.AwaitingRefund);
+            BookingWorkflowRules.IsOpenRefundStatus(payment.Status));
         booking.Status = hasPendingRefund
             ? BookingStatus.AwaitingRefund
             : BookingStatus.Completed;
