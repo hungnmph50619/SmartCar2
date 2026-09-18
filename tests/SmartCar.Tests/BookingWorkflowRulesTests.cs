@@ -264,6 +264,39 @@ public sealed class BookingWorkflowRulesTests
 
 
     [Theory]
+    [InlineData(1000000, 500000, 1500000)]
+    [InlineData(1000000, 0, 1000000)]
+    [InlineData(-1, 500000, 500000)]
+    [InlineData(1000000, -1, 1000000)]
+    public void CalculateEffectiveTripRevenuePaid_IncludesPaidExtensionMoney(
+        decimal effectiveRentalPaid,
+        decimal paidExtensionAmount,
+        decimal expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.CalculateEffectiveTripRevenuePaid(
+                effectiveRentalPaid,
+                paidExtensionAmount));
+    }
+
+    [Fact]
+    public void ExtendedTripSettlement_TreatsPaidExtensionAsRevenueAlreadyCollected()
+    {
+        var effectiveTripRevenuePaid =
+            BookingWorkflowRules.CalculateEffectiveTripRevenuePaid(
+                effectiveRentalPaid: 1_000_000m,
+                paidExtensionAmount: 500_000m);
+
+        Assert.True(BookingWorkflowRules.HasRequiredUpfrontPayment(
+            requiredRental: 1_500_000m,
+            rentalPaid: effectiveTripRevenuePaid,
+            requiredDeposit: 3_000_000m,
+            depositPaid: 3_000_000m));
+    }
+
+
+    [Theory]
     [InlineData(0, 0, true)]
     [InlineData(500000, 500000, true)]
     [InlineData(500000, 0, false)]
