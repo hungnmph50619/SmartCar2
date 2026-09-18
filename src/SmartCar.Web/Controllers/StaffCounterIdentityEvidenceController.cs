@@ -322,6 +322,10 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
             return NotFound();
         }
 
+        Response.Headers.CacheControl = "private, no-store, max-age=0";
+        Response.Headers.Pragma = "no-cache";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+
         var stream = System.IO.File.Open(
             fullPath,
             FileMode.Open,
