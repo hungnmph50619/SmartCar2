@@ -613,7 +613,8 @@
             <div class="card border-danger shadow-sm mb-4">
                 <div class="card-header bg-white text-danger"><strong>Hủy đơn</strong></div>
                 <div class="card-body">
-                    <p class="small text-muted">Cọc được hoàn nếu xe chưa bàn giao. Tiền thuê áp dụng chính sách hủy.</p>
+                    <p class="small text-muted mb-1">Nếu xe chưa bàn giao, phần cọc còn lại được hoàn 100%.</p>
+                    <p class="small text-muted">@CancellationRefundPolicy.GetVietnamesePolicySummary()</p>
                     <form asp-controller="BookingOperations" asp-action="Cancel" method="post">
                         <input type="hidden" name="BookingId" value="@Model.BookingId" />
                         <textarea name="Reason" class="form-control mb-2" maxlength="500" required placeholder="Lý do hủy"></textarea>
