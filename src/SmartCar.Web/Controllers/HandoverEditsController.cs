@@ -199,6 +199,8 @@ public sealed class HandoverEditsController : Controller
             booking.Handover.HandoverAt = model.HandoverAt;
             booking.Handover.Mileage = model.Mileage!.Value;
             booking.Handover.FuelLevel = $"{fuelPercent}%";
+            booking.Handover.ExteriorCondition = Normalize(model.ExteriorCondition);
+            booking.Handover.InteriorCondition = Normalize(model.InteriorCondition);
             booking.Handover.Accessories = Normalize(model.Accessories);
             booking.Handover.Notes = Normalize(model.Notes);
             booking.Handover.ImagePaths = string.Join(';', updatedPaths);
