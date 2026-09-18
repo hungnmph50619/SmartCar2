@@ -92,11 +92,12 @@ internal sealed class ReturnService : IReturnService
             .Where(extension => extension.Status == BookingExtensionStatus.Paid)
             .Sum(extension => extension.AdditionalAmount);
 
-        if (paidExtensionAmount > effectivePaidExtensionAmount &&
-            booking.Extensions.Any(extension => extension.Status == BookingExtensionStatus.Approved))
+        if (!BookingWorkflowRules.IsExtensionPaymentLedgerConsistent(
+                paidExtensionAmount,
+                effectivePaidExtensionAmount))
         {
             return OperationResult.Failure(
-                "Dữ liệu gia hạn đang lệch: đã có tiền gia hạn được ghi nhận nhưng yêu cầu vẫn chưa chuyển sang trạng thái Đã thanh toán. " +
+                "Dữ liệu gia hạn đang lệch giữa tiền đã thu và yêu cầu gia hạn có hiệu lực. " +
                 "Vui lòng đối soát dữ liệu gia hạn trước khi lập biên bản trả xe.");
         }
 
@@ -506,11 +507,12 @@ internal sealed class ReturnService : IReturnService
             .Where(extension => extension.Status == BookingExtensionStatus.Paid)
             .Sum(extension => extension.AdditionalAmount);
 
-        if (paidExtensionAmount > effectivePaidExtensionAmount &&
-            booking.Extensions.Any(extension => extension.Status == BookingExtensionStatus.Approved))
+        if (!BookingWorkflowRules.IsExtensionPaymentLedgerConsistent(
+                paidExtensionAmount,
+                effectivePaidExtensionAmount))
         {
             return OperationResult.Failure(
-                "Dữ liệu gia hạn đang lệch: có tiền gia hạn đã thu nhưng yêu cầu chưa được ghi nhận Đã thanh toán. " +
+                "Dữ liệu gia hạn đang lệch giữa tiền đã thu và yêu cầu gia hạn có hiệu lực. " +
                 "Không quyết toán tự động để tránh mất quyền lợi của khách.");
         }
 
