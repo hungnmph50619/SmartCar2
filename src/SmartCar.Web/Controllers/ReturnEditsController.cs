@@ -207,8 +207,8 @@ public sealed class ReturnEditsController : Controller
             booking.VehicleReturn.ReturnedAt = model.ReturnedAt;
             booking.VehicleReturn.Mileage = model.Mileage!.Value;
             booking.VehicleReturn.FuelLevel = $"{fuelPercent}%";
-            booking.VehicleReturn.ExteriorCondition = Normalize(model.ExteriorCondition);
-            booking.VehicleReturn.InteriorCondition = Normalize(model.InteriorCondition);
+            booking.VehicleReturn.ExteriorCondition = NormalizeText(model.ExteriorCondition);
+            booking.VehicleReturn.InteriorCondition = NormalizeText(model.InteriorCondition);
             booking.VehicleReturn.HasDamage = model.HasDamage;
             booking.VehicleReturn.AccessoryStatus = normalizedAccessory;
             booking.VehicleReturn.Notes = BuildReturnNotes(model.AccessoryStatus, model.MissingAccessories, model.Notes);
@@ -290,6 +290,9 @@ public sealed class ReturnEditsController : Controller
         SplitPaths(imagePaths)
             .Where(path => !path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
+    private static string? NormalizeText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static bool TryParseFuel(string? value, out int percent)
     {
