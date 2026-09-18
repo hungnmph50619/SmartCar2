@@ -305,8 +305,14 @@ public sealed class StaffController : Controller
         var upfrontPayments = booking.Payments
             .Where(item => item.Type is PaymentType.Rental or PaymentType.Deposit)
             .ToList();
+        var settlementPayments = booking.Payments
+            .Where(item =>
+                item.Type is PaymentType.Rental or
+                    PaymentType.Deposit or
+                    PaymentType.VehicleSwapAdjustment)
+            .ToList();
 
-        if (upfrontPayments.Any(item => item.Status == PaymentStatus.AwaitingConfirmation))
+        if (settlementPayments.Any(item => item.Status == PaymentStatus.AwaitingConfirmation))
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Đơn đang có chuyển khoản chờ Admin đối soát. Không được đồng thời ghi nhận tiền mặt.";
@@ -408,6 +414,18 @@ public sealed class StaffController : Controller
             staleDeposit.Method = PaymentMethods.NotSelected;
             staleDeposit.PaidAt = null;
             staleDeposit.TransactionCode = null;
+        }
+
+        foreach (var staleSwapAdjustment in booking.Payments.Where(item =>
+                     item.Type == PaymentType.VehicleSwapAdjustment &&
+                     item.Status == PaymentStatus.Pending))
+        {
+            // Thu tiền mặt trực tiếp theo số còn thiếu cuối cùng; không để khoản chênh lệch cũ
+            // tiếp tục tồn tại và có thể bị thu lần hai.
+            staleSwapAdjustment.Status = PaymentStatus.Failed;
+            staleSwapAdjustment.Method = PaymentMethods.NotSelected;
+            staleSwapAdjustment.PaidAt = null;
+            staleSwapAdjustment.TransactionCode = null;
         }
 
         var rentalPaid = booking.Payments
