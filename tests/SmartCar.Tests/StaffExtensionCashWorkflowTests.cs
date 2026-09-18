@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using SmartCar.Application.Common;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Payments;
@@ -18,7 +19,7 @@ namespace SmartCar.Tests;
 public sealed class StaffExtensionCashWorkflowTests
 {
     [Fact]
-    public async Task CollectExtensionCash_AppliesApprovedExtensionAtomically()
+    public async Task CollectExtensionCash_AppliesApprovedExtensionAndPayment()
     {
         await using var db = CreateDbContext();
         var originalReturn = new DateTime(2026, 9, 20, 10, 0, 0);
@@ -78,8 +79,9 @@ public sealed class StaffExtensionCashWorkflowTests
         Assert.Equal(1_500_000m, booking.RentalAmount);
         Assert.Equal(1_500_000m, booking.TotalAmount);
 
-        var payment = Assert.Single(booking.Payments.Where(item =>
-            item.Type == PaymentType.Extension));
+        var payment = Assert.Single(
+            booking.Payments,
+            item => item.Type == PaymentType.Extension);
         Assert.Equal(PaymentStatus.Paid, payment.Status);
         Assert.Equal(PaymentMethods.Cash, payment.Method);
         Assert.Equal(500_000m, payment.Amount);
@@ -170,6 +172,8 @@ public sealed class StaffExtensionCashWorkflowTests
             new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseInMemoryDatabase(
                     $"staff-extension-cash-{Guid.NewGuid():N}")
+                .ConfigureWarnings(warnings => warnings.Ignore(
+                    InMemoryEventId.TransactionIgnoredWarning))
                 .Options;
         return new ApplicationDbContext(options);
     }
