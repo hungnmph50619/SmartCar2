@@ -127,8 +127,21 @@
 @if (awaitingRefund)
 {
     <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <span><strong>Đã kiểm tra xong.</strong> Chờ quyết toán cọc <strong>@Model.RefundAmount.ToString("N0") đ</strong>.</span>
-        <a class="btn btn-sm btn-warning" asp-controller="AdminPayments" asp-action="Index" asp-route-section="refund" asp-route-status="@PaymentStatus.AwaitingRefund">Xử lý hoàn cọc</a>
+        <span>
+            <strong>Đã kiểm tra xong.</strong>
+            @if (Model.RefundStatus == PaymentStatus.RefundApproved)
+            {
+                <text>Admin đã duyệt khoản hoàn <strong>@Model.RefundAmount.ToString("N0") đ</strong>. Nhân viên có thể thực hiện chuyển tiền.</text>
+            }
+            else
+            {
+                <text>Khoản hoàn <strong>@Model.RefundAmount.ToString("N0") đ</strong> đang chờ Admin duyệt.</text>
+            }
+        </span>
+        @if (Model.RefundStatus == PaymentStatus.RefundApproved)
+        {
+            <a class="btn btn-sm btn-warning" asp-controller="Staff" asp-action="Refunds">Thực hiện hoàn tiền</a>
+        }
     </div>
 }
 else
