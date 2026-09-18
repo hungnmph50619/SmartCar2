@@ -370,6 +370,26 @@
         </section>
     }
 
+    @if (!b.HasHandover && hasPaymentAwaitingConfirmation &&
+        b.Status is BookingStatus.PendingConfirmation or BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup)
+    {
+        <section class="card card-body shadow-sm mb-3 border-warning-subtle rounded-4">
+            <div class="d-flex gap-3 align-items-start">
+                <span class="staff-step-number">!</span>
+                <div class="flex-grow-1">
+                    <h2 class="h5 mb-1">Chưa thể hủy đơn vì còn giao dịch chờ đối soát</h2>
+                    <p class="text-muted mb-3">
+                        Có khoản chuyển khoản/QR đang ở trạng thái chờ xác nhận. Staff phải xác nhận đã nhận tiền hoặc từ chối giao dịch trước,
+                        sau đó hệ thống mới cho hủy và tính hoàn tiền để tránh bỏ sót tiền khách đã chuyển.
+                    </p>
+                    <a class="btn btn-warning" asp-controller="StaffPayments" asp-action="Reconciliation">
+                        Mở danh sách giao dịch chờ đối soát
+                    </a>
+                </div>
+            </div>
+        </section>
+    }
+
     @if (b.Status == BookingStatus.Rented)
     {
         <section class="card card-body shadow-sm mb-3 rounded-4">
