@@ -289,6 +289,10 @@ public sealed class AdminExtensionsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        // Mọi khoản chênh lệch đổi xe Pending trước đó được tính theo chiếc xe cũ
+        // và trở thành lỗi thời ngay khi đổi xe lần nữa. Đóng chúng trước khi tính lại từ ledger thực thu.
+        FailPendingPayments(conflict.Payments, PaymentType.VehicleSwapAdjustment);
+
         var grossRentalPaid = conflict.Payments
             .Where(item =>
                 item.Status == PaymentStatus.Paid &&
