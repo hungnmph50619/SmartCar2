@@ -145,10 +145,13 @@ public sealed class AdminRentalDocumentsController : Controller
     booking.Handover.ImagePaths,
     HandoverSignedMarker);
 
-        if (booking.Status != BookingStatus.ReadyForPickup)
+        if (booking.Status is not (
+                BookingStatus.ReadyForPickup or
+                BookingStatus.Rented or
+                BookingStatus.PendingInspection))
         {
             TempData["ErrorMessage"] =
-                "Chỉ được tải hoặc thay bản ký giao xe khi đơn đang ở trạng thái sẵn sàng giao xe.";
+                "Chỉ được tải hoặc thay bản ký giao xe trong giai đoạn bàn giao, đang thuê hoặc chờ kiểm tra trả xe.";
 
             return RedirectToBookingDetails(bookingId);
         }
