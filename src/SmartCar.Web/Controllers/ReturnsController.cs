@@ -22,6 +22,8 @@ public sealed class ReturnsController : Controller
     private const long MaximumImageBytes = 5 * 1024 * 1024;
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
+    private const string OverdueCompPrefix = "OVERDUE-COMP-";
+    private const string OverdueDebtPrefix = "OVERDUE-DEBT-";
 
     private readonly IReturnService _returnService;
     private readonly IBookingService _bookingService;
@@ -261,6 +263,31 @@ public sealed class ReturnsController : Controller
             .OrderByDescending(payment => payment.PaymentId)
             .FirstOrDefault();
 
+        var overdueRows = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment =>
+                payment.BookingId == bookingId &&
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.TransactionCode != null &&
+                (payment.TransactionCode.StartsWith(OverdueCompPrefix) ||
+                 payment.TransactionCode.StartsWith(OverdueDebtPrefix)))
+            .Select(payment => new { payment.Amount, payment.TransactionCode })
+            .ToListAsync(cancellationToken);
+
+        var overdueImpacts = overdueRows
+            .Select(row => new
+            {
+                BookingId = ParseAffectedBookingId(row.TransactionCode),
+                row.Amount
+            })
+            .Where(row => row.BookingId.HasValue)
+            .GroupBy(row => row.BookingId!.Value)
+            .Select(group => new OverdueImpactViewModel(
+                group.Key,
+                group.Sum(row => row.Amount)))
+            .OrderBy(item => item.BookingId)
+            .ToList();
+
         ViewBag.DepositHoldDays = DepositHoldPolicy.NormalizeDays(records.DepositHoldDaysApplied);
         ViewBag.DepositEligibleAt = DepositHoldPolicy.CalculateEligibleAt(
             records.VehicleReturn.ReturnedAt, records.DepositHoldDaysApplied);
@@ -278,6 +305,7 @@ public sealed class ReturnsController : Controller
             RefundStatus = refundPayment?.Status,
             RefundAmount = refundPayment?.Amount ?? 0m,
             AdditionalCharges = booking.AdditionalCharges,
+            OverdueImpacts = overdueImpacts,
             HandoverIdentityVerified = records.Handover.CustomerIdentityVerified,
             HandoverSignedDocumentVerified = records.Handover.SignedDocumentVerified,
             ReturnIdentityVerified = records.VehicleReturn.CustomerIdentityVerified,
@@ -808,6 +836,30 @@ public sealed class ReturnsController : Controller
                 System.IO.File.Delete(fullPath);
             }
         }
+    }
+
+    private static int? ParseAffectedBookingId(string? transactionCode)
+    {
+        if (string.IsNullOrWhiteSpace(transactionCode))
+        {
+            return null;
+        }
+
+        var prefix = transactionCode.StartsWith(OverdueCompPrefix, StringComparison.OrdinalIgnoreCase)
+            ? OverdueCompPrefix
+            : transactionCode.StartsWith(OverdueDebtPrefix, StringComparison.OrdinalIgnoreCase)
+                ? OverdueDebtPrefix
+                : null;
+        if (prefix is null)
+        {
+            return null;
+        }
+
+        var parts = transactionCode[prefix.Length..]
+            .Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 && int.TryParse(parts[1], out var affectedBookingId)
+            ? affectedBookingId
+            : null;
     }
 
     private static IReadOnlyList<string> SplitImagePaths(string? imagePaths) =>
