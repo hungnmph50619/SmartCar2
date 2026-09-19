@@ -36,34 +36,38 @@ public sealed class AdminBusinessSettingsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Update(RentalPolicySnapshot model, CancellationToken cancellationToken)
+    public async Task<IActionResult> Update(string group, string version, CancellationToken cancellationToken)
     {
-        foreach (var field in new[] { "Version", "DepositHoldDays", "DepositPercent", "IncludedKilometersPerDay",
-            "ExcessKilometerFee", "LateReturnFeeMultiplier", "LateReturnGraceMinutes", "IncludedDeliveryDistanceKm",
-            "BaseDeliveryFee", "DeliveryFeePerExtraKm", "MaxDeliveryDistanceKm", "TrafficFineTerms", "DamageCompensationTerms" })
+        var fields = SmartCar.Web.ViewModels.BusinessPolicyGroups.Fields(group);
+        if (fields.Length == 0) return BadRequest("Nhóm chính sách không hợp lệ.");
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            "UPDATE [dbo].[BusinessSettings] WITH (UPDLOCK, HOLDLOCK) SET [DepositHoldDays] = [DepositHoldDays] WHERE [BusinessSettingId] = 1", cancellationToken);
+        var oldPolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        var model = RentalPolicySnapshot.FromJson(oldPolicy.ToJson());
+        // Only bind the selected group. Other settings always come from the database.
+        await TryUpdateModelAsync(model, "", metadata => fields.Contains(metadata.PropertyName));
+        foreach (var field in fields)
         {
             if (!Request.Form.ContainsKey(field) || string.IsNullOrWhiteSpace(Request.Form[field]))
-                ModelState.AddModelError(field, "Vui lòng nhập đầy đủ thông tin chính sách.");
+                ModelState.AddModelError(field, "Vui lòng nhập đầy đủ thông tin.");
         }
+        var conflict = string.IsNullOrWhiteSpace(version) || version != oldPolicy.Version;
+        if (conflict)
+            ModelState.AddModelError(string.Empty, "Chính sách đã thay đổi từ khi bạn mở trang. Hãy tải lại để đối chiếu trước khi sửa tiếp.");
         if (!ModelState.IsValid)
         {
-            ViewData["CurrentPolicy"] = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+            await transaction.RollbackAsync(cancellationToken);
+            ViewData["CurrentPolicy"] = oldPolicy;
+            ViewData["EditingGroup"] = group;
+            ViewData["PolicyConflict"] = conflict;
+            // Keep the submitted version: a stale form must not become valid by submitting twice.
+            model.Version = version;
             return View("Index", model);
         }
         model.TrafficFineTerms = model.TrafficFineTerms.Trim();
         model.DamageCompensationTerms = model.DamageCompensationTerms.Trim();
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-        // Serialize concurrent configuration writers before reading the version (avoids lock conversion deadlocks).
-        await _dbContext.Database.ExecuteSqlRawAsync(
-            "UPDATE [dbo].[BusinessSettings] WITH (UPDLOCK, HOLDLOCK) SET [DepositHoldDays] = [DepositHoldDays] WHERE [BusinessSettingId] = 1", cancellationToken);
-        var oldPolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
-        if (model.Version != oldPolicy.Version)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            ViewData["CurrentPolicy"] = oldPolicy;
-            ModelState.AddModelError(string.Empty, "Cấu hình đã được người khác thay đổi. Hãy tải lại trang và kiểm tra trước khi lưu.");
-            return View("Index", model);
-        }
         model.Version = Guid.NewGuid().ToString("N");
         var json = model.ToJson();
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
@@ -74,11 +78,11 @@ public sealed class AdminBusinessSettingsController : Controller
             await _dbContext.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO [dbo].[BusinessSettings] ([BusinessSettingId], [DepositHoldDays], [PolicyJson], [UpdatedAt], [UpdatedByUserId]) VALUES (1, {model.DepositHoldDays}, {json}, {updatedAt}, {adminId})", cancellationToken);
         await _auditService.WriteAsync(adminId, "UpdateRentalPolicy", "BusinessSetting", "1",
-            "Cập nhật chính sách cọc, quãng đường, trả muộn, giao xe và điều khoản. Chỉ áp dụng cho đơn mới.",
+            $"Cập nhật nhóm {SmartCar.Web.ViewModels.BusinessPolicyGroups.Title(group)}. Chỉ áp dụng cho đơn mới.",
             oldValues: oldPolicy.ToJson(), newValues: json,
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken: cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        TempData["SuccessMessage"] = "Đã lưu chính sách. Đơn mới áp dụng cấu hình mới; đơn đã tạo giữ nguyên chính sách và điều khoản.";
+        TempData["SuccessMessage"] = $"Đã lưu {SmartCar.Web.ViewModels.BusinessPolicyGroups.Title(group)}. Áp dụng cho đơn mới; đơn cũ giữ nguyên.";
         return RedirectToAction(nameof(Index));
     }
 
