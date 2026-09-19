@@ -209,11 +209,11 @@ internal sealed class HandoverService : IHandoverService
             ImagePaths = Normalize(request.ImagePaths),
             ReceiverFaceImagePath = faceSession.ImagePath,
             Notes = Normalize(request.Notes),
-            IncludedKilometers = rentalDays * RentalPolicy.IncludedKilometersPerDay,
-            ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
-            LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
-            TrafficFineTerms = RentalPolicy.TrafficFineTerms,
-            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
+            IncludedKilometers = rentalDays * booking.Policy.IncludedKilometersPerDay,
+            ExcessKmFeePerKm = booking.Policy.ExcessKilometerFee,
+            LateReturnFeeMultiplier = booking.Policy.LateReturnFeeMultiplier,
+            TrafficFineTerms = booking.Policy.TrafficFineTerms,
+            DamageCompensationTerms = booking.Policy.DamageCompensationTerms,
             PenaltyPolicyAccepted = true,
             CustomerIdentityVerified = true,
             IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
@@ -249,3 +249,4 @@ internal sealed class HandoverService : IHandoverService
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
+

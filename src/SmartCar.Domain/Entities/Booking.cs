@@ -5,6 +5,10 @@ namespace SmartCar.Domain.Entities;
 
 public class Booking
 {
+    public string? PolicyJson { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public RentalPolicySnapshot Policy => RentalPolicySnapshot.FromJson(PolicyJson);
+
     public int BookingId { get; set; }
     public string CustomerId { get; set; } = string.Empty;
     public int VehicleId { get; set; }
@@ -52,3 +56,4 @@ public class Booking
     public VehicleReturn? VehicleReturn { get; set; }
     public Review? Review { get; set; }
 }
+

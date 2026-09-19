@@ -201,7 +201,7 @@ public sealed class StaffExtensionOperationsController : Controller
         var newRentalAmount =
             conflict.NumberOfDays * replacement.DailyPrice;
         var newDepositAmount =
-            RentalPolicy.CalculateDeposit(newRentalAmount);
+            conflict.Policy.CalculateDeposit(newRentalAmount);
         var newRentalPaymentAmount =
             newRentalAmount + deliveryFee;
         var overallDifference =
@@ -450,6 +450,8 @@ public sealed class StaffExtensionOperationsController : Controller
 
         return new ExtensionConflictResolutionViewModel
         {
+            Policy = conflict.Policy,
+            CurrentDepositAmount = conflict.DepositAmount,
             ExtensionId = extension.BookingExtensionId,
             BookingId = conflict.BookingId,
             CustomerName = customerName,
@@ -629,3 +631,4 @@ public sealed class StaffExtensionOperationsController : Controller
             ? addition
             : $"{current.Trim()} {addition}";
 }
+

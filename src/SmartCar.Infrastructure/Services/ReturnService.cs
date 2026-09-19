@@ -189,9 +189,7 @@ internal sealed class ReturnService : IReturnService
         var lateMinutes = actualReturnedAt > booking.ReturnDate
             ? (int)Math.Ceiling((actualReturnedAt - booking.ReturnDate).TotalMinutes)
             : 0;
-        var lateDays = lateMinutes > 0
-            ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
-            : 0;
+        var lateDays = booking.Policy.LateChargeDays(lateMinutes);
         var lateReturnMultiplier = booking.Handover.LateReturnFeeMultiplier >= 1
             ? booking.Handover.LateReturnFeeMultiplier
             : RentalPolicy.LateReturnFeeMultiplier;
@@ -202,7 +200,7 @@ internal sealed class ReturnService : IReturnService
             (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
         var effectiveIncludedKilometers = Math.Max(
             booking.Handover.IncludedKilometers,
-            paidRentalDays * RentalPolicy.IncludedKilometersPerDay);
+            paidRentalDays * booking.Policy.IncludedKilometersPerDay);
 
         var identityVerifiedAt = DateTime.UtcNow;
         var vehicleReturn = new VehicleReturn
@@ -849,3 +847,4 @@ internal sealed class ReturnService : IReturnService
             ? addition
             : $"{current.Trim()} {addition}";
 }
+

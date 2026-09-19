@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using SmartCar.Infrastructure.Services;
+using System.Data;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,89 +27,49 @@ public sealed class AdminBusinessSettingsController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
-    {
-        var depositHoldDays = await GetDepositHoldDaysAsync(cancellationToken);
-        return View(depositHoldDays);
-    }
+    public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
+        View(await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken));
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Update(
-        string? depositHoldDays,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> Update(RentalPolicySnapshot model, CancellationToken cancellationToken)
     {
-        var rawValue = depositHoldDays?.Trim();
-
-        if (string.IsNullOrWhiteSpace(rawValue))
+        foreach (var field in new[] { "Version", "DepositHoldDays", "DepositPercent", "IncludedKilometersPerDay",
+            "ExcessKilometerFee", "LateReturnFeeMultiplier", "LateReturnGraceMinutes", "IncludedDeliveryDistanceKm",
+            "BaseDeliveryFee", "DeliveryFeePerExtraKm", "MaxDeliveryDistanceKm", "TrafficFineTerms", "DamageCompensationTerms" })
         {
-            TempData["ErrorMessage"] = "Vui lòng nhập số ngày giữ cọc.";
-            return RedirectToAction(nameof(Index));
+            if (!Request.Form.ContainsKey(field) || string.IsNullOrWhiteSpace(Request.Form[field]))
+                ModelState.AddModelError(field, "Vui lòng nhập đầy đủ thông tin chính sách.");
         }
-
-        if (rawValue.Any(character => character < '0' || character > '9'))
+        if (!ModelState.IsValid) return View("Index", model);
+        model.TrafficFineTerms = model.TrafficFineTerms.Trim();
+        model.DamageCompensationTerms = model.DamageCompensationTerms.Trim();
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        // Serialize concurrent configuration writers before reading the version (avoids lock conversion deadlocks).
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            "UPDATE [dbo].[BusinessSettings] WITH (UPDLOCK, HOLDLOCK) SET [DepositHoldDays] = [DepositHoldDays] WHERE [BusinessSettingId] = 1", cancellationToken);
+        var oldPolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        if (model.Version != oldPolicy.Version)
         {
-            TempData["ErrorMessage"] =
-                $"Số ngày giữ cọc chỉ được nhập số nguyên từ 0 đến {DepositHoldPolicy.MaxConfigurableDays}. Không nhập chữ, số âm hoặc số thập phân.";
-            return RedirectToAction(nameof(Index));
+            await transaction.RollbackAsync(cancellationToken);
+            ModelState.AddModelError(string.Empty, "Cấu hình đã được người khác thay đổi. Hãy tải lại trang và kiểm tra trước khi lưu.");
+            return View("Index", model);
         }
-
-        if (!int.TryParse(rawValue, out var parsedDays) ||
-            parsedDays < 0 ||
-            parsedDays > DepositHoldPolicy.MaxConfigurableDays)
-        {
-            TempData["ErrorMessage"] =
-                $"Số ngày giữ cọc phải là số nguyên từ 0 đến {DepositHoldPolicy.MaxConfigurableDays}.";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var oldValue = await GetDepositHoldDaysAsync(cancellationToken);
-        if (oldValue == parsedDays)
-        {
-            TempData["SuccessMessage"] = $"Số ngày giữ cọc hiện tại vẫn là {oldValue} ngày.";
-            return RedirectToAction(nameof(Index));
-        }
-
+        model.Version = Guid.NewGuid().ToString("N");
+        var json = model.ToJson();
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         var updatedAt = DateTime.UtcNow;
-
-        var affectedRows = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-            UPDATE [dbo].[BusinessSettings]
-            SET [DepositHoldDays] = {parsedDays},
-                [UpdatedAt] = {updatedAt},
-                [UpdatedByUserId] = {adminId}
-            WHERE [BusinessSettingId] = 1
-            """,
-            cancellationToken);
-
-        if (affectedRows == 0)
-        {
+        var affected = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE [dbo].[BusinessSettings] SET [DepositHoldDays] = {model.DepositHoldDays}, [PolicyJson] = {json}, [UpdatedAt] = {updatedAt}, [UpdatedByUserId] = {adminId} WHERE [BusinessSettingId] = 1", cancellationToken);
+        if (affected == 0)
             await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-                $"""
-                INSERT INTO [dbo].[BusinessSettings]
-                    ([BusinessSettingId], [DepositHoldDays], [UpdatedAt], [UpdatedByUserId])
-                VALUES
-                    (1, {parsedDays}, {updatedAt}, {adminId})
-                """,
-                cancellationToken);
-        }
-
-        await _auditService.WriteAsync(
-            adminId,
-            "UpdateDepositHoldPolicy",
-            "BusinessSetting",
-            "1",
-            $"Thay đổi thời gian giữ cọc sau trả xe: {oldValue} ngày → {parsedDays} ngày.",
-            oldValues: JsonSerializer.Serialize(new { DepositHoldDays = oldValue }),
-            newValues: JsonSerializer.Serialize(new { DepositHoldDays = parsedDays }),
-            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken: cancellationToken);
-
-        TempData["SuccessMessage"] =
-            $"Đã đổi thời gian giữ cọc từ {oldValue} ngày thành {parsedDays} ngày. " +
-            "Chỉ các đơn thuê tạo mới từ bây giờ mới áp dụng giá trị này.";
-
+                $"INSERT INTO [dbo].[BusinessSettings] ([BusinessSettingId], [DepositHoldDays], [PolicyJson], [UpdatedAt], [UpdatedByUserId]) VALUES (1, {model.DepositHoldDays}, {json}, {updatedAt}, {adminId})", cancellationToken);
+        await _auditService.WriteAsync(adminId, "UpdateRentalPolicy", "BusinessSetting", "1",
+            "Cập nhật chính sách cọc, quãng đường, trả muộn, giao xe và điều khoản. Chỉ áp dụng cho đơn mới.",
+            oldValues: oldPolicy.ToJson(), newValues: json,
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken: cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        TempData["SuccessMessage"] = "Đã lưu chính sách. Đơn mới áp dụng cấu hình mới; đơn đã tạo giữ nguyên chính sách và điều khoản.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -205,3 +167,4 @@ public sealed class AdminBusinessSettingsController : Controller
             : DepositHoldPolicy.NormalizeDays(values[0]);
     }
 }
+

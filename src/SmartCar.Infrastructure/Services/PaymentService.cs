@@ -929,12 +929,12 @@ internal sealed class PaymentService : IPaymentService
             0m,
             booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
 
-        if (booking.PickupMethod == VehiclePickupMethod.Delivery &&
+        if (booking.PolicyJson == null && booking.PickupMethod == VehiclePickupMethod.Delivery &&
             deliveryFee <= 0m &&
             booking.DeliveryLatitude.HasValue &&
             booking.DeliveryLongitude.HasValue)
         {
-            deliveryFee = RentalPolicy.CalculateDeliveryFee(
+            deliveryFee = booking.Policy.CalculateDeliveryFee(
                 booking.PickupMethod,
                 booking.DeliveryLatitude,
                 booking.DeliveryLongitude);
@@ -955,3 +955,4 @@ internal sealed class PaymentService : IPaymentService
         _ => "thanh toán"
     };
 }
+

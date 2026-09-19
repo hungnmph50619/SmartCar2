@@ -269,7 +269,8 @@ public sealed class BookingsController : Controller
                 model.PickupMethod,
                 model.DeliveryAddress,
                 deliveryLatitude,
-                deliveryLongitude);
+                deliveryLongitude,
+                model.PolicyVersion);
 
         var result =
             await _bookingService.CreateAsync(

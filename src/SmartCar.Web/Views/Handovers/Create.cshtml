@@ -4,7 +4,7 @@
 @{
     ViewData["Title"] = "Biên bản giao xe";
     const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
-    var includedDays = Math.Max(1, Model.IncludedKilometers / RentalPolicy.IncludedKilometersPerDay);
+    var includedDays = Math.Max(1, Model.IncludedKilometers / Model.IncludedKilometersPerDay);
     var kycFaceUrl = Url.Action("CustomerKyc", "IdentityFace", new { customerId = Model.CustomerId }) ?? "#";
 }
 
@@ -143,9 +143,9 @@
         <div class="text-uppercase small text-primary fw-semibold">Bước 4/4</div>
         <h2 class="h5 mb-3">Chính sách và ghi chú</h2>
         <div class="row g-2 mb-3">
-            <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Định mức</div><strong>@RentalPolicy.IncludedKilometersPerDay.ToString("N0") km/ngày</strong><div class="small text-muted">Chuyến này: @Model.IncludedKilometers.ToString("N0") km / @includedDays ngày</div></div></div>
+            <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Định mức</div><strong>@Model.IncludedKilometersPerDay.ToString("N0") km/ngày</strong><div class="small text-muted">Chuyến này: @Model.IncludedKilometers.ToString("N0") km / @includedDays ngày</div></div></div>
             <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Vượt km</div><strong>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</strong></div></div>
-            <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Trả muộn</div><strong>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</strong></div></div>
+            <div class="col-md-4"><div class="border rounded p-3 h-100"><div class="small text-muted">Trả muộn</div><strong>@Model.LateReturnFeeMultiplier.ToString("0.##") × giá/ngày</strong><div class="small text-muted">Miễn @Model.LateReturnGraceMinutes phút; sau đó mỗi 24 giờ bắt đầu tính 1 ngày phí.</div></div></div>
         </div>
         <div class="border rounded p-3 mb-2"><strong>Vi phạm giao thông / phạt nguội</strong><div class="small mt-1">@Model.TrafficFineTerms</div></div>
         <div class="border rounded p-3 mb-3"><strong>Hư hỏng / thiếu / trả muộn</strong><div class="small mt-1">@Model.DamageCompensationTerms</div></div>
@@ -164,3 +164,4 @@
     <partial name="_ValidationScriptsPartial" />
     <script src="~/js/evidence-image-slots.js" asp-append-version="true"></script>
 }
+

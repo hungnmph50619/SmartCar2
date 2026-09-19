@@ -99,7 +99,8 @@
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <a asp-action="MyBookings" class="text-decoration-none">← Đơn thuê của tôi</a>
-        <h1 class="h3 mt-2 mb-1">Đơn thuê #@Model.BookingId</h1>
+        <span id="booking-policy" data-deposit-rate="@((Model.Policy.DepositPercent / 100m).ToString(System.Globalization.CultureInfo.InvariantCulture))" hidden></span>
+<h1 class="h3 mt-2 mb-1">Đơn thuê #@Model.BookingId</h1>
         <div class="text-muted">@Model.VehicleName · @Model.LicensePlate</div>
     </div>
     <span class="badge bg-primary fs-6">@Model.Status.ToVietnamese()</span>
@@ -194,7 +195,7 @@
                             }
                             <tr>
                                 <td>Tiền cọc</td>
-                                <td>@((RentalPolicy.DepositRate * 100).ToString("0"))% tiền thuê · hoàn theo trạng thái đơn</td>
+                                <td>@(Model.Policy.DepositPercent.ToString("0.##"))% tiền thuê · hoàn theo trạng thái đơn</td>
                                 <td class="text-end">@Model.DepositAmount.ToString("N0") đ</td>
                             </tr>
                             @foreach (var extension in invoiceExtensions)
@@ -846,3 +847,4 @@
         sync();
     })();
 </script>
+

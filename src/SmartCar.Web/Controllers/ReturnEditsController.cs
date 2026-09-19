@@ -401,9 +401,7 @@ public sealed class ReturnEditsController : Controller
         var lateMinutes = vehicleReturn.ReturnedAt > booking.ReturnDate
             ? (int)Math.Ceiling((vehicleReturn.ReturnedAt - booking.ReturnDate).TotalMinutes)
             : 0;
-        var lateDays = lateMinutes > 0
-            ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
-            : 0;
+        var lateDays = booking.Policy.LateChargeDays(lateMinutes);
         var lateMultiplier = booking.Handover.LateReturnFeeMultiplier >= 1
             ? booking.Handover.LateReturnFeeMultiplier
             : RentalPolicy.LateReturnFeeMultiplier;
@@ -436,7 +434,7 @@ public sealed class ReturnEditsController : Controller
             (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
         var effectiveIncludedKilometers = Math.Max(
             booking.Handover.IncludedKilometers,
-            paidRentalDays * RentalPolicy.IncludedKilometersPerDay);
+            paidRentalDays * booking.Policy.IncludedKilometersPerDay);
         var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
 

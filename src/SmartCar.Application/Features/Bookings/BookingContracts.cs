@@ -10,7 +10,8 @@ public sealed record CreateBookingRequest(
     VehiclePickupMethod PickupMethod,
     string? DeliveryAddress,
     decimal? DeliveryLatitude,
-    decimal? DeliveryLongitude);
+    decimal? DeliveryLongitude,
+    string? PolicyVersion = null);
 
 public class BookingListItemDto
 {
@@ -42,6 +43,8 @@ public class BookingListItemDto
 
 public sealed class BookingDetailsDto : BookingListItemDto
 {
+    public string? PolicyJson { get; init; }
+    public SmartCar.Domain.Constants.RentalPolicySnapshot Policy => SmartCar.Domain.Constants.RentalPolicySnapshot.FromJson(PolicyJson);
     public decimal DailyPrice { get; init; }
     public int NumberOfDays { get; init; }
 
@@ -210,3 +213,4 @@ public interface IBookingService
         int bookingId,
         CancellationToken cancellationToken = default);
 }
+

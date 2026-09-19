@@ -1,7 +1,9 @@
 @model SmartCar.Web.ViewModels.StaffCounterRentalViewModel
 @using SmartCar.Application.Features.Bookings
 @using SmartCar.Domain.Constants
+@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext PolicyDb
 @{
+    var policy = await SmartCar.Infrastructure.Services.BusinessPolicyStore.ReadAsync(PolicyDb, Context.RequestAborted);
     ViewData["Title"] = "Thuê xe tại quầy";
 }
 
@@ -61,6 +63,8 @@
     </div>
 
     <form asp-action="CounterRental" method="post" class="card staff-form-card" data-loading-form id="counter-rental-form">
+        <input type="hidden" name="PolicyVersion" value="@policy.Version" />
+        <div class="alert alert-info m-3">Cọc @policy.DepositPercent.ToString("0.##")% tiền thuê ban đầu. Giữ cọc @policy.DepositHoldDays ngày sau khi trả xe. Định mức @policy.IncludedKilometersPerDay km/ngày; vượt mức @policy.ExcessKilometerFee.ToString("N0") đ/km.</div>
         <div class="card-body p-4 p-lg-5">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
                 <div>
@@ -374,3 +378,4 @@
         })();
     </script>
 }
+

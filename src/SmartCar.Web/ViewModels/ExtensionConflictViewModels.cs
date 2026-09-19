@@ -2,6 +2,8 @@ namespace SmartCar.Web.ViewModels;
 
 public sealed class ExtensionConflictResolutionViewModel
 {
+    public SmartCar.Domain.Constants.RentalPolicySnapshot Policy { get; init; } = new();
+    public decimal CurrentDepositAmount { get; init; }
     public int ExtensionId { get; init; }
     public int BookingId { get; init; }
     public string CustomerName { get; init; } = string.Empty;
@@ -25,3 +27,4 @@ public sealed class ExtensionAlternativeVehicleViewModel
     public decimal PriceDifference => EstimatedRentalAmount - CurrentRentalAmount;
     public bool IsEquivalentPrice => PriceDifference == 0;
 }
+

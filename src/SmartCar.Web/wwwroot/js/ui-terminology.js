@@ -177,7 +177,7 @@
 
             const depositDifference = amountValue(previousRow);
             const matchesCurrentDepositPolicy =
-                rentalDifference > 0 && depositDifference === rentalDifference * 3;
+                rentalDifference > 0 && depositDifference === Math.round(rentalDifference * Number(document.getElementById("booking-policy")?.dataset.depositRate || 3));
             const canDistinguishFromFinalDeposit = !completed || depositRows.length > 1;
 
             if (matchesCurrentDepositPolicy && canDistinguishFromFinalDeposit) {

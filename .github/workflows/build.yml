@@ -6,6 +6,7 @@ on:
       - master
       - agent/**
       - hoangquangtruong_Staff
+      - Quy_2
   pull_request:
     branches:
       - master
@@ -101,3 +102,4 @@ jobs:
         run: |
           echo "EF Core model differs from ApplicationDbContextModelSnapshot.cs."
           exit 1
+

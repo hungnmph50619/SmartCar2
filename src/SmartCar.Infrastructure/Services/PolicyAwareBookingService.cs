@@ -98,7 +98,7 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 $"{blockedUntil.Value:dd/MM/yyyy HH:mm}.");
         }
 
-        var depositHoldDaysApplied = await GetConfiguredDepositHoldDaysAsync(cancellationToken);
+
 
         var result = await _inner.CreateAsync(customerId, request, cancellationToken);
         if (!result.Succeeded || !result.BookingId.HasValue)
@@ -117,11 +117,6 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 "Đơn đã được tạo nhưng không thể tải lại để áp dụng chính sách giữ cọc.");
         }
 
-        if (createdBooking.DepositHoldDaysApplied != depositHoldDaysApplied)
-        {
-            createdBooking.DepositHoldDaysApplied = depositHoldDaysApplied;
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
 
         var postConflict = await _policy.HasBufferedConflictAsync(
             request.VehicleId,
@@ -285,18 +280,6 @@ internal sealed class PolicyAwareBookingService : IBookingService
         return await _inner.MarkReadyForPickupAsync(bookingId, cancellationToken);
     }
 
-    private async Task<int> GetConfiguredDepositHoldDaysAsync(
-        CancellationToken cancellationToken)
-    {
-        var values = await _dbContext.Database
-            .SqlQueryRaw<int>(
-                "SELECT [DepositHoldDays] AS [Value] FROM [dbo].[BusinessSettings] WHERE [BusinessSettingId] = 1")
-            .ToListAsync(cancellationToken);
-
-        return values.Count == 0
-            ? DepositHoldPolicy.DefaultDays
-            : DepositHoldPolicy.NormalizeDays(values[0]);
-    }
 
     private static string FormatRemaining(TimeSpan remaining)
     {
@@ -314,3 +297,4 @@ internal sealed class PolicyAwareBookingService : IBookingService
         return $"{Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes))} phút";
     }
 }
+

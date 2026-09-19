@@ -1,205 +1,48 @@
-@model int
-@using SmartCar.Domain.Constants
-
+@model SmartCar.Domain.Constants.RentalPolicySnapshot
 @{
     ViewData["Title"] = "Cấu hình nghiệp vụ";
-    var currentPolicyText = Model == 0
-        ? "Sau khi khách trả xe và hậu kiểm xong, cọc có thể được duyệt hoàn ngay nếu không còn khoản cần xử lý."
-        : $"Sau khi khách trả xe, cọc phải chờ {Model} ngày trước khi được duyệt hoàn.";
+    Layout = "_AdminLayout";
 }
-
-<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
-    <div>
-        <h1 class="h3 mb-1">Cấu hình nghiệp vụ</h1>
-        <p class="text-muted mb-0">Thiết lập thời gian giữ cọc sau chuyến thuê cho các đơn tạo mới.</p>
-    </div>
-    <a class="btn btn-outline-secondary" asp-controller="AuditLogs" asp-action="Index" asp-route-auditAction="UpdateDepositHoldPolicy">
-        Xem lịch sử thay đổi
-    </a>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div><h1 class="h3">Cấu hình nghiệp vụ</h1><p class="text-muted">Thiết lập chính sách áp dụng cho đơn thuê tạo mới.</p></div>
+    <a class="btn btn-outline-secondary" asp-controller="AuditLogs" asp-action="Index" asp-route-search="BusinessSetting">Xem lịch sử thay đổi</a>
 </div>
-
-<div class="row g-4">
-    <div class="col-lg-7">
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
-                <div class="rounded-3 border bg-light p-3 mb-4">
-                    <div class="text-muted small mb-1">Số ngày giữ cọc sau khi trả xe</div>
-                    <div class="d-flex align-items-end gap-2 flex-wrap">
-                        <div class="display-6 fw-bold text-primary lh-1">@Model</div>
-                        <div class="fw-semibold mb-1">ngày</div>
-                    </div>
-                    <div class="small text-muted mt-2">@currentPolicyText</div>
-                </div>
-
-                <form asp-action="Update" method="post" id="depositHoldForm" novalidate>
-                    <div class="mb-3">
-                        <label for="depositHoldDays" class="form-label fw-semibold">Đổi số ngày giữ cọc</label>
-                        <div class="input-group" style="max-width:320px">
-                            <input id="depositHoldDays"
-                                   name="depositHoldDays"
-                                   type="text"
-                                   inputmode="numeric"
-                                   pattern="[0-9]*"
-                                   maxlength="2"
-                                   autocomplete="off"
-                                   spellcheck="false"
-                                   class="form-control"
-                                   value="@Model"
-                                   aria-describedby="depositHoldHelp depositHoldError"
-                                   required />
-                            <span class="input-group-text">ngày</span>
-                        </div>
-                        <div id="depositHoldHelp" class="form-text">Chỉ nhập số nguyên từ 0 đến @DepositHoldPolicy.MaxConfigurableDays.</div>
-                        <div id="depositHoldError" class="text-danger small mt-1 d-none" role="alert" aria-live="polite"></div>
-                    </div>
-
-                    <div class="alert alert-warning border py-2 px-3 small mb-3">
-                        <strong>Chỉ áp dụng sau chuyến thuê.</strong> Đơn hủy trước khi giao xe không phải chờ số ngày giữ cọc này.
-                    </div>
-
-                    <div class="alert alert-light border py-2 px-3 small mb-3">
-                        <strong>Lưu ý:</strong> chỉ đơn thuê tạo sau khi lưu mới dùng số ngày mới. Đơn cũ giữ nguyên.
-                    </div>
-
-                    <button type="submit" id="saveDepositHoldButton" class="btn btn-primary px-4">
-                        Lưu thay đổi
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-5">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-body p-4">
-                <h2 class="h5 mb-3">Cách áp dụng</h2>
-
-                <div class="d-grid gap-3">
-                    <div class="d-flex gap-3">
-                        <span class="badge rounded-pill text-bg-primary align-self-start">1</span>
-                        <div>
-                            <div class="fw-semibold">Tạo đơn</div>
-                            <div class="small text-muted">Đơn giữ nguyên số ngày đang áp dụng lúc tạo.</div>
-                        </div>
-                    </div>
-                    <div class="d-flex gap-3">
-                        <span class="badge rounded-pill text-bg-primary align-self-start">2</span>
-                        <div>
-                            <div class="fw-semibold">Trả xe</div>
-                            <div class="small text-muted">Bắt đầu tính thời gian giữ cọc.</div>
-                        </div>
-                    </div>
-                    <div class="d-flex gap-3">
-                        <span class="badge rounded-pill text-bg-primary align-self-start">3</span>
-                        <div>
-                            <div class="fw-semibold">Đủ ngày</div>
-                            <div class="small text-muted">Nếu không còn khoản cần xử lý, Admin được duyệt hoàn cọc.</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="alert alert-info small mt-4 mb-0">
-                    <strong>Ví dụ:</strong> giữ 15 ngày, trả xe 10/09 → từ 25/09 có thể duyệt hoàn.
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
+<div class="alert alert-info">Mỗi đơn lưu chính sách tại lúc tạo. Thay đổi dưới đây không sửa tiền hoặc nội dung biên bản của đơn cũ. Giá thuê/ngày được chỉnh trong Quản lý xe.</div>
+<form asp-action="Update" method="post">
+    <input asp-for="Version" type="hidden" />
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+<section class="card card-body mb-3"><h2 class="h5 mb-3">Tiền cọc</h2><div class="row g-3">
+<div class="col-md-6"><label asp-for="DepositPercent" class="form-label">Tỷ lệ cọc trên tiền thuê ban đầu (%)</label><input asp-for="DepositPercent" type="number" min="1" max="1000" step="0.01" required class="form-control" /><span asp-validation-for="DepositPercent" class="text-danger"></span></div>
+<div class="col-md-6"><label asp-for="DepositHoldDays" class="form-label">Số ngày giữ cọc sau khi trả xe</label><input asp-for="DepositHoldDays" type="number" min="0" max="30" step="1" required class="form-control" /><span asp-validation-for="DepositHoldDays" class="text-danger"></span></div>
+</div><p class="small text-muted mt-3 mb-0">Ví dụ: thuê 750.000 đ, cọc 300% → cọc 2.250.000 đ. Thời gian giữ cọc chỉ áp dụng sau chuyến thuê; đủ ngày vẫn cần duyệt hoàn và xử lý các khoản còn mở.</p></section>
+<section class="card card-body mb-3"><h2 class="h5 mb-3">Quãng đường và trả muộn</h2><div class="row g-3">
+<div class="col-md-6"><label asp-for="IncludedKilometersPerDay" class="form-label">Định mức (km/ngày thuê)</label><input asp-for="IncludedKilometersPerDay" type="number" min="1" max="10000" step="1" required class="form-control" /><span asp-validation-for="IncludedKilometersPerDay" class="text-danger"></span></div>
+<div class="col-md-6"><label asp-for="ExcessKilometerFee" class="form-label">Phí vượt định mức (đ/km)</label><input asp-for="ExcessKilometerFee" type="number" min="0" max="1000000" step="1" required class="form-control" /><span asp-validation-for="ExcessKilometerFee" class="text-danger"></span></div>
+<div class="col-md-6"><label asp-for="LateReturnFeeMultiplier" class="form-label">Hệ số phí trả muộn × giá thuê/ngày</label><input asp-for="LateReturnFeeMultiplier" type="number" min="1" max="10" step="0.01" required class="form-control" /><span asp-validation-for="LateReturnFeeMultiplier" class="text-danger"></span></div>
+<div class="col-md-6"><label asp-for="LateReturnGraceMinutes" class="form-label">Số phút trả muộn được miễn phí</label><input asp-for="LateReturnGraceMinutes" type="number" min="0" max="1440" step="1" required class="form-control" /><span asp-validation-for="LateReturnGraceMinutes" class="text-danger"></span></div>
+</div><p class="small text-muted mt-3 mb-0">Sau số phút miễn phí, mỗi khoảng 24 giờ bắt đầu tiếp theo tính 1 ngày phí. Ví dụ miễn 30 phút: muộn 30 phút không tính phí; muộn 31 phút tính 1 ngày × hệ số × giá thuê/ngày của đơn.</p></section>
+<section class="card card-body mb-3"><h2 class="h5 mb-3">Giao xe tận nơi</h2><div class="row g-3">
+<div class="col-md-6"><label asp-for="IncludedDeliveryDistanceKm" class="form-label">Số km trong phí cơ bản</label><input asp-for="IncludedDeliveryDistanceKm" type="number" min="0" max="500" step="0.01" required class="form-control" /><span asp-validation-for="IncludedDeliveryDistanceKm" class="text-danger"></span></div>
+<div class="col-md-6"><label asp-for="BaseDeliveryFee" class="form-label">Phí giao cơ bản (đ)</label><input asp-for="BaseDeliveryFee" type="number" min="0" max="10000000" step="1" required class="form-control" /><span asp-validation-for="BaseDeliveryFee" class="text-danger"></span></div>
+<div class="col-md-6"><label asp-for="DeliveryFeePerExtraKm" class="form-label">Phí mỗi km bắt đầu tiếp theo (đ)</label><input asp-for="DeliveryFeePerExtraKm" type="number" min="0" max="1000000" step="1" required class="form-control" /><span asp-validation-for="DeliveryFeePerExtraKm" class="text-danger"></span></div>
+<div class="col-md-6"><label asp-for="MaxDeliveryDistanceKm" class="form-label">Bán kính giao tối đa (km)</label><input asp-for="MaxDeliveryDistanceKm" type="number" min="1" max="500" step="0.01" required class="form-control" /><span asp-validation-for="MaxDeliveryDistanceKm" class="text-danger"></span></div>
+</div><p class="small text-muted mt-3 mb-0">Nhận tại cửa hàng: 0 đ. Giao tận nơi: phí cơ bản + số km vượt được làm tròn lên × phí/km. Khoảng cách tính theo tọa độ, làm tròn 2 chữ số thập phân trước khi tính phí.</p></section>
+<section class="card card-body mb-3"><h2 class="h5">Điều khoản trên biên bản</h2>
+<p class="text-muted">Chỉnh nội dung diễn giải không làm thay đổi công thức tính phí. Các mức phí được hiển thị riêng từ cấu hình ở trên. Nội dung lưu dưới dạng văn bản thuần.</p>
+<label asp-for="TrafficFineTerms" class="form-label">Vi phạm giao thông / phạt nguội</label>
+<textarea asp-for="TrafficFineTerms" rows="6" maxlength="1500" required class="form-control mb-3"></textarea>
+<label asp-for="DamageCompensationTerms" class="form-label">Hư hỏng / thiếu / trả muộn</label>
+<textarea asp-for="DamageCompensationTerms" rows="7" maxlength="1500" required class="form-control"></textarea>
+<details class="mt-3"><summary>Xem trước điều khoản</summary><h3 class="h6 mt-3">Vi phạm giao thông / phạt nguội</h3><p id="traffic-preview" style="white-space:pre-wrap"></p><h3 class="h6">Hư hỏng / thiếu / trả muộn</h3><p id="damage-preview" style="white-space:pre-wrap"></p></details>
+</section>
+<button class="btn btn-primary" type="submit">Lưu chính sách cho đơn mới</button>
+</form>
 @section Scripts {
 <script>
-(() => {
-    const form = document.getElementById('depositHoldForm');
-    const input = document.getElementById('depositHoldDays');
-    const error = document.getElementById('depositHoldError');
-    const maxDays = @DepositHoldPolicy.MaxConfigurableDays;
-    const currentDays = @Model;
-
-    if (!form || !input || !error) return;
-
-    const showError = (message) => {
-        error.textContent = message;
-        error.classList.remove('d-none');
-        input.classList.add('is-invalid');
-    };
-
-    const clearError = () => {
-        error.textContent = '';
-        error.classList.add('d-none');
-        input.classList.remove('is-invalid');
-    };
-
-    const validate = () => {
-        const value = input.value.trim();
-
-        if (!value) {
-            showError('Vui lòng nhập số ngày giữ cọc.');
-            return false;
-        }
-
-        if (!/^\d+$/.test(value)) {
-            showError('Chỉ được nhập số nguyên, không nhập chữ, số âm hoặc số thập phân.');
-            return false;
-        }
-
-        const days = Number(value);
-        if (!Number.isInteger(days) || days < 0 || days > maxDays) {
-            showError(`Số ngày phải từ 0 đến ${maxDays}.`);
-            return false;
-        }
-
-        clearError();
-        return true;
-    };
-
-    input.addEventListener('focus', () => input.select());
-    input.addEventListener('click', () => input.select());
-
-    input.addEventListener('beforeinput', (event) => {
-        if (event.inputType.startsWith('delete')) return;
-        if (event.data && /[^0-9]/.test(event.data)) {
-            event.preventDefault();
-            showError(`Chỉ được nhập số nguyên từ 0 đến ${maxDays}.`);
-        }
-    });
-
-    input.addEventListener('paste', (event) => {
-        const text = event.clipboardData?.getData('text') ?? '';
-        if (!/^\d+$/.test(text.trim())) {
-            event.preventDefault();
-            showError(`Nội dung dán không hợp lệ. Chỉ được nhập số nguyên từ 0 đến ${maxDays}.`);
-        }
-    });
-
-    input.addEventListener('input', () => {
-        if (/^\d*$/.test(input.value)) {
-            validate();
-        }
-    });
-
-    form.addEventListener('submit', (event) => {
-        if (!validate()) {
-            event.preventDefault();
-            input.focus();
-            return;
-        }
-
-        const newDays = Number(input.value);
-        if (newDays === currentDays) {
-            event.preventDefault();
-            showError(`Số ngày hiện tại đã là ${currentDays} ngày, không có thay đổi để lưu.`);
-            input.focus();
-            return;
-        }
-
-        const confirmed = window.confirm(
-            `Đổi thời gian giữ cọc từ ${currentDays} ngày thành ${newDays} ngày?\n\nChỉ các đơn thuê tạo mới sau khi lưu mới áp dụng.`
-        );
-
-        if (!confirmed) {
-            event.preventDefault();
-        }
-    });
-})();
+for (const [field, preview] of [['TrafficFineTerms','traffic-preview'],['DamageCompensationTerms','damage-preview']]) {
+    const input = document.getElementById(field), output = document.getElementById(preview);
+    const render = () => output.textContent = input.value;
+    input.addEventListener('input', render); render();
+}
 </script>
 }

@@ -39,6 +39,7 @@ public sealed class StaffBookingDetailsViewModel
 
 public sealed class StaffCounterRentalViewModel
 {
+    public string? PolicyVersion { get; set; }
     [Required(ErrorMessage = "Vui lòng chọn khách hàng.")]
     public string CustomerId { get; set; } = string.Empty;
 
@@ -72,3 +73,4 @@ public sealed record StaffRefundLineViewModel(
     decimal Amount,
     string Method,
     PaymentStatus Status);
+

@@ -73,11 +73,13 @@ public sealed class HandoversController : Controller
         {
             BookingId = bookingId,
             HandoverAt = DateTime.Now,
-            IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay,
-            ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
-            LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
-            TrafficFineTerms = RentalPolicy.TrafficFineTerms,
-            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
+            IncludedKilometersPerDay = booking.Policy.IncludedKilometersPerDay,
+            LateReturnGraceMinutes = booking.Policy.LateReturnGraceMinutes,
+            IncludedKilometers = booking.NumberOfDays * booking.Policy.IncludedKilometersPerDay,
+            ExcessKmFeePerKm = booking.Policy.ExcessKilometerFee,
+            LateReturnFeeMultiplier = booking.Policy.LateReturnFeeMultiplier,
+            TrafficFineTerms = booking.Policy.TrafficFineTerms,
+            DamageCompensationTerms = booking.Policy.DamageCompensationTerms,
             PenaltyPolicyAccepted = true
         };
 
@@ -130,11 +132,13 @@ public sealed class HandoversController : Controller
         ModelState.Remove(nameof(HandoverViewModel.Images));
 
         model.HandoverAt = DateTime.Now;
-        model.IncludedKilometers = booking.NumberOfDays * RentalPolicy.IncludedKilometersPerDay;
-        model.ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee;
-        model.LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier;
-        model.TrafficFineTerms = RentalPolicy.TrafficFineTerms;
-        model.DamageCompensationTerms = RentalPolicy.DamageCompensationTerms;
+        model.IncludedKilometersPerDay = booking.Policy.IncludedKilometersPerDay;
+        model.LateReturnGraceMinutes = booking.Policy.LateReturnGraceMinutes;
+        model.IncludedKilometers = booking.NumberOfDays * booking.Policy.IncludedKilometersPerDay;
+        model.ExcessKmFeePerKm = booking.Policy.ExcessKilometerFee;
+        model.LateReturnFeeMultiplier = booking.Policy.LateReturnFeeMultiplier;
+        model.TrafficFineTerms = booking.Policy.TrafficFineTerms;
+        model.DamageCompensationTerms = booking.Policy.DamageCompensationTerms;
         model.PenaltyPolicyAccepted = true;
 
         var identityFailures = new List<string>();
@@ -497,3 +501,4 @@ public sealed class HandoversController : Controller
         }
     }
 }
+
