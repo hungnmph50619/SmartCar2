@@ -2,6 +2,10 @@
     const maximumImageBytes = 5 * 1024 * 1024;
     const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
     const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    const maximumTotalImages = 25;
+    const draftDatabaseName = 'smartcar-evidence-drafts';
+    const draftStoreName = 'files';
+    const draftMaxAgeMs = 24 * 60 * 60 * 1000;
 
     // Razor boolean attributes such as selected="False" are still truthy HTML attributes.
     const accessoryMode = document.querySelector('[data-accessory-mode]');
@@ -13,8 +17,13 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('[data-evidence-slot]').forEach(initializeSlot);
-        document.querySelectorAll('[data-evidence-multiple]').forEach(initializeMultiple);
+        document.querySelectorAll('[data-evidence-slot]').forEach((slot) => {
+            initializeSlot(slot).catch(() => { });
+        });
+        document.querySelectorAll('[data-evidence-multiple]').forEach((root) => {
+            initializeMultiple(root).catch(() => { });
+        });
+        cleanupExpiredDrafts().catch(() => { });
         document.querySelectorAll('form').forEach((form) => {
             if (!form.querySelector('[data-evidence-input], [data-evidence-multiple-input]')) return;
 
@@ -44,7 +53,7 @@
         });
     });
 
-    function initializeSlot(slot) {
+    async function initializeSlot(slot) {
         const input = slot.querySelector('[data-evidence-input]');
         const preview = slot.querySelector('[data-evidence-preview]');
         const name = slot.querySelector('[data-evidence-name]');
@@ -100,12 +109,15 @@
 
         input.addEventListener('change', async () => {
             render();
+            await persistInputDraft(input);
             await validateDuplicateContent(input.form);
         });
+
+        await restoreInputDraft(input);
         render();
     }
 
-    function initializeMultiple(root) {
+    async function initializeMultiple(root) {
         const input = root.querySelector('[data-evidence-multiple-input]');
         const preview = root.querySelector('[data-evidence-multiple-preview]');
         const count = root.querySelector('[data-evidence-count]');
@@ -168,8 +180,11 @@
 
         input.addEventListener('change', async () => {
             render();
+            await persistInputDraft(input);
             await validateDuplicateContent(input.form);
         });
+
+        await restoreInputDraft(input);
         render();
     }
 
@@ -192,6 +207,18 @@
                 if (!file || file.size <= 0) continue;
                 entries.push({ input, file, hash: await hashFile(file) });
             }
+        }
+
+        if (entries.length > maximumTotalImages) {
+            const hostInput = inputs.find((input) => input.hasAttribute('data-evidence-multiple-input')) || inputs[0];
+            const host = hostInput?.closest('[data-evidence-slot], [data-evidence-multiple]');
+            if (hostInput && host) {
+                setInputError(
+                    hostInput,
+                    host,
+                    `Tổng số ảnh tối đa là ${maximumTotalImages}. Hiện đã chọn ${entries.length} ảnh.`);
+            }
+            return false;
         }
 
         const groups = new Map();
@@ -217,6 +244,141 @@
         });
 
         return valid && inputs.every((input) => input.checkValidity());
+    }
+
+    function getDraftKey(input) {
+        return input instanceof HTMLInputElement
+            ? (input.dataset.fileDraftKey || '').trim()
+            : '';
+    }
+
+    async function persistInputDraft(input) {
+        const key = getDraftKey(input);
+        if (!key) return;
+
+        const files = Array.from(input.files || []);
+        if (files.length === 0) {
+            await deleteDraft(key);
+            return;
+        }
+
+        const db = await openDraftDatabase();
+        await new Promise((resolve, reject) => {
+            const transaction = db.transaction(draftStoreName, 'readwrite');
+            const store = transaction.objectStore(draftStoreName);
+            store.put({
+                key,
+                savedAt: Date.now(),
+                files
+            });
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+        });
+        db.close();
+    }
+
+    async function restoreInputDraft(input) {
+        const key = getDraftKey(input);
+        if (!key || (input.files && input.files.length > 0)) return;
+
+        const record = await readDraft(key);
+        if (!record || !Array.isArray(record.files) || record.files.length === 0) return;
+
+        if (!Number.isFinite(record.savedAt) || Date.now() - record.savedAt > draftMaxAgeMs) {
+            await deleteDraft(key);
+            return;
+        }
+
+        if (typeof DataTransfer !== 'function') return;
+
+        const transfer = new DataTransfer();
+        record.files.forEach((storedFile, index) => {
+            if (storedFile instanceof File) {
+                transfer.items.add(storedFile);
+                return;
+            }
+
+            if (storedFile instanceof Blob) {
+                transfer.items.add(new File(
+                    [storedFile],
+                    `restored-${index + 1}.jpg`,
+                    { type: storedFile.type || 'image/jpeg', lastModified: record.savedAt }));
+            }
+        });
+
+        if (transfer.files.length > 0) {
+            input.files = transfer.files;
+        }
+    }
+
+    async function readDraft(key) {
+        const db = await openDraftDatabase();
+        const result = await new Promise((resolve, reject) => {
+            const transaction = db.transaction(draftStoreName, 'readonly');
+            const request = transaction.objectStore(draftStoreName).get(key);
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+        db.close();
+        return result;
+    }
+
+    async function deleteDraft(key) {
+        if (!key) return;
+        const db = await openDraftDatabase();
+        await new Promise((resolve, reject) => {
+            const transaction = db.transaction(draftStoreName, 'readwrite');
+            transaction.objectStore(draftStoreName).delete(key);
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+        });
+        db.close();
+    }
+
+    async function cleanupExpiredDrafts() {
+        const db = await openDraftDatabase();
+        const cutoff = Date.now() - draftMaxAgeMs;
+        await new Promise((resolve, reject) => {
+            const transaction = db.transaction(draftStoreName, 'readwrite');
+            const store = transaction.objectStore(draftStoreName);
+            const request = store.openCursor();
+
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) return;
+                const value = cursor.value;
+                if (!value || !Number.isFinite(value.savedAt) || value.savedAt < cutoff) {
+                    cursor.delete();
+                }
+                cursor.continue();
+            };
+            request.onerror = () => reject(request.error);
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+        });
+        db.close();
+    }
+
+    function openDraftDatabase() {
+        return new Promise((resolve, reject) => {
+            if (!globalThis.indexedDB) {
+                reject(new Error('IndexedDB is not available.'));
+                return;
+            }
+
+            const request = indexedDB.open(draftDatabaseName, 1);
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(draftStoreName)) {
+                    db.createObjectStore(draftStoreName, { keyPath: 'key' });
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
     }
 
     async function hashFile(file) {

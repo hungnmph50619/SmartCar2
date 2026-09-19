@@ -116,12 +116,12 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label asp-for="PickupDate" class="form-label fw-semibold">Thời gian nhận *</label>
-                        <input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-pickup" />
+                        <input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-pickup" required />
                         <span asp-validation-for="PickupDate" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
                         <label asp-for="ReturnDate" class="form-label fw-semibold">Thời gian trả dự kiến *</label>
-                        <input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-return" />
+                        <input asp-for="ReturnDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-return" required />
                         <span asp-validation-for="ReturnDate" class="text-danger small"></span>
                     </div>
                 </div>
@@ -199,6 +199,7 @@
             const pickup = document.getElementById('counter-pickup');
             const returned = document.getElementById('counter-return');
             const duration = document.getElementById('counter-duration');
+            const form = document.getElementById('counter-rental-form');
 
             let customerTimer;
             let vehicleTimer;
@@ -297,11 +298,56 @@
                 }, 250);
             });
 
+            const toLocalMinuteValue = date => {
+                const pad = value => String(value).padStart(2, '0');
+                return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+            };
+
+            const minimumPickupDate = () => {
+                const threshold = Date.now() + @BookingDateRules.MinimumPickupLeadMinutes * 60000;
+                return new Date(Math.ceil(threshold / 60000) * 60000);
+            };
+
+            const syncTimeConstraints = () => {
+                const minimumPickup = minimumPickupDate();
+                pickup.min = toLocalMinuteValue(minimumPickup);
+
+                const start = pickup.value ? new Date(pickup.value) : null;
+                if (start && Number.isFinite(start.valueOf())) {
+                    returned.min = toLocalMinuteValue(new Date(start.getTime() + 60000));
+                } else {
+                    returned.removeAttribute('min');
+                }
+
+                pickup.setCustomValidity('');
+                returned.setCustomValidity('');
+
+                if (pickup.value) {
+                    const selectedPickup = new Date(pickup.value);
+                    if (!Number.isFinite(selectedPickup.valueOf()) || selectedPickup < minimumPickup) {
+                        pickup.setCustomValidity(`Thời gian nhận phải cách hiện tại ít nhất @BookingDateRules.MinimumPickupLeadMinutes phút.`);
+                    }
+                }
+
+                if (pickup.value && returned.value) {
+                    const selectedPickup = new Date(pickup.value);
+                    const selectedReturn = new Date(returned.value);
+                    if (!Number.isFinite(selectedReturn.valueOf()) || selectedReturn <= selectedPickup) {
+                        returned.setCustomValidity('Thời gian trả phải sau thời gian nhận.');
+                    }
+                }
+            };
+
             const validRange = () => {
+                syncTimeConstraints();
                 if (!pickup.value || !returned.value) return false;
                 const start = new Date(pickup.value);
                 const end = new Date(returned.value);
-                return Number.isFinite(start.valueOf()) && Number.isFinite(end.valueOf()) && end > start && start >= new Date(Date.now() + @BookingDateRules.MinimumPickupLeadMinutes * 60000);
+                return pickup.checkValidity() &&
+                    returned.checkValidity() &&
+                    Number.isFinite(start.valueOf()) &&
+                    Number.isFinite(end.valueOf()) &&
+                    end > start;
             };
 
             const renderDuration = () => {
@@ -322,6 +368,7 @@
             };
 
             const onTimeChanged = () => {
+                syncTimeConstraints();
                 renderDuration();
                 clearVehicle(validRange()
                     ? 'Thời gian đã thay đổi. Hãy tìm và chọn lại xe khả dụng.'
@@ -368,11 +415,40 @@
                 }, 250);
             });
 
+            form.addEventListener('submit', event => {
+                syncTimeConstraints();
+
+                if (!validRange()) {
+                    event.preventDefault();
+                    clearVehicle('Khoảng thời gian chưa hợp lệ nên chưa thể lập đơn.');
+                    if (!pickup.checkValidity()) {
+                        pickup.reportValidity();
+                    } else {
+                        returned.reportValidity();
+                    }
+                    return;
+                }
+
+                if (!customerId.value) {
+                    event.preventDefault();
+                    customerStatus.textContent = 'Phải chọn một khách hàng từ kết quả tìm kiếm.';
+                    customerSearch.focus();
+                    return;
+                }
+
+                if (!vehicleId.value || vehicleId.value === '0') {
+                    event.preventDefault();
+                    vehicleStatus.textContent = 'Phải chọn một xe còn khả dụng từ kết quả tìm kiếm.';
+                    vehicleSearch.focus();
+                }
+            });
+
             document.addEventListener('click', event => {
                 if (!event.target.closest('[data-autocomplete="customer"]')) hideResults(customerResults);
                 if (!event.target.closest('[data-autocomplete="vehicle"]')) hideResults(vehicleResults);
             });
 
+            syncTimeConstraints();
             renderDuration();
             vehicleSearch.disabled = !validRange();
         })();

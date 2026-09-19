@@ -191,6 +191,18 @@ public sealed class StaffExtensionOperationsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        if (!await HasRequiredVehicleDocumentsAsync(
+                replacement.VehicleId,
+                conflict.PickupDate,
+                conflict.ReturnDate,
+                cancellationToken))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Xe thay thế không có đủ Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ còn hiệu lực cho toàn bộ thời gian thuê.";
+            return RedirectToAction(nameof(Index));
+        }
+
         var deliveryFee = Math.Max(
             0m,
             conflict.TotalAmount -
@@ -505,7 +517,31 @@ public sealed class StaffExtensionOperationsController : Controller
                 !_dbContext.VehicleIncidents.Any(incident =>
                     incident.VehicleId == vehicle.VehicleId &&
                     incident.Status != IncidentStatus.Resolved &&
-                    incident.Status != IncidentStatus.Cancelled))
+                    incident.Status != IncidentStatus.Cancelled) &&
+                _dbContext.VehicleDocuments.Any(document =>
+                    document.VehicleId == vehicle.VehicleId &&
+                    document.DocumentType == VehicleDocumentType.Registration &&
+                    document.IssuedDate.Date <= conflict.PickupDate.Date &&
+                    (!document.ExpiryDate.HasValue ||
+                     document.ExpiryDate.Value.Date >= conflict.ReturnDate.Date)) &&
+                _dbContext.VehicleDocuments.Any(document =>
+                    document.VehicleId == vehicle.VehicleId &&
+                    document.DocumentType == VehicleDocumentType.Inspection &&
+                    document.IssuedDate.Date <= conflict.PickupDate.Date &&
+                    document.ExpiryDate.HasValue &&
+                    document.ExpiryDate.Value.Date >= conflict.ReturnDate.Date) &&
+                _dbContext.VehicleDocuments.Any(document =>
+                    document.VehicleId == vehicle.VehicleId &&
+                    document.DocumentType == VehicleDocumentType.Insurance &&
+                    document.IssuedDate.Date <= conflict.PickupDate.Date &&
+                    document.ExpiryDate.HasValue &&
+                    document.ExpiryDate.Value.Date >= conflict.ReturnDate.Date) &&
+                _dbContext.VehicleDocuments.Any(document =>
+                    document.VehicleId == vehicle.VehicleId &&
+                    document.DocumentType == VehicleDocumentType.RoadFee &&
+                    document.IssuedDate.Date <= conflict.PickupDate.Date &&
+                    document.ExpiryDate.HasValue &&
+                    document.ExpiryDate.Value.Date >= conflict.ReturnDate.Date))
             .Select(vehicle =>
                 new ExtensionAlternativeVehicleViewModel
                 {
@@ -557,6 +593,63 @@ public sealed class StaffExtensionOperationsController : Controller
             .OrderBy(other => other.PickupDate)
             .FirstOrDefaultAsync(cancellationToken);
     }
+
+    private async Task<bool> HasRequiredVehicleDocumentsAsync(
+        int vehicleId,
+        DateTime pickupDate,
+        DateTime returnDate,
+        CancellationToken cancellationToken)
+    {
+        var hasRegistration = await HasValidVehicleDocumentAsync(
+            vehicleId,
+            VehicleDocumentType.Registration,
+            pickupDate,
+            returnDate,
+            allowNoExpiry: true,
+            cancellationToken);
+        var hasInspection = await HasValidVehicleDocumentAsync(
+            vehicleId,
+            VehicleDocumentType.Inspection,
+            pickupDate,
+            returnDate,
+            allowNoExpiry: false,
+            cancellationToken);
+        var hasInsurance = await HasValidVehicleDocumentAsync(
+            vehicleId,
+            VehicleDocumentType.Insurance,
+            pickupDate,
+            returnDate,
+            allowNoExpiry: false,
+            cancellationToken);
+        var hasRoadFee = await HasValidVehicleDocumentAsync(
+            vehicleId,
+            VehicleDocumentType.RoadFee,
+            pickupDate,
+            returnDate,
+            allowNoExpiry: false,
+            cancellationToken);
+
+        return hasRegistration &&
+               hasInspection &&
+               hasInsurance &&
+               hasRoadFee;
+    }
+
+    private Task<bool> HasValidVehicleDocumentAsync(
+        int vehicleId,
+        VehicleDocumentType documentType,
+        DateTime requiredFrom,
+        DateTime requiredUntil,
+        bool allowNoExpiry,
+        CancellationToken cancellationToken) =>
+        _dbContext.VehicleDocuments.AnyAsync(document =>
+            document.VehicleId == vehicleId &&
+            document.DocumentType == documentType &&
+            document.IssuedDate.Date <= requiredFrom.Date &&
+            ((allowNoExpiry && !document.ExpiryDate.HasValue) ||
+             (document.ExpiryDate.HasValue &&
+              document.ExpiryDate.Value.Date >= requiredUntil.Date)),
+            cancellationToken);
 
     private static void SetSinglePendingPaymentAmount(
         ICollection<Payment> payments,

@@ -88,9 +88,9 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
             return NotFound();
         }
 
-        var documentType = side.Equals("back", StringComparison.OrdinalIgnoreCase)
+        var documentType = string.Equals(side, "back", StringComparison.OrdinalIgnoreCase)
             ? DocumentTypes.CitizenIdBack
-            : side.Equals("front", StringComparison.OrdinalIgnoreCase)
+            : string.Equals(side, "front", StringComparison.OrdinalIgnoreCase)
                 ? DocumentTypes.CitizenId
                 : null;
         if (documentType is null)
@@ -133,9 +133,9 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
             return NotFound();
         }
 
-        var purpose = side.Equals("back", StringComparison.OrdinalIgnoreCase)
+        var purpose = string.Equals(side, "back", StringComparison.OrdinalIgnoreCase)
             ? IdentityCapturePurposes.HandoverCitizenBack
-            : side.Equals("front", StringComparison.OrdinalIgnoreCase)
+            : string.Equals(side, "front", StringComparison.OrdinalIgnoreCase)
                 ? IdentityCapturePurposes.HandoverCitizenFront
                 : null;
         if (purpose is null)

@@ -78,7 +78,7 @@
     .signed-upload-card{border:1px solid #d8dde6;border-radius:.5rem;padding:.75rem;background:#f8fafc}
     .signed-preview{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}
     .signed-preview-card{position:relative;border:1px solid #dee2e6;border-radius:.5rem;background:#fff;padding:.25rem;width:108px}
-    .signed-preview-card img{display:block;width:98px;height:72px;object-fit:cover;border-radius:.35rem;background:#f1f3f5}
+    .signed-preview-card img{display:block;width:98px;height:72px;object-fit:contain;background:#f8f9fa;border-radius:.35rem;background:#f1f3f5}
     .signed-preview-card .caption{font-size:.72rem;color:#6c757d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.25rem}
     .remove-signed-page{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border:0;border-radius:50%;background:#dc3545;color:#fff;line-height:1;font-weight:700}
     .signed-links{border:1px solid #badbcc;background:#f0fff4;border-radius:.5rem;padding:.5rem .75rem}
@@ -241,7 +241,7 @@ else
                     {
                         <div class="col-6 col-md-4">
                             <a href="@image" target="_blank" rel="noopener" title="@EvidenceLabel(image)">
-                                <img src="@image" alt="@EvidenceLabel(image) lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
+                                <img src="@image" alt="@EvidenceLabel(image) lúc giao" class="img-fluid rounded border w-100" style="height:140px;object-fit:contain;background:#f8f9fa" />
                             </a>
                         </div>
                     }
@@ -321,7 +321,7 @@ else
                     {
                         <div class="col-6 col-md-4">
                             <a href="@image" target="_blank" rel="noopener" title="@EvidenceLabel(image)">
-                                <img src="@image" alt="@EvidenceLabel(image) lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:cover" />
+                                <img src="@image" alt="@EvidenceLabel(image) lúc trả" class="img-fluid rounded border w-100" style="height:140px;object-fit:contain;background:#f8f9fa" />
                             </a>
                         </div>
                     }
@@ -620,7 +620,7 @@ else
             @if (!Model.AdditionalChargePaid && Model.AdditionalChargeAwaitingConfirmation)
             {
                 <span class="small text-muted">
-                    Không thu tiền mặt khi giao dịch QR đang chờ Admin xác nhận.
+                    Không thu tiền mặt khi giao dịch QR đang chờ Staff đối soát.
                 </span>
             }
             else if (!Model.AdditionalChargePaid && Model.AdditionalAmount > 0)
@@ -645,7 +645,7 @@ else
 <div class="alert alert-info mt-3">
     <strong>Chính sách cọc của đơn: giữ @ViewBag.DepositHoldDays ngày sau khi trả xe.</strong>
     <div>Sớm nhất được duyệt hoàn: @(((DateTime)ViewBag.DepositEligibleAt).ToString("dd/MM/yyyy HH:mm")).</div>
-    <div>Hoàn tất đối chiếu sẽ quyết toán và tạo khoản hoàn cọc còn lại nếu có. Đủ thời gian và không còn khoản phạt cần xử lý, Admin duyệt; nhân viên chuyển tiền và xác nhận hoàn.</div>
+    <div>Hoàn tất đối chiếu sẽ quyết toán cọc và tạo khoản hoàn còn lại nếu có. Phụ phí trả xe phải được thanh toán riêng trước khi hoàn tất; các khoản bồi thường được phép khấu trừ từ cọc sẽ được xử lý trong quyết toán. Đủ thời gian và không còn khoản phạt cần xử lý, Admin duyệt; Staff thực hiện chuyển tiền.</div>
     <div class="small">Đổi cấu hình hiện tại không thay đổi số ngày đã lưu trên đơn này.</div>
 </div>
 
@@ -664,7 +664,7 @@ else
         }
         else
         {
-            <p class="text-muted">Đủ hồ sơ. Hệ thống sẽ chuyển sang bước <strong>quyết toán tiền cọc</strong>, khấu trừ các khoản đã ghi nhận trước khi xác định số tiền hoàn thực tế.</p>
+            <p class="text-muted">Đủ hồ sơ và các phụ phí phải thu riêng đã được thanh toán. Hệ thống sẽ chuyển sang <strong>quyết toán tiền cọc</strong>; chỉ các khoản được phép khấu trừ từ cọc theo hồ sơ nghiệp vụ mới được trừ trước khi xác định số tiền hoàn thực tế.</p>
             <form asp-controller="Returns" asp-action="Complete" method="post" data-loading-form data-confirm="Xác nhận đã đối chiếu đủ hồ sơ giao - trả và chuyển sang quyết toán cọc?">
                 <input type="hidden" name="BookingId" value="@Model.BookingId" />
                 <input type="hidden" name="reviewConfirmed" value="true" />

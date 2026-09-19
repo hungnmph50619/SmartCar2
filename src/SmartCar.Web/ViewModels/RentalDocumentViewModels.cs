@@ -21,6 +21,8 @@ public sealed class HandoverDocumentViewModel
     public IReadOnlyList<string> ImagePaths { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> SignedDocumentPaths { get; init; } = Array.Empty<string>();
     public string? SignedDocumentPath { get; init; }
+    public bool SignedDocumentVerified { get; init; }
+    public DateTime? SignedDocumentVerifiedAt { get; init; }
 }
 
 public sealed class ReturnDocumentViewModel
@@ -39,6 +41,8 @@ public sealed class ReturnDocumentViewModel
     public IReadOnlyList<string> ImagePaths { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> SignedDocumentPaths { get; init; } = Array.Empty<string>();
     public string? SignedDocumentPath { get; init; }
+    public bool SignedDocumentVerified { get; init; }
+    public DateTime? SignedDocumentVerifiedAt { get; init; }
 }
 
 public sealed class TripRecordViewModel

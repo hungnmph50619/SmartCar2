@@ -61,6 +61,35 @@ public sealed class StaffOperationsAuthorizationTests
 
 
     [Fact]
+    public void AdminTripRecordsController_IsAdminOnlyReadOnlyHistory()
+    {
+        var authorizeAttributes = typeof(AdminTripRecordsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .ToArray();
+
+        Assert.NotEmpty(authorizeAttributes);
+        Assert.Contains(
+            authorizeAttributes,
+            attribute => string.Equals(attribute.Roles, RoleNames.Admin, StringComparison.Ordinal));
+
+        var declaredActions = typeof(AdminTripRecordsController)
+            .GetMethods(System.Reflection.BindingFlags.Instance |
+                        System.Reflection.BindingFlags.Public |
+                        System.Reflection.BindingFlags.DeclaredOnly)
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("Details", declaredActions);
+        Assert.DoesNotContain(declaredActions, name =>
+            name.StartsWith("Upload", StringComparison.Ordinal) ||
+            name.StartsWith("Verify", StringComparison.Ordinal) ||
+            name.StartsWith("Create", StringComparison.Ordinal) ||
+            name.StartsWith("Edit", StringComparison.Ordinal));
+    }
+
+
+    [Fact]
     public void AdminPaymentsController_DoesNotExposeIncomingPaymentReconciliationActions()
     {
         var publicActions = typeof(AdminPaymentsController)
