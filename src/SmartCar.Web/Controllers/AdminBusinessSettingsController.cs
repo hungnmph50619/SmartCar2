@@ -27,8 +27,12 @@ public sealed class AdminBusinessSettingsController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
-        View(await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken));
+    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    {
+        var currentPolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        ViewData["CurrentPolicy"] = currentPolicy;
+        return View(currentPolicy);
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -41,7 +45,11 @@ public sealed class AdminBusinessSettingsController : Controller
             if (!Request.Form.ContainsKey(field) || string.IsNullOrWhiteSpace(Request.Form[field]))
                 ModelState.AddModelError(field, "Vui lòng nhập đầy đủ thông tin chính sách.");
         }
-        if (!ModelState.IsValid) return View("Index", model);
+        if (!ModelState.IsValid)
+        {
+            ViewData["CurrentPolicy"] = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+            return View("Index", model);
+        }
         model.TrafficFineTerms = model.TrafficFineTerms.Trim();
         model.DamageCompensationTerms = model.DamageCompensationTerms.Trim();
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
@@ -52,6 +60,7 @@ public sealed class AdminBusinessSettingsController : Controller
         if (model.Version != oldPolicy.Version)
         {
             await transaction.RollbackAsync(cancellationToken);
+            ViewData["CurrentPolicy"] = oldPolicy;
             ModelState.AddModelError(string.Empty, "Cấu hình đã được người khác thay đổi. Hãy tải lại trang và kiểm tra trước khi lưu.");
             return View("Index", model);
         }

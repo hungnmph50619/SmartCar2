@@ -2,12 +2,74 @@
 @{
     ViewData["Title"] = "Cấu hình nghiệp vụ";
     Layout = "_AdminLayout";
+    var currentPolicy = (SmartCar.Domain.Constants.RentalPolicySnapshot)ViewData["CurrentPolicy"]!;
+    var vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
 }
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div><h1 class="h3">Cấu hình nghiệp vụ</h1><p class="text-muted">Thiết lập chính sách áp dụng cho đơn thuê tạo mới.</p></div>
     <a class="btn btn-outline-secondary" asp-controller="AuditLogs" asp-action="Index" asp-route-search="BusinessSetting">Xem lịch sử thay đổi</a>
 </div>
 <div class="alert alert-info">Mỗi đơn lưu chính sách tại lúc tạo. Thay đổi dưới đây không sửa tiền hoặc nội dung biên bản của đơn cũ. Giá thuê/ngày được chỉnh trong Quản lý xe.</div>
+<section class="card card-body mb-4 border-primary" aria-labelledby="current-policy-heading">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <h2 id="current-policy-heading" class="h5 mb-0">Chính sách đang áp dụng cho đơn mới</h2>
+        <span class="badge bg-success">Đang áp dụng</span>
+    </div>
+    <p class="text-muted small">Các mức hệ thống đang dùng tại lúc tải trang. Nhập thay đổi ở bên dưới chưa làm thay đổi chính sách này.</p>
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="bg-light rounded p-3 h-100">
+                <h3 class="h6 text-primary">Tiền cọc</h3>
+                <dl class="mb-0">
+                    <dt class="small text-muted fw-normal">Tỷ lệ cọc trên tiền thuê ban đầu</dt>
+                    <dd class="fs-5 fw-semibold">@currentPolicy.DepositPercent.ToString("0.##", vi)%</dd>
+                    <dt class="small text-muted fw-normal">Giữ cọc sau khi trả xe</dt>
+                    <dd class="fs-5 fw-semibold mb-0">@currentPolicy.DepositHoldDays ngày</dd>
+                </dl>
+                @if (currentPolicy.DepositHoldDays == 0)
+                {
+                    <p class="small text-muted mt-2 mb-0">Không chờ thêm ngày; vẫn cần hậu kiểm, xử lý khoản còn mở và duyệt hoàn.</p>
+                }
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="bg-light rounded p-3 h-100">
+                <h3 class="h6 text-primary">Quãng đường và trả muộn</h3>
+                <dl class="mb-0">
+                    <dt class="small text-muted fw-normal">Định mức</dt>
+                    <dd class="fs-5 fw-semibold">@currentPolicy.IncludedKilometersPerDay.ToString("N0", vi) km/ngày</dd>
+                    <dt class="small text-muted fw-normal">Phí vượt định mức</dt>
+                    <dd class="fw-semibold">@currentPolicy.ExcessKilometerFee.ToString("N0", vi) đ/km</dd>
+                    <dt class="small text-muted fw-normal">Trả muộn</dt>
+                    <dd class="fw-semibold mb-0">@currentPolicy.LateReturnFeeMultiplier.ToString("0.##", vi) × giá thuê/ngày · miễn @currentPolicy.LateReturnGraceMinutes phút</dd>
+                </dl>
+                <p class="small text-muted mt-2 mb-0">Sau thời gian miễn phí, mỗi 24 giờ bắt đầu tính 1 ngày phí.</p>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="bg-light rounded p-3 h-100">
+                <h3 class="h6 text-primary">Giao xe tận nơi</h3>
+                <dl class="mb-0">
+                    <dt class="small text-muted fw-normal">Phí cơ bản</dt>
+                    <dd class="fs-5 fw-semibold">@currentPolicy.BaseDeliveryFee.ToString("N0", vi) đ / @currentPolicy.IncludedDeliveryDistanceKm.ToString("0.##", vi) km đầu</dd>
+                    <dt class="small text-muted fw-normal">Mỗi km bắt đầu tiếp theo</dt>
+                    <dd class="fw-semibold">@currentPolicy.DeliveryFeePerExtraKm.ToString("N0", vi) đ/km</dd>
+                    <dt class="small text-muted fw-normal">Bán kính tối đa</dt>
+                    <dd class="fw-semibold mb-0">@currentPolicy.MaxDeliveryDistanceKm.ToString("0.##", vi) km</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <details class="mt-3">
+        <summary>Xem điều khoản đang áp dụng</summary>
+        <h3 class="h6 mt-3">Vi phạm giao thông / phạt nguội</h3>
+        <p style="white-space:pre-wrap">@currentPolicy.TrafficFineTerms</p>
+        <h3 class="h6">Hư hỏng / thiếu / trả muộn</h3>
+        <p class="mb-0" style="white-space:pre-wrap">@currentPolicy.DamageCompensationTerms</p>
+    </details>
+</section>
+<h2 class="h5">Chỉnh sửa chính sách</h2>
+<p class="text-muted">Các giá trị nhập bên dưới chỉ có hiệu lực sau khi lưu thành công. Đơn cũ giữ chính sách đã chốt.</p>
 <form asp-action="Update" method="post">
     <input asp-for="Version" type="hidden" />
     <div asp-validation-summary="All" class="text-danger mb-3"></div>
