@@ -5,7 +5,7 @@ using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Controllers;
-using SmartCar.Web.Services;
+using SmartCar.Application.Features.Audits;
 using SmartCar.Web.ViewModels;
 using Xunit;
 
@@ -149,12 +149,6 @@ public sealed class ReturnEditDamageEvidenceTests
         public Task<IReadOnlyList<SmartCar.Application.Features.Audits.AuditLogDto>> GetRecentAsync(
             int take = 200,
             CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<IReadOnlyList<SmartCar.Application.Features.Audits.AuditLogDto>> GetRecentAsync(
-            int take,
-            CancellationToken cancellationToken,
-            bool unused = false) =>
             throw new NotSupportedException();
 
         public Task<SmartCar.Application.Features.Audits.AuditLogSearchResult> SearchAsync(
