@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Payments;
 using SmartCar.Application.Features.Audits;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -349,6 +350,52 @@ public sealed class StaffPaymentsController : Controller
                 : RedirectToStaffDetails(bookingId);
         }
 
+        var debtRelations = pendingDebts
+            .Select(payment => new
+            {
+                Payment = payment,
+                Parsed = OverdueCompensationLedger.TryParseDebtRelation(
+                    payment.TransactionCode,
+                    out var renterBookingId,
+                    out var affectedBookingId),
+                RenterBookingId = renterBookingId,
+                AffectedBookingId = affectedBookingId
+            })
+            .ToList();
+
+        if (debtRelations.Any(item =>
+                !item.Parsed ||
+                item.RenterBookingId != booking.BookingId ||
+                item.AffectedBookingId == booking.BookingId))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Có khoản bồi thường quá hạn không còn mã liên kết hợp lệ giữa đơn gây ảnh hưởng và đơn bị ảnh hưởng. Chưa thu tiền.";
+            return booking.Status == BookingStatus.PendingInspection
+                ? RedirectToAction("Inspect", "Returns", new { bookingId })
+                : RedirectToStaffDetails(bookingId);
+        }
+
+        var affectedBookingIds = debtRelations
+            .Select(item => item.AffectedBookingId)
+            .Distinct()
+            .ToArray();
+
+        var affectedBookings = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .Where(item => affectedBookingIds.Contains(item.BookingId))
+            .ToDictionaryAsync(item => item.BookingId, cancellationToken);
+
+        if (affectedBookings.Count != affectedBookingIds.Length)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Không tìm thấy đầy đủ đơn bị ảnh hưởng để mở khoản bồi thường tương ứng. Chưa thu tiền.";
+            return booking.Status == BookingStatus.PendingInspection
+                ? RedirectToAction("Inspect", "Returns", new { bookingId })
+                : RedirectToStaffDetails(bookingId);
+        }
+
         var paidAt = DateTime.UtcNow;
         var total = pendingDebts.Sum(payment => payment.Amount);
 
@@ -360,6 +407,86 @@ public sealed class StaffPaymentsController : Controller
 
             // Giữ nguyên OVERDUE-DEBT-{đơn A}-{đơn B}-... để hồ sơ lịch sử
             // vẫn truy ngược được khoản tiền này phát sinh do ảnh hưởng đơn nào.
+        }
+
+        var releasedCompensationTotal = 0m;
+        foreach (var relationGroup in debtRelations.GroupBy(item => item.AffectedBookingId))
+        {
+            var affectedBookingId = relationGroup.Key;
+            var affectedBooking = affectedBookings[affectedBookingId];
+            var deductionPrefix =
+                OverdueCompensationLedger.BuildDepositDeductionRelationPrefix(
+                    booking.BookingId,
+                    affectedBookingId);
+            var debtPrefix =
+                OverdueCompensationLedger.BuildDebtRelationPrefix(
+                    booking.BookingId,
+                    affectedBookingId);
+
+            var fundedFromDeposit = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.AdditionalCharge &&
+                    item.Method == PaymentMethods.DepositDeduction &&
+                    item.Status == PaymentStatus.Paid &&
+                    !string.IsNullOrWhiteSpace(item.TransactionCode) &&
+                    item.TransactionCode.StartsWith(
+                        deductionPrefix,
+                        StringComparison.OrdinalIgnoreCase))
+                .Sum(item => item.Amount);
+
+            var fundedFromDebt = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.OverdueCompensationDebt &&
+                    item.Status == PaymentStatus.Paid &&
+                    !string.IsNullOrWhiteSpace(item.TransactionCode) &&
+                    item.TransactionCode.StartsWith(
+                        debtPrefix,
+                        StringComparison.OrdinalIgnoreCase))
+                .Sum(item => item.Amount);
+
+            var compensationRefundAlreadyRecorded = affectedBooking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Refund &&
+                    item.Method == PaymentMethods.CompensationRefund &&
+                    BookingWorkflowRules.CountsTowardRefundTotal(item.Status))
+                .Sum(item => item.Amount);
+
+            var releaseAmount = OverdueCompensationLedger.CalculateRefundReleaseAmount(
+                fundedFromDeposit,
+                fundedFromDebt,
+                compensationRefundAlreadyRecorded);
+
+            if (releaseAmount <= 0m)
+            {
+                continue;
+            }
+
+            affectedBooking.Payments.Add(new Payment
+            {
+                Type = PaymentType.Refund,
+                Amount = releaseAmount,
+                Method = PaymentMethods.CompensationRefund,
+                Status = PaymentStatus.AwaitingRefund
+            });
+            affectedBooking.RefundAmount = affectedBooking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Refund &&
+                    BookingWorkflowRules.CountsTowardRefundTotal(item.Status))
+                .Sum(item => item.Amount);
+            affectedBooking.RefundReason = AppendText(
+                affectedBooking.RefundReason,
+                $"Đã thực thu thêm {releaseAmount:N0} đồng bồi thường từ đơn #{booking.BookingId}; " +
+                "khoản tương ứng đã chuyển sang chờ Admin duyệt hoàn.");
+            releasedCompensationTotal += releaseAmount;
+
+            _dbContext.Notifications.Add(new Notification
+            {
+                UserId = affectedBooking.CustomerId,
+                Title = "Bồi thường đã có thêm nguồn thanh toán",
+                Message =
+                    $"Đơn #{affectedBooking.BookingId}: SmartCar đã thực thu thêm {releaseAmount:N0} đồng " +
+                    $"từ khách của đơn #{booking.BookingId}. Khoản này đã chuyển sang quy trình chờ Admin duyệt hoàn tiền."
+            });
         }
 
         _dbContext.Notifications.Add(new Notification
@@ -380,7 +507,8 @@ public sealed class StaffPaymentsController : Controller
             nameof(Payment),
             bookingId.ToString(),
             $"Nhân viên thu {total:N0} đồng bồi thường quá hạn còn thiếu bằng tiền mặt " +
-            $"cho đơn #{bookingId}; số khoản: {pendingDebts.Count}.",
+            $"cho đơn #{bookingId}; số khoản: {pendingDebts.Count}; " +
+            $"mở thêm {releasedCompensationTotal:N0} đồng bồi thường có nguồn cho đơn bị ảnh hưởng.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
@@ -448,6 +576,11 @@ public sealed class StaffPaymentsController : Controller
             $"Đã ghi nhận khách báo chuyển khoản. Staff có tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
         return RedirectToStaffDetails(bookingId);
     }
+
+    private static string AppendText(string? current, string addition) =>
+        string.IsNullOrWhiteSpace(current)
+            ? addition
+            : $"{current.Trim()} {addition}";
 
     private IActionResult RedirectToStaffDetails(int bookingId) =>
         RedirectToAction("Details", "Staff", new { id = bookingId });
