@@ -247,7 +247,8 @@ public sealed class AdminCustomersController : Controller
                 payment.Type is PaymentType.Rental or
                     PaymentType.Extension or
                     PaymentType.AdditionalCharge or
-                    PaymentType.TrafficFine)
+                    PaymentType.TrafficFine or
+                    PaymentType.OverdueCompensationDebt)
             .Sum(payment => payment.Amount);
         var refunds = payments
             .Where(payment => payment.Type == PaymentType.Refund &&
@@ -259,6 +260,12 @@ public sealed class AdminCustomersController : Controller
                 payment.Status is PaymentStatus.Pending or
                     PaymentStatus.AwaitingConfirmation or
                     PaymentStatus.Failed)
+            .Sum(payment => payment.Amount);
+
+        var outstandingOverdueCompensationDebt = payments
+            .Where(payment =>
+                payment.Type == PaymentType.OverdueCompensationDebt &&
+                payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
             .Sum(payment => payment.Amount);
 
         return View(new AdminCustomerDetailsViewModel
@@ -273,7 +280,10 @@ public sealed class AdminCustomersController : Controller
             ActiveTab = activeTab,
             ProfileStatusCode = state.Code,
             ProfileStatusText = state.Text,
-            CanRent = customer.IsActive && state.Code == "Verified" && outstandingTrafficFineDebt <= 0,
+            CanRent = customer.IsActive &&
+                state.Code == "Verified" &&
+                outstandingTrafficFineDebt <= 0 &&
+                outstandingOverdueCompensationDebt <= 0,
             CompletedBookingCount = bookings.Count(booking => booking.Status == BookingStatus.Completed),
             ActiveBookingCount = bookings.Count(booking => ActiveBookingStatuses.Contains(booking.Status)),
             CancelledBookingCount = bookings.Count(booking =>
