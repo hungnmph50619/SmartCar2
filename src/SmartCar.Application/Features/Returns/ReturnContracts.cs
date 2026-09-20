@@ -35,6 +35,12 @@ public interface IReturnService
         int bookingId,
         int additionalChargeId,
         CancellationToken cancellationToken = default);
+    Task<OperationResult> FinalizeChargesAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
+    Task<OperationResult> ReopenChargesAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default);
     Task<OperationResult> CompleteAsync(
         int bookingId,
         bool requiresMaintenance,
