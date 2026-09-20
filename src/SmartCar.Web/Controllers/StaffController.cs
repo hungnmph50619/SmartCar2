@@ -731,6 +731,31 @@ public sealed class StaffController : Controller
             .OrderByDescending(group => group.Key)
             .ToList();
 
+        var bookingIds = actionableGroups
+            .Select(group => group.Key)
+            .ToArray();
+
+        var outstandingTrafficFineByBooking = bookingIds.Length == 0
+            ? new Dictionary<int, decimal>()
+            : await _dbContext.Payments.AsNoTracking()
+                .Where(payment =>
+                    bookingIds.Contains(payment.BookingId) &&
+                    payment.Type == PaymentType.TrafficFine &&
+                    payment.Status is PaymentStatus.Pending or
+                        PaymentStatus.AwaitingConfirmation or
+                        PaymentStatus.Failed)
+                .GroupBy(payment => payment.BookingId)
+                .Select(group => new
+                {
+                    BookingId = group.Key,
+                    Amount = group.Sum(payment => payment.Amount)
+                })
+                .Where(item => item.Amount > 0m)
+                .ToDictionaryAsync(
+                    item => item.BookingId,
+                    item => item.Amount,
+                    cancellationToken);
+
         var customerIds = actionableGroups
             .Select(group => group.First().Booking.CustomerId)
             .Distinct()
@@ -764,6 +789,8 @@ public sealed class StaffController : Controller
                 LicensePlate = first.Booking.Vehicle.LicensePlate,
                 TotalAmount = approvedLines.Sum(item => item.Amount),
                 AwaitingApprovalAmount = awaitingApprovalAmount,
+                OutstandingTrafficFineAmount =
+                    outstandingTrafficFineByBooking.GetValueOrDefault(first.BookingId),
                 BankName = bank?.BankName,
                 AccountNumber = bank?.AccountNumber,
                 AccountHolderName = bank?.AccountHolderName,
@@ -843,6 +870,26 @@ public sealed class StaffController : Controller
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ.";
             return RedirectToAction(nameof(Refunds));
+        }
+
+        if (approvedRefunds.Any(item => item.Method == PaymentMethods.DepositRefund))
+        {
+            var outstandingTrafficFine = booking.Payments
+                .Where(payment =>
+                    payment.Type == PaymentType.TrafficFine &&
+                    payment.Status is PaymentStatus.Pending or
+                        PaymentStatus.AwaitingConfirmation or
+                        PaymentStatus.Failed)
+                .Sum(payment => payment.Amount);
+
+            if (outstandingTrafficFine > 0m)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Đơn vừa phát sinh {outstandingTrafficFine:N0} đồng phạt/vi phạm chưa xử lý. " +
+                    "Chưa được chuyển khoản hoàn cọc cho đến khi nghĩa vụ này được xử lý.";
+                return RedirectToAction(nameof(Refunds));
+            }
         }
 
         var duplicateCode = await _dbContext.Payments.AsNoTracking().AnyAsync(
