@@ -27,7 +27,7 @@ public static class BusinessPolicyGroups
     public static string Title(string group) => group switch
     {
         "deposit" => "Tiền cọc", "mileage" => "Quãng đường", "late" => "Trả muộn",
-        "delivery" => "Giao xe tận nơi", "reservation" => "Giữ chỗ & thanh toán",
+        "delivery" => "Giao xe tận nơi", "reservation" => "Đặt xe & thanh toán",
         "schedule" => "Lịch xe", "cancellation" => "Hủy đơn & hoàn tiền",
         "noshow" => "Không đến nhận xe", "terms" => "Điều khoản biên bản", _ => ""
     };
