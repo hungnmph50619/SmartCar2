@@ -355,8 +355,8 @@
                 <div class="policy-card-header">
                     <span class="policy-card-icon" aria-hidden="true">⌛</span>
                     <div class="policy-card-heading">
-                        <h2>Giữ chỗ & thanh toán</h2>
-                        <p>Thời gian chờ trước khi đơn hết hạn</p>
+                        <h2>Đặt xe & thanh toán</h2>
+                        <p>Các mốc thời gian từ lúc gửi đơn đến khi nhận xe</p>
                     </div>
                     <button type="button"
                             class="btn btn-outline-primary policy-edit-btn"
@@ -368,20 +368,32 @@
                     </button>
                 </div>
 
-                <div class="policy-metrics">
+                <div class="policy-metrics four policy-reservation-metrics">
                     <div class="policy-metric">
-                        <span class="policy-metric-label">Chờ khách thanh toán</span>
-                        <strong class="policy-metric-value">@current.BookingPaymentHoldMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-label">Duyệt đơn mới</span>
+                        <strong class="policy-metric-value">@current.BookingConfirmationHoldMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-note">Từ lúc khách gửi đơn</span>
                     </div>
                     <div class="policy-metric">
-                        <span class="policy-metric-label">Chờ đối soát chuyển khoản</span>
+                        <span class="policy-metric-label">Thanh toán sau duyệt</span>
+                        <strong class="policy-metric-value">@current.BookingPaymentHoldMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-note">Quá hạn → đơn hết hiệu lực</span>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Đối soát chuyển khoản</span>
                         <strong class="policy-metric-value">@current.BookingTransferReconciliationHoldMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-note">Sau khi khách báo đã chuyển</span>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Cách giờ nhận tối thiểu</span>
+                        <strong class="policy-metric-value">@current.MinimumPickupLeadMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-note">Giờ nhận phải cách hiện tại ít nhất từng này</span>
                     </div>
                 </div>
 
                 <p class="policy-helper">
                     <span class="policy-helper-icon" aria-hidden="true">i</span>
-                    <span>Xác nhận đơn @current.BookingConfirmationHoldMinutes phút · đặt trước tối thiểu @current.MinimumPickupLeadMinutes phút.</span>
+                    <span>Ví dụ hiện tại 19:00 và cách giờ nhận tối thiểu là @current.MinimumPickupLeadMinutes phút → khách chỉ được chọn giờ nhận từ @DateTime.Today.AddHours(19).AddMinutes(current.MinimumPickupLeadMinutes).ToString("HH:mm") trở đi.</span>
                 </p>
             </div>
 
@@ -400,40 +412,40 @@
                 }
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label asp-for="BookingConfirmationHoldMinutes" class="form-label">Chờ xác nhận đơn</label>
+                        <label asp-for="BookingConfirmationHoldMinutes" class="form-label">Thời gian xử lý đơn mới</label>
                         <div class="input-group">
                             <input asp-for="BookingConfirmationHoldMinutes" type="number" min="5" max="240" step="1" required
-                                   class="form-control" data-policy-input data-label="Chờ xác nhận đơn" data-unit="phút"
+                                   class="form-control" data-policy-input data-label="Thời gian xử lý đơn mới" data-unit="phút"
                                    data-current="@current.BookingConfirmationHoldMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">phút</span>
                         </div>
                         <span asp-validation-for="BookingConfirmationHoldMinutes" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
-                        <label asp-for="BookingPaymentHoldMinutes" class="form-label">Chờ khách thanh toán</label>
+                        <label asp-for="BookingPaymentHoldMinutes" class="form-label">Thời gian khách thanh toán sau duyệt</label>
                         <div class="input-group">
                             <input asp-for="BookingPaymentHoldMinutes" type="number" min="5" max="180" step="1" required
-                                   class="form-control" data-policy-input data-label="Chờ khách thanh toán" data-unit="phút"
+                                   class="form-control" data-policy-input data-label="Thời gian khách thanh toán sau duyệt" data-unit="phút"
                                    data-current="@current.BookingPaymentHoldMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">phút</span>
                         </div>
                         <span asp-validation-for="BookingPaymentHoldMinutes" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
-                        <label asp-for="BookingTransferReconciliationHoldMinutes" class="form-label">Chờ đối soát chuyển khoản</label>
+                        <label asp-for="BookingTransferReconciliationHoldMinutes" class="form-label">Thời gian Staff đối soát chuyển khoản</label>
                         <div class="input-group">
                             <input asp-for="BookingTransferReconciliationHoldMinutes" type="number" min="15" max="720" step="1" required
-                                   class="form-control" data-policy-input data-label="Chờ đối soát chuyển khoản" data-unit="phút"
+                                   class="form-control" data-policy-input data-label="Thời gian Staff đối soát chuyển khoản" data-unit="phút"
                                    data-current="@current.BookingTransferReconciliationHoldMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">phút</span>
                         </div>
                         <span asp-validation-for="BookingTransferReconciliationHoldMinutes" class="text-danger small"></span>
                     </div>
                     <div class="col-md-6">
-                        <label asp-for="MinimumPickupLeadMinutes" class="form-label">Đặt xe trước tối thiểu</label>
+                        <label asp-for="MinimumPickupLeadMinutes" class="form-label">Giờ nhận phải cách hiện tại ít nhất</label>
                         <div class="input-group">
                             <input asp-for="MinimumPickupLeadMinutes" type="number" min="0" max="1440" step="1" required
-                                   class="form-control" data-policy-input data-label="Đặt xe trước tối thiểu" data-unit="phút"
+                                   class="form-control" data-policy-input data-label="Khoảng cách tối thiểu tới giờ nhận" data-unit="phút"
                                    data-current="@current.MinimumPickupLeadMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">phút</span>
                         </div>
