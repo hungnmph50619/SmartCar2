@@ -140,6 +140,87 @@ public sealed class StaffExtensionCashWorkflowTests
         Assert.Equal(originalReturn, booking.ReturnDate);
     }
 
+    [Fact]
+    public async Task CollectOverdueCompensationDebtCash_PaysPendingDebtAndPreservesSourceCode()
+    {
+        await using var db = CreateDbContext();
+
+        db.Bookings.Add(new Booking
+        {
+            BookingId = 103,
+            CustomerId = "customer-1",
+            VehicleId = 10,
+            PickupDate = DateTime.Now.AddDays(-2),
+            ReturnDate = DateTime.Now.AddHours(-1),
+            DailyPrice = 500_000m,
+            NumberOfDays = 2,
+            RentalAmount = 1_000_000m,
+            DepositAmount = 300_000m,
+            TotalAmount = 1_000_000m,
+            Status = BookingStatus.PendingInspection
+        });
+        db.Payments.Add(new Payment
+        {
+            BookingId = 103,
+            Type = PaymentType.OverdueCompensationDebt,
+            Amount = 700_000m,
+            Method = PaymentMethods.NotSelected,
+            Status = PaymentStatus.Pending,
+            TransactionCode = "OVERDUE-DEBT-103-204-20260920120000"
+        });
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db);
+        await controller.CollectOverdueCompensationDebtCash(103, default);
+
+        var payment = await db.Payments.SingleAsync();
+        Assert.Equal(PaymentStatus.Paid, payment.Status);
+        Assert.Equal(PaymentMethods.Cash, payment.Method);
+        Assert.NotNull(payment.PaidAt);
+        Assert.Equal(
+            "OVERDUE-DEBT-103-204-20260920120000",
+            payment.TransactionCode);
+    }
+
+    [Fact]
+    public async Task CollectOverdueCompensationDebtCash_RejectsWhenQrIsAwaitingReconciliation()
+    {
+        await using var db = CreateDbContext();
+
+        db.Bookings.Add(new Booking
+        {
+            BookingId = 104,
+            CustomerId = "customer-1",
+            VehicleId = 10,
+            PickupDate = DateTime.Now.AddDays(-2),
+            ReturnDate = DateTime.Now.AddHours(-1),
+            DailyPrice = 500_000m,
+            NumberOfDays = 2,
+            RentalAmount = 1_000_000m,
+            DepositAmount = 300_000m,
+            TotalAmount = 1_000_000m,
+            Status = BookingStatus.PendingInspection
+        });
+        db.Payments.Add(new Payment
+        {
+            BookingId = 104,
+            Type = PaymentType.OverdueCompensationDebt,
+            Amount = 700_000m,
+            Method = PaymentMethods.BankQr,
+            Status = PaymentStatus.AwaitingConfirmation,
+            TransactionCode = "OVERDUE-DEBT-104-205-20260920120000"
+        });
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db);
+        await controller.CollectOverdueCompensationDebtCash(104, default);
+
+        var payment = await db.Payments.SingleAsync();
+        Assert.Equal(PaymentStatus.AwaitingConfirmation, payment.Status);
+        Assert.Equal(PaymentMethods.BankQr, payment.Method);
+        Assert.Null(payment.PaidAt);
+    }
+
     private static StaffPaymentsController CreateController(
         ApplicationDbContext db)
     {
