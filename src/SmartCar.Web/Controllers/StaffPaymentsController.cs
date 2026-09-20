@@ -284,6 +284,116 @@ public sealed class StaffPaymentsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CollectOverdueCompensationDebtCash(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(staffId))
+        {
+            return Challenge();
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Payments)
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Không tìm thấy đơn thuê.";
+            return RedirectToStaffDetails(bookingId);
+        }
+
+        if (booking.Status is not (BookingStatus.Rented or BookingStatus.PendingInspection))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Chỉ được thu bồi thường quá hạn khi chuyến đang thuê hoặc đang kiểm tra xe trả.";
+            return RedirectToStaffDetails(bookingId);
+        }
+
+        var debts = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.OverdueCompensationDebt &&
+                payment.Amount > 0m)
+            .OrderBy(payment => payment.PaymentId)
+            .ToList();
+
+        if (debts.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Khoản bồi thường quá hạn đang có chuyển khoản/QR chờ Staff đối soát. " +
+                "Không được đồng thời thu tiền mặt.";
+            return booking.Status == BookingStatus.PendingInspection
+                ? RedirectToAction("Inspect", "Returns", new { bookingId })
+                : RedirectToStaffDetails(bookingId);
+        }
+
+        var pendingDebts = debts
+            .Where(payment => payment.Status == PaymentStatus.Pending)
+            .ToList();
+
+        if (pendingDebts.Count == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Đơn không còn khoản bồi thường quá hạn cần thu bằng tiền mặt.";
+            return booking.Status == BookingStatus.PendingInspection
+                ? RedirectToAction("Inspect", "Returns", new { bookingId })
+                : RedirectToStaffDetails(bookingId);
+        }
+
+        var paidAt = DateTime.UtcNow;
+        var total = pendingDebts.Sum(payment => payment.Amount);
+
+        foreach (var payment in pendingDebts)
+        {
+            payment.Method = PaymentMethods.Cash;
+            payment.Status = PaymentStatus.Paid;
+            payment.PaidAt = paidAt;
+
+            // Giữ nguyên OVERDUE-DEBT-{đơn A}-{đơn B}-... để hồ sơ lịch sử
+            // vẫn truy ngược được khoản tiền này phát sinh do ảnh hưởng đơn nào.
+        }
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Đã thanh toán bồi thường quá hạn tại quầy",
+            Message =
+                $"Đơn #{booking.BookingId}: SmartCar đã ghi nhận {total:N0} đồng " +
+                "bồi thường quá hạn còn thiếu bằng tiền mặt."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        await _auditService.WriteAsync(
+            staffId,
+            "StaffCollectOverdueCompensationDebtCash",
+            nameof(Payment),
+            bookingId.ToString(),
+            $"Nhân viên thu {total:N0} đồng bồi thường quá hạn còn thiếu bằng tiền mặt " +
+            $"cho đơn #{bookingId}; số khoản: {pendingDebts.Count}.",
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
+
+        TempData["SuccessMessage"] =
+            $"Đã ghi nhận {total:N0} đ bồi thường quá hạn bằng tiền mặt.";
+
+        return booking.Status == BookingStatus.PendingInspection
+            ? RedirectToAction("Inspect", "Returns", new { bookingId })
+            : RedirectToStaffDetails(bookingId);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> SubmitCounterQr(
         int bookingId,
         bool transferConfirmed,
