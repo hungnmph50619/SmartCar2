@@ -38,11 +38,13 @@ else
                 line.Method == PaymentMethods.DepositRefund);
             var trafficFineBlocked =
                 hasApprovedDepositRefund && item.HasOutstandingTrafficFine;
-            var hasApprovedCompensationRefund = item.Lines.Any(line =>
+            var hasApprovedUnfundedLegacyCompensationRefund = item.Lines.Any(line =>
                 line.Status == PaymentStatus.RefundApproved &&
-                line.Method == PaymentMethods.CompensationRefund);
+                line.Method == PaymentMethods.CompensationRefund &&
+                !OverdueCompensationLedger.IsFundedRefundCode(line.TransactionCode));
             var compensationFundingBlocked =
-                hasApprovedCompensationRefund && item.HasUnfundedCompensation;
+                hasApprovedUnfundedLegacyCompensationRefund &&
+                item.HasUnfundedCompensation;
             var canTransfer =
                 !bankMissing &&
                 !batchBlocked &&
