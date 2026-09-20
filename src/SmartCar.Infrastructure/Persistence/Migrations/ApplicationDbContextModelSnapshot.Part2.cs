@@ -248,6 +248,10 @@ partial class ApplicationDbContextModelSnapshot
                 b.Property<int>("BookingId")
                     .HasColumnType("int");
 
+                b.Property<string>("LedgerReference")
+                    .HasMaxLength(100)
+                    .HasColumnType("nvarchar(100)");
+
                 b.Property<string>("Method")
                     .IsRequired()
                     .HasMaxLength(50)
