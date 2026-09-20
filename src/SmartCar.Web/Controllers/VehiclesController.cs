@@ -55,6 +55,8 @@ public sealed class VehiclesController : Controller
         ViewBag.Search = model;
 
         var policy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        ViewBag.VehicleTurnaroundMinutes = policy.VehicleTurnaroundMinutes;
+        ViewBag.MinimumPickupLeadMinutes = policy.MinimumPickupLeadMinutes;
         var earliestPickup = DateTime.Now.AddMinutes(policy.MinimumPickupLeadMinutes);
         if (model.PickupDate < earliestPickup)
         {
