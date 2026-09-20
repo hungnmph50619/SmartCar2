@@ -93,7 +93,8 @@ public static class CancellationRefundPolicy
         $"từ {policy.CancellationTier2Hours} giờ: {policy.CancellationTier2RefundPercent:0.##}%; " +
         $"từ {policy.CancellationTier3Hours} giờ: {policy.CancellationTier3RefundPercent:0.##}%; " +
         $"từ {policy.CancellationTier4Hours} giờ: {policy.CancellationTier4RefundPercent:0.##}%; " +
-        $"dưới mốc cuối: {policy.CancellationBelowTierRefundPercent:0.##}%.";
+        $"dưới mốc cuối: {policy.CancellationBelowTierRefundPercent:0.##}%. " +
+        $"Khoản hoàn sau hủy có mục tiêu xử lý trong {policy.CancellationRefundProcessingHours} giờ.";
 
     public static string GetVietnameseDescription(decimal refundRate) => refundRate switch
     {
