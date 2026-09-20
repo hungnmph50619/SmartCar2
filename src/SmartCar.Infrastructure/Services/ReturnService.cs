@@ -538,7 +538,9 @@ internal sealed class ReturnService : IReturnService
         var grossRentalPaid = booking.Payments
             .Where(payment =>
                 payment.Status == PaymentStatus.Paid &&
-                payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
+                payment.Type is PaymentType.Rental
+                    or PaymentType.Extension
+                    or PaymentType.VehicleSwapAdjustment)
             .Sum(payment => payment.Amount);
         var rentalRefundPlanned = booking.Payments
             .Where(payment =>
