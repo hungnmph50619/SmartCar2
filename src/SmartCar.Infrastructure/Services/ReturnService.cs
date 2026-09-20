@@ -473,6 +473,156 @@ internal sealed class ReturnService : IReturnService
         return OperationResult.Success();
     }
 
+    public async Task<OperationResult> FinalizeChargesAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var booking = await ChargeQuery()
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking is null || booking.VehicleReturn is null)
+        {
+            return OperationResult.Failure("Không tìm thấy biên bản trả xe.");
+        }
+
+        if (booking.Status != BookingStatus.PendingInspection)
+        {
+            return OperationResult.Failure("Chỉ đơn đang chờ kiểm tra mới được chốt phụ phí.");
+        }
+
+        if (!AllStaffChecksCompleted(booking))
+        {
+            return OperationResult.Failure(
+                "Phải xác minh đúng người nhận/trả và bản ký giao/trả trước khi chốt phụ phí.");
+        }
+
+        if (booking.AdditionalAmount <= 0m)
+        {
+            return OperationResult.Failure("Đơn không có phụ phí cần chốt.");
+        }
+
+        if (booking.Payments.Any(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid))
+        {
+            return OperationResult.Failure(
+                "Phụ phí đã bắt đầu thanh toán hoặc đã thanh toán nên không thể chốt lại.");
+        }
+
+        var pendingPayments = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Pending)
+            .OrderBy(payment => payment.PaymentId)
+            .ToList();
+
+        var payment = pendingPayments.FirstOrDefault();
+        if (payment is null)
+        {
+            payment = new Payment
+            {
+                BookingId = booking.BookingId,
+                Type = PaymentType.AdditionalCharge
+            };
+            booking.Payments.Add(payment);
+        }
+
+        var now = DateTime.UtcNow;
+        payment.Amount = booking.AdditionalAmount;
+        payment.Method = PaymentMethods.NotSelected;
+        payment.Status = PaymentStatus.Pending;
+        payment.PaidAt = null;
+        payment.TransactionCode =
+            AdditionalChargeSettlementPolicy.CreateReadyMarker(booking.BookingId, now);
+
+        foreach (var duplicate in pendingPayments.Where(item => item != payment))
+        {
+            _dbContext.Payments.Remove(duplicate);
+        }
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "Đã chốt phụ phí sau đối chiếu xe",
+            Message =
+                $"Đơn #{booking.BookingId}: SmartCar đã chốt tổng phụ phí {booking.AdditionalAmount:N0} đồng sau khi đối chiếu biên bản giao - trả. Bạn có thể thanh toán khoản này."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return OperationResult.Success();
+    }
+
+    public async Task<OperationResult> ReopenChargesAsync(
+        int bookingId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var booking = await ChargeQuery()
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking is null || booking.VehicleReturn is null)
+        {
+            return OperationResult.Failure("Không tìm thấy biên bản trả xe.");
+        }
+
+        if (booking.Status != BookingStatus.PendingInspection)
+        {
+            return OperationResult.Failure("Đơn không còn ở bước kiểm tra xe trả.");
+        }
+
+        if (!AllStaffChecksCompleted(booking))
+        {
+            return OperationResult.Failure(
+                "Chưa đủ xác minh giao/trả để mở lại phần phụ phí.");
+        }
+
+        if (booking.Payments.Any(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid))
+        {
+            return OperationResult.Failure(
+                "Phụ phí đã báo chuyển hoặc đã thanh toán nên không thể mở lại để sửa.");
+        }
+
+        var pendingPayments = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Pending)
+            .ToList();
+
+        if (!pendingPayments.Any(payment =>
+                AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)))
+        {
+            return OperationResult.Failure("Phụ phí chưa được chốt nên không cần mở lại.");
+        }
+
+        _dbContext.Payments.RemoveRange(pendingPayments);
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = booking.CustomerId,
+            Title = "SmartCar đang đối chiếu lại phụ phí",
+            Message =
+                $"Đơn #{booking.BookingId}: khoản phụ phí đang được nhân viên kiểm tra lại. Vui lòng chưa thanh toán cho đến khi có thông báo chốt mới."
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return OperationResult.Success();
+    }
+
     public async Task<OperationResult> CompleteAsync(
         int bookingId,
         bool requiresMaintenance,
