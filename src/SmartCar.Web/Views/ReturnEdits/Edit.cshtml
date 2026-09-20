@@ -91,6 +91,7 @@
     <h2 class="h5 mb-2">Ảnh đối chiếu khi trả xe</h2>
     <p class="text-muted mb-3">Có thể xóa ảnh chọn nhầm hoặc thêm ảnh còn thiếu trước khi in và ký biên bản.</p>
     <span asp-validation-for="ImagesToDelete" class="text-danger small d-block"></span>
+    <span asp-validation-for="DamageImages" class="text-danger small d-block"></span>
     <span asp-validation-for="NewImages" class="text-danger small d-block"></span>
     <div id="delete-image-summary" class="alert alert-danger d-none py-2 mb-3">
         <strong>Đã chọn xóa ảnh.</strong>
@@ -108,7 +109,12 @@
             {
                 var imagePath = currentImages[index];
                 var checkboxId = $"delete-return-image-{index}";
-                <div class="col-sm-6 col-lg-3 existing-image-card">
+                var imageFileName = imagePath
+                    .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .LastOrDefault();
+                var isDamageImage = !string.IsNullOrWhiteSpace(imageFileName) &&
+                    imageFileName.StartsWith("damage-", StringComparison.OrdinalIgnoreCase);
+                <div class="col-sm-6 col-lg-3 existing-image-card" data-is-damage="@(isDamageImage ? "true" : "false")">
                     <div class="border rounded-3 p-2 h-100 bg-light position-relative existing-image-box">
                         <button type="button" class="btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center mark-delete-image" style="width:26px;height:26px;padding:0;top:-8px;right:-8px;z-index:2;line-height:1" title="Xóa ảnh này" aria-label="Xóa ảnh trả xe @(index + 1)">&times;</button>
                         <input class="delete-image-check d-none" type="checkbox" name="ImagesToDelete" value="@imagePath" id="@checkboxId" />
@@ -127,16 +133,29 @@
         </div>
     }
 
+    <div id="damage-image-box" class="border border-warning rounded p-3 bg-warning-subtle mb-3 @(Model.HasDamage ? string.Empty : "d-none")">
+        <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap mb-2">
+            <div>
+                <label asp-for="DamageImages" class="form-label fw-semibold mb-1">Ảnh hư hỏng bổ sung</label>
+                <div class="small">Bắt buộc khi đánh dấu “Có hư hỏng mới” mà bộ ảnh giữ lại chưa còn ảnh hư hỏng.</div>
+            </div>
+            <span id="new-damage-image-count" class="badge text-bg-secondary">Chưa chọn ảnh</span>
+        </div>
+        <input asp-for="DamageImages" id="new-damage-images" type="file" class="form-control" multiple accept="@imageAccept" />
+        <div class="form-text">JPG/PNG/WEBP · 5 MB/ảnh. Ảnh này được lưu riêng dưới nhóm chứng cứ hư hỏng.</div>
+        <div id="new-damage-image-preview" class="d-flex flex-wrap gap-2 mt-3"></div>
+    </div>
+
     <div class="border rounded p-3 bg-light">
         <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap mb-2">
             <div>
-                <label asp-for="NewImages" class="form-label fw-semibold mb-1">Thêm ảnh mới</label>
+                <label asp-for="NewImages" class="form-label fw-semibold mb-1">Thêm ảnh đối chiếu khác</label>
                 <div class="text-muted small">Không bắt buộc nếu chỉ sửa thông tin.</div>
             </div>
             <span id="new-return-image-count" class="badge text-bg-secondary">Chưa chọn ảnh</span>
         </div>
         <input asp-for="NewImages" id="new-return-images" type="file" class="form-control" multiple accept="@imageAccept" />
-        <div class="form-text">JPG/PNG/WEBP · tối đa 25 ảnh · 5 MB/ảnh.</div>
+        <div class="form-text">JPG/PNG/WEBP · tổng cộng tối đa 25 ảnh · 5 MB/ảnh.</div>
         <div id="new-return-image-preview" class="d-flex flex-wrap gap-2 mt-3"></div>
     </div>
 
@@ -151,48 +170,362 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
-            const form=document.querySelector('form');
-            const hidden=document.getElementById('returned-at-value');
-            const date=document.getElementById('return-date');
-            const time=document.getElementById('return-time');
-            const fuel=document.getElementById('fuel-level');
-            const accessoryStatus=document.getElementById('return-accessories-status');
-            const missingBox=document.getElementById('missing-accessories-box');
-            const missingInput=document.getElementById('missing-accessories');
-            const imageInput=document.getElementById('new-return-images');
-            const imagePreview=document.getElementById('new-return-image-preview');
-            const imageCount=document.getElementById('new-return-image-count');
-            const imageValidation=form?.querySelector('[data-valmsg-for="NewImages"]');
-            const existingList=document.getElementById('existing-image-list');
-            const deleteSummary=document.getElementById('delete-image-summary');
-            const deleteSummaryText=document.getElementById('delete-image-summary-text');
-            const maximumImageBytes=5*1024*1024;
-            const maximumImages=25;
-            const allowedImageExtensions=['.jpg','.jpeg','.png','.webp'];
-            const allowedImageTypes=['image/jpeg','image/png','image/webp'];
-            let selectedImageFiles=Array.from(imageInput?.files || []);
-            let previewUrls=[];
+            const form = document.querySelector('form');
+            const hidden = document.getElementById('returned-at-value');
+            const date = document.getElementById('return-date');
+            const time = document.getElementById('return-time');
+            const fuel = document.getElementById('fuel-level');
+            const accessoryStatus = document.getElementById('return-accessories-status');
+            const missingBox = document.getElementById('missing-accessories-box');
+            const missingInput = document.getElementById('missing-accessories');
+            const hasDamage = document.getElementById('has-damage');
 
-            function syncDateTime(){ if(!date.value||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time.value)) return false; hidden.value=`${date.value}T${time.value}`; return true; }
-            function selectedDeleteCount(){ return document.querySelectorAll('.delete-image-check:checked').length; }
-            function currentImageCountAfterDelete(){ const currentCount=Number(existingList?.dataset.currentCount || 0); return Math.max(0,currentCount-selectedDeleteCount()); }
-            function updateDeleteSummary(){ const count=selectedDeleteCount(); if(!deleteSummary||!deleteSummaryText) return; if(count>0){ deleteSummary.classList.remove('d-none'); deleteSummaryText.textContent=`Đã chọn xóa ${count} ảnh. Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và quay lại đối chiếu”.`; } else { deleteSummary.classList.add('d-none'); } }
-            function setImageValidationMessage(message,showInline){ if(!imageValidation) return; if(showInline&&message){ imageValidation.textContent=message; imageValidation.classList.remove('field-validation-valid'); imageValidation.classList.add('field-validation-error'); return; } if(!message){ imageValidation.textContent=''; imageValidation.classList.remove('field-validation-error'); imageValidation.classList.add('field-validation-valid'); } }
-            function validateNewImages(showInline=false){ if(!imageInput) return true; let message=''; const total=currentImageCountAfterDelete()+selectedImageFiles.length; if(total>maximumImages) message=`Biên bản chỉ được lưu tối đa ${maximumImages} ảnh đối chiếu.`; if(total===0&&!message) message='Biên bản trả xe phải có ít nhất một ảnh đối chiếu.'; if(!message){ const oversized=selectedImageFiles.find(file=>file.size>maximumImageBytes); if(oversized) message=`Ảnh "${oversized.name}" vượt quá 5 MB.`; } if(!message){ const invalid=selectedImageFiles.find(file=>{ const lower=file.name.toLowerCase(); const extensionValid=allowedImageExtensions.some(ext=>lower.endsWith(ext)); const typeValid=!file.type||allowedImageTypes.includes(file.type.toLowerCase()); return !extensionValid||!typeValid; }); if(invalid) message=`Ảnh "${invalid.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`; } imageInput.setCustomValidity(message); setImageValidationMessage(message,showInline); return message===''; }
-            function clearPreviewUrls(){ previewUrls.forEach(url=>URL.revokeObjectURL(url)); previewUrls=[]; }
-            function syncImageInputFiles(){ if(!imageInput) return; const transfer=new DataTransfer(); selectedImageFiles.forEach(file=>transfer.items.add(file)); imageInput.files=transfer.files; }
-            function removeNewImage(index){ selectedImageFiles.splice(index,1); syncImageInputFiles(); renderImagePreview(); validateNewImages(true); }
-            function renderImagePreview(){ if(!imageInput||!imagePreview||!imageCount) return; clearPreviewUrls(); imagePreview.innerHTML=''; imageCount.textContent=selectedImageFiles.length>0?`Đã chọn ${selectedImageFiles.length} ảnh mới`:'Chưa chọn ảnh'; imageCount.className=`badge ${selectedImageFiles.length>0?'text-bg-success':'text-bg-secondary'}`; selectedImageFiles.forEach((file,index)=>{ const url=URL.createObjectURL(file); previewUrls.push(url); const wrapper=document.createElement('div'); wrapper.className='border rounded bg-white p-1 position-relative'; wrapper.style.width='116px'; const removeButton=document.createElement('button'); removeButton.type='button'; removeButton.className='btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center'; removeButton.style.width='24px'; removeButton.style.height='24px'; removeButton.style.padding='0'; removeButton.style.top='-7px'; removeButton.style.right='-7px'; removeButton.style.zIndex='2'; removeButton.style.lineHeight='1'; removeButton.innerHTML='&times;'; removeButton.title='Xóa ảnh này'; removeButton.addEventListener('click',()=>removeNewImage(index)); const image=document.createElement('img'); image.src=url; image.alt=file.name; image.className='rounded border bg-light'; image.style.width='106px'; image.style.height='82px'; image.style.objectFit='cover'; const caption=document.createElement('div'); caption.className='small text-muted text-truncate mt-1'; caption.title=file.name; caption.textContent=file.name; wrapper.append(removeButton,image,caption); imagePreview.appendChild(wrapper); }); }
-            function syncAccessories(){ if(accessoryStatus.value==='Thiếu'){ missingBox.classList.remove('d-none'); missingInput?.setAttribute('required','required'); } else { missingBox.classList.add('d-none'); missingInput?.removeAttribute('required'); if(missingInput) missingInput.value=''; } }
-            document.querySelectorAll('.mark-delete-image').forEach(button=>button.addEventListener('click',()=>{ const card=button.closest('.existing-image-card'); const box=card?.querySelector('.existing-image-box'); const check=card?.querySelector('.delete-image-check'); const note=card?.querySelector('.delete-image-note'); const img=card?.querySelector('.existing-image-thumb'); const link=card?.querySelector('.existing-image-link'); const title=card?.querySelector('.image-title'); if(check) check.checked=true; if(note) note.classList.remove('d-none'); if(box){ box.classList.remove('bg-light'); box.classList.add('border-danger','bg-danger-subtle','shadow-sm'); } if(img){ img.classList.add('opacity-50'); img.style.filter='grayscale(1)'; } if(link) link.classList.add('pe-none'); if(title){ title.textContent='Ảnh đã chọn xóa'; title.classList.remove('text-muted'); title.classList.add('text-danger','fw-semibold'); } button.classList.add('d-none'); updateDeleteSummary(); validateNewImages(true); }));
-            document.querySelectorAll('.undo-delete-image').forEach(button=>button.addEventListener('click',()=>{ const card=button.closest('.existing-image-card'); const box=card?.querySelector('.existing-image-box'); const check=card?.querySelector('.delete-image-check'); const note=card?.querySelector('.delete-image-note'); const img=card?.querySelector('.existing-image-thumb'); const link=card?.querySelector('.existing-image-link'); const title=card?.querySelector('.image-title'); const deleteButton=card?.querySelector('.mark-delete-image'); if(check) check.checked=false; if(note) note.classList.add('d-none'); if(box){ box.classList.add('bg-light'); box.classList.remove('border-danger','bg-danger-subtle','shadow-sm'); } if(img){ img.classList.remove('opacity-50'); img.style.filter=''; } if(link) link.classList.remove('pe-none'); if(title){ const index=Array.from(document.querySelectorAll('.existing-image-card')).indexOf(card); title.textContent=`Ảnh ${index+1}`; title.classList.add('text-muted'); title.classList.remove('text-danger','fw-semibold'); } if(deleteButton) deleteButton.classList.remove('d-none'); updateDeleteSummary(); validateNewImages(true); }));
-            fuel.addEventListener('input',()=>{ fuel.value=fuel.value.replace(/[^0-9]/g,'').slice(0,3); if(Number(fuel.value)>100) fuel.value='100'; });
-            imageInput?.addEventListener('change',()=>{ selectedImageFiles=Array.from(imageInput.files || []); renderImagePreview(); validateNewImages(true); });
-            accessoryStatus?.addEventListener('change',syncAccessories);
-            form.addEventListener('submit',event=>{ let valid=true; if(!syncDateTime()){ time.setCustomValidity('Giờ phải theo định dạng HH:mm, ví dụ 14:30.'); time.reportValidity(); valid=false; } if(!validateNewImages(true)){ imageInput?.reportValidity(); valid=false; } if(!valid) event.preventDefault(); });
-            date.addEventListener('change',syncDateTime);
-            time.addEventListener('input',()=>{ time.setCustomValidity(''); syncDateTime(); });
-            syncAccessories(); renderImagePreview(); updateDeleteSummary(); syncDateTime();
+            const damageBox = document.getElementById('damage-image-box');
+            const damageInput = document.getElementById('new-damage-images');
+            const damagePreview = document.getElementById('new-damage-image-preview');
+            const damageCount = document.getElementById('new-damage-image-count');
+            const damageValidation = form?.querySelector('[data-valmsg-for="DamageImages"]');
+
+            const imageInput = document.getElementById('new-return-images');
+            const imagePreview = document.getElementById('new-return-image-preview');
+            const imageCount = document.getElementById('new-return-image-count');
+            const imageValidation = form?.querySelector('[data-valmsg-for="NewImages"]');
+
+            const existingList = document.getElementById('existing-image-list');
+            const deleteSummary = document.getElementById('delete-image-summary');
+            const deleteSummaryText = document.getElementById('delete-image-summary-text');
+
+            const minimumImages = 7;
+            const maximumImages = 25;
+            const maximumImageBytes = 5 * 1024 * 1024;
+            const allowedImageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+            const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+            let selectedDamageFiles = Array.from(damageInput?.files || []);
+            let selectedImageFiles = Array.from(imageInput?.files || []);
+            let damagePreviewUrls = [];
+            let imagePreviewUrls = [];
+
+            function syncDateTime() {
+                if (!date?.value || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time?.value || '')) {
+                    return false;
+                }
+                hidden.value = `${date.value}T${time.value}`;
+                return true;
+            }
+
+            function selectedDeleteCount() {
+                return document.querySelectorAll('.delete-image-check:checked').length;
+            }
+
+            function currentImageCountAfterDelete() {
+                const currentCount = Number(existingList?.dataset.currentCount || 0);
+                return Math.max(0, currentCount - selectedDeleteCount());
+            }
+
+            function currentDamageCountAfterDelete() {
+                return Array.from(document.querySelectorAll('.existing-image-card[data-is-damage="true"]'))
+                    .filter(card => !card.querySelector('.delete-image-check')?.checked)
+                    .length;
+            }
+
+            function updateDeleteSummary() {
+                const count = selectedDeleteCount();
+                if (!deleteSummary || !deleteSummaryText) return;
+                if (count > 0) {
+                    deleteSummary.classList.remove('d-none');
+                    deleteSummaryText.textContent =
+                        `Đã chọn xóa ${count} ảnh. Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và quay lại đối chiếu”.`;
+                } else {
+                    deleteSummary.classList.add('d-none');
+                }
+            }
+
+            function setValidationMessage(element, message, showInline) {
+                if (!element) return;
+                if (showInline && message) {
+                    element.textContent = message;
+                    element.classList.remove('field-validation-valid');
+                    element.classList.add('field-validation-error');
+                } else if (!message) {
+                    element.textContent = '';
+                    element.classList.remove('field-validation-error');
+                    element.classList.add('field-validation-valid');
+                }
+            }
+
+            function fileValidationMessage(files) {
+                const oversized = files.find(file => file.size > maximumImageBytes);
+                if (oversized) return `Ảnh "${oversized.name}" vượt quá 5 MB.`;
+
+                const invalid = files.find(file => {
+                    const lower = file.name.toLowerCase();
+                    const extensionValid = allowedImageExtensions.some(ext => lower.endsWith(ext));
+                    const typeValid = !file.type || allowedImageTypes.includes(file.type.toLowerCase());
+                    return !extensionValid || !typeValid;
+                });
+                return invalid
+                    ? `Ảnh "${invalid.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`
+                    : '';
+            }
+
+            function validateImages(showInline = false) {
+                const allNewFiles = [...selectedDamageFiles, ...selectedImageFiles];
+                const total = currentImageCountAfterDelete() + allNewFiles.length;
+
+                let commonMessage = '';
+                if (total < minimumImages) {
+                    commonMessage = `Biên bản trả xe phải giữ tối thiểu ${minimumImages} ảnh đối chiếu.`;
+                } else if (total > maximumImages) {
+                    commonMessage = `Biên bản chỉ được lưu tối đa ${maximumImages} ảnh đối chiếu.`;
+                } else {
+                    commonMessage = fileValidationMessage(allNewFiles);
+                }
+
+                let damageMessage = '';
+                if (hasDamage?.checked &&
+                    currentDamageCountAfterDelete() + selectedDamageFiles.length === 0) {
+                    damageMessage =
+                        'Đã đánh dấu hư hỏng thì bộ ảnh cuối cùng phải có ít nhất một ảnh hư hỏng.';
+                }
+
+                imageInput?.setCustomValidity(commonMessage);
+                damageInput?.setCustomValidity(damageMessage || commonMessage);
+                setValidationMessage(imageValidation, commonMessage, showInline);
+                setValidationMessage(damageValidation, damageMessage, showInline);
+
+                return !commonMessage && !damageMessage;
+            }
+
+            function syncInputFiles(input, files) {
+                if (!input) return;
+                const transfer = new DataTransfer();
+                files.forEach(file => transfer.items.add(file));
+                input.files = transfer.files;
+            }
+
+            function clearPreviewUrls(urls) {
+                urls.forEach(url => URL.revokeObjectURL(url));
+                urls.length = 0;
+            }
+
+            function renderPreview(files, preview, count, urls, removeFile) {
+                if (!preview || !count) return;
+                clearPreviewUrls(urls);
+                preview.innerHTML = '';
+                count.textContent = files.length > 0 ? `Đã chọn ${files.length} ảnh` : 'Chưa chọn ảnh';
+                count.className = `badge ${files.length > 0 ? 'text-bg-success' : 'text-bg-secondary'}`;
+
+                files.forEach((file, index) => {
+                    const url = URL.createObjectURL(file);
+                    urls.push(url);
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'border rounded bg-white p-1 position-relative';
+                    wrapper.style.width = '116px';
+
+                    const removeButton = document.createElement('button');
+                    removeButton.type = 'button';
+                    removeButton.className =
+                        'btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center';
+                    removeButton.style.width = '24px';
+                    removeButton.style.height = '24px';
+                    removeButton.style.padding = '0';
+                    removeButton.style.top = '-7px';
+                    removeButton.style.right = '-7px';
+                    removeButton.style.zIndex = '2';
+                    removeButton.style.lineHeight = '1';
+                    removeButton.innerHTML = '&times;';
+                    removeButton.title = 'Xóa ảnh này';
+                    removeButton.addEventListener('click', () => removeFile(index));
+
+                    const image = document.createElement('img');
+                    image.src = url;
+                    image.alt = file.name;
+                    image.className = 'rounded border bg-light';
+                    image.style.width = '106px';
+                    image.style.height = '82px';
+                    image.style.objectFit = 'cover';
+
+                    const caption = document.createElement('div');
+                    caption.className = 'small text-muted text-truncate mt-1';
+                    caption.title = file.name;
+                    caption.textContent = file.name;
+
+                    wrapper.append(removeButton, image, caption);
+                    preview.appendChild(wrapper);
+                });
+            }
+
+            function renderDamagePreview() {
+                renderPreview(
+                    selectedDamageFiles,
+                    damagePreview,
+                    damageCount,
+                    damagePreviewUrls,
+                    index => {
+                        selectedDamageFiles.splice(index, 1);
+                        syncInputFiles(damageInput, selectedDamageFiles);
+                        renderDamagePreview();
+                        validateImages(true);
+                    });
+            }
+
+            function renderImagePreview() {
+                renderPreview(
+                    selectedImageFiles,
+                    imagePreview,
+                    imageCount,
+                    imagePreviewUrls,
+                    index => {
+                        selectedImageFiles.splice(index, 1);
+                        syncInputFiles(imageInput, selectedImageFiles);
+                        renderImagePreview();
+                        validateImages(true);
+                    });
+            }
+
+            function syncAccessories() {
+                if (accessoryStatus?.value === 'Thiếu') {
+                    missingBox?.classList.remove('d-none');
+                    missingInput?.setAttribute('required', 'required');
+                } else {
+                    missingBox?.classList.add('d-none');
+                    missingInput?.removeAttribute('required');
+                    if (missingInput) missingInput.value = '';
+                }
+            }
+
+            function syncDamageBox() {
+                if (hasDamage?.checked) {
+                    damageBox?.classList.remove('d-none');
+                } else {
+                    damageBox?.classList.add('d-none');
+                    selectedDamageFiles = [];
+                    syncInputFiles(damageInput, selectedDamageFiles);
+                    renderDamagePreview();
+                }
+                validateImages(true);
+            }
+
+            document.querySelectorAll('.mark-delete-image').forEach(button =>
+                button.addEventListener('click', () => {
+                    const card = button.closest('.existing-image-card');
+                    const box = card?.querySelector('.existing-image-box');
+                    const check = card?.querySelector('.delete-image-check');
+                    const note = card?.querySelector('.delete-image-note');
+                    const img = card?.querySelector('.existing-image-thumb');
+                    const link = card?.querySelector('.existing-image-link');
+                    const title = card?.querySelector('.image-title');
+
+                    if (check) check.checked = true;
+                    note?.classList.remove('d-none');
+                    if (box) {
+                        box.classList.remove('bg-light');
+                        box.classList.add('border-danger', 'bg-danger-subtle', 'shadow-sm');
+                    }
+                    if (img) {
+                        img.classList.add('opacity-50');
+                        img.style.filter = 'grayscale(1)';
+                    }
+                    link?.classList.add('pe-none');
+                    if (title) {
+                        title.textContent = 'Ảnh đã chọn xóa';
+                        title.classList.remove('text-muted');
+                        title.classList.add('text-danger', 'fw-semibold');
+                    }
+                    button.classList.add('d-none');
+                    updateDeleteSummary();
+                    validateImages(true);
+                }));
+
+            document.querySelectorAll('.undo-delete-image').forEach(button =>
+                button.addEventListener('click', () => {
+                    const card = button.closest('.existing-image-card');
+                    const box = card?.querySelector('.existing-image-box');
+                    const check = card?.querySelector('.delete-image-check');
+                    const note = card?.querySelector('.delete-image-note');
+                    const img = card?.querySelector('.existing-image-thumb');
+                    const link = card?.querySelector('.existing-image-link');
+                    const title = card?.querySelector('.image-title');
+                    const deleteButton = card?.querySelector('.mark-delete-image');
+
+                    if (check) check.checked = false;
+                    note?.classList.add('d-none');
+                    if (box) {
+                        box.classList.add('bg-light');
+                        box.classList.remove('border-danger', 'bg-danger-subtle', 'shadow-sm');
+                    }
+                    if (img) {
+                        img.classList.remove('opacity-50');
+                        img.style.filter = '';
+                    }
+                    link?.classList.remove('pe-none');
+                    if (title) {
+                        const index = Array.from(document.querySelectorAll('.existing-image-card')).indexOf(card);
+                        title.textContent = `Ảnh ${index + 1}`;
+                        title.classList.add('text-muted');
+                        title.classList.remove('text-danger', 'fw-semibold');
+                    }
+                    deleteButton?.classList.remove('d-none');
+                    updateDeleteSummary();
+                    validateImages(true);
+                }));
+
+            fuel?.addEventListener('input', () => {
+                fuel.value = fuel.value.replace(/[^0-9]/g, '').slice(0, 3);
+                if (Number(fuel.value) > 100) fuel.value = '100';
+            });
+
+            damageInput?.addEventListener('change', () => {
+                selectedDamageFiles = Array.from(damageInput.files || []);
+                renderDamagePreview();
+                validateImages(true);
+            });
+
+            imageInput?.addEventListener('change', () => {
+                selectedImageFiles = Array.from(imageInput.files || []);
+                renderImagePreview();
+                validateImages(true);
+            });
+
+            hasDamage?.addEventListener('change', syncDamageBox);
+            accessoryStatus?.addEventListener('change', syncAccessories);
+
+            form?.addEventListener('submit', event => {
+                let valid = true;
+
+                if (!syncDateTime()) {
+                    time?.setCustomValidity('Giờ phải theo định dạng HH:mm, ví dụ 14:30.');
+                    time?.reportValidity();
+                    valid = false;
+                }
+
+                if (!validateImages(true)) {
+                    if (damageInput?.validationMessage) {
+                        damageInput.reportValidity();
+                    } else {
+                        imageInput?.reportValidity();
+                    }
+                    valid = false;
+                }
+
+                if (!valid) event.preventDefault();
+            });
+
+            date?.addEventListener('change', syncDateTime);
+            time?.addEventListener('input', () => {
+                time.setCustomValidity('');
+                syncDateTime();
+            });
+
+            syncAccessories();
+            renderDamagePreview();
+            renderImagePreview();
+            updateDeleteSummary();
+            syncDateTime();
+            if (hasDamage?.checked) damageBox?.classList.remove('d-none');
+            validateImages(false);
         })();
     </script>
 }
