@@ -6,6 +6,10 @@
     var editing = ViewData["EditingGroup"] as string;
     var conflict = ViewData["PolicyConflict"] as bool? ?? false;
     var vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+    string FriendlyHours(int hours) =>
+        hours % 24 == 0
+            ? $"{hours / 24} ngày"
+            : $"{hours} giờ";
 }
 
 @section Styles {
@@ -540,31 +544,41 @@
                     </button>
                 </div>
 
-                <div class="policy-metrics policy-metrics-three">
-                    <div class="policy-metric">
-                        <span class="policy-metric-label">Hủy sau thanh toán</span>
-                        <strong class="policy-metric-value">≤ @current.FreeCancellationWindowMinutes.ToString("N0", vi) phút</strong>
-                    </div>
-                    <div class="policy-metric">
-                        <span class="policy-metric-label">Còn trước giờ nhận</span>
-                        <strong class="policy-metric-value">≥ @current.MinimumHoursForFreeCancellation.ToString("N0", vi) giờ</strong>
-                    </div>
-                    <div class="policy-metric">
-                        <span class="policy-metric-label">Nếu đủ 2 điều kiện</span>
-                        <strong class="policy-metric-value">Hoàn 100%</strong>
+                <div class="policy-refund-primary">
+                    <div class="policy-refund-primary-title">Hoàn 100% khi đủ 2 điều kiện</div>
+                    <div class="policy-refund-primary-rule">
+                        <span>Hủy trong <strong>@current.FreeCancellationWindowMinutes phút</strong> sau thanh toán</span>
+                        <span class="policy-rule-plus">+</span>
+                        <span>Còn ít nhất <strong>@FriendlyHours(current.MinimumHoursForFreeCancellation)</strong> trước giờ nhận</span>
                     </div>
                 </div>
 
-                <div class="policy-refund-summary">
-                    <span>≥ @current.CancellationTier1Hours giờ: <strong>@current.CancellationTier1RefundPercent.ToString("0.##", vi)%</strong></span>
-                    <span>≥ @current.CancellationTier2Hours giờ: <strong>@current.CancellationTier2RefundPercent.ToString("0.##", vi)%</strong></span>
-                    <span>≥ @current.CancellationTier3Hours giờ: <strong>@current.CancellationTier3RefundPercent.ToString("0.##", vi)%</strong></span>
-                    <span>≥ @current.CancellationTier4Hours giờ: <strong>@current.CancellationTier4RefundPercent.ToString("0.##", vi)%</strong></span>
-                    <span>&lt; @current.CancellationTier4Hours giờ: <strong>@current.CancellationBelowTierRefundPercent.ToString("0.##", vi)%</strong></span>
+                <div class="policy-refund-cases">
+                    <div class="policy-refund-case">
+                        <span>Còn từ @FriendlyHours(current.CancellationTier1Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationTier1RefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-refund-case">
+                        <span>Còn từ @FriendlyHours(current.CancellationTier2Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationTier2RefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-refund-case">
+                        <span>Còn từ @FriendlyHours(current.CancellationTier3Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationTier3RefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-refund-case">
+                        <span>Còn từ @FriendlyHours(current.CancellationTier4Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationTier4RefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-refund-case policy-refund-case-last">
+                        <span>Còn dưới @FriendlyHours(current.CancellationTier4Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationBelowTierRefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
                 </div>
+
                 <p class="policy-helper">
                     <span class="policy-helper-icon" aria-hidden="true">i</span>
-                    <span>Nếu không đủ điều kiện hoàn 100%, hệ thống chọn mức theo thời gian còn lại trước giờ nhận. Hoàn tiền mục tiêu trong @current.CancellationRefundProcessingHours giờ sau khi hủy.</span>
+                    <span>Nếu không đủ điều kiện hoàn 100%, dùng mức theo thời gian còn lại. Khoản hoàn được xử lý mục tiêu trong @current.CancellationRefundProcessingHours giờ.</span>
                 </p>
             </div>
 
@@ -582,10 +596,10 @@
                     <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
                 }
 
-                <div class="policy-form-section-title">Hoàn 100% khi đủ cả 2 điều kiện</div>
+                <div class="policy-form-section-title">Điều kiện để hoàn 100%</div>
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <label asp-for="FreeCancellationWindowMinutes" class="form-label">1. Hủy không quá</label>
+                        <label asp-for="FreeCancellationWindowMinutes" class="form-label">Hủy trong vòng sau thanh toán</label>
                         <div class="input-group">
                             <input asp-for="FreeCancellationWindowMinutes" type="number" min="0" max="1440" step="1" required
                                    class="form-control" data-policy-input data-label="Cửa sổ hủy miễn phí" data-unit="phút"
@@ -595,7 +609,7 @@
                         <span asp-validation-for="FreeCancellationWindowMinutes" class="text-danger small"></span>
                     </div>
                     <div class="col-md-4">
-                        <label asp-for="MinimumHoursForFreeCancellation" class="form-label">2. Còn ít nhất trước giờ nhận</label>
+                        <label asp-for="MinimumHoursForFreeCancellation" class="form-label">Còn ít nhất trước giờ nhận</label>
                         <div class="input-group">
                             <input asp-for="MinimumHoursForFreeCancellation" type="number" min="0" max="336" step="1" required
                                    class="form-control" data-policy-input data-label="Còn tối thiểu để hoàn 100%" data-unit="giờ"
@@ -605,7 +619,7 @@
                         <span asp-validation-for="MinimumHoursForFreeCancellation" class="text-danger small"></span>
                     </div>
                     <div class="col-md-4">
-                        <label asp-for="CancellationRefundProcessingHours" class="form-label">Mục tiêu xử lý hoàn</label>
+                        <label asp-for="CancellationRefundProcessingHours" class="form-label">Hoàn tiền trong vòng</label>
                         <div class="input-group">
                             <input asp-for="CancellationRefundProcessingHours" type="number" min="1" max="168" step="1" required
                                    class="form-control" data-policy-input data-label="Xử lý hoàn tiền sau hủy" data-unit="giờ"
@@ -617,9 +631,9 @@
                 </div>
 
                 <div class="policy-rule-example">
-                    Ví dụ: hủy trong @current.FreeCancellationWindowMinutes phút sau thanh toán và còn ≥ @current.MinimumHoursForFreeCancellation giờ trước nhận → hoàn 100%.
+                    Khách phải thỏa cả 2 điều kiện trên để được hoàn 100%.
                 </div>
-                <div class="policy-form-section-title mt-3">Nếu không đủ điều kiện hoàn 100%</div>
+                <div class="policy-form-section-title mt-3">Nếu không đủ điều kiện trên</div>
                 <div class="policy-tier-grid">
                     <div class="policy-tier-row">
                         <span class="policy-tier-name">Còn từ</span>
