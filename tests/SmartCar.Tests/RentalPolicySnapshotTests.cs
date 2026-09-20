@@ -73,6 +73,48 @@ public sealed class RentalPolicySnapshotTests
     }
 
     [Fact]
+    public void LegacyJsonWithoutWorkflowFieldsKeepsPreviousDefaults()
+    {
+        var policy = RentalPolicySnapshot.FromJson("""{"Version":"old","DepositPercent":300}""");
+
+        Assert.Equal(RentalPolicy.BookingConfirmationHoldMinutes, policy.BookingConfirmationHoldMinutes);
+        Assert.Equal(RentalPolicy.BookingPaymentHoldMinutes, policy.BookingPaymentHoldMinutes);
+        Assert.Equal(RentalPolicy.BookingTransferReconciliationHoldMinutes, policy.BookingTransferReconciliationHoldMinutes);
+        Assert.Equal(RentalPolicy.VehicleTurnaroundMinutes, policy.VehicleTurnaroundMinutes);
+        Assert.Equal(RentalPolicy.DeliveryLeadMinutes, policy.DeliveryLeadMinutes);
+        Assert.Equal(RentalPolicy.NoShowGraceMinutes, policy.NoShowGraceMinutes);
+        Assert.Equal(RentalPolicy.NoShowFeeRate * 100m, policy.NoShowFeePercent);
+        Assert.Equal(24, policy.CancellationRefundProcessingHours);
+    }
+
+    [Fact]
+    public void WorkflowSettingsRoundTripInsideBookingSnapshot()
+    {
+        var configured = new RentalPolicySnapshot
+        {
+            BookingPaymentHoldMinutes = 45,
+            BookingTransferReconciliationHoldMinutes = 180,
+            VehicleTurnaroundMinutes = 90,
+            DeliveryLeadMinutes = 45,
+            NoShowGraceMinutes = 40,
+            NoShowFeePercent = 75,
+            FreeCancellationWindowMinutes = 90,
+            CancellationRefundProcessingHours = 36
+        };
+
+        var restored = RentalPolicySnapshot.FromJson(configured.ToJson());
+
+        Assert.Equal(45, restored.BookingPaymentHoldMinutes);
+        Assert.Equal(180, restored.BookingTransferReconciliationHoldMinutes);
+        Assert.Equal(90, restored.VehicleTurnaroundMinutes);
+        Assert.Equal(45, restored.DeliveryLeadMinutes);
+        Assert.Equal(40, restored.NoShowGraceMinutes);
+        Assert.Equal(75m, restored.NoShowFeePercent);
+        Assert.Equal(90, restored.FreeCancellationWindowMinutes);
+        Assert.Equal(36, restored.CancellationRefundProcessingHours);
+    }
+
+    [Fact]
     public void InvalidConfigurationIsRejected()
     {
         static bool Valid(RentalPolicySnapshot p) => Validator.TryValidateObject(p, new ValidationContext(p), new List<ValidationResult>(), true);
@@ -84,5 +126,12 @@ public sealed class RentalPolicySnapshotTests
         Assert.False(Valid(new RentalPolicySnapshot { BaseDeliveryFee = 0.1m }));
         Assert.False(Valid(new RentalPolicySnapshot { TrafficFineTerms = " " }));
         Assert.False(Valid(new RentalPolicySnapshot { DamageCompensationTerms = new string('x', 1501) }));
+        Assert.False(Valid(new RentalPolicySnapshot { CancellationRefundProcessingHours = 0 }));
+        Assert.False(Valid(new RentalPolicySnapshot { CancellationTier1Hours = 48, CancellationTier2Hours = 72 }));
+        Assert.False(Valid(new RentalPolicySnapshot
+        {
+            CancellationTier1RefundPercent = 50,
+            CancellationTier2RefundPercent = 70
+        }));
     }
 }
