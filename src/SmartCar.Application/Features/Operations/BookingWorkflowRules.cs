@@ -71,6 +71,21 @@ public static class BookingWorkflowRules
     public static bool IsReturnSurchargePaymentType(PaymentType type) =>
         type == PaymentType.AdditionalCharge;
 
+    public static bool BlocksNewRentalForOutstandingCustomerObligation(
+        PaymentType type,
+        PaymentStatus status,
+        decimal amount) =>
+        amount > 0m &&
+        (
+            (type == PaymentType.TrafficFine &&
+             status is PaymentStatus.Pending or
+                 PaymentStatus.AwaitingConfirmation or
+                 PaymentStatus.Failed) ||
+            (type == PaymentType.OverdueCompensationDebt &&
+             status is PaymentStatus.Pending or
+                 PaymentStatus.AwaitingConfirmation)
+        );
+
     public static bool IsOutstandingTrafficFine(
         PaymentType type,
         PaymentStatus status,
