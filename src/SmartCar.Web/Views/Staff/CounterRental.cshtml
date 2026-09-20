@@ -50,7 +50,7 @@
             <div class="staff-step h-100">
                 <span class="staff-step-number">3</span>
                 <div class="fw-bold">Tìm xe khả dụng</div>
-                <div class="small text-muted">Có xét lịch trùng, buffer @RentalPolicy.VehicleTurnaroundMinutes phút, tình trạng và giấy tờ xe.</div>
+                <div class="small text-muted">Có xét lịch trùng, buffer @policy.VehicleTurnaroundMinutes phút, tình trạng và giấy tờ xe.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
@@ -134,7 +134,7 @@
                         </div>
                         <div class="text-md-end">
                             <div class="small text-muted">Buffer vận hành</div>
-                            <strong>≥ @RentalPolicy.VehicleTurnaroundMinutes phút giữa hai chuyến</strong>
+                            <strong>≥ @policy.VehicleTurnaroundMinutes phút giữa hai chuyến</strong>
                         </div>
                     </div>
                 </div>
@@ -304,7 +304,7 @@
             };
 
             const minimumPickupDate = () => {
-                const threshold = Date.now() + @BookingDateRules.MinimumPickupLeadMinutes * 60000;
+                const threshold = Date.now() + @policy.MinimumPickupLeadMinutes * 60000;
                 return new Date(Math.ceil(threshold / 60000) * 60000);
             };
 
@@ -325,7 +325,7 @@
                 if (pickup.value) {
                     const selectedPickup = new Date(pickup.value);
                     if (!Number.isFinite(selectedPickup.valueOf()) || selectedPickup < minimumPickup) {
-                        pickup.setCustomValidity(`Thời gian nhận phải cách hiện tại ít nhất @BookingDateRules.MinimumPickupLeadMinutes phút.`);
+                        pickup.setCustomValidity(`Thời gian nhận phải cách hiện tại ít nhất @policy.MinimumPickupLeadMinutes phút.`);
                     }
                 }
 
