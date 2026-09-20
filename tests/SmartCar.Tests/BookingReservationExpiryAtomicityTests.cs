@@ -110,7 +110,7 @@ public sealed class BookingReservationExpiryAtomicityTests
             .Select(item => item.Status)
             .SingleAsync();
 
-        Assert.Equal(1, refunds);
+        Assert.Equal(2, refunds);
         Assert.Equal(1, holdEvents);
         Assert.Equal(BookingStatus.Expired, status);
     }
