@@ -23,6 +23,8 @@ public sealed class ReturnInspectionViewModel
 
     public bool AdditionalChargeAwaitingConfirmation { get; init; }
 
+    public bool AdditionalChargeFinalized { get; init; }
+
     public PaymentStatus? RefundStatus { get; init; }
 
     public decimal RefundAmount { get; init; }
