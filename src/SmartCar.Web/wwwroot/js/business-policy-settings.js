@@ -10,6 +10,24 @@
 
     const inputs = card => Array.from(card.querySelectorAll('[data-policy-input]'));
 
+    const isIntegerInput = input =>
+        input.type === 'number' &&
+        input.step !== '' &&
+        input.step !== 'any' &&
+        Number(input.step) === 1;
+
+    const normalizeIntegerDisplay = input => {
+        if (!isIntegerInput(input)) return;
+
+        const raw = input.value.trim();
+        if (raw === '') return;
+
+        const value = Number(raw.replace(',', '.'));
+        if (Number.isFinite(value) && Number.isInteger(value)) {
+            input.value = String(value);
+        }
+    };
+
     const normalizeText = value => (value ?? '').replace(/\r\n/g, '\n');
 
     const changed = input => input.type === 'number'
@@ -263,6 +281,11 @@
         render(card);
     };
 
+    const showIntegerOnly = (card, input) => {
+        transientErrors.set(input, 'Chỉ được nhập số nguyên.');
+        render(card);
+    };
+
     const restoreAcceptedNumber = input => {
         input.value = acceptedNumberValues.get(input) ?? input.dataset.current ?? '';
     };
@@ -304,12 +327,20 @@
 
         inputs(card).forEach(input => {
             if (input.type === 'number') {
+                normalizeIntegerDisplay(input);
                 acceptedNumberValues.set(input, input.value);
 
                 input.addEventListener('keydown', event => {
                     if (event.key === '-' || event.key === 'Subtract') {
                         event.preventDefault();
                         showBlockedNegative(card, input);
+                        return;
+                    }
+
+                    if (isIntegerInput(input) &&
+                        (event.key === '.' || event.key === ',' || event.key === 'Decimal')) {
+                        event.preventDefault();
+                        showIntegerOnly(card, input);
                     }
                 });
 
@@ -317,6 +348,13 @@
                     if (event.data === '-') {
                         event.preventDefault();
                         showBlockedNegative(card, input);
+                        return;
+                    }
+
+                    if (isIntegerInput(input) &&
+                        (event.data === '.' || event.data === ',')) {
+                        event.preventDefault();
+                        showIntegerOnly(card, input);
                     }
                 });
 
@@ -329,6 +367,13 @@
                     if (normalized.startsWith('-') || pastedValue < 0) {
                         event.preventDefault();
                         showBlockedNegative(card, input);
+                        return;
+                    }
+
+                    if (isIntegerInput(input) &&
+                        (/[.,]/.test(pasted) || (Number.isFinite(pastedValue) && !Number.isInteger(pastedValue)))) {
+                        event.preventDefault();
+                        showIntegerOnly(card, input);
                         return;
                     }
 
@@ -364,6 +409,16 @@
                         return;
                     }
 
+                    if (raw !== '' &&
+                        isIntegerInput(input) &&
+                        Number.isFinite(value) &&
+                        !Number.isInteger(value)) {
+                        restoreAcceptedNumber(input);
+                        showIntegerOnly(card, input);
+                        return;
+                    }
+
+                    normalizeIntegerDisplay(input);
                     acceptedNumberValues.set(input, input.value);
                 }
 
