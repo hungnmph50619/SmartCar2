@@ -51,6 +51,8 @@ public sealed class TripRecordViewModel
     public BookingDetailsDto Booking { get; init; } = null!;
     public HandoverDocumentViewModel Handover { get; init; } = null!;
     public ReturnDocumentViewModel Return { get; init; } = null!;
+    public IReadOnlyList<OverdueSettlementViewModel> OverdueSettlements { get; init; }
+        = Array.Empty<OverdueSettlementViewModel>();
 
     public int DrivenKilometers => Math.Max(0, Return.Mileage - Handover.Mileage);
 
@@ -58,3 +60,11 @@ public sealed class TripRecordViewModel
     public bool HasSignedReturn => Return.SignedDocumentPaths.Count > 0 || !string.IsNullOrWhiteSpace(Return.SignedDocumentPath);
     public bool IsClosed => Booking.Status == SmartCar.Domain.Enums.BookingStatus.Completed;
 }
+
+
+public sealed record OverdueSettlementViewModel(
+    int AffectedBookingId,
+    decimal DepositDeductedAmount,
+    decimal DebtAmount,
+    decimal DebtPaidAmount,
+    decimal DebtOpenAmount);
