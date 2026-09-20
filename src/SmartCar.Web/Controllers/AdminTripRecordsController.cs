@@ -99,6 +99,7 @@ public sealed class AdminTripRecordsController : Controller
                 RecordedAt = records.VehicleReturn.ReturnedAt,
                 Mileage = records.VehicleReturn.Mileage,
                 FuelLevel = records.VehicleReturn.FuelLevel,
+                Accessories = records.VehicleReturn.AccessoryStatus,
                 HasDamage = records.VehicleReturn.HasDamage,
                 IsLateReturn = records.VehicleReturn.IsLateReturn,
                 LateMinutes = records.VehicleReturn.LateMinutes,
