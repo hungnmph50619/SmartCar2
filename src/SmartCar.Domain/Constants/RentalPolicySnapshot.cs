@@ -54,6 +54,9 @@ public sealed class RentalPolicySnapshot : IValidatableObject
     [Range(0, 336, ErrorMessage = "Điều kiện thời gian còn lại phải từ 0 đến 336 giờ.")]
     public int MinimumHoursForFreeCancellation { get; set; } = 24;
 
+    [Range(1, 168, ErrorMessage = "Thời gian xử lý hoàn tiền sau hủy phải từ 1 đến 168 giờ.")]
+    public int CancellationRefundProcessingHours { get; set; } = 24;
+
     [Range(1, 720)] public int CancellationTier1Hours { get; set; } = 168;
     [Range(typeof(decimal), "0", "100")] public decimal CancellationTier1RefundPercent { get; set; } = 90m;
     [Range(1, 720)] public int CancellationTier2Hours { get; set; } = 48;
