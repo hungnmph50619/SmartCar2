@@ -81,7 +81,6 @@ public sealed class RentalPolicySnapshotTests
         Assert.Equal(RentalPolicy.BookingPaymentHoldMinutes, policy.BookingPaymentHoldMinutes);
         Assert.Equal(RentalPolicy.BookingTransferReconciliationHoldMinutes, policy.BookingTransferReconciliationHoldMinutes);
         Assert.Equal(RentalPolicy.VehicleTurnaroundMinutes, policy.VehicleTurnaroundMinutes);
-        Assert.Equal(RentalPolicy.DeliveryLeadMinutes, policy.DeliveryLeadMinutes); // legacy field only
         Assert.Equal(RentalPolicy.NoShowGraceMinutes, policy.NoShowGraceMinutes);
         Assert.Equal(RentalPolicy.NoShowFeeRate * 100m, policy.NoShowFeePercent);
         Assert.Equal(24, policy.CancellationRefundProcessingHours);
@@ -92,8 +91,7 @@ public sealed class RentalPolicySnapshotTests
     {
         var policy = new RentalPolicySnapshot
         {
-            VehicleTurnaroundMinutes = 90,
-            DeliveryLeadMinutes = 45
+            VehicleTurnaroundMinutes = 90
         };
 
         Assert.Equal(90, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
@@ -108,7 +106,6 @@ public sealed class RentalPolicySnapshotTests
             BookingPaymentHoldMinutes = 45,
             BookingTransferReconciliationHoldMinutes = 180,
             VehicleTurnaroundMinutes = 90,
-            DeliveryLeadMinutes = 45,
             NoShowGraceMinutes = 40,
             NoShowFeePercent = 75,
             FreeCancellationWindowMinutes = 90,
@@ -120,7 +117,6 @@ public sealed class RentalPolicySnapshotTests
         Assert.Equal(45, restored.BookingPaymentHoldMinutes);
         Assert.Equal(180, restored.BookingTransferReconciliationHoldMinutes);
         Assert.Equal(90, restored.VehicleTurnaroundMinutes);
-        Assert.Equal(45, restored.DeliveryLeadMinutes);
         Assert.Equal(40, restored.NoShowGraceMinutes);
         Assert.Equal(75m, restored.NoShowFeePercent);
         Assert.Equal(90, restored.FreeCancellationWindowMinutes);
