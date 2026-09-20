@@ -163,20 +163,32 @@ public sealed class AdminOverdueViolationsController : Controller
             });
         }
 
-        affected.Payments.Add(new Payment
+        // Chỉ tạo khoản bồi thường cho B bằng phần đã có nguồn thực tế từ cọc A.
+        // Phần còn thiếu nằm ở OverdueCompensationDebt và chỉ trở thành Refund của B
+        // sau khi A thanh toán/được Staff đối soát thành công.
+        if (depositDeduction > 0m)
         {
-            Type = PaymentType.Refund,
-            Amount = contractCompensation,
-            Method = PaymentMethods.CompensationRefund,
-            Status = PaymentStatus.AwaitingRefund
-        });
+            affected.Payments.Add(new Payment
+            {
+                Type = PaymentType.Refund,
+                Amount = depositDeduction,
+                Method = PaymentMethods.CompensationRefund,
+                Status = PaymentStatus.AwaitingRefund
+            });
+        }
+
         affected.RefundAmount = affected.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Refund &&
                 BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
             .Sum(payment => payment.Amount);
-        affected.RefundReason = AppendText(affected.RefundReason,
-            $"Bồi thường {contractCompensation:N0} đồng bằng giá hợp đồng do đơn #{renterBookingId} giữ xe quá hạn sau khi bị từ chối gia hạn.");
+        affected.RefundReason = AppendText(
+            affected.RefundReason,
+            $"Bồi thường do đơn #{renterBookingId} giữ xe quá hạn: tổng nghĩa vụ {contractCompensation:N0} đồng; " +
+            $"đã có nguồn từ cọc {depositDeduction:N0} đồng" +
+            (outstanding > 0m
+                ? $"; còn {outstanding:N0} đồng chỉ tạo khoản hoàn bổ sung sau khi thực thu từ khách vi phạm."
+                : "; đã đủ nguồn."));
 
         _dbContext.Notifications.Add(new Notification
         {
@@ -190,7 +202,13 @@ public sealed class AdminOverdueViolationsController : Controller
         {
             UserId = affected.CustomerId,
             Title = "Hoàn tiền và bồi thường do không thể giao xe",
-            Message = $"Đơn #{affectedBookingId}: SmartCar ghi nhận bồi thường {contractCompensation:N0} đ do đơn trước giữ xe quá hạn. Khoản này được gộp với các khoản hoàn của đơn."
+            Message =
+                $"Đơn #{affectedBookingId}: tổng mức bồi thường được ghi nhận là {contractCompensation:N0} đ. " +
+                $"Hiện đã có nguồn {depositDeduction:N0} đ từ cọc khách gây ảnh hưởng" +
+                (outstanding > 0m
+                    ? $"; {outstanding:N0} đ còn lại sẽ chuyển sang khoản hoàn khi SmartCar thực thu được từ khách đó."
+                    : " và đã đủ nguồn bồi thường.") +
+                " Các khoản tiền bạn đã thanh toán cho đơn bị hủy vẫn được xử lý hoàn độc lập."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
