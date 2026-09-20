@@ -5,6 +5,7 @@
     const conflict = root.dataset.conflict === 'true';
     const cards = Array.from(root.querySelectorAll('[data-policy-group]'));
     const transientErrors = new WeakMap();
+    const acceptedNumberValues = new WeakMap();
     let submitting = false;
 
     const inputs = card => Array.from(card.querySelectorAll('[data-policy-input]'));
@@ -56,9 +57,6 @@
     };
 
     const numberError = input => {
-        const transient = transientErrors.get(input);
-        if (transient) return transient;
-
         const raw = input.value.trim();
         const label = input.dataset.label || 'Giá trị';
         const unit = input.dataset.unit || '';
@@ -173,6 +171,10 @@
     const render = card => {
         const changes = inputs(card).filter(changed);
         const valid = validateCard(card);
+        inputs(card).forEach(input => {
+            const transient = transientErrors.get(input);
+            if (transient) setFieldError(input, transient);
+        });
         renderChanges(card, changes);
 
         const save = card.querySelector('[data-save]');
@@ -187,6 +189,7 @@
     const resetValidation = card => {
         inputs(card).forEach(input => {
             transientErrors.delete(input);
+            if (input.type === 'number') acceptedNumberValues.set(input, input.value);
             input.classList.remove('is-invalid');
             input.removeAttribute('aria-invalid');
             const node = errorNodeFor(input);
@@ -208,6 +211,18 @@
     const showBlockedNegative = (card, input) => {
         transientErrors.set(input, 'Không được nhập số âm.');
         render(card);
+    };
+
+    const showBlockedMaximum = (card, input) => {
+        transientErrors.set(
+            input,
+            `Tối đa ${format(input.max, input.dataset.unit)}.`
+        );
+        render(card);
+    };
+
+    const restoreAcceptedNumber = input => {
+        input.value = acceptedNumberValues.get(input) ?? input.dataset.current ?? '';
     };
 
     cards.forEach(card => {
@@ -247,6 +262,8 @@
 
         inputs(card).forEach(input => {
             if (input.type === 'number') {
+                acceptedNumberValues.set(input, input.value);
+
                 input.addEventListener('keydown', event => {
                     if (event.key === '-' || event.key === 'Subtract') {
                         event.preventDefault();
@@ -264,14 +281,50 @@
                 input.addEventListener('paste', event => {
                     const pasted = event.clipboardData?.getData('text')?.trim() ?? '';
                     const normalized = pasted.replace(',', '.');
-                    if (normalized.startsWith('-') || Number(normalized) < 0) {
+                    const pastedValue = Number(normalized);
+                    const max = input.max === '' ? null : Number(input.max);
+
+                    if (normalized.startsWith('-') || pastedValue < 0) {
                         event.preventDefault();
                         showBlockedNegative(card, input);
+                        return;
+                    }
+
+                    if (max !== null &&
+                        Number.isFinite(max) &&
+                        Number.isFinite(pastedValue) &&
+                        pastedValue > max) {
+                        event.preventDefault();
+                        showBlockedMaximum(card, input);
                     }
                 });
             }
 
             input.addEventListener('input', () => {
+                if (input.type === 'number') {
+                    const raw = input.value.trim();
+                    const value = Number(raw.replace(',', '.'));
+                    const max = input.max === '' ? null : Number(input.max);
+
+                    if (raw !== '' && Number.isFinite(value) && value < 0) {
+                        restoreAcceptedNumber(input);
+                        showBlockedNegative(card, input);
+                        return;
+                    }
+
+                    if (raw !== '' &&
+                        max !== null &&
+                        Number.isFinite(max) &&
+                        Number.isFinite(value) &&
+                        value > max) {
+                        restoreAcceptedNumber(input);
+                        showBlockedMaximum(card, input);
+                        return;
+                    }
+
+                    acceptedNumberValues.set(input, input.value);
+                }
+
                 transientErrors.delete(input);
                 render(card);
             });
