@@ -169,7 +169,11 @@ internal sealed class BookingOperationService : IBookingOperationService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        if (ownedTransaction is not null)
+        {
+            await ownedTransaction.CommitAsync(cancellationToken);
+        }
+
         await _auditService.WriteAsync(
             staffId,
             "StaffMarkNoShow",
@@ -192,9 +196,13 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (string.IsNullOrWhiteSpace(request.Reason))
             return RefundResult.Failure("Vui lòng nhập lý do hủy đơn.");
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
+        await using var ownedTransaction =
+            _dbContext.Database.CurrentTransaction is null
+                ? await _dbContext.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable,
+                    cancellationToken)
+                : null;
+
         var query = _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
