@@ -8,6 +8,9 @@
     ViewData["Title"] = "Quản lý thanh toán";
     var currentSection = ViewBag.Section as string ?? "collection";
     var selectedStatus = ViewBag.Status as PaymentStatus?;
+    var unfundedCompensationByBooking =
+        ViewBag.UnfundedCompensationByBooking as IDictionary<int, decimal>
+        ?? new Dictionary<int, decimal>();
 
     string StatusText(PaymentStatus status) => status switch
     {
@@ -171,6 +174,12 @@ else if (currentSection == "refund")
                             payment.Method == PaymentMethods.BankTransferRefund);
                         var hasDepositRefund = shown.Any(payment =>
                             payment.Method == PaymentMethods.DepositRefund);
+                        var hasCompensationRefund = shown.Any(payment =>
+                            payment.Method == PaymentMethods.CompensationRefund);
+                        var unfundedCompensationAmount =
+                            unfundedCompensationByBooking.GetValueOrDefault(first.BookingId);
+                        var compensationFundingBlocked =
+                            hasCompensationRefund && unfundedCompensationAmount > 0m;
                         UserBankAccountDto? bank = null;
                         if (awaitingApproval.Count > 0 || approved.Count > 0)
                         {
@@ -191,6 +200,13 @@ else if (currentSection == "refund")
                                 else if (hasDepositRefund)
                                 {
                                     <div class="mb-2"><span class="badge bg-light text-dark border">Hoàn cọc · nếu đã trả xe thì áp dụng thời gian giữ cọc</span></div>
+                                }
+                                @if (compensationFundingBlocked)
+                                {
+                                    <div class="alert alert-danger py-2 small">
+                                        <strong>Chưa đủ nguồn bồi thường.</strong>
+                                        Còn @unfundedCompensationAmount.ToString("N0") đ chưa thực thu từ khách gây ảnh hưởng.
+                                    </div>
                                 }
                                 @foreach (var refund in shown)
                                 {
@@ -213,7 +229,15 @@ else if (currentSection == "refund")
                             <td>
                                 @if (awaitingApproval.Count > 0)
                                 {
-                                    @if (bank is null)
+                                    @if (compensationFundingBlocked)
+                                    {
+                                        <div class="alert alert-danger py-2 small mb-0">
+                                            <strong>Không được duyệt bồi thường lúc này.</strong><br />
+                                            Còn @unfundedCompensationAmount.ToString("N0") đ chưa được thực thu từ khách gây ảnh hưởng.
+                                            SmartCar không ứng tiền trước cho khoản này.
+                                        </div>
+                                    }
+                                    else if (bank is null)
                                     {
                                         <div class="text-warning small mb-2">
                                             Khách chưa có tài khoản nhận hoàn mặc định. Không thể duyệt hoàn.
@@ -248,7 +272,18 @@ else if (currentSection == "refund")
                                 }
                                 else if (rowStatus == PaymentStatus.RefundApproved)
                                 {
-                                    <span class="text-primary small">✓ Chủ/Admin đã duyệt. Chờ nhân viên thực hiện chuyển tiền.</span>
+                                    @if (compensationFundingBlocked)
+                                    {
+                                        <div class="alert alert-danger py-2 small mb-0">
+                                            Khoản bồi thường đã được duyệt trước đó nhưng hiện còn
+                                            <strong>@unfundedCompensationAmount.ToString("N0") đ</strong> chưa có nguồn thực thu.
+                                            Staff đang bị khóa chuyển tiền.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-primary small">✓ Chủ/Admin đã duyệt. Chờ nhân viên thực hiện chuyển tiền.</span>
+                                    }
                                 }
                                 else if (rowStatus == PaymentStatus.Refunded)
                                 {
