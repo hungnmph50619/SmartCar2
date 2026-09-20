@@ -50,6 +50,36 @@ public sealed class CancellationRefundPolicyTests
         Assert.Equal(expectedRate, rate);
     }
 
+
+    [Fact]
+    public void GetRentalRefundRate_UsesBookingSnapshotConfiguration()
+    {
+        var cancelledAt = new DateTime(2026, 9, 13, 10, 0, 0);
+        var pickupDate = cancelledAt.AddHours(30);
+        var policy = new RentalPolicySnapshot
+        {
+            FreeCancellationWindowMinutes = 15,
+            MinimumHoursForFreeCancellation = 48,
+            CancellationTier1Hours = 120,
+            CancellationTier1RefundPercent = 80,
+            CancellationTier2Hours = 36,
+            CancellationTier2RefundPercent = 60,
+            CancellationTier3Hours = 18,
+            CancellationTier3RefundPercent = 40,
+            CancellationTier4Hours = 3,
+            CancellationTier4RefundPercent = 10,
+            CancellationBelowTierRefundPercent = 0
+        };
+
+        var rate = CancellationRefundPolicy.GetRentalRefundRate(
+            cancelledAt,
+            pickupDate,
+            rentalPaidAt: null,
+            policy);
+
+        Assert.Equal(0.40m, rate);
+    }
+
     [Fact]
     public void RentalPolicy_UsesThirtyMinutePaymentWindowAndSixtyMinuteTurnaround()
     {
