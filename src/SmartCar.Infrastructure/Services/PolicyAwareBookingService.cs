@@ -29,6 +29,7 @@ internal sealed class PolicyAwareBookingService : IBookingService
         CancellationToken cancellationToken = default)
     {
         await _policy.ExpireStaleReservationsAsync(cancellationToken);
+        var activePolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
 
         if (await _policy.HasActiveUnpaidHoldAsync(customerId, cancellationToken))
         {
@@ -77,12 +78,12 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 cancellationToken))
         {
             var deliveryLead = request.PickupMethod == VehiclePickupMethod.Delivery
-                ? $" và thêm {RentalPolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
+                ? $" và thêm {activePolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
                 : string.Empty;
 
             return BookingMutationResult.Failure(
                 $"Xe không đủ khoảng vận hành giữa hai lượt thuê. SmartCar cần tối thiểu " +
-                $"{RentalPolicy.VehicleTurnaroundMinutes} phút để nhận xe, kiểm tra và chuẩn bị lại{deliveryLead}.");
+                $"{activePolicy.VehicleTurnaroundMinutes} phút để nhận xe, kiểm tra và chuẩn bị lại{deliveryLead}.");
         }
 
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
@@ -214,12 +215,13 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 booking.BookingId,
                 cancellationToken))
         {
+            var bookingPolicy = booking.Policy;
             var deliveryLead = booking.PickupMethod == VehiclePickupMethod.Delivery
-                ? $" và thêm {RentalPolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
+                ? $" và thêm {bookingPolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
                 : string.Empty;
 
             return OperationResult.Failure(
-                $"Không thể duyệt vì lịch xe không còn đủ {RentalPolicy.VehicleTurnaroundMinutes} phút xoay vòng{deliveryLead}.");
+                $"Không thể duyệt vì lịch xe không còn đủ {bookingPolicy.VehicleTurnaroundMinutes} phút xoay vòng{deliveryLead}.");
         }
 
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
@@ -273,7 +275,7 @@ internal sealed class PolicyAwareBookingService : IBookingService
         if (blockedUntil.HasValue && blockedUntil.Value > DateTime.Now)
         {
             return OperationResult.Failure(
-                $"Xe vừa được trả thực tế. Cần đủ {RentalPolicy.VehicleTurnaroundMinutes} phút để kiểm tra/vệ sinh; " +
+                $"Xe vừa được trả thực tế. Cần đủ {booking.Policy.VehicleTurnaroundMinutes} phút để kiểm tra/vệ sinh; " +
                 $"có thể xác nhận sẵn sàng từ {blockedUntil.Value:dd/MM/yyyy HH:mm}.");
         }
 
