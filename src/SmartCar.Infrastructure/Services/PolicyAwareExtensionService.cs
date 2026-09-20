@@ -71,7 +71,7 @@ internal sealed class PolicyAwareExtensionService : IExtensionService
         {
             return OperationResult.Failure(
                 $"Không thể gia hạn đến {request.RequestedReturnDate:dd/MM/yyyy HH:mm}: " +
-                $"phải chừa ít nhất {RentalPolicy.VehicleTurnaroundMinutes} phút để nhận, kiểm tra và chuẩn bị xe trước lượt kế tiếp. " +
+                $"phải chừa ít nhất {booking.Policy.VehicleTurnaroundMinutes} phút để nhận, kiểm tra và chuẩn bị xe trước lượt kế tiếp. " +
                 "Nếu thực sự bất khả kháng, hãy gửi yêu cầu bất khả kháng kèm minh chứng để Admin xử lý xung đột riêng.");
         }
 
@@ -111,7 +111,7 @@ internal sealed class PolicyAwareExtensionService : IExtensionService
                 {
                     return OperationResult.Failure(
                         $"Không thể duyệt gia hạn: sau giờ trả mới phải còn ít nhất " +
-                        $"{RentalPolicy.VehicleTurnaroundMinutes} phút trước lượt thuê kế tiếp.");
+                        $"{extension.Booking.Policy.VehicleTurnaroundMinutes} phút trước lượt thuê kế tiếp.");
                 }
 
                 if (!confirmConflictHandled)
