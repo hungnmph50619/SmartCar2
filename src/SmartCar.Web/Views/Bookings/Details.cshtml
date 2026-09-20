@@ -23,9 +23,10 @@
          payment.Status == PaymentStatus.Pending &&
          AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
     var visibleAdditionalAmount = additionalChargeFinalized ? Model.AdditionalAmount : 0m;
-    var visibleAdditionalCharges = additionalChargeFinalized
-        ? Model.AdditionalCharges
-        : Array.Empty<SmartCar.Application.Features.Bookings.ChargeSummaryDto>();
+    IReadOnlyList<SmartCar.Application.Features.Bookings.ChargeSummaryDto> visibleAdditionalCharges =
+        additionalChargeFinalized
+            ? Model.AdditionalCharges
+            : Array.Empty<SmartCar.Application.Features.Bookings.ChargeSummaryDto>();
     var invoiceTotal = Model.InitialRentalAmount + Model.DeliveryFee + Model.DepositAmount + extensionAmount + visibleAdditionalAmount;
     var paidTotal = Model.Payments
         .Where(payment => payment.Status == PaymentStatus.Paid &&
