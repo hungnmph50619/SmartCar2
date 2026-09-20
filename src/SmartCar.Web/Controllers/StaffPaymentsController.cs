@@ -466,7 +466,11 @@ public sealed class StaffPaymentsController : Controller
                 Type = PaymentType.Refund,
                 Amount = releaseAmount,
                 Method = PaymentMethods.CompensationRefund,
-                Status = PaymentStatus.AwaitingRefund
+                Status = PaymentStatus.AwaitingRefund,
+                TransactionCode = OverdueCompensationLedger.BuildFundedRefundCode(
+                    booking.BookingId,
+                    affectedBookingId,
+                    paidAt)
             });
             affectedBooking.RefundAmount = affectedBooking.Payments
                 .Where(item =>
