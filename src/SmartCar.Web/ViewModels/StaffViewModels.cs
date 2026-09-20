@@ -64,6 +64,8 @@ public sealed class StaffRefundViewModel
     public bool HasAwaitingApproval => AwaitingApprovalAmount > 0m;
     public decimal OutstandingTrafficFineAmount { get; init; }
     public bool HasOutstandingTrafficFine => OutstandingTrafficFineAmount > 0m;
+    public decimal UnfundedCompensationAmount { get; init; }
+    public bool HasUnfundedCompensation => UnfundedCompensationAmount > 0m;
     public string? BankName { get; init; }
     public string? AccountNumber { get; init; }
     public string? AccountHolderName { get; init; }
