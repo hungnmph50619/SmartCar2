@@ -26,7 +26,7 @@
     };
 
     const errorNodeFor = input => {
-        const wrapper = input.closest('.col-md-6, .col-12, .policy-tier-row') ?? input.parentElement;
+        const wrapper = input.closest('.col-md-4, .col-md-6, .col-12, .policy-tier-row') ?? input.parentElement;
         let node = Array.from(wrapper.querySelectorAll('.policy-client-error'))
             .find(item => item.dataset.for === input.name);
 
