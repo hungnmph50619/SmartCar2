@@ -38,7 +38,16 @@ else
                 line.Method == PaymentMethods.DepositRefund);
             var trafficFineBlocked =
                 hasApprovedDepositRefund && item.HasOutstandingTrafficFine;
-            var canTransfer = !bankMissing && !batchBlocked && !trafficFineBlocked;
+            var hasApprovedCompensationRefund = item.Lines.Any(line =>
+                line.Status == PaymentStatus.RefundApproved &&
+                line.Method == PaymentMethods.CompensationRefund);
+            var compensationFundingBlocked =
+                hasApprovedCompensationRefund && item.HasUnfundedCompensation;
+            var canTransfer =
+                !bankMissing &&
+                !batchBlocked &&
+                !trafficFineBlocked &&
+                !compensationFundingBlocked;
 
             <div class="card shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between gap-2 flex-wrap">
@@ -71,6 +80,17 @@ else
                             <strong>@item.OutstandingTrafficFineAmount.ToString("N0") đ</strong>
                             phạt/vi phạm chưa xử lý. Vì tiền cọc chưa được chuyển thực tế,
                             Staff phải chờ nghĩa vụ này được xử lý rồi mới hoàn cọc.
+                        </div>
+                    }
+
+                    @if (compensationFundingBlocked)
+                    {
+                        <div class="alert alert-danger">
+                            <strong>Tạm khóa chuyển bồi thường.</strong>
+                            Còn <strong>@item.UnfundedCompensationAmount.ToString("N0") đ</strong>
+                            chưa được thực thu từ khách gây ảnh hưởng cho đơn này.
+                            Không dùng tiền SmartCar ứng trước; Staff chỉ được chuyển khi khoản nợ nguồn đã thanh toán
+                            hoặc được đối soát thành công.
                         </div>
                     }
 
@@ -135,7 +155,17 @@ else
                         @foreach (var line in item.Lines)
                         {
                             <div class="d-flex justify-content-between gap-3 border-bottom py-1">
-                                <span>#@line.PaymentId · @line.Status.ToVietnamese()</span>
+                                <span>
+                                    #@line.PaymentId ·
+                                    @(line.Method == PaymentMethods.DepositRefund
+                                        ? "Hoàn cọc"
+                                        : line.Method == PaymentMethods.CompensationRefund
+                                            ? "Bồi thường"
+                                            : line.Method == PaymentMethods.VehicleSwapRefund
+                                                ? "Hoàn chênh lệch đổi xe"
+                                                : "Hoàn tiền")
+                                    · @line.Status.ToVietnamese()
+                                </span>
                                 <strong>@line.Amount.ToString("N0") đ</strong>
                             </div>
                         }
