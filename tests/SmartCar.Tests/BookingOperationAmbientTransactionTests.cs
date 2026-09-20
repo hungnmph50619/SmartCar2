@@ -23,7 +23,7 @@ public sealed class BookingOperationAmbientTransactionTests
             .UseSqlite(connection)
             .Options;
 
-        await using var db = new ApplicationDbContext(options);
+        await using var db = new TransactionTestDbContext(options);
         await db.Database.EnsureCreatedAsync();
 
         db.Users.Add(new ApplicationUser
@@ -110,6 +110,26 @@ public sealed class BookingOperationAmbientTransactionTests
             binder: null,
             args: new object[] { db, new AuditServiceStub() },
             culture: null)!;
+    }
+
+    private sealed class TransactionTestDbContext : ApplicationDbContext
+    {
+        public TransactionTestDbContext(
+            DbContextOptions<ApplicationDbContext> options)
+            : base(options)
+        {
+        }
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            builder.Entity<Vehicle>()
+                .Property(item => item.RowVersion)
+                .ValueGeneratedNever();
+            builder.Entity<Booking>()
+                .Property(item => item.RowVersion)
+                .ValueGeneratedNever();
+        }
     }
 
     private sealed class AuditServiceStub : IAuditService
