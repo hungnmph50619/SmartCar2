@@ -78,4 +78,5 @@ public sealed record StaffRefundLineViewModel(
     decimal Amount,
     string Method,
     PaymentStatus Status,
-    string? TransactionCode);
+    string? TransactionCode,
+    string? LedgerReference);
