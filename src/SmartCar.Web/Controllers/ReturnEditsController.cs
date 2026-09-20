@@ -84,6 +84,7 @@ public sealed class ReturnEditsController : Controller
     {
         ModelState.Remove(nameof(ReturnEditViewModel.ExistingImagePaths));
         ModelState.Remove(nameof(ReturnEditViewModel.ImagesToDelete));
+        ModelState.Remove(nameof(ReturnEditViewModel.DamageImages));
         ModelState.Remove(nameof(ReturnEditViewModel.NewImages));
 
         var booking = await _dbContext.Bookings
@@ -116,11 +117,17 @@ public sealed class ReturnEditsController : Controller
             ModelState.AddModelError(nameof(model.ImagesToDelete), "Danh sách ảnh cần xóa không hợp lệ.");
         }
 
+        var damageImages = (model.DamageImages ?? new List<IFormFile>())
+            .Where(file => file.Length > 0)
+            .ToList();
         var newImages = (model.NewImages ?? new List<IFormFile>())
             .Where(file => file.Length > 0)
             .ToList();
+        var retainedReturnPhotos = returnPhotos
+            .Where(path => !deleteSet.Contains(path))
+            .ToList();
 
-        var finalImageCount = returnPhotos.Count - deleteSet.Count + newImages.Count;
+        var finalImageCount = retainedReturnPhotos.Count + damageImages.Count + newImages.Count;
         if (finalImageCount < MinimumImages)
         {
             ModelState.AddModelError(
@@ -135,6 +142,15 @@ public sealed class ReturnEditsController : Controller
                 $"Biên bản chỉ được lưu tối đa {MaximumImages} ảnh đối chiếu.");
         }
 
+        foreach (var image in damageImages)
+        {
+            var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
+            if (error is not null)
+            {
+                ModelState.AddModelError(nameof(model.DamageImages), $"{image.FileName}: {error}");
+            }
+        }
+
         foreach (var image in newImages)
         {
             var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
@@ -142,6 +158,15 @@ public sealed class ReturnEditsController : Controller
             {
                 ModelState.AddModelError(nameof(model.NewImages), $"{image.FileName}: {error}");
             }
+        }
+
+        if (model.HasDamage &&
+            !retainedReturnPhotos.Any(IsDamageEvidencePath) &&
+            damageImages.Count == 0)
+        {
+            ModelState.AddModelError(
+                nameof(model.DamageImages),
+                "Đã đánh dấu hư hỏng thì bộ ảnh cuối cùng phải có ít nhất một ảnh hư hỏng.");
         }
 
         if (!model.Mileage.HasValue || model.Mileage.Value < booking.Handover.Mileage)
@@ -193,7 +218,11 @@ public sealed class ReturnEditsController : Controller
         var addedPaths = new List<string>();
         try
         {
-            addedPaths = await SaveImagesAsync(model.BookingId, newImages, cancellationToken);
+            addedPaths = await SaveImagesAsync(
+                model.BookingId,
+                damageImages,
+                newImages,
+                cancellationToken);
 
             var updatedPaths = currentPaths
                 .Where(path => !deleteSet.Contains(path))
@@ -288,6 +317,15 @@ public sealed class ReturnEditsController : Controller
             .Where(path => !path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
+    private static bool IsDamageEvidencePath(string path)
+    {
+        var fileName = path
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault();
+        return !string.IsNullOrWhiteSpace(fileName) &&
+               fileName.StartsWith("damage-", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool TryParseFuel(string? value, out int percent)
     {
         percent = 0;
@@ -346,12 +384,14 @@ public sealed class ReturnEditsController : Controller
 
     private async Task<List<string>> SaveImagesAsync(
         int bookingId,
-        IEnumerable<IFormFile> images,
+        IEnumerable<IFormFile> damageImages,
+        IEnumerable<IFormFile> otherImages,
         CancellationToken cancellationToken)
     {
-        var selectedImages = images.Where(file => file.Length > 0).ToList();
+        var selectedDamageImages = damageImages.Where(file => file.Length > 0).ToList();
+        var selectedOtherImages = otherImages.Where(file => file.Length > 0).ToList();
         var paths = new List<string>();
-        if (selectedImages.Count == 0)
+        if (selectedDamageImages.Count + selectedOtherImages.Count == 0)
         {
             return paths;
         }
@@ -362,15 +402,24 @@ public sealed class ReturnEditsController : Controller
 
         try
         {
-            foreach (var image in selectedImages)
+            foreach (var image in selectedDamageImages)
             {
-                var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-                var fileName = $"other-edit-{Guid.NewGuid():N}{extension}";
-                var fullPath = Path.Combine(folder, fileName);
+                paths.Add(await SaveEditedImageAsync(
+                    folder,
+                    relativeFolder,
+                    "damage-edit",
+                    image,
+                    cancellationToken));
+            }
 
-                await using var stream = System.IO.File.Create(fullPath);
-                await image.CopyToAsync(stream, cancellationToken);
-                paths.Add($"/{relativeFolder}/{fileName}");
+            foreach (var image in selectedOtherImages)
+            {
+                paths.Add(await SaveEditedImageAsync(
+                    folder,
+                    relativeFolder,
+                    "other-edit",
+                    image,
+                    cancellationToken));
             }
         }
         catch
@@ -380,6 +429,22 @@ public sealed class ReturnEditsController : Controller
         }
 
         return paths;
+    }
+
+    private static async Task<string> SaveEditedImageAsync(
+        string folder,
+        string relativeFolder,
+        string label,
+        IFormFile image,
+        CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+        var fileName = $"{label}-{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using var stream = System.IO.File.Create(fullPath);
+        await image.CopyToAsync(stream, cancellationToken);
+        return $"/{relativeFolder}/{fileName}";
     }
 
     private static void RecalculateAutomaticCharges(Booking booking)
