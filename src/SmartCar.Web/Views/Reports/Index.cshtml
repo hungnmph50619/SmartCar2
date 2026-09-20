@@ -221,7 +221,7 @@
                 <div class="finance-line"><span>Chi phí vận hành</span><strong class="text-danger">@Model.TotalOperatingCost.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span><strong>Tổng giảm trừ</strong></span><strong class="text-danger">@totalExpense.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span><strong>Kết quả ròng</strong></span><strong class="@(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Hoàn cọc và bồi thường lấy từ cọc khách không phải chi phí SmartCar.</div>
+                <div class="tiny mt-2">Chi phí vận hành chỉ tính khoản SmartCar thực chịu. Phạt/vi phạm do khách chịu, hoàn cọc và bồi thường từ cọc không làm giảm kết quả ròng.</div>
 
                 @if (refundTransactionRows.Count > 0)
                 {
