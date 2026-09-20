@@ -169,8 +169,8 @@
 
     <div class="row g-3 mb-3">
         <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TỔNG DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div><div class="tiny mt-1">Không gồm cọc và bồi thường A → B</div></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">QR NGÂN HÀNG</div><div class="kpi-number text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</div><div class="tiny mt-1">Đã xác nhận thanh toán online</div></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TIỀN MẶT TẠI QUẦY</div><div class="kpi-number text-success">@Model.TotalCashRevenue.ToString("N0") đ</div><div class="tiny mt-1">Thu trực tiếp tại quầy</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">DOANH THU QUA QR</div><div class="kpi-number text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</div><div class="tiny mt-1">Không gồm tiền cọc</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">DOANH THU TIỀN MẶT</div><div class="kpi-number text-success">@Model.TotalCashRevenue.ToString("N0") đ</div><div class="tiny mt-1">Không gồm tiền cọc</div></div></div>
         <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">KẾT QUẢ RÒNG TRONG KỲ</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div><div class="tiny mt-1">Doanh thu − hoàn tiền − chi phí SmartCar</div></div></div>
     </div>
 
@@ -184,8 +184,8 @@
     <div class="row g-3 mb-3">
         <div class="col-lg-6">
             <div class="panel p-3 h-100">
-                <h2 class="section-title mb-2">Cách ghi nhận tiền</h2>
-                <div class="finance-line"><span>QR ngân hàng</span><strong class="text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</strong></div>
+                <h2 class="section-title mb-2">Doanh thu theo cách thu</h2>
+                <div class="finance-line"><span>Qua QR ngân hàng</span><strong class="text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Tiền mặt tại quầy</span><strong class="text-success">@Model.TotalCashRevenue.ToString("N0") đ</strong></div>
                 @if (Model.TotalDepositDeductionRevenue > 0)
                 {
@@ -196,7 +196,7 @@
                     <div class="finance-line"><span>Chưa xác định</span><strong class="text-warning">@Model.TotalUnknownPaymentMethodRevenue.ToString("N0") đ</strong></div>
                 }
                 <div class="finance-line"><span><strong>Tổng doanh thu</strong></span><strong>@paymentMethodTotal.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Cọc A dùng bồi thường B được theo dõi riêng, không tính doanh thu.</div>
+                <div class="tiny mt-2">Các số trên là doanh thu đã ghi nhận theo cách thu; tiền cọc được theo dõi riêng và không tính vào doanh thu.</div>
             </div>
         </div>
         <div class="col-lg-6">
@@ -250,14 +250,16 @@
                     <h2 class="section-title">Tiền đang xử lý</h2>
                     <a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index">Mở thanh toán</a>
                 </div>
-                <div class="finance-line"><span>Cần thu</span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Doanh thu còn phải thu</span><strong class="text-warning">@Model.OutstandingReceivables.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Cọc còn phải thu</span><strong class="text-warning">@Model.OutstandingDeposits.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span><strong>Tổng đang chờ thu</strong></span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Cọc đang giữ</span><strong>@Model.DepositsHeld.ToString("N0") đ</strong></div>
                 @if (Model.PendingCompensationTransfers > 0)
                 {
                     <div class="finance-line"><span>Bồi thường từ cọc chờ chuyển</span><strong class="text-warning">@Model.PendingCompensationTransfers.ToString("N0") đ</strong></div>
                 }
                 <div class="finance-line"><span>Chờ hoàn</span><strong class="text-warning">@Model.PendingRefunds.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Bồi thường A → B không làm tăng doanh thu hoặc giảm kết quả ròng.</div>
+                <div class="tiny mt-2">Cọc không phải doanh thu. Bồi thường A → B cũng không làm tăng doanh thu hoặc giảm kết quả ròng.</div>
             </div>
         </div>
     </div>
