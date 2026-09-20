@@ -77,13 +77,9 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 null,
                 cancellationToken))
         {
-            var deliveryLead = request.PickupMethod == VehiclePickupMethod.Delivery
-                ? $" và thêm {activePolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
-                : string.Empty;
-
             return BookingMutationResult.Failure(
-                $"Xe không đủ khoảng vận hành giữa hai lượt thuê. SmartCar cần tối thiểu " +
-                $"{activePolicy.VehicleTurnaroundMinutes} phút để nhận xe, kiểm tra và chuẩn bị lại{deliveryLead}.");
+                $"Xe không đủ khoảng chuẩn bị giữa hai lượt thuê. SmartCar cần tối thiểu " +
+                $"{activePolicy.VehicleTurnaroundMinutes} phút sau lượt trả trước khi xe có thể nhận lượt mới.");
         }
 
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
@@ -217,12 +213,8 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 cancellationToken))
         {
             var bookingPolicy = booking.Policy;
-            var deliveryLead = booking.PickupMethod == VehiclePickupMethod.Delivery
-                ? $" và thêm {bookingPolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
-                : string.Empty;
-
             return OperationResult.Failure(
-                $"Không thể duyệt vì lịch xe không còn đủ {bookingPolicy.VehicleTurnaroundMinutes} phút xoay vòng{deliveryLead}.");
+                $"Không thể duyệt vì lịch xe không còn đủ {bookingPolicy.VehicleTurnaroundMinutes} phút chuẩn bị giữa hai lượt thuê.");
         }
 
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
