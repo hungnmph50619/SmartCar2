@@ -18,6 +18,10 @@ public class Payment
     public DateTime? PaidAt { get; set; }
     public string? TransactionCode { get; set; }
 
+    // Mã liên kết nghiệp vụ nội bộ cần tồn tại độc lập với mã giao dịch ngân hàng.
+    // Ví dụ: OVERDUE-FUNDED-{booking gây ảnh hưởng}-{booking bị ảnh hưởng}-...
+    public string? LedgerReference { get; set; }
+
     public Booking Booking { get; set; } = null!;
     public VehicleIncident? VehicleIncident { get; set; }
 }
