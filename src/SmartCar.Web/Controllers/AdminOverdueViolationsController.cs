@@ -14,9 +14,6 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminOverdueViolationsController : Controller
 {
-    private const string CompensationPrefix = "OVERDUE-COMP-";
-    private const string DebtPrefix = "OVERDUE-DEBT-";
-
     private static readonly BookingStatus[] BlockingStatuses =
     {
         BookingStatus.PendingConfirmation,
@@ -86,10 +83,22 @@ public sealed class AdminOverdueViolationsController : Controller
             return Back();
         }
 
-        var duplicatePrefix = $"{CompensationPrefix}{renterBookingId}-{affectedBookingId}-";
-        if (renter.Payments.Any(x => !string.IsNullOrWhiteSpace(x.TransactionCode) && x.TransactionCode.StartsWith(duplicatePrefix)))
+        var duplicateDeductionPrefix =
+            $"{OverdueCompensationLedger.DepositDeductionPrefix}{renterBookingId}-{affectedBookingId}-";
+        var duplicateDebtPrefix =
+            $"{OverdueCompensationLedger.DebtPrefix}{renterBookingId}-{affectedBookingId}-";
+
+        if (renter.Payments.Any(payment =>
+                !string.IsNullOrWhiteSpace(payment.TransactionCode) &&
+                (payment.TransactionCode.StartsWith(
+                     duplicateDeductionPrefix,
+                     StringComparison.OrdinalIgnoreCase) ||
+                 payment.TransactionCode.StartsWith(
+                     duplicateDebtPrefix,
+                     StringComparison.OrdinalIgnoreCase))))
         {
-            TempData["ErrorMessage"] = "Vi phạm giữa hai đơn này đã được xử lý trước đó.";
+            TempData["ErrorMessage"] =
+                "Vi phạm giữa hai đơn này đã được xử lý trước đó; không tạo thêm khấu trừ, nợ hoặc bồi thường trùng.";
             return Back();
         }
 
@@ -132,7 +141,10 @@ public sealed class AdminOverdueViolationsController : Controller
                 Method = PaymentMethods.DepositDeduction,
                 Status = PaymentStatus.Paid,
                 PaidAt = now,
-                TransactionCode = $"{duplicatePrefix}{now:yyyyMMddHHmmss}"
+                TransactionCode = OverdueCompensationLedger.BuildDepositDeductionCode(
+                    renterBookingId,
+                    affectedBookingId,
+                    now)
             });
         }
 
@@ -144,7 +156,10 @@ public sealed class AdminOverdueViolationsController : Controller
                 Amount = outstanding,
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending,
-                TransactionCode = $"{DebtPrefix}{renterBookingId}-{affectedBookingId}-{now:yyyyMMddHHmmss}"
+                TransactionCode = OverdueCompensationLedger.BuildDebtCode(
+                    renterBookingId,
+                    affectedBookingId,
+                    now)
             });
         }
 
