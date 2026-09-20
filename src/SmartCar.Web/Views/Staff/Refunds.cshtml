@@ -41,7 +41,9 @@ else
             var hasApprovedUnfundedLegacyCompensationRefund = item.Lines.Any(line =>
                 line.Status == PaymentStatus.RefundApproved &&
                 line.Method == PaymentMethods.CompensationRefund &&
-                !OverdueCompensationLedger.IsFundedRefundCode(line.TransactionCode));
+                !CompensationLedger.IsFundedRefund(
+                    line.LedgerReference,
+                    line.TransactionCode));
             var compensationFundingBlocked =
                 hasApprovedUnfundedLegacyCompensationRefund &&
                 item.HasUnfundedCompensation;
