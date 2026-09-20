@@ -26,7 +26,7 @@
     };
 
     const errorNodeFor = input => {
-        const wrapper = input.closest('.col-md-6, .col-12') ?? input.parentElement;
+        const wrapper = input.closest('.col-md-6, .col-12, .policy-tier-row') ?? input.parentElement;
         let node = Array.from(wrapper.querySelectorAll('.policy-client-error'))
             .find(item => item.dataset.for === input.name);
 
@@ -139,6 +139,48 @@
                         included,
                         'Quãng đường trong phí cơ bản không được lớn hơn phạm vi giao tối đa.'
                     );
+                }
+            }
+        }
+
+        if (card.dataset.policyGroup === 'cancellation') {
+            const get = name => fields.find(input => input.name === name);
+            const hours = [
+                get('CancellationTier1Hours'),
+                get('CancellationTier2Hours'),
+                get('CancellationTier3Hours'),
+                get('CancellationTier4Hours')
+            ];
+            const rates = [
+                get('CancellationTier1RefundPercent'),
+                get('CancellationTier2RefundPercent'),
+                get('CancellationTier3RefundPercent'),
+                get('CancellationTier4RefundPercent'),
+                get('CancellationBelowTierRefundPercent')
+            ];
+
+            if (hours.every(input => input && !errors.has(input))) {
+                const values = hours.map(input => Number(input.value));
+                if (!(values[0] > values[1] &&
+                      values[1] > values[2] &&
+                      values[2] > values[3])) {
+                    hours.forEach(input => errors.set(
+                        input,
+                        'Các mốc giờ phải giảm dần: mốc 1 > mốc 2 > mốc 3 > mốc 4.'
+                    ));
+                }
+            }
+
+            if (rates.every(input => input && !errors.has(input))) {
+                const values = rates.map(input => Number(input.value));
+                if (!(values[0] >= values[1] &&
+                      values[1] >= values[2] &&
+                      values[2] >= values[3] &&
+                      values[3] >= values[4])) {
+                    rates.forEach(input => errors.set(
+                        input,
+                        'Tỷ lệ hoàn phải giảm dần theo thời điểm hủy.'
+                    ));
                 }
             }
         }
