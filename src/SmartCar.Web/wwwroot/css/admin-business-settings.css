@@ -735,3 +735,36 @@
     border-right: 0;
   }
 }
+
+
+.policy-reservation-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.policy-reservation-metrics .policy-metric:nth-child(3),
+.policy-reservation-metrics .policy-metric:nth-child(4) {
+  border-top: 1px solid #e0e9f3;
+}
+
+.policy-reservation-metrics .policy-metric:nth-child(3) {
+  border-left: 0;
+}
+
+.policy-metric-note {
+  display: block;
+  margin-top: .3rem;
+  color: #718198;
+  font-size: .72rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 479.98px) {
+  .policy-reservation-metrics {
+    grid-template-columns: 1fr !important;
+  }
+
+  .policy-reservation-metrics .policy-metric + .policy-metric {
+    border-top: 1px solid #e0e9f3;
+    border-left: 0;
+  }
+}
