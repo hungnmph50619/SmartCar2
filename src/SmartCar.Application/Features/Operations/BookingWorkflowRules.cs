@@ -68,6 +68,16 @@ public static class BookingWorkflowRules
         type != PaymentType.Refund &&
         status == PaymentStatus.Pending;
 
+    public static bool IsOutstandingTrafficFine(
+        PaymentType type,
+        PaymentStatus status,
+        decimal amount) =>
+        type == PaymentType.TrafficFine &&
+        amount > 0m &&
+        status is PaymentStatus.Pending or
+            PaymentStatus.AwaitingConfirmation or
+            PaymentStatus.Failed;
+
     public static bool PreserveForLateReconciliationOnReservationExpiry(
         PaymentStatus status) =>
         status == PaymentStatus.AwaitingConfirmation;
