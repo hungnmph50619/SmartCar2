@@ -644,6 +644,7 @@
                             <span class="input-group-text">giờ</span>
                         </div>
                         <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
                             <input asp-for="CancellationTier1RefundPercent" type="number" min="0" max="100" step=".01" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 1" data-unit="%"
                                    data-current="@current.CancellationTier1RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
@@ -659,6 +660,7 @@
                             <span class="input-group-text">giờ</span>
                         </div>
                         <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
                             <input asp-for="CancellationTier2RefundPercent" type="number" min="0" max="100" step=".01" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 2" data-unit="%"
                                    data-current="@current.CancellationTier2RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
@@ -674,6 +676,7 @@
                             <span class="input-group-text">giờ</span>
                         </div>
                         <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
                             <input asp-for="CancellationTier3RefundPercent" type="number" min="0" max="100" step=".01" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 3" data-unit="%"
                                    data-current="@current.CancellationTier3RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
@@ -689,6 +692,7 @@
                             <span class="input-group-text">giờ</span>
                         </div>
                         <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
                             <input asp-for="CancellationTier4RefundPercent" type="number" min="0" max="100" step=".01" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 4" data-unit="%"
                                    data-current="@current.CancellationTier4RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
@@ -699,6 +703,7 @@
                         <span class="policy-tier-name">Còn dưới @current.CancellationTier4Hours giờ</span>
                         <span class="policy-tier-muted">Hoàn tiền thuê</span>
                         <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
                             <input asp-for="CancellationBelowTierRefundPercent" type="number" min="0" max="100" step=".01" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn khi dưới ngưỡng cuối" data-unit="%"
                                    data-current="@current.CancellationBelowTierRefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
