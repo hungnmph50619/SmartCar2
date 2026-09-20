@@ -260,12 +260,7 @@ internal sealed class PaymentService : IPaymentService
         payment.Method = PaymentMethods.BankQr;
         payment.Status = PaymentStatus.AwaitingConfirmation;
         payment.PaidAt = null;
-        payment.TransactionCode =
-            !expiredBooking && payment.Type == PaymentType.AdditionalCharge
-                ? AdditionalChargeSettlementPolicy.CreateReadyMarker(
-                    payment.BookingId,
-                    DateTime.UtcNow)
-                : null;
+        payment.TransactionCode = null;
 
         Payment? bundledDeposit = null;
 
@@ -758,7 +753,12 @@ internal sealed class PaymentService : IPaymentService
             ? PaymentMethods.BankQr
             : PaymentMethods.NotSelected;
         payment.PaidAt = null;
-        payment.TransactionCode = null;
+        payment.TransactionCode =
+            !expiredBooking && payment.Type == PaymentType.AdditionalCharge
+                ? AdditionalChargeSettlementPolicy.CreateReadyMarker(
+                    payment.BookingId,
+                    DateTime.UtcNow)
+                : null;
 
         if (payment.Type == PaymentType.Rental)
         {
