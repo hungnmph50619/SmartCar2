@@ -271,6 +271,7 @@ internal sealed class PolicyAwareBookingService : IBookingService
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
             booking.VehicleId,
             booking.PickupDate,
+            booking.PickupMethod,
             booking.BookingId,
             cancellationToken);
 
