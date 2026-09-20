@@ -62,6 +62,12 @@ public static class BookingWorkflowRules
             or PaymentStatus.RefundApproved
             or PaymentStatus.Refunded;
 
+    public static bool ShouldVoidPendingCollectionOnTerminalBooking(
+        PaymentType type,
+        PaymentStatus status) =>
+        type != PaymentType.Refund &&
+        status == PaymentStatus.Pending;
+
     public static bool PreserveForLateReconciliationOnReservationExpiry(
         PaymentStatus status) =>
         status == PaymentStatus.AwaitingConfirmation;
