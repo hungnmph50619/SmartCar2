@@ -270,7 +270,7 @@
                 </div>
                 <div class="finance-line"><span>Doanh thu còn phải thu</span><strong class="text-warning">@Model.OutstandingReceivables.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Cọc còn phải thu</span><strong class="text-warning">@Model.OutstandingDeposits.ToString("N0") đ</strong></div>
-                <div class="finance-line"><span><strong>Tổng đang chờ thu</strong></span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span><strong>Tổng doanh thu + cọc chờ thu</strong></span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Phạt chờ khách thanh toán</span><strong class="text-warning">@Model.PendingTrafficFineAmount.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Phạt chờ Staff đối soát</span><strong class="text-warning">@Model.AwaitingTrafficFineConfirmationAmount.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Cọc đang giữ</span><strong>@Model.DepositsHeld.ToString("N0") đ</strong></div>
