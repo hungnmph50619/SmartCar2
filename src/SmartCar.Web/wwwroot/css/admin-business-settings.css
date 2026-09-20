@@ -590,3 +590,46 @@
   grid-column: 2 / -1;
   margin-top: -.15rem;
 }
+
+
+.policy-metrics-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.policy-refund-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-top: .7rem;
+}
+
+.policy-refund-summary span {
+  padding: .32rem .55rem;
+  border: 1px solid #e2eaf3;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #607086;
+  font-size: .74rem;
+  line-height: 1.2;
+}
+
+.policy-refund-summary strong {
+  color: #243a52;
+}
+
+.policy-rule-example {
+  margin-top: .8rem;
+  padding: .65rem .75rem;
+  border: 1px solid #d9e9fb;
+  border-radius: 10px;
+  background: #f4f9ff;
+  color: #45627f;
+  font-size: .78rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 767.98px) {
+  .policy-metrics-three {
+    grid-template-columns: 1fr;
+  }
+}
