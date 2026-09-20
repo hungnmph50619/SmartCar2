@@ -1004,6 +1004,13 @@ public sealed class StaffController : Controller
         var total = approvedRefunds.Sum(item => item.Amount);
         foreach (var refund in approvedRefunds)
         {
+            if (refund.Method == PaymentMethods.CompensationRefund &&
+                string.IsNullOrWhiteSpace(refund.LedgerReference) &&
+                OverdueCompensationLedger.IsFundedRefundCode(refund.TransactionCode))
+            {
+                refund.LedgerReference = refund.TransactionCode;
+            }
+
             refund.Status = PaymentStatus.Refunded;
             refund.PaidAt = refundedAt;
             refund.TransactionCode = transactionCode;
