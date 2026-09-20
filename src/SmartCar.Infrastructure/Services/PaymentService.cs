@@ -742,7 +742,11 @@ internal sealed class PaymentService : IPaymentService
                     Type = PaymentType.Refund,
                     Amount = releaseAmount,
                     Method = PaymentMethods.CompensationRefund,
-                    Status = PaymentStatus.AwaitingRefund
+                    Status = PaymentStatus.AwaitingRefund,
+                    TransactionCode = OverdueCompensationLedger.BuildFundedRefundCode(
+                        booking.BookingId,
+                        overdueAffectedBookingId,
+                        paidAt)
                 });
                 overdueAffectedBooking.RefundAmount = overdueAffectedBooking.Payments
                     .Where(item =>
