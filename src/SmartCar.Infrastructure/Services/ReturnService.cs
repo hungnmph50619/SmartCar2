@@ -18,8 +18,6 @@ internal sealed class ReturnService : IReturnService
     private const int MaximumChargeDescriptionLength = 250;
     private const string AccessoriesComplete = "Đủ";
     private const string AccessoriesMissingPrefix = "Thiếu/mất:";
-    private const string ReturnAccessoriesLabel = "Phụ kiện khi trả:";
-    private const string ReturnNoteSeparator = " | Ghi chú: ";
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
 
@@ -218,7 +216,8 @@ internal sealed class ReturnService : IReturnService
             LateFee = lateFee,
             ImagePaths = string.Join(';', evidencePaths),
             ReturnerFaceImagePath = faceSession.ImagePath,
-            Notes = BuildReturnNotes(accessoryStatus, request.Notes),
+            AccessoryStatus = accessoryStatus,
+            Notes = Normalize(request.Notes),
             CustomerIdentityVerified = true,
             IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
             IdentityVerifiedAt = identityVerifiedAt
@@ -381,7 +380,7 @@ internal sealed class ReturnService : IReturnService
                 return OperationResult.Failure("Biên bản giao xe chưa ghi phụ kiện ban đầu nên chưa đủ căn cứ tạo phí thiếu phụ kiện.");
             }
 
-            if (!HasMissingAccessories(booking.VehicleReturn.Notes))
+            if (!HasMissingAccessories(booking.VehicleReturn.AccessoryStatus))
             {
                 return OperationResult.Failure("Biên bản trả xe chưa ghi nhận phụ kiện thiếu/mất nên chưa thể tạo phí này.");
             }
@@ -825,19 +824,11 @@ internal sealed class ReturnService : IReturnService
             payment.Method != PaymentMethods.DepositDeduction &&
             payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid);
 
-    private static bool HasMissingAccessories(string? notes) =>
-        !string.IsNullOrWhiteSpace(notes) &&
-        notes.TrimStart().StartsWith(
-            $"{ReturnAccessoriesLabel} {AccessoriesMissingPrefix}",
+    private static bool HasMissingAccessories(string? accessoryStatus) =>
+        !string.IsNullOrWhiteSpace(accessoryStatus) &&
+        accessoryStatus.TrimStart().StartsWith(
+            AccessoriesMissingPrefix,
             StringComparison.OrdinalIgnoreCase);
-
-    private static string BuildReturnNotes(string accessoryStatus, string? note)
-    {
-        var normalizedNote = Normalize(note);
-        return normalizedNote is null
-            ? $"{ReturnAccessoriesLabel} {accessoryStatus}"
-            : $"{ReturnAccessoriesLabel} {accessoryStatus}{ReturnNoteSeparator}{normalizedNote}";
-    }
 
     private static IReadOnlyList<string> SplitImagePaths(string? imagePaths) =>
         string.IsNullOrWhiteSpace(imagePaths)
