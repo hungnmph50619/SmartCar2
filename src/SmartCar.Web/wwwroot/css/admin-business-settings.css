@@ -1,0 +1,483 @@
+/* Admin business settings */
+.policy-settings-page {
+  --policy-surface: #ffffff;
+  --policy-soft: #f7faff;
+  --policy-border: #dfe8f3;
+  --policy-muted: #6c7e91;
+  --policy-ink: #102a43;
+  --policy-blue: #1667d9;
+  --policy-green: #169873;
+  --policy-orange: #d78900;
+  --policy-purple: #7656d6;
+  --policy-red: #d84b64;
+}
+
+.policy-settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.15rem;
+}
+
+.policy-settings-title {
+  margin: 0 0 .2rem;
+  color: var(--policy-ink);
+  font-size: clamp(1.7rem, 2.2vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -.035em;
+}
+
+.policy-settings-subtitle {
+  margin: 0;
+  color: var(--policy-muted);
+}
+
+.policy-history-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  white-space: nowrap;
+}
+
+.policy-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1.2rem;
+  overflow: hidden;
+  border: 1px solid #d9eafc;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #eef7ff, #f4fbff);
+}
+
+.policy-overview-item {
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+  min-width: 0;
+  padding: 1rem 1.1rem;
+}
+
+.policy-overview-item + .policy-overview-item {
+  border-left: 1px solid #d6e6f6;
+}
+
+.policy-overview-icon,
+.policy-card-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  font-weight: 900;
+}
+
+.policy-overview-icon {
+  width: 42px;
+  height: 42px;
+  color: var(--policy-blue);
+  background: #dceeff;
+  font-size: 1.1rem;
+}
+
+.policy-overview-item:nth-child(2) .policy-overview-icon {
+  color: var(--policy-green);
+  background: #ddf6ea;
+}
+
+.policy-overview-item:nth-child(3) .policy-overview-icon {
+  color: var(--policy-purple);
+  background: #ece5ff;
+}
+
+.policy-overview-copy {
+  min-width: 0;
+}
+
+.policy-overview-copy strong {
+  display: block;
+  color: var(--policy-ink);
+  font-size: .98rem;
+}
+
+.policy-overview-copy span {
+  display: block;
+  overflow: hidden;
+  margin-top: .1rem;
+  color: var(--policy-muted);
+  font-size: .8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.policy-conflict-alert {
+  margin-bottom: 1rem;
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.policy-card {
+  grid-column: span 4;
+  overflow: hidden;
+  border: 1px solid var(--policy-border);
+  border-radius: 18px;
+  background: var(--policy-surface);
+  box-shadow: 0 10px 28px rgba(16, 42, 67, .055);
+}
+
+.policy-card.policy-card-wide {
+  grid-column: span 7;
+}
+
+.policy-card.policy-card-terms {
+  grid-column: span 5;
+}
+
+.policy-card-main {
+  padding: 1rem;
+}
+
+.policy-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: .8rem;
+  margin-bottom: .9rem;
+}
+
+.policy-card-heading {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.policy-card-heading h2 {
+  margin: 0;
+  color: var(--policy-ink);
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.policy-card-heading p {
+  margin: .12rem 0 0;
+  color: var(--policy-muted);
+  font-size: .8rem;
+}
+
+.policy-card-icon {
+  width: 42px;
+  height: 42px;
+  color: var(--policy-green);
+  background: #e2f6ed;
+  font-size: 1.05rem;
+}
+
+.policy-card[data-policy-group="mileage"] .policy-card-icon {
+  color: var(--policy-blue);
+  background: #e4f0ff;
+}
+
+.policy-card[data-policy-group="late"] .policy-card-icon {
+  color: var(--policy-orange);
+  background: #fff1d6;
+}
+
+.policy-card[data-policy-group="delivery"] .policy-card-icon {
+  color: var(--policy-red);
+  background: #ffe7ec;
+}
+
+.policy-card[data-policy-group="terms"] .policy-card-icon {
+  color: var(--policy-purple);
+  background: #eee8ff;
+}
+
+.policy-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  flex: 0 0 auto;
+  padding: .45rem .7rem;
+  border-radius: 10px;
+  font-size: .82rem;
+}
+
+.policy-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  margin-bottom: .7rem;
+  border: 1px solid #e7eef7;
+  border-radius: 13px;
+  background: var(--policy-soft);
+}
+
+.policy-metrics.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.policy-metric {
+  min-width: 0;
+  padding: .8rem .85rem;
+}
+
+.policy-metric + .policy-metric {
+  border-left: 1px solid #e0e9f3;
+}
+
+.policy-metric-label {
+  display: block;
+  margin-bottom: .15rem;
+  color: var(--policy-muted);
+  font-size: .73rem;
+  line-height: 1.35;
+}
+
+.policy-metric-value {
+  display: block;
+  color: var(--policy-ink);
+  font-size: 1.22rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.policy-helper {
+  display: flex;
+  align-items: flex-start;
+  gap: .45rem;
+  min-height: 1.3rem;
+  margin: 0;
+  color: var(--policy-muted);
+  font-size: .76rem;
+  line-height: 1.45;
+}
+
+.policy-helper-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin-top: .05rem;
+  border-radius: 50%;
+  color: #fff;
+  background: #9db0c4;
+  font-size: .65rem;
+  font-weight: 800;
+}
+
+.policy-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: .85rem;
+  padding-top: .75rem;
+  border-top: 1px solid #edf1f6;
+}
+
+.policy-terms-list {
+  display: grid;
+  gap: .55rem;
+}
+
+.policy-term-row {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .72rem .8rem;
+  border: 1px solid #e5edf6;
+  border-radius: 12px;
+  background: var(--policy-soft);
+}
+
+.policy-term-row-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: var(--policy-blue);
+  background: #e5f0ff;
+  font-size: .9rem;
+  font-weight: 900;
+}
+
+.policy-term-row-copy {
+  min-width: 0;
+}
+
+.policy-term-row-copy strong {
+  display: block;
+  color: var(--policy-ink);
+  font-size: .82rem;
+}
+
+.policy-term-row-copy span {
+  display: block;
+  margin-top: .05rem;
+  color: var(--policy-muted);
+  font-size: .74rem;
+  line-height: 1.35;
+}
+
+.policy-terms-details {
+  margin-top: .65rem;
+  border-top: 1px solid #edf1f6;
+  padding-top: .65rem;
+}
+
+.policy-terms-details summary {
+  color: var(--policy-blue);
+  cursor: pointer;
+  font-size: .78rem;
+  font-weight: 700;
+  list-style: none;
+}
+
+.policy-terms-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.policy-terms-details summary::after {
+  content: " +";
+  font-weight: 800;
+}
+
+.policy-terms-details[open] summary::after {
+  content: " −";
+}
+
+.policy-terms-full {
+  margin-top: .7rem;
+  padding: .85rem;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.policy-terms-full h3 {
+  margin: 0 0 .3rem;
+  color: var(--policy-ink);
+  font-size: .82rem;
+  font-weight: 800;
+}
+
+.policy-terms-full p {
+  margin: 0 0 .8rem;
+  color: #526679;
+  font-size: .76rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.policy-terms-full p:last-child {
+  margin-bottom: 0;
+}
+
+.policy-edit-form {
+  margin-top: .9rem;
+  padding: 1rem;
+  border-top: 1px solid #e6edf5;
+  background: #fbfdff;
+}
+
+.policy-edit-form .form-label {
+  margin-bottom: .35rem;
+  color: #324a60;
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.policy-edit-form .form-control,
+.policy-edit-form .input-group-text {
+  min-height: 42px;
+}
+
+.policy-edit-form textarea.form-control {
+  min-height: 132px;
+}
+
+.policy-edit-form [data-changes] {
+  margin-bottom: 0;
+  box-shadow: none;
+}
+
+.policy-edit-actions {
+  display: flex;
+  gap: .55rem;
+  margin-top: .9rem;
+}
+
+@media (max-width: 1199.98px) {
+  .policy-card {
+    grid-column: span 6;
+  }
+
+  .policy-card.policy-card-wide,
+  .policy-card.policy-card-terms {
+    grid-column: span 12;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .policy-settings-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .policy-history-btn {
+    align-self: flex-start;
+  }
+
+  .policy-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-overview-item + .policy-overview-item {
+    border-top: 1px solid #d6e6f6;
+    border-left: 0;
+  }
+
+  .policy-card,
+  .policy-card.policy-card-wide,
+  .policy-card.policy-card-terms {
+    grid-column: span 12;
+  }
+
+  .policy-metrics.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .policy-metrics.four .policy-metric:nth-child(3) {
+    border-top: 1px solid #e0e9f3;
+    border-left: 0;
+  }
+
+  .policy-metrics.four .policy-metric:nth-child(4) {
+    border-top: 1px solid #e0e9f3;
+  }
+}
+
+@media (max-width: 479.98px) {
+  .policy-card-header {
+    flex-wrap: wrap;
+  }
+
+  .policy-edit-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .policy-metrics,
+  .policy-metrics.four {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-metric + .policy-metric,
+  .policy-metrics.four .policy-metric:nth-child(3),
+  .policy-metrics.four .policy-metric:nth-child(4) {
+    border-top: 1px solid #e0e9f3;
+    border-left: 0;
+  }
+}
