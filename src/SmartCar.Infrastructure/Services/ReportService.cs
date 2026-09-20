@@ -511,8 +511,12 @@ internal sealed class ReportService : IReportService
             var vehicleIncidents = incidentRecords
                 .Where(item => item.VehicleId == vehicle.VehicleId)
                 .ToList();
+            // Tiền phạt giao thông là nghĩa vụ của khách, không phải chi phí vận hành SmartCar.
+            // Chỉ ActualCost (chi phí SmartCar thực chịu) mới làm giảm kết quả ròng.
             var incidentCost = vehicleIncidents
-                .Sum(item => item.ActualCost + item.FineAmount);
+                .Sum(item => ReportFinancialRules.IncidentOperatingCost(
+                    item.ActualCost,
+                    item.FineAmount));
 
             var netOperatingProfit =
                 revenue -
@@ -611,7 +615,9 @@ internal sealed class ReportService : IReportService
 
             foreach (var incident in vehicleIncidents)
             {
-                var cost = incident.ActualCost + incident.FineAmount;
+                var cost = ReportFinancialRules.IncidentOperatingCost(
+                    incident.ActualCost,
+                    incident.FineAmount);
                 if (cost <= 0)
                 {
                     continue;
@@ -620,9 +626,9 @@ internal sealed class ReportService : IReportService
                 transactions.Add(new ReportTransactionDto(
                     incident.OccurredAt,
                     incident.BookingId,
-                    "Sự cố/phạt",
+                    "Chi phí sự cố",
                     string.IsNullOrWhiteSpace(incident.Description)
-                        ? $"Sự cố #{incident.VehicleIncidentId}"
+                        ? $"Chi phí sự cố #{incident.VehicleIncidentId}"
                         : incident.Description,
                     cost,
                     true,
