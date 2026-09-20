@@ -505,7 +505,7 @@
                 @if (Model.Status is BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup)
                 {
                     <div class="alert alert-light border small py-2">
-                        <strong>Không đến nhận sau @RentalPolicy.NoShowGraceMinutes phút:</strong> phí @((RentalPolicy.NoShowFeeRate * 100).ToString("0"))% tiền thuê, hoàn @(((1 - RentalPolicy.NoShowFeeRate) * 100).ToString("0"))% tiền thuê và 100% cọc còn lại.
+                        <strong>Không đến nhận sau @Model.Policy.NoShowGraceMinutes phút:</strong> giữ @Model.Policy.NoShowFeePercent.ToString("0.##")% tiền thuê, hoàn @((100m - Model.Policy.NoShowFeePercent).ToString("0.##"))% tiền thuê và 100% cọc còn lại.
                     </div>
                 }
 
