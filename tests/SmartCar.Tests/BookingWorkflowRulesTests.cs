@@ -297,6 +297,30 @@ public sealed class BookingWorkflowRulesTests
 
 
     [Theory]
+    [InlineData(PaymentType.Rental, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.Deposit, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.VehicleSwapAdjustment, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.Extension, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.AdditionalCharge, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.Refund, PaymentStatus.Pending, false)]
+    [InlineData(PaymentType.Rental, PaymentStatus.AwaitingConfirmation, false)]
+    [InlineData(PaymentType.Rental, PaymentStatus.Paid, false)]
+    [InlineData(PaymentType.Rental, PaymentStatus.Failed, false)]
+    public void ShouldVoidPendingCollectionOnTerminalBooking_OnlyClosesUncollectedObligations(
+        PaymentType type,
+        PaymentStatus status,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.ShouldVoidPendingCollectionOnTerminalBooking(
+                type,
+                status));
+    }
+
+
+    [Theory]
     [InlineData(PaymentStatus.AwaitingConfirmation, true)]
     [InlineData(PaymentStatus.Pending, false)]
     [InlineData(PaymentStatus.Paid, false)]
