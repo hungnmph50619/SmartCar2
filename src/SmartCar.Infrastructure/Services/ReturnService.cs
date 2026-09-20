@@ -517,6 +517,16 @@ internal sealed class ReturnService : IReturnService
                 "Phụ phí đã bắt đầu thanh toán hoặc đã thanh toán nên không thể chốt lại.");
         }
 
+        if (booking.Payments.Any(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Pending &&
+                AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)))
+        {
+            return OperationResult.Failure(
+                "Phụ phí đã được chốt. Nếu cần sửa, hãy mở lại phụ phí trước.");
+        }
+
         var pendingPayments = booking.Payments
             .Where(payment =>
                 payment.Type == PaymentType.AdditionalCharge &&
