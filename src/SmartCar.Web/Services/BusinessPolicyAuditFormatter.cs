@@ -42,6 +42,7 @@ public static class BusinessPolicyAuditFormatter
         new("NoShowFeePercent", "Tỷ lệ giữ tiền thuê khi No-show", value => $"{FormatDecimal(value)}%"),
         new("FreeCancellationWindowMinutes", "Cửa sổ hủy miễn phí", value => $"{FormatInteger(value)} phút"),
         new("MinimumHoursForFreeCancellation", "Còn tối thiểu để hoàn 100%", value => $"{FormatInteger(value)} giờ"),
+        new("CancellationRefundProcessingHours", "Xử lý hoàn tiền sau hủy", value => $"{FormatInteger(value)} giờ"),
         new("CancellationTier1Hours", "Mốc hủy 1", value => $"{FormatInteger(value)} giờ"),
         new("CancellationTier1RefundPercent", "Hoàn ở mốc 1", value => $"{FormatDecimal(value)}%"),
         new("CancellationTier2Hours", "Mốc hủy 2", value => $"{FormatInteger(value)} giờ"),
