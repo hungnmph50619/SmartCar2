@@ -20,6 +20,8 @@ internal sealed class BookingReservationPolicy
         BookingStatus.PendingInspection
     };
 
+    private static readonly SemaphoreSlim ExpiryGate = new(1, 1);
+
     private readonly ApplicationDbContext _dbContext;
 
     public BookingReservationPolicy(ApplicationDbContext dbContext)
@@ -29,6 +31,20 @@ internal sealed class BookingReservationPolicy
 
     public async Task ExpireStaleReservationsAsync(
         CancellationToken cancellationToken = default)
+    {
+        await ExpiryGate.WaitAsync(cancellationToken);
+        try
+        {
+            await ExpireStaleReservationsCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            ExpiryGate.Release();
+        }
+    }
+
+    private async Task ExpireStaleReservationsCoreAsync(
+        CancellationToken cancellationToken)
     {
         await using var ownedTransaction =
             _dbContext.Database.CurrentTransaction is null
