@@ -86,7 +86,9 @@ public sealed class AdminPaymentsController : Controller
                     payment.Method == PaymentMethods.CompensationRefund &&
                     (payment.Status == PaymentStatus.AwaitingRefund ||
                      payment.Status == PaymentStatus.RefundApproved) &&
-                    !OverdueCompensationLedger.IsFundedRefundCode(payment.TransactionCode))
+                    !CompensationLedger.IsFundedRefund(
+                        payment.LedgerReference,
+                        payment.TransactionCode))
                 .Select(payment => payment.BookingId)
                 .Distinct()
                 .ToHashSet()
@@ -194,7 +196,9 @@ public sealed class AdminPaymentsController : Controller
 
         var hasUnfundedLegacyCompensationRefund = awaitingApproval.Any(item =>
             item.Method == PaymentMethods.CompensationRefund &&
-            !OverdueCompensationLedger.IsFundedRefundCode(item.TransactionCode));
+            !CompensationLedger.IsFundedRefund(
+                item.LedgerReference,
+                item.TransactionCode));
 
         if (hasUnfundedLegacyCompensationRefund)
         {
