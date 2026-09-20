@@ -69,7 +69,8 @@ internal sealed class PaymentService : IPaymentService
                 payment.Method,
                 payment.Status,
                 payment.PaidAt,
-                payment.TransactionCode))
+                payment.TransactionCode,
+                payment.LedgerReference))
             .ToListAsync(cancellationToken);
     }
 
