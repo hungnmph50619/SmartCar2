@@ -29,7 +29,8 @@ public interface IPaymentService
         string customerId,
         PaymentType paymentType,
         string actorId,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        int? paymentId = null);
 
     Task<OperationResult> ConfirmQrPaymentAsync(
         int paymentId,
