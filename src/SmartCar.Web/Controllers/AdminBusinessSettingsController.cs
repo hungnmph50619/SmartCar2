@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
+using SmartCar.Domain.Entities;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.Services;
 
@@ -16,6 +17,18 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminBusinessSettingsController : Controller
 {
+    private static readonly HashSet<string> CustomerNoticeGroups = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "deposit",
+        "mileage",
+        "late",
+        "delivery",
+        "reservation",
+        "cancellation",
+        "noshow",
+        "terms"
+    };
+
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
 
@@ -83,6 +96,17 @@ public sealed class AdminBusinessSettingsController : Controller
             $"{auditDescription}. Áp dụng cho đơn mới.",
             oldValues: oldPolicy.ToJson(), newValues: json,
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken: cancellationToken);
+
+        if (CustomerNoticeGroups.Contains(group) &&
+            BusinessPolicyAuditFormatter.GetChanges(oldPolicy.ToJson(), json).Count > 0)
+        {
+            await AddCustomerPolicyNotificationsAsync(
+                group,
+                auditDescription,
+                updatedAt,
+                cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         TempData["SuccessMessage"] = $"Đã lưu {SmartCar.Web.ViewModels.BusinessPolicyGroups.Title(group)}. Áp dụng cho đơn mới; đơn cũ giữ nguyên.";
         return RedirectToAction(nameof(Index));
@@ -168,6 +192,59 @@ public sealed class AdminBusinessSettingsController : Controller
             eligibleAt = eligibleAt.ToString("dd/MM/yyyy HH:mm"),
             message
         });
+    }
+
+    private async Task AddCustomerPolicyNotificationsAsync(
+        string group,
+        string auditDescription,
+        DateTime updatedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var customerRoleId = await _dbContext.Roles
+            .AsNoTracking()
+            .Where(role => role.Name == RoleNames.Customer)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(customerRoleId))
+        {
+            return;
+        }
+
+        var customerIds = await _dbContext.UserRoles
+            .AsNoTracking()
+            .Where(userRole => userRole.RoleId == customerRoleId)
+            .Join(
+                _dbContext.Users.AsNoTracking().Where(user => user.IsActive),
+                userRole => userRole.UserId,
+                user => user.Id,
+                (userRole, user) => user.Id)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (customerIds.Count == 0)
+        {
+            return;
+        }
+
+        var title = $"Cập nhật chính sách {SmartCar.Web.ViewModels.BusinessPolicyGroups.Title(group)}";
+        var vietnamUpdatedAt = updatedAtUtc.AddHours(7);
+        var summary = auditDescription.Length > 650
+            ? auditDescription[..647] + "..."
+            : auditDescription;
+        var message =
+            $"{summary}. Áp dụng cho đơn tạo từ {vietnamUpdatedAt:dd/MM/yyyy HH:mm}. " +
+            "Đơn đã đặt trước thời điểm này giữ nguyên chính sách đã chốt.";
+
+        _dbContext.Notifications.AddRange(
+            customerIds.Select(customerId => new Notification
+            {
+                UserId = customerId,
+                Title = title,
+                Message = message
+            }));
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<int> GetDepositHoldDaysAsync(CancellationToken cancellationToken)
