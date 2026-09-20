@@ -63,7 +63,7 @@ public sealed class RentalPolicySnapshot : IValidatableObject
     [Range(typeof(decimal), "0", "100")] public decimal CancellationTier2RefundPercent { get; set; } = 70m;
     [Range(1, 720)] public int CancellationTier3Hours { get; set; } = 24;
     [Range(typeof(decimal), "0", "100")] public decimal CancellationTier3RefundPercent { get; set; } = 50m;
-    [Range(0, 720)] public int CancellationTier4Hours { get; set; } = 6;
+    [Range(1, 720)] public int CancellationTier4Hours { get; set; } = 6;
     [Range(typeof(decimal), "0", "100")] public decimal CancellationTier4RefundPercent { get; set; } = 20m;
     [Range(typeof(decimal), "0", "100")] public decimal CancellationBelowTierRefundPercent { get; set; } = 0m;
     [Required, StringLength(1500)] public string TrafficFineTerms { get; set; } = RentalPolicy.TrafficFineTerms;
