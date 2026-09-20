@@ -21,6 +21,7 @@ public static class CancellationRefundPolicy
             rentalPaidAt,
             FreeCancellationWindowMinutes,
             MinimumHoursForFreeCancellation,
+            true,
             168, 0.90m,
             48, 0.70m,
             24, 0.50m,
@@ -38,6 +39,7 @@ public static class CancellationRefundPolicy
             rentalPaidAt,
             policy.FreeCancellationWindowMinutes,
             policy.MinimumHoursForFreeCancellation,
+            policy.FreeCancellationRequiresMinimumLead,
             policy.CancellationTier1Hours, policy.CancellationTier1RefundPercent / 100m,
             policy.CancellationTier2Hours, policy.CancellationTier2RefundPercent / 100m,
             policy.CancellationTier3Hours, policy.CancellationTier3RefundPercent / 100m,
@@ -50,6 +52,7 @@ public static class CancellationRefundPolicy
         DateTime? rentalPaidAt,
         int freeWindowMinutes,
         int minimumHoursForFreeCancellation,
+        bool requiresMinimumLeadForFreeCancellation,
         int tier1Hours,
         decimal tier1Rate,
         int tier2Hours,
@@ -68,7 +71,8 @@ public static class CancellationRefundPolicy
         var hoursBeforePickup = (pickupDate - cancelledAt).TotalHours;
 
         if (rentalPaidAt.HasValue &&
-            hoursBeforePickup >= minimumHoursForFreeCancellation &&
+            (!requiresMinimumLeadForFreeCancellation ||
+             hoursBeforePickup >= minimumHoursForFreeCancellation) &&
             cancelledAt >= rentalPaidAt.Value &&
             (cancelledAt - rentalPaidAt.Value).TotalMinutes <= freeWindowMinutes)
         {
@@ -87,14 +91,20 @@ public static class CancellationRefundPolicy
         "từ 7 ngày trở lên: 90%; từ 48 giờ đến dưới 7 ngày: 70%; từ 24 đến dưới 48 giờ: 50%; " +
         "từ 6 đến dưới 24 giờ: 20%; dưới 6 giờ: 0%.";
 
-    public static string GetVietnamesePolicySummary(RentalPolicySnapshot policy) =>
-        $"Hoàn 100% nếu hủy trong {policy.FreeCancellationWindowMinutes} phút sau thanh toán và còn ít nhất {policy.MinimumHoursForFreeCancellation} giờ trước nhận; " +
-        $"còn từ {policy.CancellationTier1Hours} giờ: {policy.CancellationTier1RefundPercent:0.##}%; " +
-        $"từ {policy.CancellationTier2Hours} giờ: {policy.CancellationTier2RefundPercent:0.##}%; " +
-        $"từ {policy.CancellationTier3Hours} giờ: {policy.CancellationTier3RefundPercent:0.##}%; " +
-        $"từ {policy.CancellationTier4Hours} giờ: {policy.CancellationTier4RefundPercent:0.##}%; " +
-        $"dưới mốc cuối: {policy.CancellationBelowTierRefundPercent:0.##}%. " +
-        $"Khoản hoàn sau hủy có mục tiêu xử lý trong {policy.CancellationRefundProcessingHours} giờ.";
+    public static string GetVietnamesePolicySummary(RentalPolicySnapshot policy)
+    {
+        var freeCancellationText = policy.FreeCancellationRequiresMinimumLead
+            ? $"Hoàn 100% nếu hủy trong {policy.FreeCancellationWindowMinutes} phút sau thanh toán và còn ít nhất {policy.MinimumHoursForFreeCancellation} giờ trước nhận; "
+            : $"Hoàn 100% nếu hủy trong {policy.FreeCancellationWindowMinutes} phút sau thanh toán; ";
+
+        return freeCancellationText +
+            $"còn từ {policy.CancellationTier1Hours} giờ: {policy.CancellationTier1RefundPercent:0.##}%; " +
+            $"từ {policy.CancellationTier2Hours} giờ: {policy.CancellationTier2RefundPercent:0.##}%; " +
+            $"từ {policy.CancellationTier3Hours} giờ: {policy.CancellationTier3RefundPercent:0.##}%; " +
+            $"từ {policy.CancellationTier4Hours} giờ: {policy.CancellationTier4RefundPercent:0.##}%; " +
+            $"dưới mốc cuối: {policy.CancellationBelowTierRefundPercent:0.##}%. " +
+            $"Khoản hoàn sau hủy có mục tiêu xử lý trong {policy.CancellationRefundProcessingHours} giờ.";
+    }
 
     public static string GetVietnameseDescription(decimal refundRate) => refundRate switch
     {
