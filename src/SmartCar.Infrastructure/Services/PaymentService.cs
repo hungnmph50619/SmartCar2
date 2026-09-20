@@ -727,7 +727,11 @@ internal sealed class PaymentService : IPaymentService
                 .Where(item =>
                     item.Type == PaymentType.Refund &&
                     item.Method == PaymentMethods.CompensationRefund &&
-                    BookingWorkflowRules.CountsTowardRefundTotal(item.Status))
+                    BookingWorkflowRules.CountsTowardRefundTotal(item.Status) &&
+                    OverdueCompensationLedger.CountsTowardRefundRelation(
+                        item.TransactionCode,
+                        booking.BookingId,
+                        overdueAffectedBookingId))
                 .Sum(item => item.Amount);
 
             var releaseAmount = OverdueCompensationLedger.CalculateRefundReleaseAmount(
