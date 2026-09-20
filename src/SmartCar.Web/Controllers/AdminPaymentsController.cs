@@ -156,9 +156,10 @@ public sealed class AdminPaymentsController : Controller
             }
 
             var outstandingTrafficFine = booking.Payments
-                .Where(payment =>
-                    payment.Type == PaymentType.TrafficFine &&
-                    payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation or PaymentStatus.Failed)
+                .Where(payment => BookingWorkflowRules.IsOutstandingTrafficFine(
+                    payment.Type,
+                    payment.Status,
+                    payment.Amount))
                 .Sum(payment => payment.Amount);
 
             if (outstandingTrafficFine > 0)
