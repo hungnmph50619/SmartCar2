@@ -315,6 +315,11 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Cần mô tả căn cứ và số tiền phụ phí hợp lệ.");
         }
 
+        if (decimal.Truncate(request.Amount) != request.Amount)
+        {
+            return OperationResult.Failure("Số tiền phụ phí phải là số nguyên đồng.");
+        }
+
         if (description.Length > MaximumChargeDescriptionLength)
         {
             return OperationResult.Failure(
