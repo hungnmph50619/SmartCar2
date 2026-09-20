@@ -915,7 +915,9 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Refunds));
         }
 
-        if (approvedRefunds.Any(item => item.Method == PaymentMethods.CompensationRefund))
+        if (approvedRefunds.Any(item =>
+                item.Method == PaymentMethods.CompensationRefund &&
+                !OverdueCompensationLedger.IsFundedRefundCode(item.TransactionCode)))
         {
             var openOverdueDebts = await _dbContext.Payments
                 .AsNoTracking()
