@@ -12,7 +12,7 @@ public static class BusinessPolicyGroups
         "schedule" => new[] { "VehicleTurnaroundMinutes" },
         "cancellation" => new[]
         {
-            "FreeCancellationWindowMinutes", "MinimumHoursForFreeCancellation", "CancellationRefundProcessingHours",
+            "FreeCancellationWindowMinutes", "CancellationRefundProcessingHours",
             "CancellationTier1Hours", "CancellationTier1RefundPercent",
             "CancellationTier2Hours", "CancellationTier2RefundPercent",
             "CancellationTier3Hours", "CancellationTier3RefundPercent",
