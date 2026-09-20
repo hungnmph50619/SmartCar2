@@ -45,6 +45,16 @@
     var extensionAwaitingConfirmation = b.Payments.Any(payment =>
         payment.Type == PaymentType.Extension &&
         payment.Status == PaymentStatus.AwaitingConfirmation);
+    var overdueCompensationDebtOpen = b.Payments
+        .Where(payment =>
+            payment.Type == PaymentType.OverdueCompensationDebt &&
+            payment.Amount > 0m &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
+        .Sum(payment => payment.Amount);
+    var overdueCompensationDebtAwaiting = b.Payments.Any(payment =>
+        payment.Type == PaymentType.OverdueCompensationDebt &&
+        payment.Amount > 0m &&
+        payment.Status == PaymentStatus.AwaitingConfirmation);
 
     var paymentBankName = Configuration["PaymentQr:BankName"]?.Trim() ?? "Vietcombank";
     var paymentAccountNumber = Configuration["PaymentQr:AccountNumber"]?.Trim() ?? string.Empty;
@@ -392,6 +402,43 @@
 
     @if (b.Status == BookingStatus.Rented)
     {
+        @if (overdueCompensationDebtOpen > 0m)
+        {
+            <section class="card card-body shadow-sm mb-3 border-danger rounded-4">
+                <h2 class="h5 text-danger">Bồi thường quá hạn còn thiếu</h2>
+                <p class="mb-2">
+                    Sau khi khấu trừ phần cọc khả dụng, khách còn phải thanh toán
+                    <strong>@overdueCompensationDebtOpen.ToString("N0") đ</strong>.
+                    Khoản này độc lập với phí gia hạn và phụ phí trả xe.
+                </p>
+
+                @if (overdueCompensationDebtAwaiting)
+                {
+                    <div class="alert alert-warning py-2">
+                        Khách đã báo chuyển khoản/QR. Không thu tiền mặt đồng thời.
+                    </div>
+                    <a class="btn btn-sm btn-warning"
+                       asp-controller="StaffPayments"
+                       asp-action="Reconciliation">
+                        Mở đối soát thanh toán
+                    </a>
+                }
+                else
+                {
+                    <form asp-controller="StaffPayments"
+                          asp-action="CollectOverdueCompensationDebtCash"
+                          method="post"
+                          data-loading-form
+                          data-confirm="Xác nhận bạn đã thực nhận đủ @overdueCompensationDebtOpen.ToString("N0") đ bồi thường quá hạn bằng tiền mặt?">
+                        <input type="hidden" name="bookingId" value="@b.BookingId" />
+                        <button class="btn btn-success" type="submit">
+                            Thu đủ @overdueCompensationDebtOpen.ToString("N0") đ tiền mặt
+                        </button>
+                    </form>
+                }
+            </section>
+        }
+
         <section class="card card-body shadow-sm mb-3 rounded-4">
             <div class="d-flex gap-3 align-items-start">
                 <span class="staff-step-number">5</span>
