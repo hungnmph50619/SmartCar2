@@ -159,6 +159,20 @@ public sealed class StaffExtensionCashWorkflowTests
             TotalAmount = 1_000_000m,
             Status = BookingStatus.PendingInspection
         });
+        db.Bookings.Add(new Booking
+        {
+            BookingId = 204,
+            CustomerId = "customer-2",
+            VehicleId = 10,
+            PickupDate = DateTime.Now.AddHours(-1),
+            ReturnDate = DateTime.Now.AddDays(1),
+            DailyPrice = 700_000m,
+            NumberOfDays = 1,
+            RentalAmount = 700_000m,
+            DepositAmount = 0m,
+            TotalAmount = 700_000m,
+            Status = BookingStatus.Cancelled
+        });
         db.Payments.Add(new Payment
         {
             BookingId = 103,
@@ -173,13 +187,106 @@ public sealed class StaffExtensionCashWorkflowTests
         var controller = CreateController(db);
         await controller.CollectOverdueCompensationDebtCash(103, default);
 
-        var payment = await db.Payments.SingleAsync();
+        var payment = await db.Payments.SingleAsync(item =>
+            item.BookingId == 103 &&
+            item.Type == PaymentType.OverdueCompensationDebt);
         Assert.Equal(PaymentStatus.Paid, payment.Status);
         Assert.Equal(PaymentMethods.Cash, payment.Method);
         Assert.NotNull(payment.PaidAt);
         Assert.Equal(
             "OVERDUE-DEBT-103-204-20260920120000",
             payment.TransactionCode);
+
+        var compensationRefund = await db.Payments.SingleAsync(item =>
+            item.BookingId == 204 &&
+            item.Type == PaymentType.Refund &&
+            item.Method == PaymentMethods.CompensationRefund);
+        Assert.Equal(700_000m, compensationRefund.Amount);
+        Assert.Equal(PaymentStatus.AwaitingRefund, compensationRefund.Status);
+    }
+
+    [Fact]
+    public async Task CollectOverdueCompensationDebtCash_DoesNotDuplicateLegacyFullCompensationRefund()
+    {
+        await using var db = CreateDbContext();
+
+        db.Bookings.AddRange(
+            new Booking
+            {
+                BookingId = 105,
+                CustomerId = "customer-1",
+                VehicleId = 10,
+                PickupDate = DateTime.Now.AddDays(-2),
+                ReturnDate = DateTime.Now.AddHours(-1),
+                DailyPrice = 500_000m,
+                NumberOfDays = 2,
+                RentalAmount = 1_000_000m,
+                DepositAmount = 700_000m,
+                TotalAmount = 1_000_000m,
+                Status = BookingStatus.PendingInspection
+            },
+            new Booking
+            {
+                BookingId = 206,
+                CustomerId = "customer-2",
+                VehicleId = 10,
+                PickupDate = DateTime.Now.AddHours(-1),
+                ReturnDate = DateTime.Now.AddDays(1),
+                DailyPrice = 1_000_000m,
+                NumberOfDays = 1,
+                RentalAmount = 1_000_000m,
+                DepositAmount = 0m,
+                TotalAmount = 1_000_000m,
+                Status = BookingStatus.Cancelled
+            });
+
+        db.Payments.AddRange(
+            new Payment
+            {
+                BookingId = 105,
+                Type = PaymentType.AdditionalCharge,
+                Amount = 700_000m,
+                Method = PaymentMethods.DepositDeduction,
+                Status = PaymentStatus.Paid,
+                PaidAt = DateTime.UtcNow.AddMinutes(-5),
+                TransactionCode = "OVERDUE-COMP-105-206-20260920115500"
+            },
+            new Payment
+            {
+                BookingId = 105,
+                Type = PaymentType.OverdueCompensationDebt,
+                Amount = 300_000m,
+                Method = PaymentMethods.NotSelected,
+                Status = PaymentStatus.Pending,
+                TransactionCode = "OVERDUE-DEBT-105-206-20260920120000"
+            },
+            new Payment
+            {
+                BookingId = 206,
+                Type = PaymentType.Refund,
+                Amount = 1_000_000m,
+                Method = PaymentMethods.CompensationRefund,
+                Status = PaymentStatus.AwaitingRefund
+            });
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db);
+        await controller.CollectOverdueCompensationDebtCash(105, default);
+
+        var debt = await db.Payments.SingleAsync(item =>
+            item.BookingId == 105 &&
+            item.Type == PaymentType.OverdueCompensationDebt);
+        Assert.Equal(PaymentStatus.Paid, debt.Status);
+
+        var compensationRefunds = await db.Payments
+            .Where(item =>
+                item.BookingId == 206 &&
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.CompensationRefund)
+            .ToListAsync();
+
+        var compensationRefund = Assert.Single(compensationRefunds);
+        Assert.Equal(1_000_000m, compensationRefund.Amount);
     }
 
     [Fact]
