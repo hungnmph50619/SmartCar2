@@ -945,7 +945,9 @@ public sealed class StaffController : Controller
             "StaffExecuteApprovedRefund",
             nameof(Payment),
             bookingId,
-            $"Thực hiện khoản hoàn đã được Admin duyệt cho đơn #{bookingId}: {total:N0} đồng, mã GD {transactionCode}.",
+            $"Thực hiện khoản hoàn đã được Admin duyệt cho đơn #{bookingId}: {total:N0} đồng, " +
+            $"mã GD {transactionCode}; chuyển tới {bank.BankName} - {bank.MaskedAccountNumber}, " +
+            $"chủ tài khoản {bank.AccountHolderName}.",
             cancellationToken);
 
         TempData["SuccessMessage"] = $"Đã hoàn {total:N0} đ cho đơn #{bookingId}.";
