@@ -88,6 +88,19 @@ public sealed class RentalPolicySnapshotTests
     }
 
     [Fact]
+    public void OperationalPreparationUsesBookingSnapshotValues()
+    {
+        var policy = new RentalPolicySnapshot
+        {
+            VehicleTurnaroundMinutes = 90,
+            DeliveryLeadMinutes = 45
+        };
+
+        Assert.Equal(90, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
+        Assert.Equal(135, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+    }
+
+    [Fact]
     public void WorkflowSettingsRoundTripInsideBookingSnapshot()
     {
         var configured = new RentalPolicySnapshot
