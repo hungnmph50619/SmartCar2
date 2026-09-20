@@ -56,6 +56,7 @@ internal sealed class PolicyAwareVehicleService : IVehicleService
             var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
                 vehicle.VehicleId,
                 request.PickupDate,
+                VehiclePickupMethod.StorePickup,
                 null,
                 cancellationToken);
 
