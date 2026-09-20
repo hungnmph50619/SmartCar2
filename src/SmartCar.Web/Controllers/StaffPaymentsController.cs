@@ -450,7 +450,7 @@ public sealed class StaffPaymentsController : Controller
                     item.Method == PaymentMethods.CompensationRefund &&
                     BookingWorkflowRules.CountsTowardRefundTotal(item.Status) &&
                     OverdueCompensationLedger.CountsTowardRefundRelation(
-                        item.TransactionCode,
+                        item.LedgerReference ?? item.TransactionCode,
                         booking.BookingId,
                         affectedBookingId))
                 .Sum(item => item.Amount);
@@ -465,16 +465,20 @@ public sealed class StaffPaymentsController : Controller
                 continue;
             }
 
+            var fundedRefundReference =
+                OverdueCompensationLedger.BuildFundedRefundCode(
+                    booking.BookingId,
+                    affectedBookingId,
+                    paidAt);
+
             affectedBooking.Payments.Add(new Payment
             {
                 Type = PaymentType.Refund,
                 Amount = releaseAmount,
                 Method = PaymentMethods.CompensationRefund,
                 Status = PaymentStatus.AwaitingRefund,
-                TransactionCode = OverdueCompensationLedger.BuildFundedRefundCode(
-                    booking.BookingId,
-                    affectedBookingId,
-                    paidAt)
+                TransactionCode = fundedRefundReference,
+                LedgerReference = fundedRefundReference
             });
             affectedBooking.RefundAmount = affectedBooking.Payments
                 .Where(item =>
