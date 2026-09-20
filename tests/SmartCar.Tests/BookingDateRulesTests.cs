@@ -59,7 +59,7 @@ public sealed class BookingDateRulesTests
     }
 
     [Fact]
-    public void CounterRentalView_UsesSharedServerPickupLeadRule()
+    public void CounterRentalView_UsesConfiguredPickupLeadRule()
     {
         var repositoryRoot = FindRepositoryRoot();
         var viewPath = Path.Combine(
@@ -71,8 +71,18 @@ public sealed class BookingDateRulesTests
             "CounterRental.cshtml");
         var source = File.ReadAllText(viewPath);
 
-        Assert.Contains("BookingDateRules.MinimumPickupLeadMinutes", source, StringComparison.Ordinal);
+        Assert.Contains("policy.MinimumPickupLeadMinutes", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Date.now() + 4 * 60000", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IsValidRange_UsesConfiguredPickupLead()
+    {
+        var pickup = DateTime.Now.AddMinutes(20);
+        var returnDate = pickup.AddDays(1);
+
+        Assert.False(BookingDateRules.IsValidRange(pickup, returnDate, 30));
+        Assert.True(BookingDateRules.IsValidRange(pickup, returnDate, 10));
     }
 
     private static string FindRepositoryRoot()
