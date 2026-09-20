@@ -297,6 +297,28 @@ public sealed class BookingWorkflowRulesTests
 
 
     [Theory]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Pending, 500000, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.AwaitingConfirmation, 500000, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Failed, 500000, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Failed, 0, false)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Paid, 500000, false)]
+    [InlineData(PaymentType.Rental, PaymentStatus.Pending, 500000, false)]
+    public void IsOutstandingTrafficFine_OnlyBlocksPositiveOpenFineLedger(
+        PaymentType type,
+        PaymentStatus status,
+        decimal amount,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.IsOutstandingTrafficFine(
+                type,
+                status,
+                amount));
+    }
+
+
+    [Theory]
     [InlineData(PaymentType.Rental, PaymentStatus.Pending, true)]
     [InlineData(PaymentType.Deposit, PaymentStatus.Pending, true)]
     [InlineData(PaymentType.VehicleSwapAdjustment, PaymentStatus.Pending, true)]
