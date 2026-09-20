@@ -757,6 +757,46 @@ public sealed class StaffController : Controller
                     item => item.Amount,
                     cancellationToken);
 
+        var openOverdueDebtRows = bookingIds.Length == 0
+            ? new List<(decimal Amount, string? TransactionCode)>()
+            : (await _dbContext.Payments.AsNoTracking()
+                .Where(payment =>
+                    payment.Amount > 0m &&
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation) &&
+                    payment.TransactionCode != null &&
+                    (
+                        payment.Type == PaymentType.OverdueCompensationDebt ||
+                        (payment.Type == PaymentType.AdditionalCharge &&
+                         payment.TransactionCode.StartsWith(OverdueCompensationLedger.DebtPrefix))
+                    ))
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    payment.TransactionCode
+                })
+                .ToListAsync(cancellationToken))
+                .Select(payment => (payment.Amount, payment.TransactionCode))
+                .ToList();
+
+        var unfundedCompensationByAffectedBooking = openOverdueDebtRows
+            .Select(payment => new
+            {
+                payment.Amount,
+                Parsed = OverdueCompensationLedger.TryParseDebtRelation(
+                    payment.TransactionCode,
+                    out _,
+                    out var affectedBookingId),
+                AffectedBookingId = affectedBookingId
+            })
+            .Where(item =>
+                item.Parsed &&
+                bookingIds.Contains(item.AffectedBookingId))
+            .GroupBy(item => item.AffectedBookingId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(item => item.Amount));
+
         var customerIds = actionableGroups
             .Select(group => group.First().Booking.CustomerId)
             .Distinct()
@@ -792,6 +832,8 @@ public sealed class StaffController : Controller
                 AwaitingApprovalAmount = awaitingApprovalAmount,
                 OutstandingTrafficFineAmount =
                     outstandingTrafficFineByBooking.GetValueOrDefault(first.BookingId),
+                UnfundedCompensationAmount =
+                    unfundedCompensationByAffectedBooking.GetValueOrDefault(first.BookingId),
                 BankName = bank?.BankName,
                 AccountNumber = bank?.AccountNumber,
                 AccountHolderName = bank?.AccountHolderName,
