@@ -38,6 +38,7 @@
         PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
         PaymentType.AdditionalCharge when method == PaymentMethods.DepositDeduction => "Khấu trừ tiền cọc",
         PaymentType.AdditionalCharge => "Phụ phí",
+        PaymentType.OverdueCompensationDebt => "Bồi thường quá hạn còn thiếu",
         PaymentType.Refund when method == PaymentMethods.DepositRefund => "Hoàn tiền cọc",
         PaymentType.Refund when method == PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
         PaymentType.Refund when method == PaymentMethods.CompensationRefund => "Hỗ trợ / bồi thường",
