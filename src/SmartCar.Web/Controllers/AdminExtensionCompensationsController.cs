@@ -239,183 +239,20 @@ public sealed class AdminExtensionCompensationsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RecordIntentionalConflictCompensation(
+    public IActionResult RecordIntentionalConflictCompensation(
         int renterBookingId,
         int affectedBookingId,
-        bool violationConfirmed,
-        CancellationToken cancellationToken)
+        bool violationConfirmed)
     {
-        if (!violationConfirmed)
-        {
-            TempData["ErrorMessage"] =
-                "Chỉ ghi nhận khi đã xác nhận khách A được thông báo từ chối gia hạn nhưng vẫn cố tình không trả xe đúng hạn và làm ảnh hưởng đơn B.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
+        TempData["ErrorMessage"] =
+            "Luồng xử lý cũ đã được vô hiệu hóa để tránh hai công thức bồi thường khác nhau. " +
+            "Hãy xử lý vi phạm quá hạn tại chi tiết đơn đang thuê; hệ thống sẽ trừ cọc khả dụng, " +
+            "ghi phần còn thiếu thành nợ và chỉ cho chuyển bồi thường sau khi nguồn tiền đã đủ.";
 
-        if (renterBookingId <= 0 || affectedBookingId <= 0 || renterBookingId == affectedBookingId)
-        {
-            TempData["ErrorMessage"] = "Mã đơn A/B không hợp lệ.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        var renterBooking = await _dbContext.Bookings
-            .Include(item => item.Payments)
-            .Include(item => item.VehicleReturn)
-            .FirstOrDefaultAsync(item => item.BookingId == renterBookingId, cancellationToken);
-
-        var affectedBooking = await _dbContext.Bookings
-            .Include(item => item.Payments)
-            .FirstOrDefaultAsync(item => item.BookingId == affectedBookingId, cancellationToken);
-
-        if (renterBooking is null || affectedBooking is null)
-        {
-            TempData["ErrorMessage"] = "Không tìm thấy đơn A hoặc đơn B.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        if (renterBooking.VehicleId != affectedBooking.VehicleId)
-        {
-            TempData["ErrorMessage"] = "Đơn A và đơn B không sử dụng cùng xe nên không đủ căn cứ ghi nhận xung đột này.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        var renterEffectiveReturn = renterBooking.VehicleReturn?.ReturnedAt ?? DateTime.Now;
-        var renterStillHoldingVehicle = renterBooking.Status == BookingStatus.Rented;
-        if (!renterStillHoldingVehicle && renterEffectiveReturn <= affectedBooking.PickupDate)
-        {
-            TempData["ErrorMessage"] =
-                "Thời điểm trả xe của A không làm chậm thời điểm nhận xe của B; chưa đủ căn cứ áp dụng bồi thường do cố tình không trả đúng hạn.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        if (renterStillHoldingVehicle && DateTime.Now <= affectedBooking.PickupDate)
-        {
-            TempData["ErrorMessage"] =
-                "Đơn B chưa đến giờ nhận xe nên chưa thể xác nhận A đã làm ảnh hưởng việc giao xe cho B.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        var contractCompensation = Math.Max(0m, affectedBooking.TotalAmount);
-        if (contractCompensation <= 0)
-        {
-            TempData["ErrorMessage"] = "Giá trị hợp đồng của đơn B không hợp lệ.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        var availableDeposit = CalculateAvailableDeposit(renterBooking.Payments);
-        if (availableDeposit < contractCompensation)
-        {
-            TempData["ErrorMessage"] =
-                $"Theo luồng đã thống nhất, A phải bồi thường bằng giá hợp đồng B: {contractCompensation:N0} đ, " +
-                $"nhưng cọc A hiện chỉ còn {availableDeposit:N0} đ. " +
-                "Hệ thống không tự lấy tiền SmartCar để bù phần thiếu; cần xử lý thu bổ sung từ A trước khi xác nhận bồi thường đủ cho B.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        var duplicate = renterBooking.Payments.Any(payment =>
-            payment.Type == PaymentType.AdditionalCharge &&
-            payment.Method == PaymentMethods.DepositDeduction &&
-            payment.Status == PaymentStatus.Paid &&
-            !string.IsNullOrWhiteSpace(payment.TransactionCode) &&
-            payment.TransactionCode.StartsWith(
-                $"{DeniedExtensionCompensationPrefix}{renterBookingId}-{affectedBookingId}-",
-                StringComparison.OrdinalIgnoreCase));
-
-        if (duplicate)
-        {
-            TempData["ErrorMessage"] = "Khoản bồi thường cho cặp đơn A/B này đã được ghi nhận trước đó.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-
-        if (BlockingStatuses.Contains(affectedBooking.Status))
-        {
-            var cancelResult = await _bookingOperationService.CancelByAdminAsync(
-                adminId,
-                new CancelBookingRequest(
-                    affectedBookingId,
-                    $"SmartCar phải hủy do khách của đơn #{renterBookingId} đã bị từ chối gia hạn nhưng vẫn không trả xe đúng hạn, làm ảnh hưởng đơn #{affectedBookingId}."),
-                cancellationToken);
-
-            if (!cancelResult.Succeeded)
-            {
-                TempData["ErrorMessage"] = string.Join("; ", cancelResult.Errors);
-                return RedirectToAction("Index", "AdminExtensions");
-            }
-
-            affectedBooking = await _dbContext.Bookings
-                .Include(item => item.Payments)
-                .FirstAsync(item => item.BookingId == affectedBookingId, cancellationToken);
-        }
-        else if (affectedBooking.Status is not (BookingStatus.Cancelled or BookingStatus.Rejected))
-        {
-            TempData["ErrorMessage"] =
-                "Trạng thái đơn B không phù hợp để tạo khoản bồi thường do hủy/không thể giao xe.";
-            return RedirectToAction("Index", "AdminExtensions");
-        }
-
-        renterBooking.Payments.Add(new Payment
-        {
-            Type = PaymentType.AdditionalCharge,
-            Amount = contractCompensation,
-            Method = PaymentMethods.DepositDeduction,
-            Status = PaymentStatus.Paid,
-            PaidAt = DateTime.UtcNow,
-            TransactionCode =
-                $"{DeniedExtensionCompensationPrefix}{renterBookingId}-{affectedBookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
-        });
-
-        affectedBooking.Payments.Add(new Payment
-        {
-            Type = PaymentType.Refund,
-            Amount = contractCompensation,
-            Method = PaymentMethods.CompensationRefund,
-            Status = PaymentStatus.AwaitingRefund
-        });
-        affectedBooking.RefundAmount = affectedBooking.Payments
-            .Where(payment =>
-                payment.Type == PaymentType.Refund &&
-                BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
-            .Sum(payment => payment.Amount);
-        affectedBooking.RefundReason = AppendText(
-            affectedBooking.RefundReason,
-            $"Bồi thường {contractCompensation:N0} đồng bằng giá hợp đồng do đơn #{renterBookingId} cố tình không trả xe đúng hạn làm ảnh hưởng.");
-
-        _dbContext.Notifications.Add(new Notification
-        {
-            UserId = renterBooking.CustomerId,
-            Title = "Khấu trừ cọc do không trả xe đúng hạn",
-            Message =
-                $"Đơn #{renterBookingId}: do đã được thông báo từ chối gia hạn nhưng vẫn không trả xe đúng hạn làm ảnh hưởng đơn #{affectedBookingId}, " +
-                $"SmartCar ghi nhận bồi thường {contractCompensation:N0} đồng bằng giá hợp đồng của đơn bị ảnh hưởng và khấu trừ từ cọc đã nộp."
-        });
-
-        _dbContext.Notifications.Add(new Notification
-        {
-            UserId = affectedBooking.CustomerId,
-            Title = "Hoàn tiền và bồi thường do không thể giao xe",
-            Message =
-                $"Đơn #{affectedBookingId}: SmartCar ghi nhận thêm {contractCompensation:N0} đồng bồi thường do đơn trước không trả xe đúng hạn. " +
-                "Khoản này sẽ được gộp cùng các khoản hoàn đang chờ của đơn."
-        });
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await _auditService.WriteAsync(
-            adminId,
-            "ResolveExtensionConflictByCancellation",
-            nameof(Booking),
-            affectedBookingId.ToString(),
-            $"TH1: đơn #{renterBookingId} đã bị từ chối gia hạn nhưng vẫn không trả đúng hạn, ảnh hưởng đơn #{affectedBookingId}. " +
-            $"Bồi thường bằng giá hợp đồng B: {contractCompensation:N0} đồng, khấu trừ từ cọc A.",
-            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-            cancellationToken: cancellationToken);
-
-        TempData["SuccessMessage"] =
-            $"Đã ghi nhận bồi thường {contractCompensation:N0} đ bằng giá hợp đồng B và khấu trừ từ cọc A. Khoản này được gộp vào lần hoàn tiền cho B.";
-
-        return RedirectToAction("Index", "AdminExtensions");
+        return RedirectToAction(
+            "Details",
+            "AdminBookings",
+            new { id = renterBookingId });
     }
 
     [HttpPost]
