@@ -71,7 +71,8 @@ public sealed class AdminPaymentsController : Controller
                 payment.Type is
                     PaymentType.Extension or
                     PaymentType.AdditionalCharge or
-                    PaymentType.VehicleSwapAdjustment,
+                    PaymentType.VehicleSwapAdjustment or
+                    PaymentType.OverdueCompensationDebt,
             "refund" =>
                 payment.Type == PaymentType.Refund &&
                 payment.Status != PaymentStatus.Failed,
