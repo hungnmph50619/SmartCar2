@@ -168,16 +168,20 @@ public sealed class AdminOverdueViolationsController : Controller
         // sau khi A thanh toán/được Staff đối soát thành công.
         if (depositDeduction > 0m)
         {
+            var fundedRefundReference =
+                OverdueCompensationLedger.BuildFundedRefundCode(
+                    renterBookingId,
+                    affectedBookingId,
+                    now);
+
             affected.Payments.Add(new Payment
             {
                 Type = PaymentType.Refund,
                 Amount = depositDeduction,
                 Method = PaymentMethods.CompensationRefund,
                 Status = PaymentStatus.AwaitingRefund,
-                TransactionCode = OverdueCompensationLedger.BuildFundedRefundCode(
-                    renterBookingId,
-                    affectedBookingId,
-                    now)
+                TransactionCode = fundedRefundReference,
+                LedgerReference = fundedRefundReference
             });
         }
 
