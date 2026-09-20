@@ -1,5 +1,7 @@
 @model IReadOnlyList<SmartCar.Web.ViewModels.StaffRefundViewModel>
 @using SmartCar.Web.Extensions
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Hoàn tiền đã duyệt";
 }
@@ -31,7 +33,12 @@ else
         {
             var bankMissing = string.IsNullOrWhiteSpace(item.AccountNumber);
             var batchBlocked = item.HasAwaitingApproval;
-            var canTransfer = !bankMissing && !batchBlocked;
+            var hasApprovedDepositRefund = item.Lines.Any(line =>
+                line.Status == PaymentStatus.RefundApproved &&
+                line.Method == PaymentMethods.DepositRefund);
+            var trafficFineBlocked =
+                hasApprovedDepositRefund && item.HasOutstandingTrafficFine;
+            var canTransfer = !bankMissing && !batchBlocked && !trafficFineBlocked;
 
             <div class="card shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between gap-2 flex-wrap">
@@ -53,6 +60,17 @@ else
                             Đơn này còn <strong>@item.AwaitingApprovalAmount.ToString("N0") đ</strong>
                             đang chờ Admin duyệt. Staff phải chờ toàn bộ batch được duyệt rồi mới chuyển một lần,
                             tránh hoàn thiếu hoặc dùng nhiều mã giao dịch cho cùng đợt quyết toán.
+                        </div>
+                    }
+
+                    @if (trafficFineBlocked)
+                    {
+                        <div class="alert alert-danger">
+                            <strong>Tạm khóa hoàn cọc.</strong>
+                            Sau khi Admin duyệt hoàn đã phát sinh
+                            <strong>@item.OutstandingTrafficFineAmount.ToString("N0") đ</strong>
+                            phạt/vi phạm chưa xử lý. Vì tiền cọc chưa được chuyển thực tế,
+                            Staff phải chờ nghĩa vụ này được xử lý rồi mới hoàn cọc.
                         </div>
                     }
 
