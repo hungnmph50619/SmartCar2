@@ -632,7 +632,7 @@ public sealed class ReturnsController : Controller
         await WriteAuditAsync(
             "StaffCollectAdditionalChargeCash",
             nameof(Payment),
-            bookingId,
+            payment.PaymentId,
             $"Nhân viên thu {outstandingAmount:N0} đồng phụ phí bằng tiền mặt cho đơn #{bookingId}. Mã nội bộ: {payment.TransactionCode}.",
             cancellationToken);
 
