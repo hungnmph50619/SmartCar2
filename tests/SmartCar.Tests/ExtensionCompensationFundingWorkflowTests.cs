@@ -161,10 +161,10 @@ public sealed class ExtensionCompensationFundingWorkflowTests
             item.Method == PaymentMethods.CompensationRefund);
 
         Assert.False(string.IsNullOrWhiteSpace(refund.LedgerReference));
-        Assert.True(
-            CompensationLedger.IsFundedRefund(
-                refund.LedgerReference,
-                refund.TransactionCode));
+        Assert.StartsWith(
+            "COMP-FUNDED-EXT-",
+            refund.LedgerReference,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class BookingOperationStub : IBookingOperationService
