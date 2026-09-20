@@ -123,39 +123,89 @@ internal sealed class ReportService : IReportService
             })
             .ToListAsync(cancellationToken);
 
-        // Thu tiền mặt tại quầy đã có Audit Log StaffCounterRentalCash.
-        // Tận dụng log hiện có để báo cáo hiển thị nhân viên đã thu tiền mà không cần thêm cột DB mới.
-        var cashEntityIds = periodPayments
+        // Gắn người thu theo đúng từng giao dịch tiền mặt.
+        // Rental cash audit theo Booking; Extension/AdditionalCharge audit theo Payment.
+        // Với dữ liệu cũ của phụ phí, EntityId từng lưu BookingId nên ưu tiên khớp thêm mã giao dịch.
+        var cashPayments = periodPayments
             .Where(item => item.Type != PaymentType.Refund && item.Method == PaymentMethods.Cash)
+            .ToList();
+        var cashBookingEntityIds = cashPayments
             .Select(item => item.BookingId.ToString())
             .Distinct()
             .ToArray();
+        var cashPaymentEntityIds = cashPayments
+            .Select(item => item.PaymentId.ToString())
+            .Distinct()
+            .ToArray();
 
-        var cashAudits = cashEntityIds.Length == 0
+        var cashAudits = cashPayments.Count == 0
             ? new List<CashAuditRow>()
             : await _dbContext.AuditLogs
                 .AsNoTracking()
                 .Where(log =>
-                    log.Action == "StaffCounterRentalCash" &&
-                    log.EntityName == "Booking" &&
-                    cashEntityIds.Contains(log.EntityId))
-                .Select(log => new CashAuditRow(log.EntityId, log.UserId, log.CreatedAt))
+                    (log.Action == "StaffReceiveCounterCash" &&
+                     log.EntityName == "Booking" &&
+                     cashBookingEntityIds.Contains(log.EntityId)) ||
+                    ((log.Action == "StaffCollectExtensionCash" ||
+                      log.Action == "StaffCollectAdditionalChargeCash") &&
+                     log.EntityName == "Payment" &&
+                     (cashPaymentEntityIds.Contains(log.EntityId) ||
+                      cashBookingEntityIds.Contains(log.EntityId))))
+                .Select(log => new CashAuditRow(
+                    log.Action,
+                    log.EntityName,
+                    log.EntityId,
+                    log.UserId,
+                    log.Description,
+                    log.CreatedAt))
                 .ToListAsync(cancellationToken);
 
-        var collectorUserByBooking = new Dictionary<int, string>();
-        foreach (var audit in cashAudits.OrderByDescending(item => item.CreatedAt))
+        var collectorUserByPayment = new Dictionary<int, string>();
+        foreach (var payment in cashPayments)
         {
-            if (string.IsNullOrWhiteSpace(audit.UserId) ||
-                !int.TryParse(audit.EntityId, out var bookingId) ||
-                collectorUserByBooking.ContainsKey(bookingId))
-            {
-                continue;
-            }
+            var transactionCode = payment.TransactionCode?.Trim();
 
-            collectorUserByBooking[bookingId] = audit.UserId;
+            var audit = cashAudits
+                .Where(item => !string.IsNullOrWhiteSpace(item.UserId))
+                .Where(item =>
+                    payment.Type switch
+                    {
+                        PaymentType.Rental or PaymentType.VehicleSwapAdjustment =>
+                            item.Action == "StaffReceiveCounterCash" &&
+                            item.EntityName == "Booking" &&
+                            item.EntityId == payment.BookingId.ToString(),
+
+                        PaymentType.Extension =>
+                            item.Action == "StaffCollectExtensionCash" &&
+                            item.EntityName == "Payment" &&
+                            (item.EntityId == payment.PaymentId.ToString() ||
+                             (!string.IsNullOrWhiteSpace(transactionCode) &&
+                              item.Description.Contains(transactionCode, StringComparison.OrdinalIgnoreCase))),
+
+                        PaymentType.AdditionalCharge =>
+                            item.Action == "StaffCollectAdditionalChargeCash" &&
+                            item.EntityName == "Payment" &&
+                            (item.EntityId == payment.PaymentId.ToString() ||
+                             (!string.IsNullOrWhiteSpace(transactionCode) &&
+                              item.Description.Contains(transactionCode, StringComparison.OrdinalIgnoreCase))),
+
+                        _ => false
+                    })
+                .OrderBy(item =>
+                    !string.IsNullOrWhiteSpace(transactionCode) &&
+                    item.Description.Contains(transactionCode, StringComparison.OrdinalIgnoreCase)
+                        ? 0
+                        : 1)
+                .ThenBy(item => Math.Abs((item.CreatedAt - payment.OccurredAtUtc).TotalSeconds))
+                .FirstOrDefault();
+
+            if (!string.IsNullOrWhiteSpace(audit?.UserId))
+            {
+                collectorUserByPayment[payment.PaymentId] = audit.UserId;
+            }
         }
 
-        var collectorUserIds = collectorUserByBooking.Values.Distinct().ToArray();
+        var collectorUserIds = collectorUserByPayment.Values.Distinct().ToArray();
         var collectorNames = collectorUserIds.Length == 0
             ? new Dictionary<string, string>()
             : await _dbContext.Users
@@ -488,7 +538,7 @@ internal sealed class ReportService : IReportService
                 }
 
                 var recordedBy = payment.Method == PaymentMethods.Cash &&
-                    collectorUserByBooking.TryGetValue(payment.BookingId, out var collectorUserId)
+                    collectorUserByPayment.TryGetValue(payment.PaymentId, out var collectorUserId)
                     ? collectorNames.GetValueOrDefault(collectorUserId)
                     : null;
 
@@ -517,7 +567,7 @@ internal sealed class ReportService : IReportService
 
                 var category = payment.Type switch
                 {
-                    PaymentType.Rental => "Tiền thuê",
+                    PaymentType.Rental => "Tiền thuê / giao xe",
                     PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
                     PaymentType.Extension => "Gia hạn",
                     PaymentType.AdditionalCharge when payment.Method == PaymentMethods.DepositDeduction => "Thu phụ phí từ cọc",
@@ -724,5 +774,11 @@ internal sealed class ReportService : IReportService
             Math.Max(0, (int)Math.Ceiling(total.TotalHours / 24d)));
     }
 
-    private sealed record CashAuditRow(string EntityId, string? UserId, DateTime CreatedAt);
+    private sealed record CashAuditRow(
+        string Action,
+        string EntityName,
+        string EntityId,
+        string? UserId,
+        string Description,
+        DateTime CreatedAt);
 }
