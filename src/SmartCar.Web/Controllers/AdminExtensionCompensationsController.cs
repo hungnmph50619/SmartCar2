@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.Data;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -82,6 +83,10 @@ public sealed class AdminExtensionCompensationsController : Controller
             return RedirectToAction("Index", "AdminExtensions");
         }
 
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var extension = await _dbContext.BookingExtensions
             .Include(item => item.Booking)
                 .ThenInclude(booking => booking.Payments)
@@ -156,12 +161,21 @@ public sealed class AdminExtensionCompensationsController : Controller
                 TransactionCode = deductionCode
             });
 
+            var fundedRefundReference =
+                CompensationLedger.BuildFundedRefundReference(
+                    "EXT",
+                    extension.BookingId,
+                    affectedBookingId,
+                    DateTime.UtcNow);
+
             cancelledBooking.Payments.Add(new Payment
             {
                 Type = PaymentType.Refund,
                 Amount = compensationAmount,
                 Method = PaymentMethods.CompensationRefund,
-                Status = PaymentStatus.AwaitingRefund
+                Status = PaymentStatus.AwaitingRefund,
+                TransactionCode = fundedRefundReference,
+                LedgerReference = fundedRefundReference
             });
 
             cancelledBooking.RefundAmount = cancelledBooking.Payments
@@ -217,6 +231,7 @@ public sealed class AdminExtensionCompensationsController : Controller
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         await _auditService.WriteAsync(
             adminId,
