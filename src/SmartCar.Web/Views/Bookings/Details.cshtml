@@ -521,7 +521,9 @@
                             @if (rentalPayment.Status == PaymentStatus.Pending)
                             {
                                 <form asp-controller="Payments" asp-action="SubmitQr" method="post" class="mt-2">
-                                    <input type="hidden" name="bookingId" value="@Model.BookingId" /><input type="hidden" name="type" value="@PaymentType.Rental" />
+                                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                    <input type="hidden" name="type" value="@PaymentType.Rental" />
+                                    <input type="hidden" name="paymentId" value="@rentalPayment.PaymentId" />
                                     <button class="btn btn-primary w-100" type="submit">Đã chuyển @bundledAmount.ToString("N0") đ</button>
                                 </form>
                             }
@@ -580,7 +582,9 @@
                             @if (payment.Status == PaymentStatus.Pending)
                             {
                                 <form asp-controller="Payments" asp-action="SubmitQr" method="post" class="mt-2">
-                                    <input type="hidden" name="bookingId" value="@Model.BookingId" /><input type="hidden" name="type" value="@payment.Type" />
+                                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                                    <input type="hidden" name="type" value="@payment.Type" />
+                                    <input type="hidden" name="paymentId" value="@payment.PaymentId" />
                                     <button class="btn btn-primary w-100" type="submit">Đã chuyển @displayAmount.ToString("N0") đ</button>
                                 </form>
                             }
