@@ -1,3 +1,5 @@
+using SmartCar.Domain.Enums;
+
 namespace SmartCar.Application.Features.Reports;
 
 public sealed record ReportTransactionDto(
@@ -10,6 +12,19 @@ public sealed record ReportTransactionDto(
     string? PaymentMethod,
     string? TransactionCode,
     string? RecordedBy);
+
+public sealed record TrafficFineReportItemDto(
+    int PaymentId,
+    int BookingId,
+    string VehicleName,
+    string LicensePlate,
+    DateTime ViolationAt,
+    decimal Amount,
+    string PaymentMethod,
+    PaymentStatus Status,
+    string? TransactionCode,
+    string? ConfirmedBy,
+    DateTime? ConfirmedAt);
 
 public sealed record VehiclePerformanceDto(
     int VehicleId,
@@ -62,6 +77,10 @@ public sealed record FleetReportDto(
     decimal DepositsHeld,
     decimal PendingRefunds,
     decimal PendingCompensationTransfers,
+    decimal PendingTrafficFineAmount,
+    decimal AwaitingTrafficFineConfirmationAmount,
+    decimal CollectedTrafficFineAmount,
+    IReadOnlyList<TrafficFineReportItemDto> TrafficFines,
     IReadOnlyList<VehiclePerformanceDto> Vehicles);
 
 public interface IReportService
