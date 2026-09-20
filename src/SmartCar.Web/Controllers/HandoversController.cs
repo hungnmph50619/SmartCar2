@@ -137,6 +137,12 @@ public sealed class HandoversController : Controller
         model.DamageCompensationTerms = RentalPolicy.DamageCompensationTerms;
         model.PenaltyPolicyAccepted = true;
 
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(staffId))
+        {
+            return Challenge();
+        }
+
         var identityFailures = new List<string>();
         if (!await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
         {
@@ -162,6 +168,11 @@ public sealed class HandoversController : Controller
         }
 
         await ValidateIdentityFaceSessionAsync(model, booking, identityFailures, cancellationToken);
+        await ValidateCounterCitizenEvidenceAsync(
+            booking,
+            staffId,
+            identityFailures,
+            cancellationToken);
         await ValidateEvidenceImagesAsync(model, cancellationToken);
 
         if (identityFailures.Count > 0)
@@ -172,12 +183,6 @@ public sealed class HandoversController : Controller
         if (!ModelState.IsValid)
         {
             return View(model);
-        }
-
-        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrWhiteSpace(staffId))
-        {
-            return Challenge();
         }
 
         IReadOnlyList<string> imagePaths;
@@ -314,6 +319,53 @@ public sealed class HandoversController : Controller
                 "Ảnh mặt người nhận không hợp lệ, không thuộc đúng đơn/khách hoặc đã được sử dụng. Vui lòng chụp lại.");
             identityFailures.Add("ảnh mặt trực tiếp không hợp lệ");
         }
+    }
+
+    private async Task ValidateCounterCitizenEvidenceAsync(
+        BookingDetailsDto booking,
+        string staffId,
+        ICollection<string> identityFailures,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var purposes = await _dbContext.Set<IdentityCaptureSession>()
+            .AsNoTracking()
+            .Where(session =>
+                session.BookingId == booking.BookingId &&
+                session.TargetCustomerId == booking.CustomerId &&
+                session.CreatedByUserId == staffId &&
+                !session.ConsumedAt.HasValue &&
+                session.CompletedAt.HasValue &&
+                session.ExpiresAt > now &&
+                session.ImagePath != null &&
+                session.CaptureMethod == IdentityCaptureMethods.StaffCounterDocument &&
+                (session.Purpose == IdentityCapturePurposes.HandoverCitizenFront ||
+                 session.Purpose == IdentityCapturePurposes.HandoverCitizenBack))
+            .Select(session => session.Purpose)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var hasFront = purposes.Contains(
+            IdentityCapturePurposes.HandoverCitizenFront,
+            StringComparer.Ordinal);
+        var hasBack = purposes.Contains(
+            IdentityCapturePurposes.HandoverCitizenBack,
+            StringComparer.Ordinal);
+
+        if (hasFront && hasBack)
+        {
+            return;
+        }
+
+        var missing = new List<string>();
+        if (!hasFront) missing.Add("mặt trước");
+        if (!hasBack) missing.Add("mặt sau");
+
+        ModelState.AddModelError(
+            string.Empty,
+            $"Cần chụp và lưu CCCD {string.Join(" + ", missing)} của khách đang có mặt tại quầy trước khi lập biên bản giao xe.");
+        identityFailures.Add(
+            $"thiếu ảnh CCCD đối chiếu tại quầy: {string.Join(", ", missing)}");
     }
 
     private async Task WriteFailedHandoverAttemptAsync(
