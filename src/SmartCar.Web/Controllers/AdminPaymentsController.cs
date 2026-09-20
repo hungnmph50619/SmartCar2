@@ -79,6 +79,60 @@ public sealed class AdminPaymentsController : Controller
             _ => payment.Type is PaymentType.Rental or PaymentType.Deposit
         }).ToList();
 
+        var compensationRefundBookingIds = section == "refund"
+            ? filtered
+                .Where(payment =>
+                    payment.Type == PaymentType.Refund &&
+                    payment.Method == PaymentMethods.CompensationRefund &&
+                    payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved)
+                .Select(payment => payment.BookingId)
+                .Distinct()
+                .ToHashSet()
+            : new HashSet<int>();
+
+        var unfundedCompensationByBooking = new Dictionary<int, decimal>();
+        if (compensationRefundBookingIds.Count > 0)
+        {
+            var openDebtRows = await _dbContext.Payments
+                .AsNoTracking()
+                .Where(payment =>
+                    payment.Amount > 0m &&
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation) &&
+                    payment.TransactionCode != null &&
+                    (
+                        payment.Type == PaymentType.OverdueCompensationDebt ||
+                        (payment.Type == PaymentType.AdditionalCharge &&
+                         payment.TransactionCode.StartsWith(OverdueCompensationLedger.DebtPrefix))
+                    ))
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    payment.TransactionCode
+                })
+                .ToListAsync(cancellationToken);
+
+            unfundedCompensationByBooking = openDebtRows
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    Parsed = OverdueCompensationLedger.TryParseDebtRelation(
+                        payment.TransactionCode,
+                        out _,
+                        out var affectedBookingId),
+                    AffectedBookingId = affectedBookingId
+                })
+                .Where(item =>
+                    item.Parsed &&
+                    compensationRefundBookingIds.Contains(item.AffectedBookingId))
+                .GroupBy(item => item.AffectedBookingId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Sum(item => item.Amount));
+        }
+
+        ViewBag.UnfundedCompensationByBooking = unfundedCompensationByBooking;
+
         return View(filtered);
     }
 
