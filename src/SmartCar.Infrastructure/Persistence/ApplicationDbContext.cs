@@ -208,6 +208,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(payment => payment.Method).HasMaxLength(50).IsRequired();
             entity.Property(payment => payment.Status).HasConversion<string>().HasMaxLength(30);
             entity.Property(payment => payment.TransactionCode).HasMaxLength(100);
+            entity.Property(payment => payment.LedgerReference).HasMaxLength(100);
             entity.HasIndex(payment => new { payment.BookingId, payment.Type, payment.Status });
             entity.HasIndex(payment => payment.VehicleIncidentId);
             entity.HasOne(payment => payment.Booking)
