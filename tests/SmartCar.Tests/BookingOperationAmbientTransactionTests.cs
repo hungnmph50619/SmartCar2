@@ -49,7 +49,7 @@ public sealed class BookingOperationAmbientTransactionTests
             Transmission = "AT",
             FuelType = "Gasoline",
             DailyPrice = 700_000m,
-            Status = VehicleStatus.Reserved,
+            Status = VehicleStatus.Available,
             RowVersion = new byte[] { 1 }
         });
         db.Bookings.Add(new Booking
