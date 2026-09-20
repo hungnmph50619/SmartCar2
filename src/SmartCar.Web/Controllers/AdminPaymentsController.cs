@@ -145,7 +145,8 @@ public sealed class AdminPaymentsController : Controller
                 .AsNoTracking()
                 .Where(payment =>
                     payment.Amount > 0m &&
-                    payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation &&
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation) &&
                     payment.TransactionCode != null &&
                     (
                         payment.Type == PaymentType.OverdueCompensationDebt ||
