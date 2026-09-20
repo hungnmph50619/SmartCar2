@@ -402,7 +402,10 @@ public sealed class AdminPaymentsController : Controller
                         payment.Type == PaymentType.Refund &&
                         payment.Method == PaymentMethods.CompensationRefund &&
                         payment.Status == PaymentStatus.AwaitingRefund &&
-                        payment.Amount == reservation.Amount)
+                        payment.Amount == reservation.Amount &&
+                        !CompensationLedger.IsFundedRefund(
+                            payment.LedgerReference,
+                            payment.TransactionCode))
                     .OrderByDescending(payment => payment.PaymentId)
                     .FirstOrDefault();
 
