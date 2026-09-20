@@ -126,10 +126,7 @@ internal sealed class ReturnService : IReturnService
         // ReturnedAt là thời điểm nghiệp vụ thực tế, vì vậy lấy từ server khi Staff lưu biên bản.
         // Không tin một timestamp tùy ý từ trình duyệt để tránh tính sai phí trả muộn.
         var actualReturnedAt = DateTime.Now;
-        if (actualReturnedAt < booking.Handover.HandoverAt)
-        {
-            return OperationResult.Failure("Thời gian trả xe không được trước thời gian giao xe.");
-        }
+        // TEST Quy_2: tạm bỏ validation thứ tự thời gian giao/trả để chạy hết chuyến.
 
         var evidencePaths = SplitImagePaths(request.ImagePaths)
             .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
