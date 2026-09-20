@@ -463,29 +463,44 @@ internal sealed class ExtensionService : IExtensionService
         DateTime requestedReturnDate,
         CancellationToken cancellationToken)
     {
-        var storeBoundary = requestedReturnDate.AddMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
-        var deliveryBoundary = requestedReturnDate.AddMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
-
-        return await _dbContext.Bookings
+        var candidates = await _dbContext.Bookings
             .AsNoTracking()
             .Where(other =>
                 other.VehicleId == vehicleId &&
                 other.BookingId != currentBookingId &&
                 BlockingStatuses.Contains(other.Status) &&
-                other.ReturnDate > currentReturnDate &&
-                (
-                    other.PickupMethod == VehiclePickupMethod.Delivery
-                        ? other.PickupDate < deliveryBoundary
-                        : other.PickupDate < storeBoundary
-                ))
+                other.ReturnDate > currentReturnDate)
             .OrderBy(other => other.PickupDate)
-            .Select(other => new ConflictInfo(
+            .Select(other => new
+            {
                 other.BookingId,
                 other.PickupDate,
-                other.ReturnDate))
-            .FirstOrDefaultAsync(cancellationToken);
+                other.ReturnDate,
+                other.PickupMethod,
+                other.PolicyJson
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var other in candidates)
+        {
+            // Khoảng chuẩn bị trước lượt kế tiếp phải theo policy snapshot của chính
+            // booking kế tiếp. Admin đổi cấu hình sau khi booking đã tạo không được
+            // làm thay đổi khoảng xoay vòng đã chốt của booking đó.
+            var otherPolicy = RentalPolicySnapshot.FromJson(other.PolicyJson);
+            var preparationMinutes = otherPolicy.GetOperationalPreparationMinutes(
+                other.PickupMethod);
+            var requiredBoundary = requestedReturnDate.AddMinutes(preparationMinutes);
+
+            if (other.PickupDate < requiredBoundary)
+            {
+                return new ConflictInfo(
+                    other.BookingId,
+                    other.PickupDate,
+                    other.ReturnDate);
+            }
+        }
+
+        return null;
     }
 
     private async Task NotifyAdminsAsync(
