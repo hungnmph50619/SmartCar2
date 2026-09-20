@@ -844,7 +844,8 @@ public sealed class StaffController : Controller
                         item.Amount,
                         item.Method,
                         item.Status,
-                        item.TransactionCode))
+                        item.TransactionCode,
+                        item.LedgerReference))
                     .ToList()
             });
         }
@@ -918,7 +919,9 @@ public sealed class StaffController : Controller
 
         if (approvedRefunds.Any(item =>
                 item.Method == PaymentMethods.CompensationRefund &&
-                !OverdueCompensationLedger.IsFundedRefundCode(item.TransactionCode)))
+                !CompensationLedger.IsFundedRefund(
+                    item.LedgerReference,
+                    item.TransactionCode)))
         {
             var openOverdueDebts = await _dbContext.Payments
                 .AsNoTracking()
@@ -1006,7 +1009,9 @@ public sealed class StaffController : Controller
         {
             if (refund.Method == PaymentMethods.CompensationRefund &&
                 string.IsNullOrWhiteSpace(refund.LedgerReference) &&
-                OverdueCompensationLedger.IsFundedRefundCode(refund.TransactionCode))
+                CompensationLedger.IsFundedRefund(
+                    refund.LedgerReference,
+                    refund.TransactionCode))
             {
                 refund.LedgerReference = refund.TransactionCode;
             }
