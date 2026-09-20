@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Domain.Constants;
+using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.ViewModels;
 
@@ -48,17 +49,64 @@ public sealed class AdminTripRecordsController : Controller
             return RedirectToAction("Details", "AdminBookings", new { id });
         }
 
-        // Nếu xe thực tế được trả sau giờ nhận của đơn kế tiếp, lưu ID đơn bị ảnh hưởng
-        // để phần quyết toán giải thích rõ khoản cọc bị giữ lại/bồi thường.
-        ViewBag.AffectedBookingId = await _dbContext.Bookings
+        const string overdueCompPrefix = "OVERDUE-COMP-";
+        const string overdueDebtPrefix = "OVERDUE-DEBT-";
+
+        var overduePayments = await _dbContext.Payments
             .AsNoTracking()
-            .Where(item => item.VehicleId == records.VehicleId
-                && item.BookingId != records.BookingId
-                && item.PickupDate > records.ReturnDate
-                && item.PickupDate < records.VehicleReturn.ReturnedAt)
-            .OrderBy(item => item.PickupDate)
-            .Select(item => (int?)item.BookingId)
-            .FirstOrDefaultAsync(cancellationToken);
+            .Where(payment =>
+                payment.BookingId == id &&
+                payment.TransactionCode != null &&
+                (
+                    (payment.Type == PaymentType.AdditionalCharge &&
+                     payment.Method == PaymentMethods.DepositDeduction &&
+                     payment.TransactionCode.StartsWith(overdueCompPrefix)) ||
+                    (payment.Type == PaymentType.OverdueCompensationDebt &&
+                     payment.TransactionCode.StartsWith(overdueDebtPrefix))
+                ))
+            .Select(payment => new
+            {
+                payment.Type,
+                payment.Amount,
+                payment.Status,
+                payment.TransactionCode
+            })
+            .ToListAsync(cancellationToken);
+
+        var overdueSettlements = overduePayments
+            .Select(payment => new
+            {
+                AffectedBookingId = ParseAffectedBookingId(
+                    payment.TransactionCode,
+                    payment.Type == PaymentType.OverdueCompensationDebt
+                        ? overdueDebtPrefix
+                        : overdueCompPrefix),
+                payment.Type,
+                payment.Amount,
+                payment.Status
+            })
+            .Where(item => item.AffectedBookingId.HasValue)
+            .GroupBy(item => item.AffectedBookingId!.Value)
+            .Select(group => new OverdueSettlementViewModel(
+                group.Key,
+                group
+                    .Where(item => item.Type == PaymentType.AdditionalCharge)
+                    .Sum(item => item.Amount),
+                group
+                    .Where(item => item.Type == PaymentType.OverdueCompensationDebt)
+                    .Sum(item => item.Amount),
+                group
+                    .Where(item =>
+                        item.Type == PaymentType.OverdueCompensationDebt &&
+                        item.Status == PaymentStatus.Paid)
+                    .Sum(item => item.Amount),
+                group
+                    .Where(item =>
+                        item.Type == PaymentType.OverdueCompensationDebt &&
+                        item.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
+                    .Sum(item => item.Amount)))
+            .OrderBy(item => item.AffectedBookingId)
+            .ToList();
 
         var handoverPaths = SplitPaths(records.Handover.ImagePaths);
         var returnPaths = SplitPaths(records.VehicleReturn.ImagePaths);
@@ -112,10 +160,30 @@ public sealed class AdminTripRecordsController : Controller
                 SignedDocumentPath = signedReturnPaths.FirstOrDefault(),
                 SignedDocumentVerified = records.VehicleReturn.SignedDocumentVerified,
                 SignedDocumentVerifiedAt = records.VehicleReturn.SignedDocumentVerifiedAt
-            }
+            },
+            OverdueSettlements = overdueSettlements
         };
 
         return View(model);
+    }
+
+    private static int? ParseAffectedBookingId(
+        string? transactionCode,
+        string prefix)
+    {
+        if (string.IsNullOrWhiteSpace(transactionCode) ||
+            !transactionCode.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var parts = transactionCode[prefix.Length..]
+            .Split('-', StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length >= 2 &&
+               int.TryParse(parts[1], out var affectedBookingId)
+            ? affectedBookingId
+            : null;
     }
 
     private static IReadOnlyList<string> SplitPaths(string? paths) =>
