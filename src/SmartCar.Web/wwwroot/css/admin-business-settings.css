@@ -481,3 +481,30 @@
     border-left: 0;
   }
 }
+
+
+/* Inline validation for business policy forms */
+.policy-client-error {
+  margin-top: .35rem;
+  color: #c83b54;
+  font-size: .74rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.policy-edit-form .form-control.is-invalid {
+  border-color: #dc5870;
+  background-image: none;
+  box-shadow: 0 0 0 .18rem rgba(220, 88, 112, .09);
+}
+
+.policy-edit-form .input-group .form-control.is-invalid + .input-group-text {
+  color: #a52e43;
+  border-color: #dc5870;
+  background: #fff4f6;
+}
+
+.policy-edit-form [data-save]:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
