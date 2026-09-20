@@ -30,6 +30,49 @@ public sealed class CancellationRefundPolicyTests
         Assert.Equal(0.20m, rate);
     }
 
+    [Fact]
+    public void GetRentalRefundRate_NewBookingSnapshotRefundsAllWithinFreeWindowEvenNearPickup()
+    {
+        var paidAt = new DateTime(2026, 9, 20, 20, 0, 0);
+        var cancelledAt = paidAt.AddMinutes(10);
+        var pickupDate = new DateTime(2026, 9, 20, 21, 0, 0);
+        var policy = new RentalPolicySnapshot
+        {
+            FreeCancellationWindowMinutes = 60,
+            FreeCancellationRequiresMinimumLead = false
+        };
+
+        var rate = CancellationRefundPolicy.GetRentalRefundRate(
+            cancelledAt,
+            pickupDate,
+            paidAt,
+            policy);
+
+        Assert.Equal(1.00m, rate);
+    }
+
+    [Fact]
+    public void GetRentalRefundRate_OldBookingSnapshotStillRequiresMinimumLead()
+    {
+        var paidAt = new DateTime(2026, 9, 20, 20, 0, 0);
+        var cancelledAt = paidAt.AddMinutes(10);
+        var pickupDate = new DateTime(2026, 9, 20, 21, 0, 0);
+        var policy = new RentalPolicySnapshot
+        {
+            FreeCancellationWindowMinutes = 60,
+            MinimumHoursForFreeCancellation = 24,
+            FreeCancellationRequiresMinimumLead = true
+        };
+
+        var rate = CancellationRefundPolicy.GetRentalRefundRate(
+            cancelledAt,
+            pickupDate,
+            paidAt,
+            policy);
+
+        Assert.Equal(0m, rate);
+    }
+
     [Theory]
     [InlineData(192, 0.90)]
     [InlineData(168, 0.90)]
