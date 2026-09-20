@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Documents;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -254,18 +255,11 @@ public sealed class AdminCustomersController : Controller
             .Where(payment => payment.Type == PaymentType.Refund &&
                               (payment.Status == PaymentStatus.Paid || payment.Status == PaymentStatus.Refunded))
             .Sum(payment => payment.Amount);
-        var outstandingTrafficFineDebt = payments
-            .Where(payment =>
-                payment.Type == PaymentType.TrafficFine &&
-                payment.Status is PaymentStatus.Pending or
-                    PaymentStatus.AwaitingConfirmation or
-                    PaymentStatus.Failed)
-            .Sum(payment => payment.Amount);
-
-        var outstandingOverdueCompensationDebt = payments
-            .Where(payment =>
-                payment.Type == PaymentType.OverdueCompensationDebt &&
-                payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
+        var outstandingCustomerObligation = payments
+            .Where(payment => BookingWorkflowRules.BlocksNewRentalForOutstandingCustomerObligation(
+                payment.Type,
+                payment.Status,
+                payment.Amount))
             .Sum(payment => payment.Amount);
 
         return View(new AdminCustomerDetailsViewModel
@@ -282,8 +276,7 @@ public sealed class AdminCustomersController : Controller
             ProfileStatusText = state.Text,
             CanRent = customer.IsActive &&
                 state.Code == "Verified" &&
-                outstandingTrafficFineDebt <= 0 &&
-                outstandingOverdueCompensationDebt <= 0,
+                outstandingCustomerObligation <= 0,
             CompletedBookingCount = bookings.Count(booking => booking.Status == BookingStatus.Completed),
             ActiveBookingCount = bookings.Count(booking => ActiveBookingStatuses.Contains(booking.Status)),
             CancelledBookingCount = bookings.Count(booking =>
