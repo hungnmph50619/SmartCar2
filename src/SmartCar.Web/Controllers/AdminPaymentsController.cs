@@ -190,10 +190,11 @@ public sealed class AdminPaymentsController : Controller
             return RedirectToAction(nameof(Index), new { section = "refund" });
         }
 
-        var hasCompensationRefund = awaitingApproval.Any(item =>
-            item.Method == PaymentMethods.CompensationRefund);
+        var hasUnfundedLegacyCompensationRefund = awaitingApproval.Any(item =>
+            item.Method == PaymentMethods.CompensationRefund &&
+            !OverdueCompensationLedger.IsFundedRefundCode(item.TransactionCode));
 
-        if (hasCompensationRefund)
+        if (hasUnfundedLegacyCompensationRefund)
         {
             var openOverdueDebts = await _dbContext.Payments
                 .AsNoTracking()
