@@ -629,6 +629,18 @@ internal sealed class ReturnService : IReturnService
         string? maintenanceNote,
         CancellationToken cancellationToken = default)
     {
+        var normalizedMaintenanceNote = Normalize(maintenanceNote);
+        if (requiresMaintenance && normalizedMaintenanceNote is null)
+        {
+            return OperationResult.Failure(
+                "Đã đánh dấu xe cần bảo trì/sửa chữa thì phải ghi rõ nội dung cần xử lý.");
+        }
+
+        if (normalizedMaintenanceNote is { Length: > 1000 })
+        {
+            return OperationResult.Failure("Nội dung bảo trì tối đa 1.000 ký tự.");
+        }
+
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
@@ -856,9 +868,7 @@ internal sealed class ReturnService : IReturnService
             {
                 VehicleId = booking.VehicleId,
                 StartDate = DateTime.UtcNow,
-                Content = string.IsNullOrWhiteSpace(maintenanceNote)
-                    ? "Kiểm tra hoặc sửa chữa sau lượt thuê"
-                    : maintenanceNote.Trim(),
+                Content = normalizedMaintenanceNote!,
                 Cost = 0,
                 Mileage = booking.Vehicle.CurrentMileage,
                 Status = MaintenanceStatus.InProgress
@@ -920,32 +930,27 @@ internal sealed class ReturnService : IReturnService
             .OrderBy(payment => payment.PaymentId)
             .ToList();
 
-        var pendingPayment = pendingPayments.FirstOrDefault();
-        foreach (var duplicate in pendingPayments.Skip(1))
+        var finalizedPayment = pendingPayments.FirstOrDefault(payment =>
+            AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode));
+
+        foreach (var pendingPayment in pendingPayments)
         {
-            _dbContext.Payments.Remove(duplicate);
+            if (pendingPayment != finalizedPayment)
+            {
+                _dbContext.Payments.Remove(pendingPayment);
+            }
         }
 
-        if (booking.AdditionalAmount > 0)
+        if (finalizedPayment is not null)
         {
-            if (pendingPayment is null)
+            if (booking.AdditionalAmount > 0m)
             {
-                booking.Payments.Add(new Payment
-                {
-                    Type = PaymentType.AdditionalCharge,
-                    Amount = booking.AdditionalAmount,
-                    Method = PaymentMethods.NotSelected,
-                    Status = PaymentStatus.Pending
-                });
+                finalizedPayment.Amount = booking.AdditionalAmount;
             }
             else
             {
-                pendingPayment.Amount = booking.AdditionalAmount;
+                _dbContext.Payments.Remove(finalizedPayment);
             }
-        }
-        else if (pendingPayment is not null)
-        {
-            _dbContext.Payments.Remove(pendingPayment);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -969,13 +974,25 @@ internal sealed class ReturnService : IReturnService
         booking.Payments.Any(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
             payment.Method != PaymentMethods.DepositDeduction &&
-            payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid);
+            (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
+             payment.Status == PaymentStatus.Pending &&
+             AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
 
-    private static bool HasMissingAccessories(string? notes) =>
-        !string.IsNullOrWhiteSpace(notes) &&
-        notes.TrimStart().StartsWith(
-            $"{ReturnAccessoriesLabel} {AccessoriesMissingPrefix}",
-            StringComparison.OrdinalIgnoreCase);
+    private static bool HasMissingAccessories(VehicleReturn vehicleReturn)
+    {
+        if (!string.IsNullOrWhiteSpace(vehicleReturn.AccessoryStatus) &&
+            vehicleReturn.AccessoryStatus.StartsWith(
+                AccessoriesMissingPrefix,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(vehicleReturn.Notes) &&
+               vehicleReturn.Notes.TrimStart().StartsWith(
+                   $"{ReturnAccessoriesLabel} {AccessoriesMissingPrefix}",
+                   StringComparison.OrdinalIgnoreCase);
+    }
 
     private static string BuildReturnNotes(string accessoryStatus, string? note)
     {
