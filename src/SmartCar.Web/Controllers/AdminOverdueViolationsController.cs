@@ -88,6 +88,26 @@ public sealed class AdminOverdueViolationsController : Controller
             return Back();
         }
 
+        var authoritativeAffectedBookingId = await _dbContext.Bookings
+            .Where(item =>
+                item.VehicleId == renter.VehicleId &&
+                item.BookingId != renter.BookingId &&
+                item.PickupDate >= renter.ReturnDate &&
+                BlockingStatuses.Contains(item.Status))
+            .OrderBy(item => item.PickupDate)
+            .ThenBy(item => item.BookingId)
+            .Select(item => (int?)item.BookingId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!authoritativeAffectedBookingId.HasValue ||
+            authoritativeAffectedBookingId.Value != affectedBookingId)
+        {
+            TempData["ErrorMessage"] = authoritativeAffectedBookingId.HasValue
+                ? $"Đơn bị ảnh hưởng hợp lệ kế tiếp là #{authoritativeAffectedBookingId.Value}, không phải #{affectedBookingId}. Hãy tải lại trang trước khi xử lý."
+                : "Không còn đơn hoạt động kế tiếp bị ảnh hưởng để xử lý bồi thường. Hãy tải lại trang.";
+            return Back();
+        }
+
         var duplicateDeductionPrefix =
             $"{OverdueCompensationLedger.DepositDeductionPrefix}{renterBookingId}-{affectedBookingId}-";
         var duplicateDebtPrefix =
