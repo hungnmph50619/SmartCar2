@@ -316,14 +316,14 @@ internal sealed class BookingReservationPolicy
         RentalPolicySnapshot requestedPolicy;
         if (excludedBookingId.HasValue)
         {
-            var policyJson = await _dbContext.Bookings
+            var bookingPolicyRow = await _dbContext.Bookings
                 .AsNoTracking()
                 .Where(booking => booking.BookingId == excludedBookingId.Value)
-                .Select(booking => booking.PolicyJson)
+                .Select(booking => new { booking.PolicyJson })
                 .FirstOrDefaultAsync(cancellationToken);
-            requestedPolicy = policyJson is null
+            requestedPolicy = bookingPolicyRow is null
                 ? await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken)
-                : RentalPolicySnapshot.FromJson(policyJson);
+                : RentalPolicySnapshot.FromJson(bookingPolicyRow.PolicyJson);
         }
         else
         {
@@ -399,14 +399,14 @@ internal sealed class BookingReservationPolicy
         RentalPolicySnapshot requestedPolicy;
         if (excludedBookingId.HasValue)
         {
-            var policyJson = await _dbContext.Bookings
+            var bookingPolicyRow = await _dbContext.Bookings
                 .AsNoTracking()
                 .Where(booking => booking.BookingId == excludedBookingId.Value)
-                .Select(booking => booking.PolicyJson)
+                .Select(booking => new { booking.PolicyJson })
                 .FirstOrDefaultAsync(cancellationToken);
-            requestedPolicy = policyJson is null
+            requestedPolicy = bookingPolicyRow is null
                 ? await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken)
-                : RentalPolicySnapshot.FromJson(policyJson);
+                : RentalPolicySnapshot.FromJson(bookingPolicyRow.PolicyJson);
         }
         else
         {
