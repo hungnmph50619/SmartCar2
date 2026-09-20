@@ -367,6 +367,7 @@ internal sealed class BookingReservationPolicy
     public async Task<DateTime?> GetActualTurnaroundBlockedUntilAsync(
         int vehicleId,
         DateTime pickupDate,
+        VehiclePickupMethod pickupMethod,
         int? excludedBookingId = null,
         CancellationToken cancellationToken = default)
     {
@@ -413,7 +414,8 @@ internal sealed class BookingReservationPolicy
             requestedPolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
         }
 
-        return latestReturnedAt.Value.AddMinutes(requestedPolicy.VehicleTurnaroundMinutes);
+        return latestReturnedAt.Value.AddMinutes(
+            requestedPolicy.GetOperationalPreparationMinutes(pickupMethod));
     }
 
     public async Task<decimal> GetOutstandingTrafficFineDebtAsync(
