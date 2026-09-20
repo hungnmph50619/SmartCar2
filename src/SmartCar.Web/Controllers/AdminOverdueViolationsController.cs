@@ -140,7 +140,7 @@ public sealed class AdminOverdueViolationsController : Controller
         {
             renter.Payments.Add(new Payment
             {
-                Type = PaymentType.AdditionalCharge,
+                Type = PaymentType.OverdueCompensationDebt,
                 Amount = outstanding,
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending,
