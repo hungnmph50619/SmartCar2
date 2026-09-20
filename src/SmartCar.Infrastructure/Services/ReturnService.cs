@@ -22,6 +22,10 @@ internal sealed class ReturnService : IReturnService
     private const string ReturnNoteSeparator = " | Ghi chú: ";
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
+    private static readonly string[] RequiredReturnEvidencePrefixes =
+    {
+        "front-", "rear-", "left-", "right-", "interior-", "odometer-", "fuel-"
+    };
 
     private readonly ApplicationDbContext _dbContext;
 
@@ -71,6 +75,20 @@ internal sealed class ReturnService : IReturnService
         if (booking.VehicleReturn is not null)
         {
             return OperationResult.Failure("Đơn đã có biên bản trả xe.");
+        }
+
+        if (!booking.Handover.CustomerIdentityVerified ||
+            !booking.Handover.SignedDocumentVerified ||
+            !HasSignedCopy(booking.Handover.ImagePaths, HandoverSignedMarker))
+        {
+            return OperationResult.Failure(
+                "Hồ sơ giao xe chưa được xác minh đầy đủ nên chưa thể lập biên bản trả.");
+        }
+
+        if (booking.Vehicle.Status != VehicleStatus.Rented)
+        {
+            return OperationResult.Failure(
+                "Trạng thái xe không còn khớp với chuyến đang thuê. Cần kiểm tra lại trước khi nhận xe trả.");
         }
 
         var extensionPayments = booking.Payments
@@ -142,6 +160,16 @@ internal sealed class ReturnService : IReturnService
         {
             return OperationResult.Failure(
                 $"Biên bản trả xe chỉ được có tối đa {MaximumEvidenceImages} ảnh chứng cứ.");
+        }
+
+        var missingRequiredEvidence = RequiredReturnEvidencePrefixes
+            .Where(prefix => !evidencePaths.Any(path =>
+                Path.GetFileName(path).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        if (missingRequiredEvidence.Length > 0)
+        {
+            return OperationResult.Failure(
+                "Biên bản trả xe phải có đủ ảnh trước, sau, trái, phải, nội thất, công-tơ-mét và nhiên liệu.");
         }
 
         if (request.HasDamage &&
