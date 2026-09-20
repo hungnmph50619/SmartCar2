@@ -843,7 +843,8 @@ public sealed class StaffController : Controller
                         item.PaymentId,
                         item.Amount,
                         item.Method,
-                        item.Status))
+                        item.Status,
+                        item.TransactionCode))
                     .ToList()
             });
         }
