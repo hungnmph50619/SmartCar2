@@ -25,7 +25,8 @@
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
     var hasPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
-        payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment);
+        payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.AdditionalCharge or
+            PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt);
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
     var hasOpenExtension = Model.Extensions.Any(extension =>
         extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence or BookingExtensionStatus.Approved);
@@ -532,7 +533,8 @@
                     }
 
                     @foreach (var payment in Model.Payments
-                        .Where(payment => payment.Type is PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment)
+                        .Where(payment => payment.Type is PaymentType.Extension or PaymentType.AdditionalCharge or
+                            PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt)
                         .OrderBy(payment => payment.PaymentId))
                     {
                         var badgeClass = payment.Status switch
@@ -564,6 +566,13 @@
                                     else if (payment.Type == PaymentType.VehicleSwapAdjustment)
                                     {
                                         <div class="small text-muted">Chênh lệch tiền thuê và cọc sau khi đổi xe.</div>
+                                    }
+                                    else if (payment.Type == PaymentType.OverdueCompensationDebt)
+                                    {
+                                        <div class="small text-danger">
+                                            Phần bồi thường còn thiếu sau khi đã khấu trừ tối đa từ tiền cọc.
+                                            Khoản này độc lập với phụ phí trả xe.
+                                        </div>
                                     }
                                 </div>
                                 <span class="badge @badgeClass">@payment.Status.ToVietnamese()</span>
