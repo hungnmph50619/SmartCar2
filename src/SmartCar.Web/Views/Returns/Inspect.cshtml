@@ -9,7 +9,9 @@
     var canEditCharges =
         Model.Status == BookingStatus.PendingInspection &&
         Model.AllStaffChecksCompleted &&
-        !Model.AdditionalChargePaid;
+        !Model.AdditionalChargePaid &&
+        !Model.AdditionalChargeAwaitingConfirmation &&
+        !Model.AdditionalChargeFinalized;
     var canComplete = Model.Status == BookingStatus.PendingInspection;
     var hasUnpaidCharge = Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid;
     var awaitingRefund = Model.Status == BookingStatus.AwaitingRefund || Model.RefundStatus == PaymentStatus.AwaitingRefund;
@@ -33,9 +35,12 @@
         .ToList();
     var hasSignedDocuments = handoverSignedPaths.Count > 0 && returnSignedPaths.Count > 0;
     var canEditReturn =
-        !isStaff &&
+        isStaff &&
         Model.Status == BookingStatus.PendingInspection &&
-        returnSignedPaths.Count == 0;
+        returnSignedPaths.Count == 0 &&
+        !Model.AdditionalChargeAwaitingConfirmation &&
+        !Model.AdditionalChargePaid &&
+        !Model.AdditionalChargeFinalized;
 
     const string accessoryLabel = "Phụ kiện khi trả:";
     const string noteSeparator = " | Ghi chú: ";
@@ -411,27 +416,22 @@ else
                     <select class="form-select"
                             name="ChargeType"
                             required>
-
-                        <option value="@AdditionalChargeType.Fuel">
-                            Nhiên liệu
+                        <option value="">Chọn loại phụ phí</option>
+                        <option value="@AdditionalChargeType.Fuel" disabled="@(!fuelReduced)">
+                            Nhiên liệu@(fuelReduced ? string.Empty : " — không giảm")
                         </option>
-
                         <option value="@AdditionalChargeType.Cleaning">
                             Vệ sinh
                         </option>
-
-                        <option value="@AdditionalChargeType.Damage">
-                            Hư hỏng
+                        <option value="@AdditionalChargeType.Damage" disabled="@(Model.Return.HasDamage != true)">
+                            Hư hỏng@(Model.Return.HasDamage == true ? string.Empty : " — biên bản không ghi hư hỏng")
                         </option>
-
-                        <option value="@AdditionalChargeType.MissingAccessory">
-                            Thiếu/mất phụ kiện
+                        <option value="@AdditionalChargeType.MissingAccessory" disabled="@(!missingAccessories)">
+                            Thiếu/mất phụ kiện@(missingAccessories ? string.Empty : " — phụ kiện đủ")
                         </option>
-
                         <option value="@AdditionalChargeType.Other">
                             Khác
                         </option>
-
                     </select>
 
                 </div>
@@ -603,27 +603,51 @@ else
         </div>
 
 
-        <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
+        <div class="mt-3 d-flex gap-2 align-items-center flex-wrap">
 
             <span class="badge @(Model.AdditionalChargePaid
                                   ? "bg-success"
-                                  : "bg-warning text-dark")">
-
+                                  : Model.AdditionalChargeAwaitingConfirmation
+                                      ? "bg-warning text-dark"
+                                      : Model.AdditionalChargeFinalized
+                                          ? "bg-primary"
+                                          : "bg-secondary")">
                 @(Model.AdditionalChargePaid
                     ? "Đã thanh toán"
                     : Model.AdditionalChargeAwaitingConfirmation
                         ? "Đang chờ đối soát QR"
-                        : "Chưa thanh toán")
-
+                        : Model.AdditionalChargeFinalized
+                            ? "Đã chốt phụ phí"
+                            : "Đang đối chiếu")
             </span>
 
-            @if (!Model.AdditionalChargePaid && Model.AdditionalChargeAwaitingConfirmation)
+            @if (!Model.AdditionalChargePaid &&
+                 !Model.AdditionalChargeAwaitingConfirmation &&
+                 !Model.AdditionalChargeFinalized &&
+                 Model.AdditionalAmount > 0)
+            {
+                <form asp-controller="Returns"
+                      asp-action="FinalizeCharges"
+                      method="post"
+                      class="d-inline"
+                      data-loading-form
+                      data-confirm="Chốt danh sách phụ phí? Sau bước này khách mới được phép thanh toán.">
+                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                    <button class="btn btn-sm btn-primary" type="submit">
+                        Chốt phụ phí @Model.AdditionalAmount.ToString("N0") đ
+                    </button>
+                </form>
+                <span class="small text-muted">Kiểm tra đủ nhiên liệu, hư hỏng, phụ kiện và các khoản khác trước khi chốt.</span>
+            }
+            else if (!Model.AdditionalChargePaid && Model.AdditionalChargeAwaitingConfirmation)
             {
                 <span class="small text-muted">
-                    Không thu tiền mặt khi giao dịch QR đang chờ Staff đối soát.
+                    Khách đã báo chuyển khoản/QR. Không được sửa phụ phí hoặc thu tiền mặt cùng lúc.
                 </span>
             }
-            else if (!Model.AdditionalChargePaid && Model.AdditionalAmount > 0)
+            else if (!Model.AdditionalChargePaid &&
+                     Model.AdditionalChargeFinalized &&
+                     Model.AdditionalAmount > 0)
             {
                 <form asp-controller="Returns"
                       asp-action="CollectAdditionalChargeCash"
@@ -634,6 +658,17 @@ else
                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                     <button class="btn btn-sm btn-success" type="submit">
                         Thu đủ phụ phí tiền mặt
+                    </button>
+                </form>
+
+                <form asp-controller="Returns"
+                      asp-action="ReopenCharges"
+                      method="post"
+                      class="d-inline"
+                      data-confirm="Mở lại phụ phí để sửa? Khách sẽ tạm thời không thể thanh toán cho đến khi Staff chốt lại.">
+                    <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                    <button class="btn btn-sm btn-outline-secondary" type="submit">
+                        Mở lại phụ phí
                     </button>
                 </form>
             }
@@ -660,7 +695,14 @@ else
         }
         else if (hasUnpaidCharge)
         {
-            <div class="alert alert-warning mb-0">Còn phụ phí <strong>@Model.AdditionalAmount.ToString("N0") đ</strong> chưa thanh toán.</div>
+            if (!Model.AdditionalChargeFinalized)
+            {
+                <div class="alert alert-warning mb-0">Còn phụ phí <strong>@Model.AdditionalAmount.ToString("N0") đ</strong> chưa được Staff chốt sau đối chiếu.</div>
+            }
+            else
+            {
+                <div class="alert alert-warning mb-0">Còn phụ phí <strong>@Model.AdditionalAmount.ToString("N0") đ</strong> chưa thanh toán.</div>
+            }
         }
         else
         {
@@ -672,7 +714,7 @@ else
                     <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="inspectionRequiresMaintenance" />
                     <label class="form-check-label" for="inspectionRequiresMaintenance">Xe cần bảo trì hoặc sửa chữa</label>
                 </div>
-                <textarea name="MaintenanceNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Nội dung bảo trì nếu có"></textarea>
+                <textarea name="MaintenanceNote" id="inspectionMaintenanceNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Ghi rõ nội dung cần bảo trì/sửa chữa"></textarea>
                 <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">@(Model.DepositAmount > 0 ? "Xác nhận & quyết toán cọc" : "Xác nhận → Hoàn tất")</button>
             </form>
         }
@@ -689,6 +731,17 @@ else if (Model.Status == BookingStatus.Completed)
 @section Scripts {
     <script>
         (() => {
+            const maintenanceCheckbox = document.getElementById('inspectionRequiresMaintenance');
+            const maintenanceNote = document.getElementById('inspectionMaintenanceNote');
+            const syncMaintenanceRequirement = () => {
+                if (!maintenanceNote) return;
+                const required = maintenanceCheckbox?.checked === true;
+                maintenanceNote.required = required;
+                if (!required) maintenanceNote.setCustomValidity('');
+            };
+            maintenanceCheckbox?.addEventListener('change', syncMaintenanceRequirement);
+            syncMaintenanceRequirement();
+
             const maximumPages = 12;
             const maximumBytes = 8 * 1024 * 1024;
             const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
