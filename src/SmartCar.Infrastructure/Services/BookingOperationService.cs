@@ -89,6 +89,8 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (DateTime.Now < booking.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes))
             return OperationResult.Failure($"Chỉ được ghi nhận không đến sau giờ nhận ít nhất {RentalPolicy.NoShowGraceMinutes} phút.");
 
+        VoidPendingCollections(booking);
+
         var grossRevenuePaid = booking.Payments
             .Where(payment => payment.Status == PaymentStatus.Paid && payment.Type is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
             .Sum(payment => payment.Amount);
@@ -230,6 +232,8 @@ internal sealed class BookingOperationService : IBookingOperationService
                     : "Trạng thái hiện tại không cho phép hủy đơn.");
         }
 
+        VoidPendingCollections(booking);
+
         var grossRevenuePaid = booking.Payments
             .Where(payment => payment.Status == PaymentStatus.Paid
                 && payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.VehicleSwapAdjustment)
@@ -361,6 +365,20 @@ internal sealed class BookingOperationService : IBookingOperationService
             cancellationToken: cancellationToken);
 
         return RefundResult.Success(newRefundAmount);
+    }
+
+    private static void VoidPendingCollections(Booking booking)
+    {
+        foreach (var payment in booking.Payments.Where(payment =>
+                     BookingWorkflowRules.ShouldVoidPendingCollectionOnTerminalBooking(
+                         payment.Type,
+                         payment.Status)))
+        {
+            payment.Status = PaymentStatus.Failed;
+            payment.Method = PaymentMethods.NotSelected;
+            payment.PaidAt = null;
+            payment.TransactionCode = null;
+        }
     }
 
     private static string AppendText(string? current, string addition) =>
