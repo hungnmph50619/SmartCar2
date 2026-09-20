@@ -356,6 +356,29 @@ internal sealed class ReturnService : IReturnService
             return OperationResult.Failure("Không đủ ảnh trả xe làm căn cứ. Chưa thể tạo phụ phí.");
         }
 
+        if (request.ChargeType == AdditionalChargeType.Fuel)
+        {
+            if (!TryParseFuelPercent(booking.Handover?.FuelLevel, out var handoverFuelPercent) ||
+                !TryParseFuelPercent(booking.VehicleReturn.FuelLevel, out var returnFuelPercent))
+            {
+                return OperationResult.Failure(
+                    "Không đọc được mức nhiên liệu giao/trả nên chưa đủ căn cứ tạo phí nhiên liệu.");
+            }
+
+            if (returnFuelPercent >= handoverFuelPercent)
+            {
+                return OperationResult.Failure(
+                    "Nhiên liệu khi trả không thấp hơn lúc giao nên không được tạo phí nhiên liệu.");
+            }
+
+            if (booking.VehicleReturn.AdditionalCharges.Any(charge =>
+                    charge.ChargeType == AdditionalChargeType.Fuel))
+            {
+                return OperationResult.Failure(
+                    "Đơn đã có một khoản phí nhiên liệu. Hãy xóa khoản cũ trước khi ghi lại.");
+            }
+        }
+
         if (request.ChargeType == AdditionalChargeType.Damage)
         {
             if (!booking.VehicleReturn.HasDamage)
@@ -376,7 +399,7 @@ internal sealed class ReturnService : IReturnService
                 return OperationResult.Failure("Biên bản giao xe chưa ghi phụ kiện ban đầu nên chưa đủ căn cứ tạo phí thiếu phụ kiện.");
             }
 
-            if (!HasMissingAccessories(booking.VehicleReturn.Notes))
+            if (!HasMissingAccessories(booking.VehicleReturn))
             {
                 return OperationResult.Failure("Biên bản trả xe chưa ghi nhận phụ kiện thiếu/mất nên chưa thể tạo phí này.");
             }
