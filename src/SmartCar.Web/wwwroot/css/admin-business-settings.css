@@ -633,3 +633,105 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.policy-refund-primary {
+  margin-top: .8rem;
+  padding: .8rem .9rem;
+  border: 1px solid #cfe3f8;
+  border-radius: 12px;
+  background: #f4f9ff;
+}
+
+.policy-refund-primary-title {
+  margin-bottom: .45rem;
+  color: #1766c2;
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.policy-refund-primary-rule {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  flex-wrap: wrap;
+  color: #354b63;
+  font-size: .82rem;
+  line-height: 1.45;
+}
+
+.policy-refund-primary-rule strong {
+  color: #102a43;
+}
+
+.policy-rule-plus {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dfeeff;
+  color: #1766c2;
+  font-weight: 900;
+}
+
+.policy-refund-cases {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: .7rem;
+  overflow: hidden;
+  border: 1px solid #e2eaf3;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.policy-refund-case {
+  min-width: 0;
+  padding: .65rem .7rem;
+  border-right: 1px solid #e9eef4;
+}
+
+.policy-refund-case:last-child {
+  border-right: 0;
+}
+
+.policy-refund-case span,
+.policy-refund-case strong {
+  display: block;
+}
+
+.policy-refund-case span {
+  color: #6b7b90;
+  font-size: .69rem;
+  line-height: 1.35;
+}
+
+.policy-refund-case strong {
+  margin-top: .2rem;
+  color: #17324d;
+  font-size: .82rem;
+}
+
+.policy-refund-case-last {
+  background: #fafbfc;
+}
+
+@media (max-width: 1199.98px) {
+  .policy-refund-cases {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .policy-refund-case {
+    border-bottom: 1px solid #e9eef4;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .policy-refund-cases {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-refund-case {
+    border-right: 0;
+  }
+}
