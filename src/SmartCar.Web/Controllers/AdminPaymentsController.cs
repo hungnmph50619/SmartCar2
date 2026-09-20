@@ -84,7 +84,8 @@ public sealed class AdminPaymentsController : Controller
                 .Where(payment =>
                     payment.Type == PaymentType.Refund &&
                     payment.Method == PaymentMethods.CompensationRefund &&
-                    payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved)
+                    payment.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved &&
+                    !OverdueCompensationLedger.IsFundedRefundCode(payment.TransactionCode))
                 .Select(payment => payment.BookingId)
                 .Distinct()
                 .ToHashSet()
