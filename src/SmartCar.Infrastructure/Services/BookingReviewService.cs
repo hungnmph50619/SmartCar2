@@ -81,12 +81,8 @@ internal sealed class BookingReviewService : IBookingReviewService
                 booking.BookingId,
                 cancellationToken))
         {
-            var extra = booking.PickupMethod == VehiclePickupMethod.Delivery
-                ? $" và thêm {RentalPolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
-                : string.Empty;
-
             return OperationResult.Failure(
-                $"Lịch xe không còn đủ {RentalPolicy.VehicleTurnaroundMinutes} phút xoay vòng{extra}.");
+                $"Lịch xe không còn đủ {booking.Policy.VehicleTurnaroundMinutes} phút chuẩn bị giữa hai lượt thuê.");
         }
 
         var blockedUntil = await _reservationPolicy.GetActualTurnaroundBlockedUntilAsync(
