@@ -454,6 +454,34 @@ internal sealed class PaymentService : IPaymentService
                 "Không thể xác nhận vì khoản phạt không còn gắn với hồ sơ vi phạm hợp lệ.");
         }
 
+        Booking? overdueAffectedBooking = null;
+        int overdueAffectedBookingId = 0;
+        if (originalType == PaymentType.OverdueCompensationDebt)
+        {
+            if (!OverdueCompensationLedger.TryParseDebtRelation(
+                    payment.TransactionCode,
+                    out var renterBookingId,
+                    out overdueAffectedBookingId) ||
+                renterBookingId != booking.BookingId ||
+                overdueAffectedBookingId == booking.BookingId)
+            {
+                return OperationResult.Failure(
+                    "Khoản bồi thường quá hạn không còn mã liên kết hợp lệ giữa đơn gây ảnh hưởng và đơn bị ảnh hưởng.");
+            }
+
+            overdueAffectedBooking = await _dbContext.Bookings
+                .Include(item => item.Payments)
+                .FirstOrDefaultAsync(
+                    item => item.BookingId == overdueAffectedBookingId,
+                    cancellationToken);
+
+            if (overdueAffectedBooking is null)
+            {
+                return OperationResult.Failure(
+                    "Không tìm thấy đơn bị ảnh hưởng để ghi nhận khoản bồi thường đã có nguồn.");
+            }
+        }
+
         var paidAt = DateTime.UtcNow;
         var transactionCode = $"QR{paidAt:yyyyMMddHHmmssfff}{booking.BookingId}";
 
@@ -659,6 +687,81 @@ internal sealed class PaymentService : IPaymentService
                     booking.Status = BookingStatus.Paid;
                     booking.ReservationExpiresAt = null;
                 }
+            }
+        }
+
+        if (originalType == PaymentType.OverdueCompensationDebt &&
+            overdueAffectedBooking is not null)
+        {
+            var deductionPrefix =
+                OverdueCompensationLedger.BuildDepositDeductionRelationPrefix(
+                    booking.BookingId,
+                    overdueAffectedBookingId);
+            var debtPrefix =
+                OverdueCompensationLedger.BuildDebtRelationPrefix(
+                    booking.BookingId,
+                    overdueAffectedBookingId);
+
+            var fundedFromDeposit = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.AdditionalCharge &&
+                    item.Method == PaymentMethods.DepositDeduction &&
+                    item.Status == PaymentStatus.Paid &&
+                    !string.IsNullOrWhiteSpace(item.TransactionCode) &&
+                    item.TransactionCode.StartsWith(
+                        deductionPrefix,
+                        StringComparison.OrdinalIgnoreCase))
+                .Sum(item => item.Amount);
+
+            var fundedFromDebt = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.OverdueCompensationDebt &&
+                    item.Status == PaymentStatus.Paid &&
+                    !string.IsNullOrWhiteSpace(item.TransactionCode) &&
+                    item.TransactionCode.StartsWith(
+                        debtPrefix,
+                        StringComparison.OrdinalIgnoreCase))
+                .Sum(item => item.Amount);
+
+            var compensationRefundAlreadyRecorded = overdueAffectedBooking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.Refund &&
+                    item.Method == PaymentMethods.CompensationRefund &&
+                    BookingWorkflowRules.CountsTowardRefundTotal(item.Status))
+                .Sum(item => item.Amount);
+
+            var releaseAmount = OverdueCompensationLedger.CalculateRefundReleaseAmount(
+                fundedFromDeposit,
+                fundedFromDebt,
+                compensationRefundAlreadyRecorded);
+
+            if (releaseAmount > 0m)
+            {
+                overdueAffectedBooking.Payments.Add(new Payment
+                {
+                    Type = PaymentType.Refund,
+                    Amount = releaseAmount,
+                    Method = PaymentMethods.CompensationRefund,
+                    Status = PaymentStatus.AwaitingRefund
+                });
+                overdueAffectedBooking.RefundAmount = overdueAffectedBooking.Payments
+                    .Where(item =>
+                        item.Type == PaymentType.Refund &&
+                        BookingWorkflowRules.CountsTowardRefundTotal(item.Status))
+                    .Sum(item => item.Amount);
+                overdueAffectedBooking.RefundReason = AppendText(
+                    overdueAffectedBooking.RefundReason,
+                    $"Đã thực thu thêm {releaseAmount:N0} đồng bồi thường từ đơn #{booking.BookingId}; " +
+                    "khoản tương ứng đã chuyển sang chờ Admin duyệt hoàn.");
+
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = overdueAffectedBooking.CustomerId,
+                    Title = "Bồi thường đã có thêm nguồn thanh toán",
+                    Message =
+                        $"Đơn #{overdueAffectedBooking.BookingId}: SmartCar đã thực thu thêm {releaseAmount:N0} đồng " +
+                        $"từ khách của đơn #{booking.BookingId}. Khoản này đã chuyển sang quy trình chờ Admin duyệt hoàn tiền."
+                });
             }
         }
 
