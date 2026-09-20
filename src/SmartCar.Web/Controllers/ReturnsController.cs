@@ -333,6 +333,7 @@ public sealed class ReturnsController : Controller
                 FuelLevel = records.VehicleReturn.FuelLevel,
                 ExteriorCondition = records.VehicleReturn.ExteriorCondition,
                 InteriorCondition = records.VehicleReturn.InteriorCondition,
+                Accessories = records.VehicleReturn.AccessoryStatus,
                 HasDamage = records.VehicleReturn.HasDamage,
                 Notes = records.VehicleReturn.Notes,
                 ImagePaths = SplitImagePaths(records.VehicleReturn.ImagePaths)
