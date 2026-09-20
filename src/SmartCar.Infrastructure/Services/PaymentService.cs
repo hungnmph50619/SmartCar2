@@ -98,6 +98,8 @@ internal sealed class PaymentService : IPaymentService
             .Include(item => item.Payments)
                 .ThenInclude(payment => payment.VehicleIncident)
             .Include(item => item.Extensions)
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
             .FirstOrDefaultAsync(
                 item => item.BookingId == bookingId && item.CustomerId == customerId,
                 cancellationToken);
@@ -162,19 +164,31 @@ internal sealed class PaymentService : IPaymentService
             }
         }
 
-        if (payment is null &&
-            paymentType == PaymentType.AdditionalCharge &&
-            booking.AdditionalAmount > 0)
+        if (paymentType == PaymentType.AdditionalCharge)
         {
-            payment = new Payment
+            var paidAdditionalAmount = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.AdditionalCharge &&
+                    item.Method != PaymentMethods.DepositDeduction &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+            var outstandingAdditionalAmount = Math.Max(
+                0m,
+                booking.AdditionalAmount - paidAdditionalAmount);
+
+            if (outstandingAdditionalAmount <= 0m)
             {
-                BookingId = booking.BookingId,
-                Type = PaymentType.AdditionalCharge,
-                Amount = booking.AdditionalAmount,
-                Method = PaymentMethods.NotSelected,
-                Status = PaymentStatus.Pending
-            };
-            booking.Payments.Add(payment);
+                return OperationResult.Failure("Phụ phí của đơn đã được thanh toán đủ.");
+            }
+
+            if (payment is null ||
+                !AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode))
+            {
+                return OperationResult.Failure(
+                    "Phụ phí chưa được Staff chốt sau khi đối chiếu giao - trả. Vui lòng chờ SmartCar xác nhận số tiền cuối cùng.");
+            }
+
+            payment.Amount = outstandingAdditionalAmount;
         }
 
         if (payment is null)
@@ -246,7 +260,12 @@ internal sealed class PaymentService : IPaymentService
         payment.Method = PaymentMethods.BankQr;
         payment.Status = PaymentStatus.AwaitingConfirmation;
         payment.PaidAt = null;
-        payment.TransactionCode = null;
+        payment.TransactionCode =
+            !expiredBooking && payment.Type == PaymentType.AdditionalCharge
+                ? AdditionalChargeSettlementPolicy.CreateReadyMarker(
+                    payment.BookingId,
+                    DateTime.UtcNow)
+                : null;
 
         Payment? bundledDeposit = null;
 
@@ -348,6 +367,10 @@ internal sealed class PaymentService : IPaymentService
                 .ThenInclude(booking => booking.Payments)
             .Include(item => item.Booking)
                 .ThenInclude(booking => booking.Extensions)
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.Handover)
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.VehicleReturn)
             .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
 
         if (payment is null)
@@ -416,6 +439,32 @@ internal sealed class PaymentService : IPaymentService
         {
             return OperationResult.Failure(
                 "Không thể xác nhận vì khoản phạt không còn gắn với hồ sơ vi phạm hợp lệ.");
+        }
+
+        if (originalType == PaymentType.AdditionalCharge)
+        {
+            var paidAdditionalBefore = booking.Payments
+                .Where(item =>
+                    item.PaymentId != payment.PaymentId &&
+                    item.Type == PaymentType.AdditionalCharge &&
+                    item.Method != PaymentMethods.DepositDeduction &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+            var outstandingAdditional = Math.Max(
+                0m,
+                booking.AdditionalAmount - paidAdditionalBefore);
+
+            if (outstandingAdditional <= 0m)
+            {
+                return OperationResult.Failure(
+                    "Phụ phí đã được thanh toán đủ; không xác nhận thêm giao dịch để tránh thu trùng.");
+            }
+
+            if (confirmedAmount != outstandingAdditional)
+            {
+                return OperationResult.Failure(
+                    $"Giao dịch phụ phí ({confirmedAmount:N0} đồng) không khớp số còn phải thu ({outstandingAdditional:N0} đồng). Không xác nhận để tránh thu sai.");
+            }
         }
 
         var paidAt = DateTime.UtcNow;
@@ -784,6 +833,10 @@ internal sealed class PaymentService : IPaymentService
                      booking.AdditionalAmount <= 0 =>
                 "Đơn không có phụ phí đang chờ thanh toán.",
 
+            PaymentType.AdditionalCharge
+                when !IsReturnSettlementReady(booking) =>
+                "Phụ phí chỉ được thanh toán sau khi SmartCar xác minh đầy đủ biên bản giao - trả.",
+
             PaymentType.TrafficFine
                 when !booking.Payments.Any(payment =>
                     payment.Type == PaymentType.TrafficFine &&
@@ -828,6 +881,10 @@ internal sealed class PaymentService : IPaymentService
                 when booking.Status != BookingStatus.PendingInspection =>
                 "Đơn không còn ở trạng thái chờ thanh toán phụ phí.",
 
+            PaymentType.AdditionalCharge
+                when !IsReturnSettlementReady(booking) =>
+                "Chưa đủ xác minh biên bản giao - trả để đối soát phụ phí.",
+
             PaymentType.TrafficFine
                 when !booking.Payments.Any(payment =>
                     payment.Type == PaymentType.TrafficFine &&
@@ -837,6 +894,14 @@ internal sealed class PaymentService : IPaymentService
 
             _ => null
         };
+
+    private static bool IsReturnSettlementReady(Booking booking) =>
+        booking.Handover is not null &&
+        booking.VehicleReturn is not null &&
+        booking.Handover.CustomerIdentityVerified &&
+        booking.Handover.SignedDocumentVerified &&
+        booking.VehicleReturn.CustomerIdentityVerified &&
+        booking.VehicleReturn.SignedDocumentVerified;
 
     private async Task NotifyStaffAsync(
         string title,
