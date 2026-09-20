@@ -23,6 +23,13 @@ public sealed class ReturnInspectionViewModel
 
     public bool AdditionalChargeAwaitingConfirmation { get; init; }
 
+    public decimal OverdueCompensationDebtAmount { get; init; }
+
+    public bool OverdueCompensationDebtAwaitingConfirmation { get; init; }
+
+    public bool HasOpenOverdueCompensationDebt =>
+        OverdueCompensationDebtAmount > 0m;
+
     public PaymentStatus? RefundStatus { get; init; }
 
     public decimal RefundAmount { get; init; }
