@@ -20,6 +20,11 @@ public static class BusinessPolicyStore
         var row = rows.SingleOrDefault();
         var policy = RentalPolicySnapshot.FromJson(row?.PolicyJson);
         policy.DepositHoldDays = row == null ? DepositHoldPolicy.DefaultDays : DepositHoldPolicy.NormalizeDays(row.DepositHoldDays);
+
+        // Chính sách hiện hành cho đơn mới: hủy trong cửa sổ miễn phí sau thanh toán
+        // được hoàn 100% tiền thuê, không yêu cầu còn tối thiểu 24 giờ trước nhận.
+        // Booking đã tạo vẫn đọc PolicyJson snapshot riêng và giữ rule cũ.
+        policy.FreeCancellationRequiresMinimumLead = false;
         if (row?.PolicyJson == null)
         {
             policy.Version = "legacy-" + policy.DepositHoldDays;
