@@ -176,7 +176,9 @@ else if (currentSection == "refund")
                             payment.Method == PaymentMethods.DepositRefund);
                         var hasUnfundedLegacyCompensationRefund = shown.Any(payment =>
                             payment.Method == PaymentMethods.CompensationRefund &&
-                            !OverdueCompensationLedger.IsFundedRefundCode(payment.TransactionCode));
+                            !CompensationLedger.IsFundedRefund(
+                                payment.LedgerReference,
+                                payment.TransactionCode));
                         unfundedCompensationByBooking.TryGetValue(
                             first.BookingId,
                             out var unfundedCompensationAmount);
