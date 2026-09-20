@@ -31,6 +31,7 @@ public sealed class PaymentsController : Controller
     public async Task<IActionResult> SubmitQr(
         int bookingId,
         PaymentType type,
+        int? paymentId,
         CancellationToken cancellationToken)
     {
         var customerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -91,7 +92,8 @@ public sealed class PaymentsController : Controller
             customerId,
             type,
             customerId,
-            cancellationToken);
+            cancellationToken,
+            paymentId);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
             ? type == PaymentType.Rental
