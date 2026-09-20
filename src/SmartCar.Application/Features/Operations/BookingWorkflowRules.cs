@@ -68,6 +68,9 @@ public static class BookingWorkflowRules
         type != PaymentType.Refund &&
         status == PaymentStatus.Pending;
 
+    public static bool IsReturnSurchargePaymentType(PaymentType type) =>
+        type == PaymentType.AdditionalCharge;
+
     public static bool IsOutstandingTrafficFine(
         PaymentType type,
         PaymentStatus status,
