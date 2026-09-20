@@ -174,13 +174,15 @@ else if (currentSection == "refund")
                             payment.Method == PaymentMethods.BankTransferRefund);
                         var hasDepositRefund = shown.Any(payment =>
                             payment.Method == PaymentMethods.DepositRefund);
-                        var hasCompensationRefund = shown.Any(payment =>
-                            payment.Method == PaymentMethods.CompensationRefund);
+                        var hasUnfundedLegacyCompensationRefund = shown.Any(payment =>
+                            payment.Method == PaymentMethods.CompensationRefund &&
+                            !OverdueCompensationLedger.IsFundedRefundCode(payment.TransactionCode));
                         unfundedCompensationByBooking.TryGetValue(
                             first.BookingId,
                             out var unfundedCompensationAmount);
                         var compensationFundingBlocked =
-                            hasCompensationRefund && unfundedCompensationAmount > 0m;
+                            hasUnfundedLegacyCompensationRefund &&
+                            unfundedCompensationAmount > 0m;
                         UserBankAccountDto? bank = null;
                         if (awaitingApproval.Count > 0 || approved.Count > 0)
                         {
