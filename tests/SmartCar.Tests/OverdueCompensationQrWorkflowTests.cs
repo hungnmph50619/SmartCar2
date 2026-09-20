@@ -87,6 +87,87 @@ public sealed class OverdueCompensationQrWorkflowTests
                 compensationRefund.TransactionCode));
     }
 
+
+    [Fact]
+    public async Task ConfirmQrPayment_DoesNotCountFundedCompensationFromDifferentSourceRelation()
+    {
+        await using var db = CreateDbContext();
+
+        db.Bookings.AddRange(
+            new Booking
+            {
+                BookingId = 501,
+                CustomerId = "customer-a",
+                VehicleId = 10,
+                PickupDate = DateTime.Now.AddDays(-2),
+                ReturnDate = DateTime.Now.AddHours(-1),
+                DailyPrice = 500_000m,
+                NumberOfDays = 2,
+                RentalAmount = 1_000_000m,
+                DepositAmount = 0m,
+                TotalAmount = 1_000_000m,
+                Status = BookingStatus.PendingInspection
+            },
+            new Booking
+            {
+                BookingId = 602,
+                CustomerId = "customer-b",
+                VehicleId = 10,
+                PickupDate = DateTime.Now.AddHours(-1),
+                ReturnDate = DateTime.Now.AddDays(1),
+                DailyPrice = 700_000m,
+                NumberOfDays = 1,
+                RentalAmount = 700_000m,
+                DepositAmount = 0m,
+                TotalAmount = 700_000m,
+                Status = BookingStatus.Cancelled
+            });
+
+        var debt = new Payment
+        {
+            BookingId = 501,
+            Type = PaymentType.OverdueCompensationDebt,
+            Amount = 700_000m,
+            Method = PaymentMethods.BankQr,
+            Status = PaymentStatus.AwaitingConfirmation,
+            TransactionCode = "OVERDUE-DEBT-501-602-20260920140000"
+        };
+        db.Payments.AddRange(
+            debt,
+            new Payment
+            {
+                BookingId = 602,
+                Type = PaymentType.Refund,
+                Amount = 200_000m,
+                Method = PaymentMethods.CompensationRefund,
+                Status = PaymentStatus.AwaitingRefund,
+                TransactionCode = "OVERDUE-FUNDED-999-602-20260920130000000"
+            });
+        await db.SaveChangesAsync();
+
+        var service = CreatePaymentService(db);
+        var result = await service.ConfirmQrPaymentAsync(
+            debt.PaymentId,
+            "staff-1");
+
+        Assert.True(result.Succeeded, string.Join("; ", result.Errors));
+
+        var refunds = await db.Payments
+            .Where(item =>
+                item.BookingId == 602 &&
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.CompensationRefund)
+            .ToListAsync();
+
+        Assert.Equal(2, refunds.Count);
+        var relationRefund = Assert.Single(refunds.Where(item =>
+            item.TransactionCode != null &&
+            item.TransactionCode.StartsWith(
+                "OVERDUE-FUNDED-501-602-",
+                StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(700_000m, relationRefund.Amount);
+    }
+
     private static IPaymentService CreatePaymentService(
         ApplicationDbContext db)
     {
