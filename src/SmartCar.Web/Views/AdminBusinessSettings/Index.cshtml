@@ -387,7 +387,7 @@
                     <div class="policy-metric">
                         <span class="policy-metric-label">Đặt trước giờ nhận</span>
                         <strong class="policy-metric-value">@current.MinimumPickupLeadMinutes.ToString("N0", vi) phút</strong>
-                        <span class="policy-metric-note">Ví dụ 20:00 → nhận sớm nhất 20:@((current.MinimumPickupLeadMinutes).ToString("00"))</span>
+                        <span class="policy-metric-note">Ví dụ 20:00 → nhận sớm nhất @DateTime.Today.AddHours(20).AddMinutes(current.MinimumPickupLeadMinutes).ToString("HH:mm")</span>
                     </div>
                 </div>
 
