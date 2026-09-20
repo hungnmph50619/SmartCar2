@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -93,6 +94,10 @@ public sealed class ReturnEditsController : Controller
         ModelState.Remove(nameof(ReturnEditViewModel.NewImages));
         ModelState.Remove(nameof(ReturnEditViewModel.NewDamageImages));
         ModelState.Remove(nameof(ReturnEditViewModel.ReturnedAt));
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -219,6 +224,7 @@ public sealed class ReturnEditsController : Controller
 
         if (!ModelState.IsValid)
         {
+            await transaction.RollbackAsync(cancellationToken);
             PopulateExistingImages(model, booking.VehicleReturn);
             return View(model);
         }
@@ -261,6 +267,7 @@ public sealed class ReturnEditsController : Controller
             RecalculateAutomaticCharges(booking);
             SynchronizePendingAdditionalChargePayment(booking);
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
