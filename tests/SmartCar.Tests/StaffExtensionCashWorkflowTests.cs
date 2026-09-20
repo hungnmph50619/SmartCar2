@@ -205,6 +205,82 @@ public sealed class StaffExtensionCashWorkflowTests
         Assert.Equal(PaymentStatus.AwaitingRefund, compensationRefund.Status);
     }
 
+
+    [Fact]
+    public async Task CollectOverdueCompensationDebtCash_DoesNotCountFundedCompensationFromDifferentSourceRelation()
+    {
+        await using var db = CreateDbContext();
+
+        db.Bookings.AddRange(
+            new Booking
+            {
+                BookingId = 107,
+                CustomerId = "customer-1",
+                VehicleId = 10,
+                PickupDate = DateTime.Now.AddDays(-2),
+                ReturnDate = DateTime.Now.AddHours(-1),
+                DailyPrice = 500_000m,
+                NumberOfDays = 2,
+                RentalAmount = 1_000_000m,
+                DepositAmount = 0m,
+                TotalAmount = 1_000_000m,
+                Status = BookingStatus.PendingInspection
+            },
+            new Booking
+            {
+                BookingId = 208,
+                CustomerId = "customer-2",
+                VehicleId = 10,
+                PickupDate = DateTime.Now.AddHours(-1),
+                ReturnDate = DateTime.Now.AddDays(1),
+                DailyPrice = 700_000m,
+                NumberOfDays = 1,
+                RentalAmount = 700_000m,
+                DepositAmount = 0m,
+                TotalAmount = 700_000m,
+                Status = BookingStatus.Cancelled
+            });
+
+        db.Payments.AddRange(
+            new Payment
+            {
+                BookingId = 107,
+                Type = PaymentType.OverdueCompensationDebt,
+                Amount = 700_000m,
+                Method = PaymentMethods.NotSelected,
+                Status = PaymentStatus.Pending,
+                TransactionCode = "OVERDUE-DEBT-107-208-20260920140000"
+            },
+            new Payment
+            {
+                BookingId = 208,
+                Type = PaymentType.Refund,
+                Amount = 200_000m,
+                Method = PaymentMethods.CompensationRefund,
+                Status = PaymentStatus.AwaitingRefund,
+                TransactionCode = "OVERDUE-FUNDED-999-208-20260920130000000"
+            });
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db);
+        await controller.CollectOverdueCompensationDebtCash(107, default);
+
+        var refunds = await db.Payments
+            .Where(item =>
+                item.BookingId == 208 &&
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.CompensationRefund)
+            .ToListAsync();
+
+        Assert.Equal(2, refunds.Count);
+        var relationRefund = Assert.Single(refunds.Where(item =>
+            item.TransactionCode != null &&
+            item.TransactionCode.StartsWith(
+                "OVERDUE-FUNDED-107-208-",
+                StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(700_000m, relationRefund.Amount);
+    }
+
     [Fact]
     public async Task CollectOverdueCompensationDebtCash_DoesNotDuplicateLegacyFullCompensationRefund()
     {
