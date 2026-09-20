@@ -52,6 +52,10 @@ public sealed class RentalPolicySnapshot : IValidatableObject
     [Range(0, 336, ErrorMessage = "Điều kiện thời gian còn lại phải từ 0 đến 336 giờ.")]
     public int MinimumHoursForFreeCancellation { get; set; } = 24;
 
+    // Tương thích booking cũ: JSON cũ không có field này => true.
+    // Policy hiện hành cho đơn mới được BusinessPolicyStore chuyển thành false.
+    public bool FreeCancellationRequiresMinimumLead { get; set; } = true;
+
     [Range(1, 168, ErrorMessage = "Thời gian xử lý hoàn tiền sau hủy phải từ 1 đến 168 giờ.")]
     public int CancellationRefundProcessingHours { get; set; } = 24;
 
@@ -135,17 +139,30 @@ public sealed class RentalPolicySnapshot : IValidatableObject
                 });
         }
 
+        if (decimal.Round(NoShowFeePercent, 2) != NoShowFeePercent)
+        {
+            yield return new ValidationResult("Tỷ lệ No-show chỉ được có tối đa 2 chữ số thập phân.");
+        }
+
         if (new[]
             {
-                NoShowFeePercent,
                 CancellationTier1RefundPercent,
                 CancellationTier2RefundPercent,
                 CancellationTier3RefundPercent,
                 CancellationTier4RefundPercent,
                 CancellationBelowTierRefundPercent
-            }.Any(x => decimal.Round(x, 2) != x))
+            }.Any(x => decimal.Truncate(x) != x))
         {
-            yield return new ValidationResult("Các tỷ lệ phần trăm chỉ được có tối đa 2 chữ số thập phân.");
+            yield return new ValidationResult(
+                "Tỷ lệ hoàn tiền khi hủy phải là số nguyên phần trăm.",
+                new[]
+                {
+                    nameof(CancellationTier1RefundPercent),
+                    nameof(CancellationTier2RefundPercent),
+                    nameof(CancellationTier3RefundPercent),
+                    nameof(CancellationTier4RefundPercent),
+                    nameof(CancellationBelowTierRefundPercent)
+                });
         }
     }
 }
