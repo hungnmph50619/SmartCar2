@@ -257,6 +257,7 @@ internal sealed class BookingOperationService : IBookingOperationService
 
         decimal refundableRevenueAmount;
         string rentalRefundReason;
+        var bookingPolicy = booking.Policy;
 
         if (isSmartCarCancellation)
         {
@@ -281,7 +282,6 @@ internal sealed class BookingOperationService : IBookingOperationService
                 rentalPaidAt = rentalPaidAt.Value.ToLocalTime();
             }
 
-            var bookingPolicy = booking.Policy;
             var refundRate = CancellationRefundPolicy.GetRentalRefundRate(
                 cancelledAt,
                 booking.PickupDate,
@@ -311,11 +311,15 @@ internal sealed class BookingOperationService : IBookingOperationService
         booking.CancelledBy = cancelledBy;
         booking.CancelledAt = DateTime.UtcNow;
         booking.RefundAmount = existingRefundTotal + newRefundAmount;
+        var refundProcessingNote = newRefundAmount > 0
+            ? $" Thời gian xử lý mục tiêu: trong {bookingPolicy.CancellationRefundProcessingHours} giờ kể từ khi hủy."
+            : string.Empty;
         booking.RefundReason = AppendText(
             booking.RefundReason,
-            depositToRefund > 0
+            (depositToRefund > 0
                 ? $"{rentalRefundReason} Hoàn 100% phần cọc còn lại {depositToRefund:N0} đồng vì xe chưa được bàn giao."
-                : rentalRefundReason);
+                : rentalRefundReason)
+            + refundProcessingNote);
         booking.ReservationExpiresAt = null;
         booking.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
             _dbContext,
@@ -349,7 +353,7 @@ internal sealed class BookingOperationService : IBookingOperationService
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã được hủy",
             Message = newRefundAmount > 0
-                ? $"Đơn #{booking.BookingId} đã hủy. Có thêm {newRefundAmount:N0} đồng đang chờ quản trị viên duyệt hoàn tiền."
+                ? $"Đơn #{booking.BookingId} đã hủy. Có thêm {newRefundAmount:N0} đồng đang chờ duyệt hoàn; mục tiêu xử lý trong {bookingPolicy.CancellationRefundProcessingHours} giờ."
                 : $"Đơn #{booking.BookingId} đã hủy và không phát sinh khoản hoàn mới."
         });
 
