@@ -97,12 +97,12 @@ else
                                        maxlength="100"
                                        required
                                        autocomplete="off"
-                                       disabled="@(!canTransfer)"
+                                       disabled="@(!canTransfer ? "disabled" : null)"
                                        placeholder="Nhập mã sau khi đã chuyển tiền" />
 
                                 <button class="btn btn-success w-100"
                                         type="submit"
-                                        disabled="@(!canTransfer)">
+                                        disabled="@(!canTransfer ? "disabled" : null)">
                                     Xác nhận đã chuyển @item.TotalAmount.ToString("N0") đ
                                 </button>
                             </form>
