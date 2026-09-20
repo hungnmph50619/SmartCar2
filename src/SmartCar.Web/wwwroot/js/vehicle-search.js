@@ -255,10 +255,14 @@
     document.querySelectorAll('#advancedFilters form, [data-vehicle-filter-form]').forEach(function (filterForm) {
         filterForm.addEventListener('submit', function (event) {
             const period = getCurrentPeriod();
+            const searchForm = document.querySelector('[data-vehicle-search-form]');
+            const minimumPickupLeadMinutes = Math.max(
+                0,
+                Number(searchForm?.dataset.minimumPickupLeadMinutes || 0)
+            );
             const earliestPickup = addMinutes(ceilToMinute(new Date()), minimumPickupLeadMinutes);
             if (!period || period.pickup.getTime() < earliestPickup.getTime()) {
                 event.preventDefault();
-                const searchForm = document.querySelector('[data-vehicle-search-form]');
                 if (searchForm && typeof searchForm.requestSubmit === 'function') searchForm.requestSubmit();
                 return;
             }
