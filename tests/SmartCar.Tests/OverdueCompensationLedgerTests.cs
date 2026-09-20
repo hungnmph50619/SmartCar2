@@ -37,6 +37,52 @@ public sealed class OverdueCompensationLedgerTests
             "OVERDUE-DEBT-103-204-20260920130000"));
     }
 
+
+    [Fact]
+    public void FundedRefundRelation_OnlyCountsExactSourcePair_AndKeepsLegacyConservative()
+    {
+        var exact = OverdueCompensationLedger.BuildFundedRefundCode(
+            103,
+            204,
+            new DateTime(2026, 9, 20, 13, 0, 0, DateTimeKind.Utc));
+        var otherSource = OverdueCompensationLedger.BuildFundedRefundCode(
+            999,
+            204,
+            new DateTime(2026, 9, 20, 13, 0, 0, DateTimeKind.Utc));
+
+        Assert.True(
+            OverdueCompensationLedger.TryParseFundedRefundRelation(
+                exact,
+                out var renterBookingId,
+                out var affectedBookingId));
+        Assert.Equal(103, renterBookingId);
+        Assert.Equal(204, affectedBookingId);
+
+        Assert.True(
+            OverdueCompensationLedger.CountsTowardRefundRelation(
+                exact,
+                103,
+                204));
+        Assert.False(
+            OverdueCompensationLedger.CountsTowardRefundRelation(
+                otherSource,
+                103,
+                204));
+
+        // Legacy compensation refunds did not carry OVERDUE-FUNDED markers.
+        // Count them conservatively so historical rows cannot be paid twice.
+        Assert.True(
+            OverdueCompensationLedger.CountsTowardRefundRelation(
+                null,
+                103,
+                204));
+        Assert.True(
+            OverdueCompensationLedger.CountsTowardRefundRelation(
+                "OVERDUE-DEBT-103-204-20260920130000",
+                103,
+                204));
+    }
+
     [Theory]
     [InlineData(700000, 300000, 700000, 300000)]
     [InlineData(700000, 300000, 1000000, 0)]
