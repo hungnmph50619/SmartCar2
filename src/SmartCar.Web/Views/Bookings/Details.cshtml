@@ -17,7 +17,16 @@
         .Where(extension => extension.Status == BookingExtensionStatus.Paid)
         .Sum(extension => extension.AdditionalDays);
     var extensionAmount = invoiceExtensions.Sum(extension => extension.AdditionalAmount);
-    var invoiceTotal = Model.InitialRentalAmount + Model.DeliveryFee + Model.DepositAmount + extensionAmount + Model.AdditionalAmount;
+    var additionalChargeFinalized = Model.Payments.Any(payment =>
+        payment.Type == PaymentType.AdditionalCharge &&
+        (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
+         payment.Status == PaymentStatus.Pending &&
+         AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
+    var visibleAdditionalAmount = additionalChargeFinalized ? Model.AdditionalAmount : 0m;
+    var visibleAdditionalCharges = additionalChargeFinalized
+        ? Model.AdditionalCharges
+        : Array.Empty<SmartCar.Application.Features.Bookings.ChargeSummaryDto>();
+    var invoiceTotal = Model.InitialRentalAmount + Model.DeliveryFee + Model.DepositAmount + extensionAmount + visibleAdditionalAmount;
     var paidTotal = Model.Payments
         .Where(payment => payment.Status == PaymentStatus.Paid &&
             payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment)
@@ -29,7 +38,9 @@
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
     var hasPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
-        payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment);
+        (payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.VehicleSwapAdjustment ||
+         payment.Type == PaymentType.AdditionalCharge &&
+         AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
     var hasOpenExtension = Model.Extensions.Any(extension =>
         extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence or BookingExtensionStatus.Approved);
@@ -209,7 +220,7 @@
                                     <td class="text-end">@extension.AdditionalAmount.ToString("N0") đ</td>
                                 </tr>
                             }
-                            @foreach (var charge in Model.AdditionalCharges)
+                            @foreach (var charge in visibleAdditionalCharges)
                             {
                                 <tr>
                                     <td>@charge.ChargeType.ToVietnamese()</td>
@@ -497,6 +508,14 @@
                     </div>
                 }
 
+                @if (Model.Status == BookingStatus.PendingInspection &&
+                    Model.AdditionalAmount > 0 &&
+                    !additionalChargeFinalized)
+                {
+                    <div class="alert alert-warning small py-2">
+                        SmartCar đang đối chiếu biên bản giao - trả và chốt phụ phí. Khoản tạm tính chưa mở thanh toán; vui lòng chờ số tiền cuối cùng.
+                    </div>
+                }
                 <div class="alert alert-info small py-2">Chuyển đúng số tiền hiển thị, sau đó bấm xác nhận đã chuyển.</div>
 
                 <div class="border border-primary rounded p-3 mb-3 bg-light">
@@ -558,7 +577,12 @@
                     }
 
                     @foreach (var payment in Model.Payments
-                        .Where(payment => payment.Type is PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment)
+                        .Where(payment =>
+                            payment.Type is PaymentType.Extension or PaymentType.VehicleSwapAdjustment ||
+                            payment.Type == PaymentType.AdditionalCharge &&
+                            (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
+                             payment.Status == PaymentStatus.Pending &&
+                             AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)))
                         .OrderBy(payment => payment.PaymentId))
                     {
                         var badgeClass = payment.Status switch
