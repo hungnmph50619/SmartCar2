@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.Data;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -213,6 +214,10 @@ public sealed class AdminRentalDocumentsController : Controller
         IFormFile? signedDocument,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var booking = await _dbContext.Bookings
             .Include(item => item.VehicleReturn)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
@@ -265,6 +270,7 @@ public sealed class AdminRentalDocumentsController : Controller
             booking.VehicleReturn.SignedDocumentVerifiedByStaffId = null;
             booking.VehicleReturn.SignedDocumentVerifiedAt = null;
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
