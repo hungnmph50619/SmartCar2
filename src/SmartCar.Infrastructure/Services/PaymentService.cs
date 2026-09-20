@@ -246,7 +246,10 @@ internal sealed class PaymentService : IPaymentService
         payment.Method = PaymentMethods.BankQr;
         payment.Status = PaymentStatus.AwaitingConfirmation;
         payment.PaidAt = null;
-        payment.TransactionCode = null;
+        if (payment.Type != PaymentType.OverdueCompensationDebt)
+        {
+            payment.TransactionCode = null;
+        }
 
         Payment? bundledDeposit = null;
 
@@ -423,7 +426,10 @@ internal sealed class PaymentService : IPaymentService
 
         payment.Status = PaymentStatus.Paid;
         payment.PaidAt = paidAt;
-        payment.TransactionCode = transactionCode;
+        if (originalType != PaymentType.OverdueCompensationDebt)
+        {
+            payment.TransactionCode = transactionCode;
+        }
 
         Payment? bundledDeposit = null;
 
@@ -653,6 +659,8 @@ internal sealed class PaymentService : IPaymentService
                     $"Đơn #{booking.BookingId}: đã xác nhận phụ phí {confirmedAmount:N0} đồng.",
                 PaymentType.TrafficFine =>
                     $"Đơn #{booking.BookingId}: đã xác nhận thanh toán nghĩa vụ phạt/vi phạm {confirmedAmount:N0} đồng.",
+                PaymentType.OverdueCompensationDebt =>
+                    $"Đơn #{booking.BookingId}: đã xác nhận thanh toán {confirmedAmount:N0} đồng phần bồi thường quá hạn còn thiếu sau khấu trừ cọc.",
                 _ =>
                     $"Đơn #{booking.BookingId}: đã xác nhận {confirmedAmount:N0} đồng."
             }
@@ -709,7 +717,10 @@ internal sealed class PaymentService : IPaymentService
             ? PaymentMethods.BankQr
             : PaymentMethods.NotSelected;
         payment.PaidAt = null;
-        payment.TransactionCode = null;
+        if (payment.Type != PaymentType.OverdueCompensationDebt)
+        {
+            payment.TransactionCode = null;
+        }
 
         if (payment.Type == PaymentType.Rental)
         {
@@ -791,6 +802,14 @@ internal sealed class PaymentService : IPaymentService
                     payment.Amount > 0) =>
                 "Không có nghĩa vụ phạt/vi phạm hợp lệ đang chờ thanh toán.",
 
+            PaymentType.OverdueCompensationDebt
+                when booking.Status is not (BookingStatus.Rented or BookingStatus.PendingInspection) ||
+                     !booking.Payments.Any(payment =>
+                         payment.Type == PaymentType.OverdueCompensationDebt &&
+                         payment.Status == PaymentStatus.Pending &&
+                         payment.Amount > 0) =>
+                "Không có khoản bồi thường quá hạn hợp lệ đang chờ thanh toán.",
+
             _ => null
         };
 
@@ -834,6 +853,14 @@ internal sealed class PaymentService : IPaymentService
                     payment.Status == PaymentStatus.AwaitingConfirmation &&
                     payment.Amount > 0) =>
                 "Không còn nghĩa vụ phạt/vi phạm chờ đối soát.",
+
+            PaymentType.OverdueCompensationDebt
+                when booking.Status is not (BookingStatus.Rented or BookingStatus.PendingInspection) ||
+                     !booking.Payments.Any(payment =>
+                         payment.Type == PaymentType.OverdueCompensationDebt &&
+                         payment.Status == PaymentStatus.AwaitingConfirmation &&
+                         payment.Amount > 0) =>
+                "Không còn khoản bồi thường quá hạn chờ đối soát.",
 
             _ => null
         };
@@ -951,6 +978,7 @@ internal sealed class PaymentService : IPaymentService
         PaymentType.VehicleSwapAdjustment => "chênh lệch đổi xe",
         PaymentType.AdditionalCharge => "phụ phí",
         PaymentType.TrafficFine => "nghĩa vụ phạt/vi phạm",
+        PaymentType.OverdueCompensationDebt => "bồi thường quá hạn còn thiếu",
         PaymentType.Refund => "hoàn tiền",
         _ => "thanh toán"
     };
