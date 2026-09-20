@@ -135,12 +135,16 @@ else if (currentSection == "refund")
                             .Where(payment => payment.Status == PaymentStatus.RefundApproved)
                             .OrderBy(payment => payment.PaymentId)
                             .ToList();
-                        var shown = awaitingApproval.Count > 0
-                            ? awaitingApproval
-                            : approved.Count > 0
-                                ? approved
-                                : group.OrderBy(payment => payment.PaymentId).ToList();
+                        var openBatch = awaitingApproval
+                            .Concat(approved)
+                            .OrderBy(payment => payment.PaymentId)
+                            .ToList();
+                        var shown = openBatch.Count > 0
+                            ? openBatch
+                            : group.OrderBy(payment => payment.PaymentId).ToList();
                         var shownTotal = shown.Sum(payment => payment.Amount);
+                        var awaitingApprovalTotal = awaitingApproval.Sum(payment => payment.Amount);
+                        var alreadyApprovedTotal = approved.Sum(payment => payment.Amount);
                         var alreadyRefunded = group
                             .Where(payment => payment.Status == PaymentStatus.Refunded && !shown.Contains(payment))
                             .Sum(payment => payment.Amount);
@@ -190,7 +194,10 @@ else if (currentSection == "refund")
                                 @foreach (var refund in shown)
                                 {
                                     <div class="d-flex justify-content-between gap-3 small py-1 border-bottom">
-                                        <span>@TypeText(refund.Type, refund.Method)</span>
+                                        <span>
+                                            @TypeText(refund.Type, refund.Method)
+                                            <span class="text-muted">· @StatusText(refund.Status)</span>
+                                        </span>
                                         <strong class="text-nowrap">@refund.Amount.ToString("N0") đ</strong>
                                     </div>
                                 }
@@ -217,9 +224,24 @@ else if (currentSection == "refund")
                                             <strong>@bank.BankName</strong> · @bank.MaskedAccountNumber<br />
                                             @bank.AccountHolderName
                                         </div>
-                                        <form asp-action="ApproveRefundBatch" method="post" data-confirm="Xác nhận duyệt toàn bộ khoản hoàn của đơn này cho nhân viên thực hiện? Sau khi duyệt, khách sẽ tạm thời không thể đổi tài khoản nhận hoàn cho đến khi chuyển tiền xong.">
+                                        @if (alreadyApprovedTotal > 0m)
+                                        {
+                                            <div class="alert alert-info py-2 small">
+                                                Đã duyệt trước: <strong>@alreadyApprovedTotal.ToString("N0") đ</strong><br />
+                                                Duyệt thêm lần này: <strong>@awaitingApprovalTotal.ToString("N0") đ</strong><br />
+                                                Sau khi duyệt, Staff sẽ được phép chuyển toàn bộ batch:
+                                                <strong>@shownTotal.ToString("N0") đ</strong>.
+                                            </div>
+                                        }
+                                        <form asp-action="ApproveRefundBatch"
+                                              method="post"
+                                              data-confirm="Xác nhận duyệt thêm @awaitingApprovalTotal.ToString("N0") đ? Sau thao tác này tổng batch Staff được phép chuyển là @shownTotal.ToString("N0") đ và khách sẽ tạm thời không thể đổi tài khoản nhận hoàn cho đến khi chuyển xong.">
                                             <input type="hidden" name="bookingId" value="@first.BookingId" />
-                                            <button class="btn btn-sm btn-warning" type="submit">Duyệt hoàn @shownTotal.ToString("N0") đ</button>
+                                            <button class="btn btn-sm btn-warning" type="submit">
+                                                @(alreadyApprovedTotal > 0m
+                                                    ? $"Duyệt thêm {awaitingApprovalTotal:N0} đ"
+                                                    : $"Duyệt hoàn {shownTotal:N0} đ")
+                                            </button>
                                         </form>
                                     }
                                 }
