@@ -106,6 +106,32 @@ public sealed class RefundLedgerPersistenceWorkflowTests
 
         Assert.IsType<RedirectToActionResult>(completed);
 
+        var completedRefunds = await db.Payments
+            .Where(item =>
+                item.BookingId == 802 &&
+                item.Type == PaymentType.Refund &&
+                item.Method == PaymentMethods.CompensationRefund &&
+                item.Status == PaymentStatus.Refunded)
+            .OrderBy(item => item.Amount)
+            .ToListAsync();
+
+        Assert.Equal(2, completedRefunds.Count);
+        Assert.All(
+            completedRefunds,
+            item => Assert.Equal("BANK-BATCH-001", item.TransactionCode));
+        Assert.Contains(
+            completedRefunds,
+            item => item.LedgerReference != null &&
+                    item.LedgerReference.StartsWith(
+                        "OVERDUE-FUNDED-701-802-",
+                        StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            completedRefunds,
+            item => item.LedgerReference != null &&
+                    item.LedgerReference.StartsWith(
+                        "OVERDUE-FUNDED-999-802-",
+                        StringComparison.OrdinalIgnoreCase));
+
         var service = CreatePaymentService(db);
         var confirmed = await service.ConfirmQrPaymentAsync(
             debt.PaymentId,
