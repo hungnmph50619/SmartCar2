@@ -8,6 +8,7 @@ public static class OverdueCompensationLedger
 {
     public const string DepositDeductionPrefix = "OVERDUE-COMP-";
     public const string DebtPrefix = "OVERDUE-DEBT-";
+    public const string FundedRefundPrefix = "OVERDUE-FUNDED-";
 
     public static string BuildDepositDeductionRelationPrefix(
         int renterBookingId,
@@ -43,6 +44,18 @@ public static class OverdueCompensationLedger
         int affectedBookingId,
         DateTime occurredAtUtc) =>
         $"{DebtPrefix}{renterBookingId}-{affectedBookingId}-{occurredAtUtc:yyyyMMddHHmmss}";
+
+    public static string BuildFundedRefundCode(
+        int renterBookingId,
+        int affectedBookingId,
+        DateTime occurredAtUtc) =>
+        $"{FundedRefundPrefix}{renterBookingId}-{affectedBookingId}-{occurredAtUtc:yyyyMMddHHmmssfff}";
+
+    public static bool IsFundedRefundCode(string? transactionCode) =>
+        !string.IsNullOrWhiteSpace(transactionCode) &&
+        transactionCode.StartsWith(
+            FundedRefundPrefix,
+            StringComparison.OrdinalIgnoreCase);
 
     public static bool TryParseDebtRelation(
         string? transactionCode,
