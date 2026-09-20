@@ -40,22 +40,24 @@
     const string accessoryLabel = "Phụ kiện khi trả:";
     const string noteSeparator = " | Ghi chú: ";
     var rawReturnNotes = Model.Return.Notes?.Trim();
-    string? returnAccessoryStatus = null;
+    string? returnAccessoryStatus = Model.Return.Accessories;
     string? returnNote = rawReturnNotes;
-    if (!string.IsNullOrWhiteSpace(rawReturnNotes) && rawReturnNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
+
+    // Tương thích bản ghi cũ từng nhét phụ kiện vào Notes. Bản ghi mới lấy
+    // phụ kiện từ cột AccessoryStatus và Notes chỉ còn là ghi chú thuần.
+    if (!string.IsNullOrWhiteSpace(rawReturnNotes) &&
+        rawReturnNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
     {
         var body = rawReturnNotes[accessoryLabel.Length..].Trim();
         var separatorIndex = body.IndexOf(noteSeparator, StringComparison.Ordinal);
-        if (separatorIndex >= 0)
-        {
-            returnAccessoryStatus = body[..separatorIndex].Trim();
-            returnNote = body[(separatorIndex + noteSeparator.Length)..].Trim();
-        }
-        else
-        {
-            returnAccessoryStatus = body;
-            returnNote = null;
-        }
+        var legacyAccessory = separatorIndex >= 0
+            ? body[..separatorIndex].Trim()
+            : body;
+
+        returnAccessoryStatus ??= legacyAccessory;
+        returnNote = separatorIndex >= 0
+            ? body[(separatorIndex + noteSeparator.Length)..].Trim()
+            : null;
     }
     var missingAccessories = returnAccessoryStatus?.StartsWith("Thiếu/mất:", StringComparison.OrdinalIgnoreCase) == true;
 
