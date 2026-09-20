@@ -328,7 +328,7 @@ internal sealed class PaymentService : IPaymentService
             paymentType is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
         {
             booking.ReservationExpiresAt = DateTime.UtcNow
-                .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
+                .AddMinutes(booking.Policy.BookingTransferReconciliationHoldMinutes);
         }
 
         await NotifyStaffAsync(
