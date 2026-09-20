@@ -715,7 +715,8 @@ public sealed class StaffController : Controller
         var openRefunds = await _dbContext.Payments.AsNoTracking()
             .Where(item =>
                 item.Type == PaymentType.Refund &&
-                item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved)
+                (item.Status == PaymentStatus.AwaitingRefund ||
+                 item.Status == PaymentStatus.RefundApproved))
             .Include(item => item.Booking)
                 .ThenInclude(booking => booking.Vehicle)
             .OrderBy(item => item.BookingId)
@@ -741,9 +742,9 @@ public sealed class StaffController : Controller
                 .Where(payment =>
                     bookingIds.Contains(payment.BookingId) &&
                     payment.Type == PaymentType.TrafficFine &&
-                    payment.Status is PaymentStatus.Pending or
-                        PaymentStatus.AwaitingConfirmation or
-                        PaymentStatus.Failed)
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation ||
+                     payment.Status == PaymentStatus.Failed))
                 .GroupBy(payment => payment.BookingId)
                 .Select(group => new
                 {
