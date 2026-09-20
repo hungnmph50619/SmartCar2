@@ -110,7 +110,7 @@
             <div>
                 <span class="section-eyebrow">TÌM XE CÒN TRỐNG</span>
                 <h1 id="vehicle-search-title" class="h3 mb-1">Chọn thời gian thuê xe</h1>
-                <p class="text-muted mb-0">Hệ thống chỉ hiển thị xe còn đủ lịch thuê và tối thiểu @RentalPolicy.VehicleTurnaroundMinutes phút để nhận xe trả, kiểm tra và vệ sinh giữa hai chuyến.</p>
+                <p class="text-muted mb-0">Hệ thống chỉ hiển thị xe còn đủ lịch thuê và tối thiểu @ViewBag.VehicleTurnaroundMinutes phút để nhận xe trả, kiểm tra và vệ sinh giữa hai chuyến.</p>
             </div>
             <span class="vehicle-search-format">Ngày/tháng/năm · Giờ 24 giờ</span>
         </div>
@@ -137,7 +137,7 @@
                         <path d="M16 3v4M8 3v4M3 10h18"></path>
                     </svg>
                 </div>
-                <small id="vehiclePickupHint" class="vn-datetime-hint">Ví dụ: 09/08/2026 09:00</small>
+                <small id="vehiclePickupHint" class="vn-datetime-hint">Đặt trước tối thiểu @ViewBag.MinimumPickupLeadMinutes phút · ví dụ 09/08/2026 09:00</small>
                 <span id="vehiclePickupError" class="search-field-error" data-vn-datetime-error="pickup" role="alert"></span>
                 <input type="hidden" name="PickupDate" value="@search.PickupDate.ToString("yyyy-MM-ddTHH:mm")" data-vn-datetime-hidden="pickup" />
             </div>
