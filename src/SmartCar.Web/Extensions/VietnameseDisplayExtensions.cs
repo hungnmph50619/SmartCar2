@@ -179,6 +179,7 @@ public static class VietnameseDisplayExtensions
         "UploadHandoverSigned" => "Tải bản giao xe đã ký",
         "UploadReturnSigned" => "Tải bản trả xe đã ký",
         "UpdateRentalPolicy" => "Cập nhật chính sách",
+        "UpdateDepositHoldPolicy" => "Cập nhật thời gian giữ cọc",
         null or "" => "Không xác định",
         _ => value
     };
