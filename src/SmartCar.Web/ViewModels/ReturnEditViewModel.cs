@@ -35,6 +35,9 @@ public sealed class ReturnEditViewModel
 
     public List<string>? ImagesToDelete { get; set; }
 
+    [Display(Name = "Ảnh hư hỏng bổ sung")]
+    public List<IFormFile>? DamageImages { get; set; }
+
     [Display(Name = "Ảnh mới bổ sung")]
     public List<IFormFile>? NewImages { get; set; }
 }
