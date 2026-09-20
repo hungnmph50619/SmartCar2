@@ -616,33 +616,13 @@ internal sealed class ReturnService : IReturnService
                     : "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền thuê/cọc.");
         }
 
-        var depositAvailableBeforeNewDeduction = Math.Max(
-            0m,
-            effectiveDepositPaid - depositAlreadyDeducted);
-        var reservedCompensation = booking.Extensions.Sum(extension =>
-            CompensationLedger.SumReservedAmount(extension.CustomerNote));
-        var compensationNotYetApplied = Math.Max(0m, reservedCompensation - depositAlreadyDeducted);
-        var newDepositDeduction = Math.Min(
-            depositAvailableBeforeNewDeduction,
-            compensationNotYetApplied);
-
-        if (newDepositDeduction > 0)
-        {
-            booking.Payments.Add(new Payment
-            {
-                Type = PaymentType.AdditionalCharge,
-                Amount = newDepositDeduction,
-                Method = PaymentMethods.DepositDeduction,
-                Status = PaymentStatus.Paid,
-                PaidAt = DateTime.UtcNow,
-                TransactionCode = $"EXT-COMP-{booking.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
-            });
-        }
-
-        var totalDepositDeducted = depositAlreadyDeducted + newDepositDeduction;
+        // Mọi khoản khấu trừ cọc hợp lệ phải đã được ghi thành Payment
+        // DepositDeduction bởi luồng nghiệp vụ đã xác minh trước đó.
+        // Không tự suy diễn/khấu trừ thêm từ marker legacy trong BookingExtension.CustomerNote.
+        var totalDepositDeducted = depositAlreadyDeducted;
         var depositToRefund = Math.Max(
             0m,
-            depositAvailableBeforeNewDeduction - newDepositDeduction);
+            effectiveDepositPaid - totalDepositDeducted);
 
         if (depositToRefund > 0)
         {
@@ -666,9 +646,8 @@ internal sealed class ReturnService : IReturnService
         {
             booking.RefundReason = AppendText(
                 booking.RefundReason,
-                $"Cọc còn giữ trước quyết toán: {depositAvailableBeforeNewDeduction:N0} đồng. " +
-                $"Khấu trừ bồi thường: {newDepositDeduction:N0} đồng. " +
-                $"Cọc còn hoàn: {depositToRefund:N0} đồng.");
+                $"Cọc đã khấu trừ theo các nghĩa vụ được ghi nhận trước quyết toán: {totalDepositDeducted:N0} đồng. " +
+                $"Cọc còn lại chờ hoàn: {depositToRefund:N0} đồng.");
         }
         else if (depositToRefund > 0)
         {
