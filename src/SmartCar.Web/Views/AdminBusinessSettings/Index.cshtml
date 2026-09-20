@@ -124,7 +124,7 @@
                                    type="number"
                                    min="1"
                                    max="1000"
-                                   step=".01"
+                                   step="1"
                                    required
                                    class="form-control"
                                    data-policy-input
@@ -779,7 +779,7 @@
                     <div class="col-md-6">
                         <label asp-for="NoShowFeePercent" class="form-label">Giữ lại tiền thuê</label>
                         <div class="input-group">
-                            <input asp-for="NoShowFeePercent" type="number" min="0" max="100" step=".01" required
+                            <input asp-for="NoShowFeePercent" type="number" min="0" max="100" step="1" required
                                    class="form-control" data-policy-input data-label="Giữ lại tiền thuê khi No-show" data-unit="%"
                                    data-current="@current.NoShowFeePercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">%</span>
@@ -859,7 +859,7 @@
                                    type="number"
                                    min="0"
                                    max="20"
-                                   step=".01"
+                                   step="1"
                                    required
                                    class="form-control"
                                    data-policy-input
@@ -913,7 +913,7 @@
                                    type="number"
                                    min="1"
                                    max="80"
-                                   step=".01"
+                                   step="1"
                                    required
                                    class="form-control"
                                    data-policy-input
