@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using SmartCar.Infrastructure.Persistence;
 
 namespace SmartCar.Web.Services;
@@ -89,6 +90,7 @@ public sealed class UserBankAccountService : IUserBankAccountService
         try
         {
             await using var command = connection.CreateCommand();
+            command.Transaction = _dbContext.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = @"
 SELECT TOP (1)
     [UserBankAccountId], [UserId], [BankCode], [BankName], [AccountNumber],
@@ -154,9 +156,39 @@ ORDER BY [UpdatedAt] DESC;";
             await connection.OpenAsync(cancellationToken);
         }
 
-        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var ambientTransaction = _dbContext.Database.CurrentTransaction?.GetDbTransaction();
+        await using var ownedTransaction = ambientTransaction is null
+            ? await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+            : null;
+        var transaction = ambientTransaction ?? ownedTransaction!;
+
         try
         {
+            await using (var guard = connection.CreateCommand())
+            {
+                guard.Transaction = transaction;
+                guard.CommandText = @"
+SELECT CASE WHEN EXISTS (
+    SELECT 1
+    FROM [Payments] AS p WITH (UPDLOCK, HOLDLOCK)
+    INNER JOIN [Bookings] AS b WITH (UPDLOCK, HOLDLOCK)
+        ON b.[BookingId] = p.[BookingId]
+    WHERE b.[CustomerId] = @userId
+      AND p.[Type] = 'Refund'
+      AND p.[Status] = 'RefundApproved'
+) THEN 1 ELSE 0 END;";
+                AddParameter(guard, "@userId", userId);
+
+                var blocked = Convert.ToInt32(
+                    await guard.ExecuteScalarAsync(cancellationToken) ?? 0) == 1;
+                if (blocked)
+                {
+                    throw new InvalidOperationException(
+                        "Bạn đang có khoản hoàn tiền đã được Admin duyệt và chờ nhân viên chuyển tiền. " +
+                        "Không thể đổi tài khoản nhận hoàn cho đến khi lần hoàn này hoàn tất.");
+                }
+            }
+
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = @"
@@ -201,11 +233,17 @@ END";
             AddParameter(command, "@accountHolderName", normalizedHolderName);
 
             await command.ExecuteNonQueryAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            if (ownedTransaction is not null)
+            {
+                await ownedTransaction.CommitAsync(cancellationToken);
+            }
         }
         catch
         {
-            await transaction.RollbackAsync(cancellationToken);
+            if (ownedTransaction is not null)
+            {
+                await ownedTransaction.RollbackAsync(cancellationToken);
+            }
             throw;
         }
         finally
