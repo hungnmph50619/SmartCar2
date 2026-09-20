@@ -468,18 +468,14 @@
 
                 <div class="policy-metrics">
                     <div class="policy-metric">
-                        <span class="policy-metric-label">Xoay vòng xe</span>
+                        <span class="policy-metric-label">Thời gian chuẩn bị giữa 2 lượt thuê</span>
                         <strong class="policy-metric-value">@current.VehicleTurnaroundMinutes.ToString("N0", vi) phút</strong>
-                    </div>
-                    <div class="policy-metric">
-                        <span class="policy-metric-label">Thêm khi giao tận nơi</span>
-                        <strong class="policy-metric-value">+@current.DeliveryLeadMinutes.ToString("N0", vi) phút</strong>
                     </div>
                 </div>
 
                 <p class="policy-helper">
                     <span class="policy-helper-icon" aria-hidden="true">i</span>
-                    <span>Giữ khoảng trống để nhận xe, kiểm tra, vệ sinh và chuẩn bị lượt kế tiếp.</span>
+                    <span>Xe chỉ xuất hiện cho lượt thuê tiếp theo sau khi đã đủ thời gian này. Ví dụ xe trả 09:00, xoay vòng @current.VehicleTurnaroundMinutes phút → có thể nhận lượt mới từ @DateTime.Today.AddHours(9).AddMinutes(current.VehicleTurnaroundMinutes).ToString("HH:mm").</span>
                 </p>
             </div>
 
@@ -498,24 +494,15 @@
                 }
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label asp-for="VehicleTurnaroundMinutes" class="form-label">Xoay vòng giữa hai lượt</label>
+                        <label asp-for="VehicleTurnaroundMinutes" class="form-label">Thời gian chuẩn bị giữa 2 lượt thuê</label>
                         <div class="input-group">
                             <input asp-for="VehicleTurnaroundMinutes" type="number" min="0" max="360" step="1" required
-                                   class="form-control" data-policy-input data-label="Xoay vòng giữa hai lượt" data-unit="phút"
+                                   class="form-control" data-policy-input data-label="Thời gian chuẩn bị giữa 2 lượt thuê" data-unit="phút"
                                    data-current="@current.VehicleTurnaroundMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">phút</span>
                         </div>
                         <span asp-validation-for="VehicleTurnaroundMinutes" class="text-danger small"></span>
-                    </div>
-                    <div class="col-md-6">
-                        <label asp-for="DeliveryLeadMinutes" class="form-label">Chuẩn bị thêm khi giao tận nơi</label>
-                        <div class="input-group">
-                            <input asp-for="DeliveryLeadMinutes" type="number" min="0" max="240" step="1" required
-                                   class="form-control" data-policy-input data-label="Chuẩn bị giao tận nơi" data-unit="phút"
-                                   data-current="@current.DeliveryLeadMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
-                            <span class="input-group-text">phút</span>
-                        </div>
-                        <span asp-validation-for="DeliveryLeadMinutes" class="text-danger small"></span>
+                        <div class="form-text">Áp dụng giống nhau dù khách nhận tại cửa hàng hay chọn giao tận nơi.</div>
                     </div>
                 </div>
                 <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
