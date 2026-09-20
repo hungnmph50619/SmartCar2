@@ -19,8 +19,6 @@ public sealed class HandoversController : Controller
 {
     private const int MaximumAdditionalImages = 18;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
-    // TEMP: Cho phép test trọn luồng giao - trả mà không cần hồ sơ/ảnh biên bản.
-    private const bool BypassRentalDocumentValidation = true;
 
     private readonly IHandoverService _handoverService;
     private readonly IBookingService _bookingService;
@@ -65,11 +63,7 @@ public sealed class HandoversController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        if (DateTime.Now >= booking.ReturnDate)
-        {
-            TempData["ErrorMessage"] = "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao.";
-            return RedirectToBookingDetails(bookingId);
-        }
+        // TEST Quy_2: tạm bỏ chặn thời gian để có thể lập biên bản và chạy hết chuyến.
 
         var model = new HandoverViewModel
         {
@@ -85,8 +79,7 @@ public sealed class HandoversController : Controller
             PenaltyPolicyAccepted = true
         };
 
-        if (!BypassRentalDocumentValidation &&
-            !await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
+        if (!await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
         {
             TempData["ErrorMessage"] =
                 "Khách chưa có đủ CCCD và GPLX đã được Admin xác minh, hoặc giấy tờ không còn hiệu lực đến ngày trả xe. Không thể bàn giao.";
@@ -116,11 +109,7 @@ public sealed class HandoversController : Controller
             return RedirectToBookingDetails(model.BookingId);
         }
 
-        if (DateTime.Now >= booking.ReturnDate)
-        {
-            TempData["ErrorMessage"] = "Đã đến hoặc quá thời gian trả xe, không thể lập biên bản giao.";
-            return RedirectToBookingDetails(model.BookingId);
-        }
+        // TEST Quy_2: tạm bỏ chặn thời gian để có thể lập biên bản và chạy hết chuyến.
 
         ModelState.Remove(nameof(HandoverViewModel.CustomerId));
         ModelState.Remove(nameof(HandoverViewModel.VerifiedCustomerName));
@@ -145,8 +134,7 @@ public sealed class HandoversController : Controller
         model.PenaltyPolicyAccepted = true;
 
         var identityFailures = new List<string>();
-        if (!BypassRentalDocumentValidation &&
-            !await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
+        if (!await PopulateVerifiedIdentityAsync(model, booking, cancellationToken))
         {
             ModelState.AddModelError(
                 string.Empty,
@@ -154,33 +142,30 @@ public sealed class HandoversController : Controller
             identityFailures.Add("hồ sơ KYC không còn hợp lệ");
         }
 
-        if (!BypassRentalDocumentValidation && !model.OriginalCitizenIdChecked)
+        if (!model.OriginalCitizenIdChecked)
         {
             identityFailures.Add("chưa xác nhận CCCD bản gốc");
         }
 
-        if (!BypassRentalDocumentValidation && !model.OriginalDrivingLicenseChecked)
+        if (!model.OriginalDrivingLicenseChecked)
         {
             identityFailures.Add("chưa xác nhận GPLX bản gốc");
         }
 
-        if (!BypassRentalDocumentValidation && !model.ReceiverIdentityCheckedInPerson)
+        if (!model.ReceiverIdentityCheckedInPerson)
         {
             identityFailures.Add("chưa xác nhận đúng người đang trực tiếp nhận xe");
         }
 
-        if (!BypassRentalDocumentValidation)
-        {
-            await ValidateIdentityFaceSessionAsync(model, booking, identityFailures, cancellationToken);
-            await ValidateEvidenceImagesAsync(model, cancellationToken);
-        }
+        await ValidateIdentityFaceSessionAsync(model, booking, identityFailures, cancellationToken);
+        await ValidateEvidenceImagesAsync(model, cancellationToken);
 
         if (identityFailures.Count > 0)
         {
             await WriteFailedHandoverAttemptAsync(model.BookingId, identityFailures, cancellationToken);
         }
 
-        if (!BypassRentalDocumentValidation && !ModelState.IsValid)
+        if (!ModelState.IsValid)
         {
             return View(model);
         }
@@ -194,9 +179,7 @@ public sealed class HandoversController : Controller
         IReadOnlyList<string> imagePaths;
         try
         {
-            imagePaths = BypassRentalDocumentValidation
-                ? Array.Empty<string>()
-                : await SaveEvidenceImagesAsync(model.BookingId, model, cancellationToken);
+            imagePaths = await SaveEvidenceImagesAsync(model.BookingId, model, cancellationToken);
         }
         catch
         {
@@ -223,7 +206,7 @@ public sealed class HandoversController : Controller
                 model.PenaltyPolicyAccepted,
                 model.Notes,
                 staffId,
-                model.IdentityFaceSessionId ?? Guid.Empty),
+                model.IdentityFaceSessionId!.Value),
             cancellationToken);
 
         if (!result.Succeeded)
