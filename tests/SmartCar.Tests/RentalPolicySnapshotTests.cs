@@ -133,7 +133,11 @@ public sealed class RentalPolicySnapshotTests
         Assert.True(Valid(new RentalPolicySnapshot()));
         Assert.False(Valid(new RentalPolicySnapshot { DepositPercent = -1 }));
         Assert.False(Valid(new RentalPolicySnapshot { DepositPercent = 0.5m }));
+        Assert.False(Valid(new RentalPolicySnapshot { DepositPercent = 10.5m }));
         Assert.False(Valid(new RentalPolicySnapshot { IncludedKilometersPerDay = 0 }));
+        Assert.False(Valid(new RentalPolicySnapshot { NoShowFeePercent = 10.5m }));
+        Assert.False(Valid(new RentalPolicySnapshot { IncludedDeliveryDistanceKm = 3.5 }));
+        Assert.False(Valid(new RentalPolicySnapshot { MaxDeliveryDistanceKm = 50.5 }));
         Assert.False(Valid(new RentalPolicySnapshot { IncludedDeliveryDistanceKm = 51, MaxDeliveryDistanceKm = 50 }));
         Assert.False(Valid(new RentalPolicySnapshot { BaseDeliveryFee = 0.1m }));
         Assert.False(Valid(new RentalPolicySnapshot { TrafficFineTerms = " " }));
