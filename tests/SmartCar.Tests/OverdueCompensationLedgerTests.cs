@@ -24,6 +24,26 @@ public sealed class OverdueCompensationLedgerTests
     }
 
     [Theory]
+    [InlineData(700000, 300000, 700000, 300000)]
+    [InlineData(700000, 300000, 1000000, 0)]
+    [InlineData(0, 300000, 0, 300000)]
+    [InlineData(700000, 0, 0, 700000)]
+    [InlineData(700000, 300000, 1200000, 0)]
+    public void CalculateRefundReleaseAmount_ReleasesOnlyNewlyFundedAmount(
+        decimal fundedFromDeposit,
+        decimal fundedFromDebt,
+        decimal alreadyRecorded,
+        decimal expected)
+    {
+        Assert.Equal(
+            expected,
+            OverdueCompensationLedger.CalculateRefundReleaseAmount(
+                fundedFromDeposit,
+                fundedFromDebt,
+                alreadyRecorded));
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("OVERDUE-COMP-103-204-20260920120000")]
