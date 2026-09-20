@@ -684,17 +684,39 @@ internal sealed class ReturnService : IReturnService
 
         if (requiresMaintenance)
         {
-            _dbContext.MaintenanceRecords.Add(new MaintenanceRecord
+            var openMaintenance = await _dbContext.MaintenanceRecords
+                .Where(record =>
+                    record.VehicleId == booking.VehicleId &&
+                    record.Status == MaintenanceStatus.InProgress)
+                .OrderByDescending(record => record.StartDate)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var normalizedMaintenanceNote = string.IsNullOrWhiteSpace(maintenanceNote)
+                ? null
+                : maintenanceNote.Trim();
+
+            if (openMaintenance is null)
             {
-                VehicleId = booking.VehicleId,
-                StartDate = DateTime.UtcNow,
-                Content = string.IsNullOrWhiteSpace(maintenanceNote)
-                    ? "Kiểm tra hoặc sửa chữa sau lượt thuê"
-                    : maintenanceNote.Trim(),
-                Cost = 0,
-                Mileage = booking.Vehicle.CurrentMileage,
-                Status = MaintenanceStatus.InProgress
-            });
+                _dbContext.MaintenanceRecords.Add(new MaintenanceRecord
+                {
+                    VehicleId = booking.VehicleId,
+                    StartDate = DateTime.UtcNow,
+                    Content = normalizedMaintenanceNote
+                        ?? "Kiểm tra hoặc sửa chữa sau lượt thuê",
+                    Cost = 0,
+                    Mileage = booking.Vehicle.CurrentMileage,
+                    Status = MaintenanceStatus.InProgress
+                });
+            }
+            else if (!string.IsNullOrWhiteSpace(normalizedMaintenanceNote) &&
+                     !openMaintenance.Content.Contains(
+                         normalizedMaintenanceNote,
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                openMaintenance.Content = AppendText(
+                    openMaintenance.Content,
+                    $"Bổ sung khi quyết toán đơn #{booking.BookingId}: {normalizedMaintenanceNote}");
+            }
         }
 
         var hasPendingRefund = booking.Payments.Any(payment =>
