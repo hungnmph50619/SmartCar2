@@ -550,7 +550,11 @@
 
             <div class="d-flex gap-2 flex-wrap mt-3">
                 <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản trả</a>
-                @if (Model.ReturnSignedPaths.Count > 0)
+                @if (Model.ReturnSignedPaths.Count == 0)
+                {
+                    <a class="btn btn-outline-warning" asp-controller="ReturnEdits" asp-action="Edit" asp-route-bookingId="@b.BookingId">Chỉnh sửa biên bản trả</a>
+                }
+                else
                 {
                     <a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Return" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
                 }
