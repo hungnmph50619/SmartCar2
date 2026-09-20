@@ -37,7 +37,7 @@ public sealed class RentalPolicySnapshot : IValidatableObject
     [Range(0, 360, ErrorMessage = "Thời gian xoay vòng xe phải từ 0 đến 360 phút.")]
     public int VehicleTurnaroundMinutes { get; set; } = RentalPolicy.VehicleTurnaroundMinutes;
 
-    [Range(0, 240, ErrorMessage = "Thời gian chuẩn bị giao tận nơi phải từ 0 đến 240 phút.")]
+    // Legacy: chỉ giữ để deserialize PolicyJson cũ. Không còn dùng để tính lịch xe.
     public int DeliveryLeadMinutes { get; set; } = RentalPolicy.DeliveryLeadMinutes;
 
     // Không đến nhận xe.
@@ -82,8 +82,7 @@ public sealed class RentalPolicySnapshot : IValidatableObject
         (decimal)Math.Ceiling(Math.Max(0d, distanceKm - IncludedDeliveryDistanceKm)) * DeliveryFeePerExtraKm;
 
     public int GetOperationalPreparationMinutes(VehiclePickupMethod pickupMethod) =>
-        VehicleTurnaroundMinutes +
-        (pickupMethod == VehiclePickupMethod.Delivery ? DeliveryLeadMinutes : 0);
+        VehicleTurnaroundMinutes;
 
     // Each started 24-hour period AFTER the grace period is charged as one day.
     public int LateChargeDays(int lateMinutes) =>
