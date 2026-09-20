@@ -178,6 +178,7 @@ public static class VietnameseDisplayExtensions
         "ResolveExtensionConflictByCancellation" => "Xử lý xung đột gia hạn bằng hủy đơn kế tiếp",
         "UploadHandoverSigned" => "Tải bản giao xe đã ký",
         "UploadReturnSigned" => "Tải bản trả xe đã ký",
+        "UpdateRentalPolicy" => "Cập nhật chính sách",
         null or "" => "Không xác định",
         _ => value
     };
@@ -195,6 +196,7 @@ public static class VietnameseDisplayExtensions
         "VehicleIncident" => "Sự cố xe",
         "Vehicle" => "Xe",
         "MaintenanceRecord" => "Phiếu bảo trì",
+        "BusinessSetting" => "Cấu hình nghiệp vụ",
         "UserProfile" => "Hồ sơ người dùng",
         "UserAccount" => "Tài khoản người dùng",
         null or "" => "Không xác định",
