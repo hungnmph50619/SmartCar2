@@ -92,6 +92,7 @@ internal sealed class BookingReviewService : IBookingReviewService
         var blockedUntil = await _reservationPolicy.GetActualTurnaroundBlockedUntilAsync(
             booking.VehicleId,
             booking.PickupDate,
+            booking.PickupMethod,
             booking.BookingId,
             cancellationToken);
 
