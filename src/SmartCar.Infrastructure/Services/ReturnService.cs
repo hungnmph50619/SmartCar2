@@ -599,13 +599,21 @@ internal sealed class ReturnService : IReturnService
             payment.Type == PaymentType.VehicleSwapAdjustment &&
             payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
 
+        var hasOpenOverdueCompensationDebt = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.OverdueCompensationDebt &&
+            payment.Amount > 0m &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
+
         if (!upfrontSatisfied ||
             !additionalPaid ||
             hasOpenAdditionalPayment ||
-            hasOpenSwapAdjustment)
+            hasOpenSwapAdjustment ||
+            hasOpenOverdueCompensationDebt)
         {
             return OperationResult.Failure(
-                "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền thuê/cọc.");
+                hasOpenOverdueCompensationDebt
+                    ? "Đơn còn phần bồi thường quá hạn chưa thanh toán hoặc đang chờ đối soát. Cần xử lý khoản này trước khi quyết toán cọc."
+                    : "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền thuê/cọc.");
         }
 
         var depositAvailableBeforeNewDeduction = Math.Max(
