@@ -802,40 +802,13 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Refunds));
         }
 
-        var customerId = await _dbContext.Bookings.AsNoTracking()
-            .Where(item => item.BookingId == bookingId)
-            .Select(item => item.CustomerId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (string.IsNullOrWhiteSpace(customerId))
-        {
-            TempData["ErrorMessage"] = "Không tìm thấy đơn thuê.";
-            return RedirectToAction(nameof(Refunds));
-        }
-
-        var bank = await _bankAccountService.GetDefaultAsync(customerId, cancellationToken);
-        if (bank is null)
-        {
-            TempData["ErrorMessage"] = "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền.";
-            return RedirectToAction(nameof(Refunds));
-        }
-
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
 
-        var duplicateCode = await _dbContext.Payments.AsNoTracking().AnyAsync(
-            item => item.Type == PaymentType.Refund &&
-                    item.Status == PaymentStatus.Refunded &&
-                    item.TransactionCode == transactionCode,
-            cancellationToken);
-        if (duplicateCode)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Mã giao dịch này đã được sử dụng cho một khoản hoàn tiền khác.";
-            return RedirectToAction(nameof(Refunds));
-        }
-
+        // Khóa booking + refund state trước, sau đó mới đọc tài khoản nhận tiền trong
+        // CÙNG transaction. UserBankAccountService sẽ enlist vào transaction này,
+        // nên không thể đổi tài khoản ở giữa lúc Staff đang hoàn tiền.
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
@@ -869,6 +842,29 @@ public sealed class StaffController : Controller
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ.";
+            return RedirectToAction(nameof(Refunds));
+        }
+
+        var duplicateCode = await _dbContext.Payments.AsNoTracking().AnyAsync(
+            item => item.Type == PaymentType.Refund &&
+                    item.Status == PaymentStatus.Refunded &&
+                    item.TransactionCode == transactionCode,
+            cancellationToken);
+        if (duplicateCode)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Mã giao dịch này đã được sử dụng cho một khoản hoàn tiền khác.";
+            return RedirectToAction(nameof(Refunds));
+        }
+
+        var bank = await _bankAccountService.GetDefaultAsync(
+            booking.CustomerId,
+            cancellationToken);
+        if (bank is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền.";
             return RedirectToAction(nameof(Refunds));
         }
 
