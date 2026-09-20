@@ -136,12 +136,12 @@
 .audit-description {
     display: -webkit-box;
     min-width: 240px;
-    max-width: 390px;
+    max-width: 460px;
     overflow: hidden;
     color: #35475d;
     line-height: 1.45;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
 }
 
 .audit-no-ip {
