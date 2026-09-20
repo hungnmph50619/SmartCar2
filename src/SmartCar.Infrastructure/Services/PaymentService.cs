@@ -69,7 +69,12 @@ internal sealed class PaymentService : IPaymentService
                 payment.Method,
                 payment.Status,
                 payment.PaidAt,
-                payment.TransactionCode))
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Status == PaymentStatus.Pending &&
+                payment.TransactionCode != null &&
+                payment.TransactionCode.StartsWith(AdditionalChargeSettlementPolicy.ReadyMarkerPrefix)
+                    ? null
+                    : payment.TransactionCode))
             .ToListAsync(cancellationToken);
     }
 
