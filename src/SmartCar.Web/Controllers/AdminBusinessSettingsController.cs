@@ -9,6 +9,7 @@ using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 
 namespace SmartCar.Web.Controllers;
 
@@ -77,8 +78,9 @@ public sealed class AdminBusinessSettingsController : Controller
         if (affected == 0)
             await _dbContext.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO [dbo].[BusinessSettings] ([BusinessSettingId], [DepositHoldDays], [PolicyJson], [UpdatedAt], [UpdatedByUserId]) VALUES (1, {model.DepositHoldDays}, {json}, {updatedAt}, {adminId})", cancellationToken);
+        var auditDescription = BusinessPolicyAuditFormatter.BuildSummary(oldPolicy.ToJson(), json);
         await _auditService.WriteAsync(adminId, "UpdateRentalPolicy", "BusinessSetting", "1",
-            $"Cập nhật nhóm {SmartCar.Web.ViewModels.BusinessPolicyGroups.Title(group)}. Chỉ áp dụng cho đơn mới.",
+            $"{auditDescription}. Áp dụng cho đơn mới.",
             oldValues: oldPolicy.ToJson(), newValues: json,
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken: cancellationToken);
         await transaction.CommitAsync(cancellationToken);
