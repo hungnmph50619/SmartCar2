@@ -81,14 +81,14 @@ public sealed class RentalPolicySnapshotTests
         Assert.Equal(RentalPolicy.BookingPaymentHoldMinutes, policy.BookingPaymentHoldMinutes);
         Assert.Equal(RentalPolicy.BookingTransferReconciliationHoldMinutes, policy.BookingTransferReconciliationHoldMinutes);
         Assert.Equal(RentalPolicy.VehicleTurnaroundMinutes, policy.VehicleTurnaroundMinutes);
-        Assert.Equal(RentalPolicy.DeliveryLeadMinutes, policy.DeliveryLeadMinutes);
+        Assert.Equal(RentalPolicy.DeliveryLeadMinutes, policy.DeliveryLeadMinutes); // legacy field only
         Assert.Equal(RentalPolicy.NoShowGraceMinutes, policy.NoShowGraceMinutes);
         Assert.Equal(RentalPolicy.NoShowFeeRate * 100m, policy.NoShowFeePercent);
         Assert.Equal(24, policy.CancellationRefundProcessingHours);
     }
 
     [Fact]
-    public void OperationalPreparationUsesBookingSnapshotValues()
+    public void OperationalPreparationUsesSameTurnaroundForAllPickupMethods()
     {
         var policy = new RentalPolicySnapshot
         {
@@ -97,7 +97,7 @@ public sealed class RentalPolicySnapshotTests
         };
 
         Assert.Equal(90, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
-        Assert.Equal(135, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+        Assert.Equal(90, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
     }
 
     [Fact]
