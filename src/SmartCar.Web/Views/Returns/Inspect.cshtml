@@ -376,7 +376,19 @@ else
                 }
                 else
                 {
-                    <div>Khách cần thanh toán khoản bồi thường này từ màn đơn thuê trước khi Staff có thể kết thúc kiểm tra.</div>
+                    <div class="mb-2">
+                        Khách có thể thanh toán QR từ màn đơn thuê, hoặc Staff ghi nhận tiền mặt khi thực tế đã thu đủ tại quầy.
+                    </div>
+                    <form asp-controller="StaffPayments"
+                          asp-action="CollectOverdueCompensationDebtCash"
+                          method="post"
+                          data-loading-form
+                          data-confirm="Xác nhận bạn đã thực nhận đủ @Model.OverdueCompensationDebtAmount.ToString("N0") đ bồi thường quá hạn bằng tiền mặt?">
+                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                        <button class="btn btn-sm btn-success" type="submit">
+                            Thu đủ @Model.OverdueCompensationDebtAmount.ToString("N0") đ tiền mặt
+                        </button>
+                    </form>
                 }
             </div>
         }
