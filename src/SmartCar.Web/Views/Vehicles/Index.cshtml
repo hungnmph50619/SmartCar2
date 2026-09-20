@@ -119,6 +119,7 @@
               action="@searchAction"
               class="row g-3 align-items-start"
               data-vehicle-search-form
+              data-minimum-pickup-lead-minutes="@ViewBag.MinimumPickupLeadMinutes"
               novalidate>
             <div class="col-lg-5 col-md-6">
                 <label for="vehiclePickupDisplay" class="form-label fw-semibold">Ngày giờ nhận xe</label>
@@ -137,7 +138,7 @@
                         <path d="M16 3v4M8 3v4M3 10h18"></path>
                     </svg>
                 </div>
-                <small id="vehiclePickupHint" class="vn-datetime-hint">Đặt trước tối thiểu @ViewBag.MinimumPickupLeadMinutes phút · ví dụ 09/08/2026 09:00</small>
+                <small id="vehiclePickupHint" class="vn-datetime-hint">Khách phải đặt trước giờ nhận ít nhất @ViewBag.MinimumPickupLeadMinutes phút.</small>
                 <span id="vehiclePickupError" class="search-field-error" data-vn-datetime-error="pickup" role="alert"></span>
                 <input type="hidden" name="PickupDate" value="@search.PickupDate.ToString("yyyy-MM-ddTHH:mm")" data-vn-datetime-hidden="pickup" />
             </div>
