@@ -151,6 +151,12 @@ public sealed class ReturnEditDamageEvidenceTests
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public Task<IReadOnlyList<SmartCar.Application.Features.Audits.AuditLogDto>> GetRecentAsync(
+            int take,
+            CancellationToken cancellationToken,
+            bool unused = false) =>
+            throw new NotSupportedException();
+
         public Task<SmartCar.Application.Features.Audits.AuditLogSearchResult> SearchAsync(
             SmartCar.Application.Features.Audits.AuditLogQuery query,
             CancellationToken cancellationToken = default) =>
@@ -162,3 +168,5 @@ public sealed class ReturnEditDamageEvidenceTests
             throw new NotSupportedException();
     }
 }
+
+// CI trigger for the red regression test.
