@@ -19,8 +19,6 @@ namespace SmartCar.Domain.Constants
         // đối chiếu km/nhiên liệu và vệ sinh nhanh trước lượt kế tiếp.
         public const int VehicleTurnaroundMinutes = 60;
 
-        // Legacy: giữ lại để đọc dữ liệu/cấu hình cũ. Không còn dùng để chặn lịch xe.
-        public const int DeliveryLeadMinutes = 30;
 
         // No-show: sau thời gian chờ, không hoàn phần tiền thuê. Tiền cọc và phí giao chưa thực hiện
         // vẫn được hoàn theo số thực tế còn lại của đơn.
