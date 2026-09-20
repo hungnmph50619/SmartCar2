@@ -729,7 +729,7 @@ internal sealed class PaymentService : IPaymentService
                     item.Method == PaymentMethods.CompensationRefund &&
                     BookingWorkflowRules.CountsTowardRefundTotal(item.Status) &&
                     OverdueCompensationLedger.CountsTowardRefundRelation(
-                        item.TransactionCode,
+                        item.LedgerReference ?? item.TransactionCode,
                         booking.BookingId,
                         overdueAffectedBookingId))
                 .Sum(item => item.Amount);
@@ -741,16 +741,20 @@ internal sealed class PaymentService : IPaymentService
 
             if (releaseAmount > 0m)
             {
+                var fundedRefundReference =
+                    OverdueCompensationLedger.BuildFundedRefundCode(
+                        booking.BookingId,
+                        overdueAffectedBookingId,
+                        paidAt);
+
                 overdueAffectedBooking.Payments.Add(new Payment
                 {
                     Type = PaymentType.Refund,
                     Amount = releaseAmount,
                     Method = PaymentMethods.CompensationRefund,
                     Status = PaymentStatus.AwaitingRefund,
-                    TransactionCode = OverdueCompensationLedger.BuildFundedRefundCode(
-                        booking.BookingId,
-                        overdueAffectedBookingId,
-                        paidAt)
+                    TransactionCode = fundedRefundReference,
+                    LedgerReference = fundedRefundReference
                 });
                 overdueAffectedBooking.RefundAmount = overdueAffectedBooking.Payments
                     .Where(item =>
