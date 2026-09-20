@@ -77,4 +77,5 @@ public sealed record StaffRefundLineViewModel(
     int PaymentId,
     decimal Amount,
     string Method,
-    PaymentStatus Status);
+    PaymentStatus Status,
+    string? TransactionCode);
