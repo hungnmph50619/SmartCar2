@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Identity;
 using SmartCar.Infrastructure.Persistence;
 using Xunit;
 
