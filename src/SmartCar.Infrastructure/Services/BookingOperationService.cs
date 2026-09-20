@@ -169,11 +169,7 @@ internal sealed class BookingOperationService : IBookingOperationService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        if (ownedTransaction is not null)
-        {
-            await ownedTransaction.CommitAsync(cancellationToken);
-        }
-
+        await transaction.CommitAsync(cancellationToken);
         await _auditService.WriteAsync(
             staffId,
             "StaffMarkNoShow",
@@ -363,7 +359,11 @@ internal sealed class BookingOperationService : IBookingOperationService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        if (ownedTransaction is not null)
+        {
+            await ownedTransaction.CommitAsync(cancellationToken);
+        }
+
         await _auditService.WriteAsync(
             actorId,
             auditAction,
