@@ -9,6 +9,29 @@ public static class OverdueCompensationLedger
     public const string DepositDeductionPrefix = "OVERDUE-COMP-";
     public const string DebtPrefix = "OVERDUE-DEBT-";
 
+    public static string BuildDepositDeductionRelationPrefix(
+        int renterBookingId,
+        int affectedBookingId) =>
+        $"{DepositDeductionPrefix}{renterBookingId}-{affectedBookingId}-";
+
+    public static string BuildDebtRelationPrefix(
+        int renterBookingId,
+        int affectedBookingId) =>
+        $"{DebtPrefix}{renterBookingId}-{affectedBookingId}-";
+
+    public static decimal CalculateRefundReleaseAmount(
+        decimal fundedFromDeposit,
+        decimal fundedFromDebt,
+        decimal compensationRefundAlreadyRecorded)
+    {
+        var totalFunded =
+            Math.Max(0m, fundedFromDeposit) +
+            Math.Max(0m, fundedFromDebt);
+        var alreadyRecorded = Math.Max(0m, compensationRefundAlreadyRecorded);
+
+        return Math.Max(0m, totalFunded - alreadyRecorded);
+    }
+
     public static string BuildDepositDeductionCode(
         int renterBookingId,
         int affectedBookingId,
