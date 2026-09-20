@@ -37,8 +37,6 @@ public sealed class RentalPolicySnapshot : IValidatableObject
     [Range(0, 360, ErrorMessage = "Thời gian xoay vòng xe phải từ 0 đến 360 phút.")]
     public int VehicleTurnaroundMinutes { get; set; } = RentalPolicy.VehicleTurnaroundMinutes;
 
-    // Legacy: chỉ giữ để deserialize PolicyJson cũ. Không còn dùng để tính lịch xe.
-    public int DeliveryLeadMinutes { get; set; } = RentalPolicy.DeliveryLeadMinutes;
 
     // Không đến nhận xe.
     [Range(0, 180, ErrorMessage = "Thời gian chờ khách đến nhận phải từ 0 đến 180 phút.")]
