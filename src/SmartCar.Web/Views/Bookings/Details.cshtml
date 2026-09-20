@@ -652,6 +652,21 @@
                             <div class="text-end small">@refund.TransactionCode</div>
                         </div>
                     }
+                    @if (Model.Status == BookingStatus.Cancelled &&
+                        Model.CancelledAt.HasValue &&
+                        refundPayments.Any(payment =>
+                            payment.Status == PaymentStatus.AwaitingRefund ||
+                            payment.Status == PaymentStatus.RefundApproved))
+                    {
+                        var refundTargetAt = Model.CancelledAt.Value.ToLocalTime()
+                            .AddHours(Model.Policy.CancellationRefundProcessingHours);
+                        <div class="alert alert-info mt-3 mb-2">
+                            <div class="fw-semibold">Thời gian xử lý hoàn tiền</div>
+                            <div>Mục tiêu xử lý trong <strong>@Model.Policy.CancellationRefundProcessingHours giờ</strong> kể từ khi hủy.</div>
+                            <div class="small mt-1">Mốc mục tiêu: @refundTargetAt.ToString("dd/MM/yyyy HH:mm"). Khoản hoàn có thể được xử lý sớm hơn.</div>
+                        </div>
+                    }
+
                     @if (ViewBag.CustomerDepositEligibleAt is DateTime depositEligibleAt &&
                         refundPayments.Any(payment => payment.Method == PaymentMethods.DepositRefund &&
                             (payment.Status == PaymentStatus.AwaitingRefund || payment.Status == PaymentStatus.RefundApproved)))
