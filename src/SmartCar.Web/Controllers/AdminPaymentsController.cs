@@ -194,7 +194,9 @@ public sealed class AdminPaymentsController : Controller
             nameof(Payment),
             booking.BookingId.ToString(),
             $"Chủ/admin duyệt thêm {newlyApprovedTotal:N0} đồng hoàn tiền cho đơn #{booking.BookingId}; " +
-            $"tổng batch đã duyệt chờ nhân viên chuyển là {approvedBatchTotal:N0} đồng.",
+            $"tổng batch đã duyệt chờ nhân viên chuyển là {approvedBatchTotal:N0} đồng; " +
+            $"tài khoản đã đối chiếu: {refundBankAccount.BankName} - {refundBankAccount.MaskedAccountNumber}, " +
+            $"chủ tài khoản {refundBankAccount.AccountHolderName}.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
