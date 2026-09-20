@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.Data;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -53,6 +54,10 @@ public sealed class AdminOverdueViolationsController : Controller
             TempData["ErrorMessage"] = "Bạn phải xác nhận vi phạm trước khi xử lý.";
             return Back();
         }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var renter = await _dbContext.Bookings
             .Include(x => x.Payments)
@@ -220,6 +225,8 @@ public sealed class AdminOverdueViolationsController : Controller
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
         await _auditService.WriteAsync(adminId, "ProcessOverdueVehicleConflict", nameof(Booking), renterBookingId.ToString(),
             $"Đơn #{renterBookingId} ảnh hưởng #{affectedBookingId}. Bồi thường {contractCompensation:N0}; khấu trừ cọc {depositDeduction:N0}; còn phải thu {outstanding:N0}.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken: cancellationToken);
