@@ -12,7 +12,7 @@ public sealed class AdditionalChargeSettlementPolicyTests
             39,
             new DateTime(2026, 9, 20, 6, 15, 0, DateTimeKind.Utc));
 
-        Assert.StartsWith("ADD-READY-39-", marker, StringComparison.Ordinal);
+        Assert.StartsWith("ADD-READY-39-", marker);
         Assert.True(AdditionalChargeSettlementPolicy.IsReadyMarker(marker));
     }
 
