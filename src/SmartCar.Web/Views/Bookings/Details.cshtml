@@ -658,7 +658,10 @@
                             payment.Status == PaymentStatus.AwaitingRefund ||
                             payment.Status == PaymentStatus.RefundApproved))
                     {
-                        var refundTargetAt = Model.CancelledAt.Value.ToLocalTime()
+                        var cancelledAtVietnam = Model.CancelledAt.Value.Kind == DateTimeKind.Utc
+                            ? Model.CancelledAt.Value.AddHours(7)
+                            : Model.CancelledAt.Value;
+                        var refundTargetAt = cancelledAtVietnam
                             .AddHours(Model.Policy.CancellationRefundProcessingHours);
                         <div class="alert alert-info mt-3 mb-2">
                             <div class="fw-semibold">Thời gian xử lý hoàn tiền</div>
