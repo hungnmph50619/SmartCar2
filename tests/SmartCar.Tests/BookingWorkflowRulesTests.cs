@@ -297,6 +297,21 @@ public sealed class BookingWorkflowRulesTests
 
 
     [Theory]
+    [InlineData(PaymentType.AdditionalCharge, true)]
+    [InlineData(PaymentType.OverdueCompensationDebt, false)]
+    [InlineData(PaymentType.TrafficFine, false)]
+    [InlineData(PaymentType.Extension, false)]
+    public void IsReturnSurchargePaymentType_SeparatesReturnChargesFromOtherDebts(
+        PaymentType type,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.IsReturnSurchargePaymentType(type));
+    }
+
+
+    [Theory]
     [InlineData(PaymentType.TrafficFine, PaymentStatus.Pending, 500000, true)]
     [InlineData(PaymentType.TrafficFine, PaymentStatus.AwaitingConfirmation, 500000, true)]
     [InlineData(PaymentType.TrafficFine, PaymentStatus.Failed, 500000, true)]
