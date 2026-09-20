@@ -48,10 +48,13 @@ internal sealed class BookingService : IBookingService
             return BookingMutationResult.Failure("Không xác định được khách hàng.");
         }
 
-        if (!BookingDateRules.IsValidRange(request.PickupDate, request.ReturnDate))
+        if (!BookingDateRules.IsValidRange(
+                request.PickupDate,
+                request.ReturnDate,
+                policy.MinimumPickupLeadMinutes))
         {
             return BookingMutationResult.Failure(
-                "Thời gian nhận xe phải ở tương lai và trước thời gian trả xe.");
+                $"Thời gian nhận xe phải cách hiện tại ít nhất {policy.MinimumPickupLeadMinutes} phút và trước thời gian trả xe.");
         }
 
         if (!Enum.IsDefined(request.PickupMethod))
@@ -181,6 +184,7 @@ internal sealed class BookingService : IBookingService
             request.PickupDate,
             request.ReturnDate,
             request.PickupMethod,
+            policy,
             null,
             cancellationToken);
 
@@ -310,6 +314,7 @@ internal sealed class BookingService : IBookingService
             booking.PickupDate,
             booking.ReturnDate,
             booking.PickupMethod,
+            booking.Policy,
             booking.BookingId,
             cancellationToken);
 
@@ -747,37 +752,47 @@ internal sealed class BookingService : IBookingService
         };
     }
 
-    private Task<bool> HasConflictAsync(
+    private async Task<bool> HasConflictAsync(
         int vehicleId,
         DateTime pickupDate,
         DateTime returnDate,
         VehiclePickupMethod pickupMethod,
+        RentalPolicySnapshot requestedPolicy,
         int? excludedBookingId,
         CancellationToken cancellationToken)
     {
-        var preparationBeforeRequested = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(pickupMethod));
-        var storePreparation = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
-        var deliveryPreparation = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
-
-        var requestedPickupBoundary = pickupDate - preparationBeforeRequested;
-        var requestedReturnWithStorePreparation = returnDate + storePreparation;
-        var requestedReturnWithDeliveryPreparation = returnDate + deliveryPreparation;
-
-        return _dbContext.Bookings.AnyAsync(
-            booking =>
+        var candidates = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking =>
                 booking.VehicleId == vehicleId &&
                 (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
-                BlockingStatuses.Contains(booking.Status) &&
-                requestedPickupBoundary < booking.ReturnDate &&
-                (
-                    booking.PickupMethod == VehiclePickupMethod.Delivery
-                        ? requestedReturnWithDeliveryPreparation > booking.PickupDate
-                        : requestedReturnWithStorePreparation > booking.PickupDate
-                ),
-            cancellationToken);
+                BlockingStatuses.Contains(booking.Status))
+            .Select(booking => new
+            {
+                booking.PickupDate,
+                booking.ReturnDate,
+                booking.PickupMethod,
+                booking.PolicyJson
+            })
+            .ToListAsync(cancellationToken);
+
+        var preparationBeforeRequested = TimeSpan.FromMinutes(
+            requestedPolicy.GetOperationalPreparationMinutes(pickupMethod));
+
+        foreach (var existing in candidates)
+        {
+            var existingPolicy = RentalPolicySnapshot.FromJson(existing.PolicyJson);
+            var preparationBeforeExisting = TimeSpan.FromMinutes(
+                existingPolicy.GetOperationalPreparationMinutes(existing.PickupMethod));
+
+            if (pickupDate < existing.ReturnDate.Add(preparationBeforeRequested) &&
+                returnDate.Add(preparationBeforeExisting) > existing.PickupDate)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private Task<bool> HasValidVehicleDocumentAsync(
