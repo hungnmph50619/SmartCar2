@@ -250,6 +250,124 @@ internal sealed class ReportService : IReportService
             })
             .ToListAsync(cancellationToken);
 
+        // Phạt/vi phạm được theo dõi riêng: không phải doanh thu và cũng không phải
+        // chi phí SmartCar. Khoản đang mở luôn hiển thị; khoản đã thu theo kỳ PaidAt.
+        var trafficFinePayments = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(item =>
+                item.Type == PaymentType.TrafficFine &&
+                item.VehicleIncident != null &&
+                item.VehicleIncident.Status != IncidentStatus.Cancelled &&
+                (
+                    item.Status == PaymentStatus.Pending ||
+                    item.Status == PaymentStatus.Failed ||
+                    item.Status == PaymentStatus.AwaitingConfirmation ||
+                    (item.Status == PaymentStatus.Paid &&
+                     item.PaidAt.HasValue &&
+                     item.PaidAt.Value >= paymentFromUtc &&
+                     item.PaidAt.Value < paymentEndUtc)
+                ))
+            .Select(item => new
+            {
+                item.PaymentId,
+                item.BookingId,
+                VehicleName = item.Booking.Vehicle.VehicleName,
+                LicensePlate = item.Booking.Vehicle.LicensePlate,
+                ViolationAt = item.VehicleIncident!.OccurredAt,
+                item.Amount,
+                item.Method,
+                item.Status,
+                item.TransactionCode,
+                PaidAtUtc = item.PaidAt
+            })
+            .ToListAsync(cancellationToken);
+
+        var paidTrafficFineEntityIds = trafficFinePayments
+            .Where(item => item.Status == PaymentStatus.Paid)
+            .Select(item => item.PaymentId.ToString())
+            .Distinct()
+            .ToArray();
+
+        var trafficFineAudits = paidTrafficFineEntityIds.Length == 0
+            ? new List<PaymentConfirmationAuditRow>()
+            : await _dbContext.AuditLogs
+                .AsNoTracking()
+                .Where(log =>
+                    log.Action == "ConfirmQrPayment" &&
+                    log.EntityName == "Payment" &&
+                    paidTrafficFineEntityIds.Contains(log.EntityId))
+                .Select(log => new PaymentConfirmationAuditRow(
+                    log.EntityId,
+                    log.UserId,
+                    log.CreatedAt))
+                .ToListAsync(cancellationToken);
+
+        var trafficFineAuditByPayment = new Dictionary<int, PaymentConfirmationAuditRow>();
+        foreach (var audit in trafficFineAudits.OrderByDescending(item => item.CreatedAt))
+        {
+            if (!int.TryParse(audit.EntityId, out var paymentId) ||
+                trafficFineAuditByPayment.ContainsKey(paymentId))
+            {
+                continue;
+            }
+
+            trafficFineAuditByPayment[paymentId] = audit;
+        }
+
+        var trafficFineConfirmerIds = trafficFineAuditByPayment.Values
+            .Where(item => !string.IsNullOrWhiteSpace(item.UserId))
+            .Select(item => item.UserId!)
+            .Distinct()
+            .ToArray();
+
+        var trafficFineConfirmerNames = trafficFineConfirmerIds.Length == 0
+            ? new Dictionary<string, string>()
+            : await _dbContext.Users
+                .AsNoTracking()
+                .Where(user => trafficFineConfirmerIds.Contains(user.Id))
+                .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
+
+        var trafficFineReportItems = trafficFinePayments
+            .Select(item =>
+            {
+                trafficFineAuditByPayment.TryGetValue(item.PaymentId, out var audit);
+                var confirmedBy = audit?.UserId is { Length: > 0 } userId
+                    ? trafficFineConfirmerNames.GetValueOrDefault(userId)
+                    : null;
+                DateTime? confirmedAt = audit is not null
+                    ? ToVietnamTime(audit.CreatedAt)
+                    : item.PaidAtUtc.HasValue
+                        ? ToVietnamTime(item.PaidAtUtc.Value)
+                        : null;
+
+                return new TrafficFineReportItemDto(
+                    item.PaymentId,
+                    item.BookingId,
+                    item.VehicleName,
+                    item.LicensePlate,
+                    item.ViolationAt,
+                    item.Amount,
+                    item.Method,
+                    item.Status,
+                    item.TransactionCode,
+                    confirmedBy,
+                    confirmedAt);
+            })
+            .OrderByDescending(item => item.ConfirmedAt ?? item.ViolationAt)
+            .ThenByDescending(item => item.PaymentId)
+            .Take(10)
+            .ToList();
+
+        var pendingTrafficFineAmount = trafficFinePayments
+            .Where(item => item.Status is PaymentStatus.Pending or PaymentStatus.Failed)
+            .Sum(item => item.Amount);
+        var awaitingTrafficFineConfirmationAmount = trafficFinePayments
+            .Where(item => item.Status == PaymentStatus.AwaitingConfirmation)
+            .Sum(item => item.Amount);
+        var collectedTrafficFineAmount = trafficFinePayments
+            .Where(item => item.Status == PaymentStatus.Paid)
+            .Sum(item => item.Amount);
+
         var outstandingReceivables = await _dbContext.Payments
             .AsNoTracking()
             .Where(item =>
@@ -709,6 +827,10 @@ internal sealed class ReportService : IReportService
             depositsHeld,
             pendingRefunds,
             pendingCompensationTransfers,
+            pendingTrafficFineAmount,
+            awaitingTrafficFineConfirmationAmount,
+            collectedTrafficFineAmount,
+            trafficFineReportItems,
             rows);
     }
 
@@ -786,5 +908,10 @@ internal sealed class ReportService : IReportService
         string EntityId,
         string? UserId,
         string Description,
+        DateTime CreatedAt);
+
+    private sealed record PaymentConfirmationAuditRow(
+        string EntityId,
+        string? UserId,
         DateTime CreatedAt);
 }
