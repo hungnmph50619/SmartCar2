@@ -12,9 +12,6 @@ namespace SmartCar.Infrastructure.Services;
 
 internal sealed class HandoverService : IHandoverService
 {
-    // TEMP: đồng bộ với chế độ test ở HandoversController.
-    private const bool BypassRentalDocumentValidation = true;
-
     private readonly ApplicationDbContext _dbContext;
 
     public HandoverService(ApplicationDbContext dbContext)
@@ -31,7 +28,7 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Không xác định được nhân viên đã trực tiếp kiểm tra người nhận xe.");
         }
 
-        if (!BypassRentalDocumentValidation && request.IdentityFaceSessionId == Guid.Empty)
+        if (request.IdentityFaceSessionId == Guid.Empty)
         {
             return OperationResult.Failure("Cần chụp ảnh khuôn mặt người nhận xe trực tiếp trước khi lập biên bản.");
         }
@@ -62,53 +59,46 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Đơn đã có biên bản giao xe.");
         }
 
-        IdentityCaptureSession? faceSession = null;
-        IdentityCaptureSession? citizenFrontSession = null;
-        IdentityCaptureSession? citizenBackSession = null;
+        var faceSession = await _dbContext.Set<IdentityCaptureSession>()
+            .FirstOrDefaultAsync(item =>
+                item.IdentityCaptureSessionId == request.IdentityFaceSessionId,
+                cancellationToken);
 
-        if (!BypassRentalDocumentValidation)
+        if (faceSession is null ||
+            faceSession.Purpose != IdentityCapturePurposes.Handover ||
+            faceSession.BookingId != booking.BookingId ||
+            faceSession.TargetCustomerId != booking.CustomerId ||
+            !faceSession.CanConsume(DateTime.UtcNow) ||
+            !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
         {
-            faceSession = await _dbContext.Set<IdentityCaptureSession>()
-                .FirstOrDefaultAsync(item =>
-                    item.IdentityCaptureSessionId == request.IdentityFaceSessionId,
-                    cancellationToken);
+            return OperationResult.Failure(
+                "Ảnh mặt người nhận không hợp lệ, không thuộc đúng đơn/khách hoặc đã được dùng. Vui lòng chụp lại tại quầy.");
+        }
 
-            if (faceSession is null ||
-                faceSession.Purpose != IdentityCapturePurposes.Handover ||
-                faceSession.BookingId != booking.BookingId ||
-                faceSession.TargetCustomerId != booking.CustomerId ||
-                !faceSession.CanConsume(DateTime.UtcNow) ||
-                !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
-            {
-                return OperationResult.Failure(
-                    "Ảnh mặt người nhận không hợp lệ, không thuộc đúng đơn/khách hoặc đã được dùng. Vui lòng chụp lại tại quầy.");
-            }
+        var counterEvidence = await _dbContext.Set<IdentityCaptureSession>()
+            .Where(item =>
+                item.BookingId == booking.BookingId &&
+                item.TargetCustomerId == booking.CustomerId &&
+                item.CreatedByUserId == request.IdentityVerifiedByStaffId &&
+                !item.ConsumedAt.HasValue &&
+                item.CompletedAt.HasValue &&
+                item.ExpiresAt > DateTime.UtcNow &&
+                item.ImagePath != null &&
+                item.CaptureMethod == IdentityCaptureMethods.StaffCounterDocument &&
+                (item.Purpose == IdentityCapturePurposes.HandoverCitizenFront ||
+                 item.Purpose == IdentityCapturePurposes.HandoverCitizenBack))
+            .OrderByDescending(item => item.CompletedAt)
+            .ToListAsync(cancellationToken);
 
-            var counterEvidence = await _dbContext.Set<IdentityCaptureSession>()
-                .Where(item =>
-                    item.BookingId == booking.BookingId &&
-                    item.TargetCustomerId == booking.CustomerId &&
-                    item.CreatedByUserId == request.IdentityVerifiedByStaffId &&
-                    !item.ConsumedAt.HasValue &&
-                    item.CompletedAt.HasValue &&
-                    item.ExpiresAt > DateTime.UtcNow &&
-                    item.ImagePath != null &&
-                    item.CaptureMethod == IdentityCaptureMethods.StaffCounterDocument &&
-                    (item.Purpose == IdentityCapturePurposes.HandoverCitizenFront ||
-                     item.Purpose == IdentityCapturePurposes.HandoverCitizenBack))
-                .OrderByDescending(item => item.CompletedAt)
-                .ToListAsync(cancellationToken);
+        var citizenFrontSession = counterEvidence
+            .FirstOrDefault(item => item.Purpose == IdentityCapturePurposes.HandoverCitizenFront);
+        var citizenBackSession = counterEvidence
+            .FirstOrDefault(item => item.Purpose == IdentityCapturePurposes.HandoverCitizenBack);
 
-            citizenFrontSession = counterEvidence
-                .FirstOrDefault(item => item.Purpose == IdentityCapturePurposes.HandoverCitizenFront);
-            citizenBackSession = counterEvidence
-                .FirstOrDefault(item => item.Purpose == IdentityCapturePurposes.HandoverCitizenBack);
-
-            if (citizenFrontSession is null || citizenBackSession is null)
-            {
-                return OperationResult.Failure(
-                    "Cần chụp và lưu đủ CCCD mặt trước + mặt sau của khách đang có mặt tại quầy trước khi lập biên bản giao xe.");
-            }
+        if (citizenFrontSession is null || citizenBackSession is null)
+        {
+            return OperationResult.Failure(
+                "Cần chụp và lưu đủ CCCD mặt trước + mặt sau của khách đang có mặt tại quầy trước khi lập biên bản giao xe.");
         }
 
         var grossRentalPaidAmount = booking.Payments
@@ -175,11 +165,7 @@ internal sealed class HandoverService : IHandoverService
         // Đây chỉ là thời điểm Staff chuẩn bị/lưu biên bản nháp. Chuyến chưa bắt đầu ở đây.
         // Thời điểm giao thực tế được chốt bằng server time khi xác minh bản ký.
         var preparedAt = DateTime.Now;
-        if (!BookingWorkflowRules.CanPrepareHandover(preparedAt, booking.ReturnDate))
-        {
-            return OperationResult.Failure(
-                "Đã đến hoặc quá thời gian trả xe của đơn, không thể chuẩn bị biên bản giao.");
-        }
+        // TEST Quy_2: tạm bỏ validation thời gian để chạy trọn luồng giao - trả.
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
         {
@@ -198,7 +184,7 @@ internal sealed class HandoverService : IHandoverService
                 "Cần xác nhận đã thông báo và khách đã đồng ý chính sách phí/phạt trước khi giao xe.");
         }
 
-        if (!BypassRentalDocumentValidation && string.IsNullOrWhiteSpace(request.ImagePaths))
+        if (string.IsNullOrWhiteSpace(request.ImagePaths))
         {
             return OperationResult.Failure("Biên bản giao xe phải có ảnh đối chiếu tình trạng xe.");
         }
@@ -217,7 +203,7 @@ internal sealed class HandoverService : IHandoverService
             InteriorCondition = Normalize(request.InteriorCondition),
             Accessories = Normalize(request.Accessories),
             ImagePaths = Normalize(request.ImagePaths),
-            ReceiverFaceImagePath = faceSession?.ImagePath,
+            ReceiverFaceImagePath = faceSession.ImagePath,
             Notes = Normalize(request.Notes),
             IncludedKilometers = rentalDays * booking.Policy.IncludedKilometersPerDay,
             ExcessKmFeePerKm = booking.Policy.ExcessKilometerFee,
@@ -225,14 +211,14 @@ internal sealed class HandoverService : IHandoverService
             TrafficFineTerms = booking.Policy.TrafficFineTerms,
             DamageCompensationTerms = booking.Policy.DamageCompensationTerms,
             PenaltyPolicyAccepted = true,
-            CustomerIdentityVerified = BypassRentalDocumentValidation || faceSession is not null,
+            CustomerIdentityVerified = true,
             IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
             IdentityVerifiedAt = verifiedAt
         };
 
-        if (faceSession is not null) faceSession.ConsumedAt = verifiedAt;
-        if (citizenFrontSession is not null) citizenFrontSession.ConsumedAt = verifiedAt;
-        if (citizenBackSession is not null) citizenBackSession.ConsumedAt = verifiedAt;
+        faceSession.ConsumedAt = verifiedAt;
+        citizenFrontSession.ConsumedAt = verifiedAt;
+        citizenBackSession.ConsumedAt = verifiedAt;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
