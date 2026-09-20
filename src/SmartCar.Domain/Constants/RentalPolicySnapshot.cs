@@ -102,8 +102,23 @@ public sealed class RentalPolicySnapshot : IValidatableObject
             IncludedDeliveryDistanceKm > MaxDeliveryDistanceKm)
             yield return new ValidationResult("Số km trong phí cơ bản không được lớn hơn bán kính giao tối đa.",
                 new[] { nameof(IncludedDeliveryDistanceKm) });
-        if (new[] { DepositPercent, LateReturnFeeMultiplier }.Any(x => decimal.Round(x, 2) != x))
-            yield return new ValidationResult("Tỷ lệ và hệ số chỉ được có tối đa 2 chữ số thập phân.");
+
+        if (IncludedDeliveryDistanceKm != Math.Truncate(IncludedDeliveryDistanceKm) ||
+            MaxDeliveryDistanceKm != Math.Truncate(MaxDeliveryDistanceKm))
+        {
+            yield return new ValidationResult(
+                "Khoảng cách giao xe phải là số nguyên km.",
+                new[] { nameof(IncludedDeliveryDistanceKm), nameof(MaxDeliveryDistanceKm) });
+        }
+        if (decimal.Truncate(DepositPercent) != DepositPercent)
+            yield return new ValidationResult(
+                "Tỷ lệ tiền cọc phải là số nguyên phần trăm.",
+                new[] { nameof(DepositPercent) });
+
+        if (decimal.Round(LateReturnFeeMultiplier, 2) != LateReturnFeeMultiplier)
+            yield return new ValidationResult(
+                "Hệ số trả muộn chỉ được có tối đa 2 chữ số thập phân.",
+                new[] { nameof(LateReturnFeeMultiplier) });
         if (new[] { BaseDeliveryFee, DeliveryFeePerExtraKm, ExcessKilometerFee }.Any(x => decimal.Truncate(x) != x))
             yield return new ValidationResult("Các khoản phí phải là số nguyên đồng.");
 
@@ -139,9 +154,11 @@ public sealed class RentalPolicySnapshot : IValidatableObject
                 });
         }
 
-        if (decimal.Round(NoShowFeePercent, 2) != NoShowFeePercent)
+        if (decimal.Truncate(NoShowFeePercent) != NoShowFeePercent)
         {
-            yield return new ValidationResult("Tỷ lệ No-show chỉ được có tối đa 2 chữ số thập phân.");
+            yield return new ValidationResult(
+                "Tỷ lệ giữ tiền thuê khi No-show phải là số nguyên phần trăm.",
+                new[] { nameof(NoShowFeePercent) });
         }
 
         if (new[]
