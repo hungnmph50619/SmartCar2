@@ -207,7 +207,8 @@ public sealed class ReturnEditsController : Controller
             booking.VehicleReturn.FuelLevel = $"{fuelPercent}%";
             booking.VehicleReturn.HasDamage = model.HasDamage;
             booking.VehicleReturn.AccessoryStatus = normalizedAccessory;
-            booking.VehicleReturn.Notes = BuildReturnNotes(model.AccessoryStatus, model.MissingAccessories, model.Notes);
+            booking.VehicleReturn.Notes =
+                string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim();
             booking.VehicleReturn.ImagePaths = string.Join(';', updatedPaths);
             booking.Vehicle.CurrentMileage = model.Mileage.Value;
 
@@ -336,15 +337,6 @@ public sealed class ReturnEditsController : Controller
         }
 
         return (AccessoriesComplete, null, string.IsNullOrWhiteSpace(note) ? null : note);
-    }
-
-    private static string BuildReturnNotes(string accessoryStatus, string? missingAccessories, string? note)
-    {
-        var normalizedAccessory = NormalizeAccessoryValue(accessoryStatus, missingAccessories);
-        var normalizedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
-        return normalizedNote is null
-            ? $"{ReturnAccessoriesLabel} {normalizedAccessory}"
-            : $"{ReturnAccessoriesLabel} {normalizedAccessory}{ReturnNoteSeparator}{normalizedNote}";
     }
 
     private static void PopulateExistingImages(ReturnEditViewModel model, VehicleReturn record)
