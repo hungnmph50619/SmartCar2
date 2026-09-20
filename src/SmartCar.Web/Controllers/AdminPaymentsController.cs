@@ -136,6 +136,48 @@ public sealed class AdminPaymentsController : Controller
             return RedirectToAction(nameof(Index), new { section = "refund" });
         }
 
+        var hasCompensationRefund = awaitingApproval.Any(item =>
+            item.Method == PaymentMethods.CompensationRefund);
+
+        if (hasCompensationRefund)
+        {
+            var openOverdueDebts = await _dbContext.Payments
+                .AsNoTracking()
+                .Where(payment =>
+                    payment.Amount > 0m &&
+                    payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation &&
+                    payment.TransactionCode != null &&
+                    (
+                        payment.Type == PaymentType.OverdueCompensationDebt ||
+                        (payment.Type == PaymentType.AdditionalCharge &&
+                         payment.TransactionCode.StartsWith(OverdueCompensationLedger.DebtPrefix))
+                    ))
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    payment.TransactionCode
+                })
+                .ToListAsync(cancellationToken);
+
+            var unfundedCompensation = openOverdueDebts
+                .Where(payment =>
+                    OverdueCompensationLedger.TryParseDebtRelation(
+                        payment.TransactionCode,
+                        out _,
+                        out var affectedBookingId) &&
+                    affectedBookingId == booking.BookingId)
+                .Sum(payment => payment.Amount);
+
+            if (unfundedCompensation > 0m)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Đơn #{booking.BookingId} còn {unfundedCompensation:N0} đồng bồi thường chưa được thực thu từ khách gây ảnh hưởng. " +
+                    "Chưa được duyệt khoản bồi thường cho đến khi khoản nợ này được thanh toán/đối soát xong.";
+                return RedirectToAction(nameof(Index), new { section = "refund" });
+            }
+        }
+
         var hasDepositRefund = awaitingApproval.Any(item =>
             item.Method == PaymentMethods.DepositRefund);
 
