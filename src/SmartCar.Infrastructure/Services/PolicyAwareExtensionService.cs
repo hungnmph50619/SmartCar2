@@ -114,12 +114,10 @@ internal sealed class PolicyAwareExtensionService : IExtensionService
                         $"{RentalPolicy.VehicleTurnaroundMinutes} phút trước lượt thuê kế tiếp.");
                 }
 
-                if (!confirmConflictHandled)
-                {
-                    return OperationResult.Failure(
-                        "Gia hạn bất khả kháng làm mất khoảng xoay vòng của đơn kế tiếp. " +
-                        "Chỉ duyệt sau khi đã xử lý phương án đổi xe/hoàn tiền cho khách kế tiếp và xác nhận đã xử lý xung đột.");
-                }
+                return OperationResult.Failure(
+                    "Gia hạn bất khả kháng làm mất khoảng xoay vòng của đơn kế tiếp. " +
+                    "Chỉ duyệt sau khi đơn kế tiếp đã thực sự được đổi sang xe khác hoặc hủy; " +
+                    "xác nhận từ trình duyệt không thay thế được trạng thái lịch xe trên hệ thống.");
             }
         }
 

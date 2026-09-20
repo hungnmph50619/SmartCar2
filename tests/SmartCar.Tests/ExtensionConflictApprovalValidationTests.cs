@@ -104,6 +104,23 @@ public sealed class ExtensionConflictApprovalValidationTests
         Assert.DoesNotContain(
             await db.Payments.ToListAsync(),
             item => item.BookingId == 701 && item.Type == PaymentType.Extension);
+
+        var conflictingBooking = await db.Bookings.SingleAsync(item =>
+            item.BookingId == 802);
+        conflictingBooking.Status = BookingStatus.Cancelled;
+        await db.SaveChangesAsync();
+
+        var approvedAfterConflictResolved = await service.ApproveAsync(
+            77,
+            "admin-1",
+            confirmConflictHandled: false,
+            adminNote: null);
+
+        Assert.True(approvedAfterConflictResolved.Succeeded);
+        Assert.Equal(BookingExtensionStatus.Approved, extension.Status);
+        Assert.Contains(
+            await db.Payments.ToListAsync(),
+            item => item.BookingId == 701 && item.Type == PaymentType.Extension);
     }
 
     private static Booking CreateBooking(
