@@ -544,11 +544,9 @@
                 </div>
 
                 <div class="policy-refund-primary">
-                    <div class="policy-refund-primary-title">Hoàn 100% khi đủ 2 điều kiện</div>
+                    <div class="policy-refund-primary-title">Hoàn 100% tiền thuê</div>
                     <div class="policy-refund-primary-rule">
-                        <span>Hủy trong <strong>@current.FreeCancellationWindowMinutes phút</strong> sau thanh toán</span>
-                        <span class="policy-rule-plus">+</span>
-                        <span>Còn ít nhất <strong>@FriendlyHours(current.MinimumHoursForFreeCancellation)</strong> trước giờ nhận</span>
+                        <span>Khách hủy trong <strong>@current.FreeCancellationWindowMinutes phút</strong> đầu sau khi thanh toán.</span>
                     </div>
                 </div>
 
@@ -595,30 +593,20 @@
                     <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
                 }
 
-                <div class="policy-form-section-title">Điều kiện để hoàn 100%</div>
+                <div class="policy-form-section-title">Hủy ngay sau thanh toán</div>
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label asp-for="FreeCancellationWindowMinutes" class="form-label">Hủy trong vòng sau thanh toán</label>
+                    <div class="col-md-6">
+                        <label asp-for="FreeCancellationWindowMinutes" class="form-label">Hoàn 100% nếu hủy trong</label>
                         <div class="input-group">
                             <input asp-for="FreeCancellationWindowMinutes" type="number" min="0" max="1440" step="1" required
-                                   class="form-control" data-policy-input data-label="Cửa sổ hủy miễn phí" data-unit="phút"
+                                   class="form-control" data-policy-input data-label="Thời gian hủy được hoàn 100%" data-unit="phút"
                                    data-current="@current.FreeCancellationWindowMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
-                            <span class="input-group-text">phút</span>
+                            <span class="input-group-text">phút sau thanh toán</span>
                         </div>
                         <span asp-validation-for="FreeCancellationWindowMinutes" class="text-danger small"></span>
                     </div>
-                    <div class="col-md-4">
-                        <label asp-for="MinimumHoursForFreeCancellation" class="form-label">Còn ít nhất trước giờ nhận</label>
-                        <div class="input-group">
-                            <input asp-for="MinimumHoursForFreeCancellation" type="number" min="0" max="336" step="1" required
-                                   class="form-control" data-policy-input data-label="Còn tối thiểu để hoàn 100%" data-unit="giờ"
-                                   data-current="@current.MinimumHoursForFreeCancellation.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
-                            <span class="input-group-text">giờ</span>
-                        </div>
-                        <span asp-validation-for="MinimumHoursForFreeCancellation" class="text-danger small"></span>
-                    </div>
-                    <div class="col-md-4">
-                        <label asp-for="CancellationRefundProcessingHours" class="form-label">Hoàn tiền trong vòng</label>
+                    <div class="col-md-6">
+                        <label asp-for="CancellationRefundProcessingHours" class="form-label">Mục tiêu xử lý khoản hoàn</label>
                         <div class="input-group">
                             <input asp-for="CancellationRefundProcessingHours" type="number" min="1" max="168" step="1" required
                                    class="form-control" data-policy-input data-label="Xử lý hoàn tiền sau hủy" data-unit="giờ"
@@ -630,9 +618,9 @@
                 </div>
 
                 <div class="policy-rule-example">
-                    Khách phải thỏa cả 2 điều kiện trên để được hoàn 100%.
+                    Trong khoảng này, khách được hoàn 100% tiền thuê dù giờ nhận xe đã gần. Sau khoảng này mới áp dụng bảng bên dưới.
                 </div>
-                <div class="policy-form-section-title mt-3">Nếu không đủ điều kiện trên</div>
+                <div class="policy-form-section-title mt-3">Sau thời gian hoàn 100%</div>
                 <div class="policy-tier-grid">
                     <div class="policy-tier-row">
                         <span class="policy-tier-name">Còn từ</span>
@@ -644,7 +632,7 @@
                         </div>
                         <div class="input-group">
                             <span class="input-group-text">hoàn</span>
-                            <input asp-for="CancellationTier1RefundPercent" type="number" min="0" max="100" step=".01" required
+                            <input asp-for="CancellationTier1RefundPercent" type="number" min="0" max="100" step="1" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 1" data-unit="%"
                                    data-current="@current.CancellationTier1RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">%</span>
@@ -660,7 +648,7 @@
                         </div>
                         <div class="input-group">
                             <span class="input-group-text">hoàn</span>
-                            <input asp-for="CancellationTier2RefundPercent" type="number" min="0" max="100" step=".01" required
+                            <input asp-for="CancellationTier2RefundPercent" type="number" min="0" max="100" step="1" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 2" data-unit="%"
                                    data-current="@current.CancellationTier2RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">%</span>
@@ -676,7 +664,7 @@
                         </div>
                         <div class="input-group">
                             <span class="input-group-text">hoàn</span>
-                            <input asp-for="CancellationTier3RefundPercent" type="number" min="0" max="100" step=".01" required
+                            <input asp-for="CancellationTier3RefundPercent" type="number" min="0" max="100" step="1" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 3" data-unit="%"
                                    data-current="@current.CancellationTier3RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">%</span>
@@ -692,7 +680,7 @@
                         </div>
                         <div class="input-group">
                             <span class="input-group-text">hoàn</span>
-                            <input asp-for="CancellationTier4RefundPercent" type="number" min="0" max="100" step=".01" required
+                            <input asp-for="CancellationTier4RefundPercent" type="number" min="0" max="100" step="1" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 4" data-unit="%"
                                    data-current="@current.CancellationTier4RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">%</span>
@@ -703,7 +691,7 @@
                         <span class="policy-tier-muted">Hoàn tiền thuê</span>
                         <div class="input-group">
                             <span class="input-group-text">hoàn</span>
-                            <input asp-for="CancellationBelowTierRefundPercent" type="number" min="0" max="100" step=".01" required
+                            <input asp-for="CancellationBelowTierRefundPercent" type="number" min="0" max="100" step="1" required
                                    class="form-control" data-policy-input data-label="Tỷ lệ hoàn khi dưới ngưỡng cuối" data-unit="%"
                                    data-current="@current.CancellationBelowTierRefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">%</span>
