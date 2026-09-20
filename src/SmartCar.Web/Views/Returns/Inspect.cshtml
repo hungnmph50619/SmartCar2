@@ -34,14 +34,6 @@
         .Where(path => !path.Contains("signed-return-", StringComparison.OrdinalIgnoreCase))
         .ToList();
     var hasSignedDocuments = handoverSignedPaths.Count > 0 && returnSignedPaths.Count > 0;
-    var canEditReturn =
-        isStaff &&
-        Model.Status == BookingStatus.PendingInspection &&
-        returnSignedPaths.Count == 0 &&
-        !Model.AdditionalChargeAwaitingConfirmation &&
-        !Model.AdditionalChargePaid &&
-        !Model.AdditionalChargeFinalized;
-
     const string accessoryLabel = "Phụ kiện khi trả:";
     const string noteSeparator = " | Ghi chú: ";
     var rawReturnNotes = Model.Return.Notes?.Trim();
@@ -275,10 +267,6 @@ else
 
                 <div class="d-flex gap-2 flex-wrap mb-3">
                     <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@Model.BookingId">In</a>
-                    @if (canEditReturn)
-                    {
-                        <a class="btn btn-sm btn-outline-warning" asp-controller="ReturnEdits" asp-action="Edit" asp-route-bookingId="@Model.BookingId">Sửa</a>
-                    }
                 </div>
 
                 @if (returnSignedPaths.Count > 0)
