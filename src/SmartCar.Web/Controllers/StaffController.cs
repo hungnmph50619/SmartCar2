@@ -873,6 +873,45 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Refunds));
         }
 
+        if (approvedRefunds.Any(item => item.Method == PaymentMethods.CompensationRefund))
+        {
+            var openOverdueDebts = await _dbContext.Payments
+                .AsNoTracking()
+                .Where(payment =>
+                    payment.Amount > 0m &&
+                    payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation &&
+                    payment.TransactionCode != null &&
+                    (
+                        payment.Type == PaymentType.OverdueCompensationDebt ||
+                        (payment.Type == PaymentType.AdditionalCharge &&
+                         payment.TransactionCode.StartsWith(OverdueCompensationLedger.DebtPrefix))
+                    ))
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    payment.TransactionCode
+                })
+                .ToListAsync(cancellationToken);
+
+            var unfundedCompensation = openOverdueDebts
+                .Where(payment =>
+                    OverdueCompensationLedger.TryParseDebtRelation(
+                        payment.TransactionCode,
+                        out _,
+                        out var affectedBookingId) &&
+                    affectedBookingId == booking.BookingId)
+                .Sum(payment => payment.Amount);
+
+            if (unfundedCompensation > 0m)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Khoản bồi thường của đơn #{booking.BookingId} còn {unfundedCompensation:N0} đồng chưa được thực thu từ khách gây ảnh hưởng. " +
+                    "Không được chuyển tiền cho đến khi phần này được thanh toán/đối soát xong.";
+                return RedirectToAction(nameof(Refunds));
+            }
+        }
+
         if (approvedRefunds.Any(item => item.Method == PaymentMethods.DepositRefund))
         {
             var outstandingTrafficFine = booking.Payments
