@@ -173,7 +173,11 @@ public sealed class AdminOverdueViolationsController : Controller
                 Type = PaymentType.Refund,
                 Amount = depositDeduction,
                 Method = PaymentMethods.CompensationRefund,
-                Status = PaymentStatus.AwaitingRefund
+                Status = PaymentStatus.AwaitingRefund,
+                TransactionCode = OverdueCompensationLedger.BuildFundedRefundCode(
+                    renterBookingId,
+                    affectedBookingId,
+                    now)
             });
         }
 
