@@ -57,6 +57,39 @@ public static class OverdueCompensationLedger
             FundedRefundPrefix,
             StringComparison.OrdinalIgnoreCase);
 
+    public static bool TryParseFundedRefundRelation(
+        string? transactionCode,
+        out int renterBookingId,
+        out int affectedBookingId) =>
+        TryParseRelation(
+            transactionCode,
+            FundedRefundPrefix,
+            out renterBookingId,
+            out affectedBookingId);
+
+    /// <summary>
+    /// Compensation refunds created before relation-aware funded markers are
+    /// treated conservatively as already recorded so legacy data cannot be
+    /// paid twice. New funded markers only count for their exact A -> B pair.
+    /// </summary>
+    public static bool CountsTowardRefundRelation(
+        string? transactionCode,
+        int renterBookingId,
+        int affectedBookingId)
+    {
+        if (!IsFundedRefundCode(transactionCode))
+        {
+            return true;
+        }
+
+        return TryParseFundedRefundRelation(
+                   transactionCode,
+                   out var recordedRenterBookingId,
+                   out var recordedAffectedBookingId) &&
+               recordedRenterBookingId == renterBookingId &&
+               recordedAffectedBookingId == affectedBookingId;
+    }
+
     public static bool TryParseDebtRelation(
         string? transactionCode,
         out int renterBookingId,
