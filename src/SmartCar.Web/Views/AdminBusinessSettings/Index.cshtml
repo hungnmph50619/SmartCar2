@@ -553,7 +553,7 @@
 
                 <p class="policy-helper">
                     <span class="policy-helper-icon" aria-hidden="true">i</span>
-                    <span>@current.CancellationTier1Hours giờ: @current.CancellationTier1RefundPercent.ToString("0.##", vi)% · @current.CancellationTier2Hours giờ: @current.CancellationTier2RefundPercent.ToString("0.##", vi)% · @current.CancellationTier3Hours giờ: @current.CancellationTier3RefundPercent.ToString("0.##", vi)% · @current.CancellationTier4Hours giờ: @current.CancellationTier4RefundPercent.ToString("0.##", vi)%.</span>
+                    <span>@current.CancellationTier1Hours giờ: @current.CancellationTier1RefundPercent.ToString("0.##", vi)% · @current.CancellationTier2Hours giờ: @current.CancellationTier2RefundPercent.ToString("0.##", vi)% · @current.CancellationTier3Hours giờ: @current.CancellationTier3RefundPercent.ToString("0.##", vi)% · @current.CancellationTier4Hours giờ: @current.CancellationTier4RefundPercent.ToString("0.##", vi)% · xử lý hoàn trong @current.CancellationRefundProcessingHours giờ.</span>
                 </p>
             </div>
 
@@ -573,7 +573,7 @@
 
                 <div class="policy-form-section-title">Hoàn 100% sau thanh toán</div>
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label asp-for="FreeCancellationWindowMinutes" class="form-label">Hủy trong</label>
                         <div class="input-group">
                             <input asp-for="FreeCancellationWindowMinutes" type="number" min="0" max="1440" step="1" required
@@ -583,7 +583,7 @@
                         </div>
                         <span asp-validation-for="FreeCancellationWindowMinutes" class="text-danger small"></span>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label asp-for="MinimumHoursForFreeCancellation" class="form-label">Và còn ít nhất</label>
                         <div class="input-group">
                             <input asp-for="MinimumHoursForFreeCancellation" type="number" min="0" max="336" step="1" required
@@ -592,6 +592,16 @@
                             <span class="input-group-text">giờ</span>
                         </div>
                         <span asp-validation-for="MinimumHoursForFreeCancellation" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-4">
+                        <label asp-for="CancellationRefundProcessingHours" class="form-label">Xử lý hoàn trong</label>
+                        <div class="input-group">
+                            <input asp-for="CancellationRefundProcessingHours" type="number" min="1" max="168" step="1" required
+                                   class="form-control" data-policy-input data-label="Xử lý hoàn tiền sau hủy" data-unit="giờ"
+                                   data-current="@current.CancellationRefundProcessingHours.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">giờ</span>
+                        </div>
+                        <span asp-validation-for="CancellationRefundProcessingHours" class="text-danger small"></span>
                     </div>
                 </div>
 
