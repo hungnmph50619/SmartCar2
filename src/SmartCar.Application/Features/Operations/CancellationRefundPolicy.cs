@@ -108,7 +108,5 @@ public static class CancellationRefundPolicy
     public static string GetVietnameseDescription(
         decimal refundRate,
         RentalPolicySnapshot policy) =>
-        refundRate >= 1m
-            ? $"Theo chính sách của đơn: hoàn 100% tiền thuê khi đáp ứng cửa sổ hủy miễn phí."
-            : $"Theo chính sách của đơn tại thời điểm hủy: hoàn {(refundRate * 100m):0.##}% tiền thuê.";
+        $"Theo chính sách của đơn tại thời điểm hủy: hoàn {(refundRate * 100m):0.##}% tiền thuê.";
 }
