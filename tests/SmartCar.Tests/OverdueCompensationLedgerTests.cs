@@ -23,6 +23,20 @@ public sealed class OverdueCompensationLedgerTests
         Assert.Equal(expectedAffectedBookingId, affectedBookingId);
     }
 
+    [Fact]
+    public void FundedRefundCode_IsRecognizedAsFunded()
+    {
+        var code = OverdueCompensationLedger.BuildFundedRefundCode(
+            103,
+            204,
+            new DateTime(2026, 9, 20, 13, 0, 0, DateTimeKind.Utc));
+
+        Assert.True(OverdueCompensationLedger.IsFundedRefundCode(code));
+        Assert.False(OverdueCompensationLedger.IsFundedRefundCode(null));
+        Assert.False(OverdueCompensationLedger.IsFundedRefundCode(
+            "OVERDUE-DEBT-103-204-20260920130000"));
+    }
+
     [Theory]
     [InlineData(700000, 300000, 700000, 300000)]
     [InlineData(700000, 300000, 1000000, 0)]
