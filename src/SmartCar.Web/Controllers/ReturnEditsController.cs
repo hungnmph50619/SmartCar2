@@ -68,7 +68,9 @@ public sealed class ReturnEditsController : Controller
         }
 
         var parsedNotes = ParseReturnNotes(booking.VehicleReturn.Notes);
-        var parsedAccessory = ParseAccessoryValue(booking.VehicleReturn.AccessoryStatus);
+        var parsedAccessory = string.IsNullOrWhiteSpace(booking.VehicleReturn.AccessoryStatus)
+            ? (parsedNotes.AccessoryStatus, parsedNotes.MissingAccessories)
+            : ParseAccessoryValue(booking.VehicleReturn.AccessoryStatus);
         return View(new ReturnEditViewModel
         {
             BookingId = bookingId,
