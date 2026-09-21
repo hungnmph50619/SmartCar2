@@ -713,15 +713,51 @@ public sealed class StaffController : Controller
     [HttpGet]
     public async Task<IActionResult> Refunds(CancellationToken cancellationToken)
     {
-        var approved = await _dbContext.Payments.AsNoTracking()
-            .Where(item => item.Type == PaymentType.Refund && item.Status == PaymentStatus.RefundApproved)
+        var openRefunds = await _dbContext.Payments.AsNoTracking()
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                (item.Status == PaymentStatus.AwaitingRefund ||
+                 item.Status == PaymentStatus.RefundApproved))
             .Include(item => item.Booking)
                 .ThenInclude(booking => booking.Vehicle)
             .OrderBy(item => item.BookingId)
             .ThenBy(item => item.PaymentId)
             .ToListAsync(cancellationToken);
 
-        var customerIds = approved.Select(item => item.Booking.CustomerId).Distinct().ToArray();
+        // Chỉ hiện booking đã có ít nhất một khoản được Admin duyệt, nhưng giữ toàn bộ
+        // khoản AwaitingRefund cùng batch để Staff biết vì sao chưa được chuyển tiền.
+        var actionableGroups = openRefunds
+            .GroupBy(item => item.BookingId)
+            .Where(group => group.Any(item => item.Status == PaymentStatus.RefundApproved))
+            .OrderByDescending(group => group.Key)
+            .ToList();
+
+        var bookingIds = actionableGroups.Select(group => group.Key).ToArray();
+        var outstandingTrafficFineByBooking = bookingIds.Length == 0
+            ? new Dictionary<int, decimal>()
+            : await _dbContext.Payments.AsNoTracking()
+                .Where(payment =>
+                    bookingIds.Contains(payment.BookingId) &&
+                    payment.Type == PaymentType.TrafficFine &&
+                    payment.Amount > 0m &&
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation ||
+                     payment.Status == PaymentStatus.Failed))
+                .GroupBy(payment => payment.BookingId)
+                .Select(group => new
+                {
+                    BookingId = group.Key,
+                    Amount = group.Sum(payment => payment.Amount)
+                })
+                .ToDictionaryAsync(
+                    item => item.BookingId,
+                    item => item.Amount,
+                    cancellationToken);
+
+        var customerIds = actionableGroups
+            .Select(group => group.First().Booking.CustomerId)
+            .Distinct()
+            .ToArray();
         var customerNames = customerIds.Length == 0
             ? new Dictionary<string, string>()
             : await _dbContext.Users.AsNoTracking()
@@ -729,10 +765,19 @@ public sealed class StaffController : Controller
                 .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
 
         var model = new List<StaffRefundViewModel>();
-        foreach (var group in approved.GroupBy(item => item.BookingId).OrderByDescending(group => group.Key))
+        foreach (var group in actionableGroups)
         {
             var first = group.First();
-            var bank = await _bankAccountService.GetDefaultAsync(first.Booking.CustomerId, cancellationToken);
+            var approvedLines = group
+                .Where(item => item.Status == PaymentStatus.RefundApproved)
+                .ToList();
+            var awaitingApprovalAmount = group
+                .Where(item => item.Status == PaymentStatus.AwaitingRefund)
+                .Sum(item => item.Amount);
+            var bank = await _bankAccountService.GetDefaultAsync(
+                first.Booking.CustomerId,
+                cancellationToken);
+
             model.Add(new StaffRefundViewModel
             {
                 BookingId = first.BookingId,
@@ -740,13 +785,20 @@ public sealed class StaffController : Controller
                 CustomerName = customerNames.GetValueOrDefault(first.Booking.CustomerId, "Khách hàng"),
                 VehicleName = first.Booking.Vehicle.VehicleName,
                 LicensePlate = first.Booking.Vehicle.LicensePlate,
-                TotalAmount = group.Sum(item => item.Amount),
+                TotalAmount = approvedLines.Sum(item => item.Amount),
+                AwaitingApprovalAmount = awaitingApprovalAmount,
+                OutstandingTrafficFineAmount =
+                    outstandingTrafficFineByBooking.GetValueOrDefault(first.BookingId),
                 BankName = bank?.BankName,
                 AccountNumber = bank?.AccountNumber,
                 AccountHolderName = bank?.AccountHolderName,
                 Status = PaymentStatus.RefundApproved,
                 Lines = group
-                    .Select(item => new StaffRefundLineViewModel(item.PaymentId, item.Amount, item.Method, item.Status))
+                    .Select(item => new StaffRefundLineViewModel(
+                        item.PaymentId,
+                        item.Amount,
+                        item.Method,
+                        item.Status))
                     .ToList()
             });
         }
