@@ -35,7 +35,8 @@ public sealed class BookingSchedulingConsistencyTests
     {
         var firstPickup = new DateTime(2026, 9, 18, 8, 0, 0);
         var firstReturn = new DateTime(2026, 9, 18, 10, 0, 0);
-        var requiredGap = RentalPolicy.VehicleTurnaroundMinutes + 30;
+        var requiredGap =
+            RentalPolicy.VehicleTurnaroundMinutes + RentalPolicy.DeliveryLeadMinutes;
 
         Assert.True(RentalPolicy.HasOperationalConflict(
             firstPickup,
