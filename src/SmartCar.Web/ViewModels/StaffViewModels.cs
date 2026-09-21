@@ -39,7 +39,6 @@ public sealed class StaffBookingDetailsViewModel
 
 public sealed class StaffCounterRentalViewModel
 {
-    public string? PolicyVersion { get; set; }
     [Required(ErrorMessage = "Vui lòng chọn khách hàng.")]
     public string CustomerId { get; set; } = string.Empty;
 
@@ -65,6 +64,8 @@ public sealed class StaffRefundViewModel
     public bool HasAwaitingApproval => AwaitingApprovalAmount > 0m;
     public decimal OutstandingTrafficFineAmount { get; init; }
     public bool HasOutstandingTrafficFine => OutstandingTrafficFineAmount > 0m;
+    public decimal UnfundedCompensationAmount { get; init; }
+    public bool HasUnfundedCompensation => UnfundedCompensationAmount > 0m;
     public string? BankName { get; init; }
     public string? AccountNumber { get; init; }
     public string? AccountHolderName { get; init; }
@@ -76,5 +77,6 @@ public sealed record StaffRefundLineViewModel(
     int PaymentId,
     decimal Amount,
     string Method,
-    PaymentStatus Status);
-
+    PaymentStatus Status,
+    string? TransactionCode,
+    string? LedgerReference);
