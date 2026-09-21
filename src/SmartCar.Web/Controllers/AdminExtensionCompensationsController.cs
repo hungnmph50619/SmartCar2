@@ -337,25 +337,32 @@ public sealed class AdminExtensionCompensationsController : Controller
         BookingExtension extension,
         CancellationToken cancellationToken)
     {
-        var storeBoundary = extension.RequestedReturnDate.AddMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
-        var deliveryBoundary = extension.RequestedReturnDate.AddMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
-
-        return await _dbContext.Bookings
+        var candidates = await _dbContext.Bookings
             .Include(item => item.Payments)
             .Where(other =>
                 other.VehicleId == extension.Booking.VehicleId &&
                 other.BookingId != extension.BookingId &&
                 BlockingStatuses.Contains(other.Status) &&
-                other.ReturnDate > extension.OriginalReturnDate &&
-                (
-                    other.PickupMethod == VehiclePickupMethod.Delivery
-                        ? other.PickupDate < deliveryBoundary
-                        : other.PickupDate < storeBoundary
-                ))
+                other.ReturnDate > extension.OriginalReturnDate)
             .OrderBy(other => other.PickupDate)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ThenBy(other => other.BookingId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var other in candidates)
+        {
+            var otherPolicy = RentalPolicySnapshot.FromJson(other.PolicyJson);
+            var preparationMinutes = otherPolicy.GetOperationalPreparationMinutes(
+                other.PickupMethod);
+            var requiredBoundary = extension.RequestedReturnDate
+                .AddMinutes(preparationMinutes);
+
+            if (other.PickupDate < requiredBoundary)
+            {
+                return other;
+            }
+        }
+
+        return null;
     }
 
     private static decimal CalculateAvailableDeposit(IEnumerable<Payment> payments)
@@ -394,3 +401,4 @@ public sealed class AdminExtensionCompensationsController : Controller
             : combined[..500];
     }
 }
+

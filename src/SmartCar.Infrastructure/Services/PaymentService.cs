@@ -69,7 +69,12 @@ internal sealed class PaymentService : IPaymentService
                 payment.Method,
                 payment.Status,
                 payment.PaidAt,
-                payment.TransactionCode,
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Status == PaymentStatus.Pending &&
+                payment.TransactionCode != null &&
+                payment.TransactionCode.StartsWith(AdditionalChargeSettlementPolicy.ReadyMarkerPrefix)
+                    ? null
+                    : payment.TransactionCode,
                 payment.LedgerReference))
             .ToListAsync(cancellationToken);
     }
@@ -100,6 +105,8 @@ internal sealed class PaymentService : IPaymentService
             .Include(item => item.Payments)
                 .ThenInclude(payment => payment.VehicleIncident)
             .Include(item => item.Extensions)
+            .Include(item => item.Handover)
+            .Include(item => item.VehicleReturn)
             .FirstOrDefaultAsync(
                 item => item.BookingId == bookingId && item.CustomerId == customerId,
                 cancellationToken);
@@ -167,7 +174,8 @@ internal sealed class PaymentService : IPaymentService
         {
             return targetedPayment?.Status == PaymentStatus.Paid
                 ? OperationResult.Failure("Khoản tiền này đã được thanh toán.")
-                : OperationResult.Failure("Khoản thanh toán được chọn không còn ở trạng thái chờ thanh toán.");
+                : OperationResult.Failure(
+                    "Khoản thanh toán được chọn không còn ở trạng thái chờ thanh toán.");
         }
 
         if (payment is null && paymentType == PaymentType.Rental)
@@ -196,19 +204,31 @@ internal sealed class PaymentService : IPaymentService
             }
         }
 
-        if (payment is null &&
-            paymentType == PaymentType.AdditionalCharge &&
-            booking.AdditionalAmount > 0)
+        if (paymentType == PaymentType.AdditionalCharge)
         {
-            payment = new Payment
+            var paidAdditionalAmount = booking.Payments
+                .Where(item =>
+                    item.Type == PaymentType.AdditionalCharge &&
+                    item.Method != PaymentMethods.DepositDeduction &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+            var outstandingAdditionalAmount = Math.Max(
+                0m,
+                booking.AdditionalAmount - paidAdditionalAmount);
+
+            if (outstandingAdditionalAmount <= 0m)
             {
-                BookingId = booking.BookingId,
-                Type = PaymentType.AdditionalCharge,
-                Amount = booking.AdditionalAmount,
-                Method = PaymentMethods.NotSelected,
-                Status = PaymentStatus.Pending
-            };
-            booking.Payments.Add(payment);
+                return OperationResult.Failure("Phụ phí của đơn đã được thanh toán đủ.");
+            }
+
+            if (payment is null ||
+                !AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode))
+            {
+                return OperationResult.Failure(
+                    "Phụ phí chưa được Staff chốt sau khi đối chiếu giao - trả. Vui lòng chờ SmartCar xác nhận số tiền cuối cùng.");
+            }
+
+            payment.Amount = outstandingAdditionalAmount;
         }
 
         if (payment is null)
@@ -346,7 +366,7 @@ internal sealed class PaymentService : IPaymentService
             paymentType is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
         {
             booking.ReservationExpiresAt = DateTime.UtcNow
-                .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
+                .AddMinutes(booking.Policy.BookingTransferReconciliationHoldMinutes);
         }
 
         await NotifyStaffAsync(
@@ -385,6 +405,10 @@ internal sealed class PaymentService : IPaymentService
                 .ThenInclude(booking => booking.Payments)
             .Include(item => item.Booking)
                 .ThenInclude(booking => booking.Extensions)
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.Handover)
+            .Include(item => item.Booking)
+                .ThenInclude(booking => booking.VehicleReturn)
             .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
 
         if (payment is null)
@@ -480,6 +504,32 @@ internal sealed class PaymentService : IPaymentService
             {
                 return OperationResult.Failure(
                     "Không tìm thấy đơn bị ảnh hưởng để ghi nhận khoản bồi thường đã có nguồn.");
+            }
+        }
+
+        if (originalType == PaymentType.AdditionalCharge)
+        {
+            var paidAdditionalBefore = booking.Payments
+                .Where(item =>
+                    item.PaymentId != payment.PaymentId &&
+                    item.Type == PaymentType.AdditionalCharge &&
+                    item.Method != PaymentMethods.DepositDeduction &&
+                    item.Status == PaymentStatus.Paid)
+                .Sum(item => item.Amount);
+            var outstandingAdditional = Math.Max(
+                0m,
+                booking.AdditionalAmount - paidAdditionalBefore);
+
+            if (outstandingAdditional <= 0m)
+            {
+                return OperationResult.Failure(
+                    "Phụ phí đã được thanh toán đủ; không xác nhận thêm giao dịch để tránh thu trùng.");
+            }
+
+            if (confirmedAmount != outstandingAdditional)
+            {
+                return OperationResult.Failure(
+                    $"Giao dịch phụ phí ({confirmedAmount:N0} đồng) không khớp số còn phải thu ({outstandingAdditional:N0} đồng). Không xác nhận để tránh thu sai.");
             }
         }
 
@@ -868,7 +918,12 @@ internal sealed class PaymentService : IPaymentService
         payment.PaidAt = null;
         if (payment.Type != PaymentType.OverdueCompensationDebt)
         {
-            payment.TransactionCode = null;
+            payment.TransactionCode =
+                !expiredBooking && payment.Type == PaymentType.AdditionalCharge
+                    ? AdditionalChargeSettlementPolicy.CreateReadyMarker(
+                        payment.BookingId,
+                        DateTime.UtcNow)
+                    : null;
         }
 
         if (payment.Type == PaymentType.Rental)
@@ -944,6 +999,10 @@ internal sealed class PaymentService : IPaymentService
                      booking.AdditionalAmount <= 0 =>
                 "Đơn không có phụ phí đang chờ thanh toán.",
 
+            PaymentType.AdditionalCharge
+                when !IsReturnSettlementReady(booking) =>
+                "Phụ phí chỉ được thanh toán sau khi SmartCar xác minh đầy đủ biên bản giao - trả.",
+
             PaymentType.TrafficFine
                 when !booking.Payments.Any(payment =>
                     payment.Type == PaymentType.TrafficFine &&
@@ -996,6 +1055,10 @@ internal sealed class PaymentService : IPaymentService
                 when booking.Status != BookingStatus.PendingInspection =>
                 "Đơn không còn ở trạng thái chờ thanh toán phụ phí.",
 
+            PaymentType.AdditionalCharge
+                when !IsReturnSettlementReady(booking) =>
+                "Chưa đủ xác minh biên bản giao - trả để đối soát phụ phí.",
+
             PaymentType.TrafficFine
                 when !booking.Payments.Any(payment =>
                     payment.Type == PaymentType.TrafficFine &&
@@ -1013,6 +1076,14 @@ internal sealed class PaymentService : IPaymentService
 
             _ => null
         };
+
+    private static bool IsReturnSettlementReady(Booking booking) =>
+        booking.Handover is not null &&
+        booking.VehicleReturn is not null &&
+        booking.Handover.CustomerIdentityVerified &&
+        booking.Handover.SignedDocumentVerified &&
+        booking.VehicleReturn.CustomerIdentityVerified &&
+        booking.VehicleReturn.SignedDocumentVerified;
 
     private async Task NotifyStaffAsync(
         string title,
@@ -1105,12 +1176,12 @@ internal sealed class PaymentService : IPaymentService
             0m,
             booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
 
-        if (booking.PickupMethod == VehiclePickupMethod.Delivery &&
+        if (booking.PolicyJson == null && booking.PickupMethod == VehiclePickupMethod.Delivery &&
             deliveryFee <= 0m &&
             booking.DeliveryLatitude.HasValue &&
             booking.DeliveryLongitude.HasValue)
         {
-            deliveryFee = RentalPolicy.CalculateDeliveryFee(
+            deliveryFee = booking.Policy.CalculateDeliveryFee(
                 booking.PickupMethod,
                 booking.DeliveryLatitude,
                 booking.DeliveryLongitude);
@@ -1132,3 +1203,5 @@ internal sealed class PaymentService : IPaymentService
         _ => "thanh toán"
     };
 }
+
+

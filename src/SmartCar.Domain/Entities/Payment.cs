@@ -25,3 +25,4 @@ public class Payment
     public Booking Booking { get; set; } = null!;
     public VehicleIncident? VehicleIncident { get; set; }
 }
+

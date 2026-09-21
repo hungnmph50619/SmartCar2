@@ -39,15 +39,22 @@ internal sealed class BookingService : IBookingService
         CreateBookingRequest request,
         CancellationToken cancellationToken = default)
     {
+        var policy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        if (request.PolicyVersion != policy.Version)
+            return BookingMutationResult.Failure("Chính sách đã thay đổi hoặc báo giá đã cũ. Vui lòng tải lại trang, kiểm tra giá và gửi lại yêu cầu.");
+
         if (string.IsNullOrWhiteSpace(customerId))
         {
             return BookingMutationResult.Failure("Không xác định được khách hàng.");
         }
 
-        if (!BookingDateRules.IsValidRange(request.PickupDate, request.ReturnDate))
+        if (!BookingDateRules.IsValidRange(
+                request.PickupDate,
+                request.ReturnDate,
+                policy.MinimumPickupLeadMinutes))
         {
             return BookingMutationResult.Failure(
-                "Thời gian nhận xe phải ở tương lai và trước thời gian trả xe.");
+                $"Thời gian nhận xe phải cách hiện tại ít nhất {policy.MinimumPickupLeadMinutes} phút và trước thời gian trả xe.");
         }
 
         if (!Enum.IsDefined(request.PickupMethod))
@@ -83,10 +90,10 @@ internal sealed class BookingService : IBookingService
                 request.DeliveryLatitude.Value,
                 request.DeliveryLongitude.Value);
 
-            if (deliveryDistanceKm > RentalPolicy.MaxDeliveryDistanceKm)
+            if (deliveryDistanceKm > policy.MaxDeliveryDistanceKm)
             {
                 return BookingMutationResult.Failure(
-                    $"SmartCar chỉ hỗ trợ giao xe trong bán kính tối đa {RentalPolicy.MaxDeliveryDistanceKm:0} km. " +
+                    $"SmartCar chỉ hỗ trợ giao xe trong bán kính tối đa {policy.MaxDeliveryDistanceKm:0} km. " +
                     $"Điểm bạn chọn cách cửa hàng khoảng {deliveryDistanceKm:0.0} km.");
             }
         }
@@ -105,6 +112,10 @@ internal sealed class BookingService : IBookingService
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
+
+        var currentPolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        if (currentPolicy.Version != policy.Version)
+            return BookingMutationResult.Failure("Chính sách vừa thay đổi. Vui lòng tải lại báo giá trước khi đặt xe.");
 
         var openCustomerLiabilities = await _dbContext.Payments
             .AsNoTracking()
@@ -219,6 +230,7 @@ internal sealed class BookingService : IBookingService
             request.PickupDate,
             request.ReturnDate,
             request.PickupMethod,
+            policy,
             null,
             cancellationToken);
 
@@ -232,14 +244,16 @@ internal sealed class BookingService : IBookingService
             1,
             (int)Math.Ceiling((request.ReturnDate - request.PickupDate).TotalHours / 24d));
         var rentalAmount = numberOfDays * vehicle.DailyPrice;
-        var depositAmount = RentalPolicy.CalculateDeposit(rentalAmount);
-        var deliveryFee = RentalPolicy.CalculateDeliveryFee(
+        var depositAmount = policy.CalculateDeposit(rentalAmount);
+        var deliveryFee = policy.CalculateDeliveryFee(
             request.PickupMethod,
             request.DeliveryLatitude,
             request.DeliveryLongitude);
 
         var booking = new Booking
         {
+            PolicyJson = policy.ToJson(),
+            DepositHoldDaysApplied = policy.DepositHoldDays,
             CustomerId = customerId,
             VehicleId = vehicle.VehicleId,
             PickupDate = request.PickupDate,
@@ -346,6 +360,7 @@ internal sealed class BookingService : IBookingService
             booking.PickupDate,
             booking.ReturnDate,
             booking.PickupMethod,
+            booking.Policy,
             booking.BookingId,
             cancellationToken);
 
@@ -360,12 +375,12 @@ internal sealed class BookingService : IBookingService
             0m,
             booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
 
-        if (deliveryFee <= 0m &&
+        if (booking.PolicyJson == null && deliveryFee <= 0m &&
             booking.PickupMethod == VehiclePickupMethod.Delivery &&
             booking.DeliveryLatitude.HasValue &&
             booking.DeliveryLongitude.HasValue)
         {
-            deliveryFee = RentalPolicy.CalculateDeliveryFee(
+            deliveryFee = booking.Policy.CalculateDeliveryFee(
                 booking.PickupMethod,
                 booking.DeliveryLatitude,
                 booking.DeliveryLongitude);
@@ -710,6 +725,7 @@ internal sealed class BookingService : IBookingService
 
         return new BookingDetailsDto
         {
+            PolicyJson = booking.PolicyJson,
             BookingId = booking.BookingId,
             CustomerId = booking.CustomerId,
             CustomerName = customer?.FullName ?? string.Empty,
@@ -782,37 +798,47 @@ internal sealed class BookingService : IBookingService
         };
     }
 
-    private Task<bool> HasConflictAsync(
+    private async Task<bool> HasConflictAsync(
         int vehicleId,
         DateTime pickupDate,
         DateTime returnDate,
         VehiclePickupMethod pickupMethod,
+        RentalPolicySnapshot requestedPolicy,
         int? excludedBookingId,
         CancellationToken cancellationToken)
     {
-        var preparationBeforeRequested = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(pickupMethod));
-        var storePreparation = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
-        var deliveryPreparation = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
-
-        var requestedPickupBoundary = pickupDate - preparationBeforeRequested;
-        var requestedReturnWithStorePreparation = returnDate + storePreparation;
-        var requestedReturnWithDeliveryPreparation = returnDate + deliveryPreparation;
-
-        return _dbContext.Bookings.AnyAsync(
-            booking =>
+        var candidates = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(booking =>
                 booking.VehicleId == vehicleId &&
                 (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
-                BlockingStatuses.Contains(booking.Status) &&
-                requestedPickupBoundary < booking.ReturnDate &&
-                (
-                    booking.PickupMethod == VehiclePickupMethod.Delivery
-                        ? requestedReturnWithDeliveryPreparation > booking.PickupDate
-                        : requestedReturnWithStorePreparation > booking.PickupDate
-                ),
-            cancellationToken);
+                BlockingStatuses.Contains(booking.Status))
+            .Select(booking => new
+            {
+                booking.PickupDate,
+                booking.ReturnDate,
+                booking.PickupMethod,
+                booking.PolicyJson
+            })
+            .ToListAsync(cancellationToken);
+
+        var preparationBeforeRequested = TimeSpan.FromMinutes(
+            requestedPolicy.GetOperationalPreparationMinutes(pickupMethod));
+
+        foreach (var existing in candidates)
+        {
+            var existingPolicy = RentalPolicySnapshot.FromJson(existing.PolicyJson);
+            var preparationBeforeExisting = TimeSpan.FromMinutes(
+                existingPolicy.GetOperationalPreparationMinutes(existing.PickupMethod));
+
+            if (pickupDate < existing.ReturnDate.Add(preparationBeforeRequested) &&
+                returnDate.Add(preparationBeforeExisting) > existing.PickupDate)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private Task<bool> HasValidVehicleDocumentAsync(
@@ -830,3 +856,4 @@ internal sealed class BookingService : IBookingService
              (document.ExpiryDate.HasValue && document.ExpiryDate.Value.Date >= requiredUntil.Date)),
             cancellationToken);
 }
+

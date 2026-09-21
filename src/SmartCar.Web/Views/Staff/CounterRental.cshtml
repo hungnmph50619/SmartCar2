@@ -1,7 +1,9 @@
 @model SmartCar.Web.ViewModels.StaffCounterRentalViewModel
 @using SmartCar.Application.Features.Bookings
 @using SmartCar.Domain.Constants
+@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext PolicyDb
 @{
+    var policy = await SmartCar.Infrastructure.Services.BusinessPolicyStore.ReadAsync(PolicyDb, Context.RequestAborted);
     ViewData["Title"] = "Thuê xe tại quầy";
 }
 
@@ -48,7 +50,7 @@
             <div class="staff-step h-100">
                 <span class="staff-step-number">3</span>
                 <div class="fw-bold">Tìm xe khả dụng</div>
-                <div class="small text-muted">Có xét lịch trùng, buffer @RentalPolicy.VehicleTurnaroundMinutes phút, tình trạng và giấy tờ xe.</div>
+                <div class="small text-muted">Có xét lịch trùng, buffer @policy.VehicleTurnaroundMinutes phút, tình trạng và giấy tờ xe.</div>
             </div>
         </div>
         <div class="col-sm-6 col-xl-3">
@@ -61,6 +63,8 @@
     </div>
 
     <form asp-action="CounterRental" method="post" class="card staff-form-card" data-loading-form id="counter-rental-form">
+        <input type="hidden" name="PolicyVersion" value="@policy.Version" />
+        <div class="alert alert-info m-3">Cọc @policy.DepositPercent.ToString("0.##")% tiền thuê ban đầu. Giữ cọc @policy.DepositHoldDays ngày sau khi trả xe. Định mức @policy.IncludedKilometersPerDay km/ngày; vượt mức @policy.ExcessKilometerFee.ToString("N0") đ/km.</div>
         <div class="card-body p-4 p-lg-5">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
                 <div>
@@ -130,7 +134,7 @@
                         </div>
                         <div class="text-md-end">
                             <div class="small text-muted">Buffer vận hành</div>
-                            <strong>≥ @RentalPolicy.VehicleTurnaroundMinutes phút giữa hai chuyến</strong>
+                            <strong>≥ @policy.VehicleTurnaroundMinutes phút giữa hai chuyến</strong>
                         </div>
                     </div>
                 </div>
@@ -300,7 +304,7 @@
             };
 
             const minimumPickupDate = () => {
-                const threshold = Date.now() + @BookingDateRules.MinimumPickupLeadMinutes * 60000;
+                const threshold = Date.now() + @policy.MinimumPickupLeadMinutes * 60000;
                 return new Date(Math.ceil(threshold / 60000) * 60000);
             };
 
@@ -321,7 +325,7 @@
                 if (pickup.value) {
                     const selectedPickup = new Date(pickup.value);
                     if (!Number.isFinite(selectedPickup.valueOf()) || selectedPickup < minimumPickup) {
-                        pickup.setCustomValidity(`Thời gian nhận phải cách hiện tại ít nhất @BookingDateRules.MinimumPickupLeadMinutes phút.`);
+                        pickup.setCustomValidity(`Thời gian nhận phải cách hiện tại ít nhất @policy.MinimumPickupLeadMinutes phút.`);
                     }
                 }
 
@@ -450,3 +454,4 @@
         })();
     </script>
 }
+

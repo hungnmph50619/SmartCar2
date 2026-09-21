@@ -50,6 +50,7 @@ public sealed class StaffCounterRentalViewModel
 
     [Required(ErrorMessage = "Vui lòng chọn thời gian trả xe.")]
     public DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(1).AddMinutes(10);
+    public string? PolicyVersion { get; set; }
 }
 
 public sealed class StaffRefundViewModel
@@ -80,3 +81,4 @@ public sealed record StaffRefundLineViewModel(
     PaymentStatus Status,
     string? TransactionCode,
     string? LedgerReference);
+

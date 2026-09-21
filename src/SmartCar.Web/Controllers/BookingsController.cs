@@ -269,7 +269,8 @@ public sealed class BookingsController : Controller
                 model.PickupMethod,
                 model.DeliveryAddress,
                 deliveryLatitude,
-                deliveryLongitude);
+                deliveryLongitude,
+                model.PolicyVersion);
 
         var result =
             await _bookingService.CreateAsync(
@@ -361,6 +362,24 @@ public sealed class BookingsController : Controller
             .AsNoTracking()
             .FirstOrDefaultAsync(item => item.BookingId == id, cancellationToken);
 
+        // Read-only customer guidance, using the policy saved on this booking.
+        var depositPolicy = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.BookingId == id && item.CustomerId == customerId)
+            .Select(item => new
+            {
+                item.DepositHoldDaysApplied,
+                ReturnedAt = item.VehicleReturn == null ? (DateTime?)null : item.VehicleReturn.ReturnedAt
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (depositPolicy?.ReturnedAt is DateTime returnedAt)
+        {
+            ViewBag.CustomerDepositHoldDays = DepositHoldPolicy.NormalizeDays(depositPolicy.DepositHoldDaysApplied);
+            ViewBag.CustomerDepositEligibleAt = DepositHoldPolicy.CalculateEligibleAt(
+                returnedAt, depositPolicy.DepositHoldDaysApplied);
+        }
+
         ViewBag.SmartCarSupportPhone =
             GetSupportPhone();
 
@@ -393,3 +412,4 @@ public sealed class BookingsController : Controller
             : "0982223792";
     }
 }
+

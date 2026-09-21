@@ -17,16 +17,31 @@
         .Where(extension => extension.Status == BookingExtensionStatus.Paid)
         .Sum(extension => extension.AdditionalDays);
     var extensionAmount = invoiceExtensions.Sum(extension => extension.AdditionalAmount);
-    var invoiceTotal = Model.InitialRentalAmount + Model.DeliveryFee + Model.DepositAmount + extensionAmount + Model.AdditionalAmount;
+    var additionalChargeFinalized = Model.Payments.Any(payment =>
+        payment.Type == PaymentType.AdditionalCharge &&
+        (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
+         payment.Status == PaymentStatus.Pending &&
+         AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
+    var visibleAdditionalAmount = additionalChargeFinalized ? Model.AdditionalAmount : 0m;
+    IReadOnlyList<SmartCar.Application.Features.Bookings.ChargeSummaryDto> visibleAdditionalCharges =
+        additionalChargeFinalized
+            ? Model.AdditionalCharges
+            : Array.Empty<SmartCar.Application.Features.Bookings.ChargeSummaryDto>();
+    var invoiceTotal = Model.InitialRentalAmount + Model.DeliveryFee + Model.DepositAmount + extensionAmount + visibleAdditionalAmount;
     var paidTotal = Model.Payments
         .Where(payment => payment.Status == PaymentStatus.Paid &&
             payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment)
         .Sum(payment => payment.Amount);
+    var trafficFines = Model.Payments.Where(payment => payment.Type == PaymentType.TrafficFine).ToList();
+    var unpaidTrafficFines = trafficFines.Where(payment => payment.Status is PaymentStatus.Pending or PaymentStatus.Failed).Sum(payment => payment.Amount);
+    var awaitingTrafficFines = trafficFines.Where(payment => payment.Status == PaymentStatus.AwaitingConfirmation).Sum(payment => payment.Amount);
+    var outstandingTrafficFines = unpaidTrafficFines + awaitingTrafficFines;
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
     var hasPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
-        payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.AdditionalCharge or
-            PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt);
+        (payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
+         payment.Type == PaymentType.AdditionalCharge &&
+         AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
     var hasOpenExtension = Model.Extensions.Any(extension =>
         extension.Status is BookingExtensionStatus.Pending or BookingExtensionStatus.NeedsEvidence or BookingExtensionStatus.Approved);
@@ -96,7 +111,8 @@
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <a asp-action="MyBookings" class="text-decoration-none">← Đơn thuê của tôi</a>
-        <h1 class="h3 mt-2 mb-1">Đơn thuê #@Model.BookingId</h1>
+        <span id="booking-policy" data-deposit-rate="@((Model.Policy.DepositPercent / 100m).ToString(System.Globalization.CultureInfo.InvariantCulture))" hidden></span>
+<h1 class="h3 mt-2 mb-1">Đơn thuê #@Model.BookingId</h1>
         <div class="text-muted">@Model.VehicleName · @Model.LicensePlate</div>
     </div>
     <span class="badge bg-primary fs-6">@Model.Status.ToVietnamese()</span>
@@ -105,6 +121,27 @@
 @if (hasAwaitingConfirmation)
 {
     <div class="alert alert-warning py-2">Đã báo chuyển khoản. SmartCar đang đối soát.</div>
+}
+
+@if (trafficFines.Count > 0)
+{
+    <div class="alert @(outstandingTrafficFines > 0 ? "alert-warning" : "alert-info") mb-4">
+        <strong>Phạt / vi phạm của đơn #@Model.BookingId</strong>
+        @if (unpaidTrafficFines > 0)
+        {
+            <div>Còn cần thanh toán: <strong>@unpaidTrafficFines.ToString("N0") đ</strong>.</div>
+        }
+        @if (awaitingTrafficFines > 0)
+        {
+            <div>Đang chờ xác nhận thanh toán: <strong>@awaitingTrafficFines.ToString("N0") đ</strong>. Không chuyển lại khoản đang chờ xác nhận.</div>
+        }
+        @if (outstandingTrafficFines <= 0)
+        {
+            <div>Hiện không còn khoản phạt chưa xử lý trong đơn này.</div>
+        }
+        <div class="small mt-1">Khoản phạt được theo dõi riêng, không tự trừ vào tiền cọc. Trạng thái xử lý hồ sơ vi phạm không thay thế trạng thái thanh toán.</div>
+        <a class="btn btn-sm btn-outline-primary mt-2" asp-controller="TrafficFines" asp-action="Index" asp-route-bookingId="@Model.BookingId">Xem bằng chứng và thanh toán phạt</a>
+    </div>
 }
 
 <div class="row g-4">
@@ -170,7 +207,7 @@
                             }
                             <tr>
                                 <td>Tiền cọc</td>
-                                <td>@((RentalPolicy.DepositRate * 100).ToString("0"))% tiền thuê · hoàn theo trạng thái đơn</td>
+                                <td>@(Model.Policy.DepositPercent.ToString("0.##"))% tiền thuê · hoàn theo trạng thái đơn</td>
                                 <td class="text-end">@Model.DepositAmount.ToString("N0") đ</td>
                             </tr>
                             @foreach (var extension in invoiceExtensions)
@@ -184,7 +221,7 @@
                                     <td class="text-end">@extension.AdditionalAmount.ToString("N0") đ</td>
                                 </tr>
                             }
-                            @foreach (var charge in Model.AdditionalCharges)
+                            @foreach (var charge in visibleAdditionalCharges)
                             {
                                 <tr>
                                     <td>@charge.ChargeType.ToVietnamese()</td>
@@ -468,10 +505,18 @@
                 @if (Model.Status is BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup)
                 {
                     <div class="alert alert-light border small py-2">
-                        <strong>Không đến nhận sau @RentalPolicy.NoShowGraceMinutes phút:</strong> phí @((RentalPolicy.NoShowFeeRate * 100).ToString("0"))% tiền thuê, hoàn @(((1 - RentalPolicy.NoShowFeeRate) * 100).ToString("0"))% tiền thuê và 100% cọc còn lại.
+                        <strong>Không đến nhận sau @Model.Policy.NoShowGraceMinutes phút:</strong> giữ @Model.Policy.NoShowFeePercent.ToString("0.##")% tiền thuê, hoàn @((100m - Model.Policy.NoShowFeePercent).ToString("0.##"))% tiền thuê và 100% cọc còn lại.
                     </div>
                 }
 
+                @if (Model.Status == BookingStatus.PendingInspection &&
+                    Model.AdditionalAmount > 0 &&
+                    !additionalChargeFinalized)
+                {
+                    <div class="alert alert-warning small py-2">
+                        SmartCar đang đối chiếu biên bản giao - trả và chốt phụ phí. Khoản tạm tính chưa mở thanh toán; vui lòng chờ số tiền cuối cùng.
+                    </div>
+                }
                 <div class="alert alert-info small py-2">Chuyển đúng số tiền hiển thị, sau đó bấm xác nhận đã chuyển.</div>
 
                 <div class="border border-primary rounded p-3 mb-3 bg-light">
@@ -535,8 +580,12 @@
                     }
 
                     @foreach (var payment in Model.Payments
-                        .Where(payment => payment.Type is PaymentType.Extension or PaymentType.AdditionalCharge or
-                            PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt)
+                        .Where(payment =>
+                            payment.Type is PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
+                            payment.Type == PaymentType.AdditionalCharge &&
+                            (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
+                             payment.Status == PaymentStatus.Pending &&
+                             AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)))
                         .OrderBy(payment => payment.PaymentId))
                     {
                         var badgeClass = payment.Status switch
@@ -614,6 +663,54 @@
                             <div class="text-end small">@refund.TransactionCode</div>
                         </div>
                     }
+                    @if (Model.Status == BookingStatus.Cancelled &&
+                        Model.CancelledAt.HasValue &&
+                        refundPayments.Any(payment =>
+                            payment.Status == PaymentStatus.AwaitingRefund ||
+                            payment.Status == PaymentStatus.RefundApproved))
+                    {
+                        var cancelledAtVietnam = Model.CancelledAt.Value.Kind == DateTimeKind.Utc
+                            ? Model.CancelledAt.Value.AddHours(7)
+                            : Model.CancelledAt.Value;
+                        var refundTargetAt = cancelledAtVietnam
+                            .AddHours(Model.Policy.CancellationRefundProcessingHours);
+                        <div class="alert alert-info mt-3 mb-2">
+                            <div class="fw-semibold">Thời gian xử lý hoàn tiền</div>
+                            <div>Mục tiêu xử lý trong <strong>@Model.Policy.CancellationRefundProcessingHours giờ</strong> kể từ khi hủy.</div>
+                            <div class="small mt-1">Mốc mục tiêu: @refundTargetAt.ToString("dd/MM/yyyy HH:mm"). Khoản hoàn có thể được xử lý sớm hơn.</div>
+                        </div>
+                    }
+
+                    @if (ViewBag.CustomerDepositEligibleAt is DateTime depositEligibleAt &&
+                        refundPayments.Any(payment => payment.Method == PaymentMethods.DepositRefund &&
+                            (payment.Status == PaymentStatus.AwaitingRefund || payment.Status == PaymentStatus.RefundApproved)))
+                    {
+                        var depositAwaitingApproval = refundPayments.Any(payment =>
+                            payment.Method == PaymentMethods.DepositRefund && payment.Status == PaymentStatus.AwaitingRefund);
+                        <div class="alert alert-info mt-3 mb-2">
+                            <div class="fw-semibold mb-1">Thời gian hoàn cọc</div>
+                            <div>Thời gian giữ cọc của đơn: <strong>@ViewBag.CustomerDepositHoldDays ngày</strong> kể từ lúc trả xe.</div>
+                            <div>Sớm nhất được duyệt hoàn: <strong>@depositEligibleAt.ToString("dd/MM/yyyy HH:mm")</strong> (giờ Việt Nam).</div>
+                            @if (outstandingTrafficFines > 0 && depositAwaitingApproval)
+                            {
+                                <div class="mt-2 fw-semibold">Chưa thể duyệt hoàn cọc: đơn còn @outstandingTrafficFines.ToString("N0") đ tiền phạt chưa xử lý, bao gồm khoản đang chờ xác nhận thanh toán nếu có. Cần đủ thời gian giữ cọc và xử lý xong khoản phạt.</div>
+                                <a asp-controller="TrafficFines" asp-action="Index" asp-route-bookingId="@Model.BookingId">Xem khoản phạt của đơn</a>
+                            }
+                            else if (!depositAwaitingApproval)
+                            {
+                                <div class="mt-2">Khoản hoàn cọc đã được duyệt, đang chờ nhân viên thực hiện chuyển tiền.</div>
+                            }
+                            else if (DateTime.UtcNow.AddHours(7) < depositEligibleAt)
+                            {
+                                <div class="mt-2">Tiền cọc đang trong thời gian chờ theo chính sách của đơn.</div>
+                            }
+                            else
+                            {
+                                <div class="mt-2">Đã đủ thời gian giữ cọc. Khoản hoàn đang chờ xét duyệt sau khi đối soát các khoản phạt hoặc phát sinh, nếu có.</div>
+                            }
+                            <div class="small mt-2">Đây là thời điểm sớm nhất được duyệt hoàn, không phải thời điểm tiền chắc chắn vào tài khoản. Tiền sẽ được chuyển sau khi khoản hoàn được duyệt và nhân viên thực hiện.</div>
+                        </div>
+                    }
                     @if (!string.IsNullOrWhiteSpace(Model.RefundReason))
                     {
                         <div class="small text-muted mt-2">@Model.RefundReason</div>
@@ -628,7 +725,7 @@
                 <div class="card-header bg-white text-danger"><strong>Hủy đơn</strong></div>
                 <div class="card-body">
                     <p class="small text-muted mb-1">Nếu xe chưa bàn giao, phần cọc còn lại được hoàn 100%.</p>
-                    <p class="small text-muted">@CancellationRefundPolicy.GetVietnamesePolicySummary()</p>
+                    <p class="small text-muted">@CancellationRefundPolicy.GetVietnamesePolicySummary(Model.Policy)</p>
                     <form asp-controller="BookingOperations" asp-action="Cancel" method="post">
                         <input type="hidden" name="BookingId" value="@Model.BookingId" />
                         <textarea name="Reason" class="form-control mb-2" maxlength="500" required placeholder="Lý do hủy"></textarea>
@@ -804,3 +901,5 @@
         sync();
     })();
 </script>
+
+

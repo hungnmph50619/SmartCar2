@@ -317,6 +317,12 @@ public sealed class ReturnsController : Controller
                 payment.Type == PaymentType.AdditionalCharge &&
                 payment.Method != PaymentMethods.DepositDeduction &&
                 payment.Status == PaymentStatus.AwaitingConfirmation),
+            AdditionalChargeFinalized = booking.Payments.Any(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
+                 payment.Status == PaymentStatus.Pending &&
+                 AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode))),
             OverdueCompensationDebtAmount = booking.Payments
                 .Where(payment =>
                     payment.Type == PaymentType.OverdueCompensationDebt &&
@@ -479,6 +485,60 @@ public sealed class ReturnsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> FinalizeCharges(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _returnService.FinalizeChargesAsync(
+            bookingId,
+            cancellationToken);
+
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã chốt phụ phí. Từ thời điểm này mới cho phép thu tiền hoặc khách báo chuyển khoản."
+            : string.Join("; ", result.Errors);
+
+        if (result.Succeeded)
+        {
+            await WriteAuditAsync(
+                "FinalizeReturnCharges",
+                nameof(AdditionalCharge),
+                bookingId,
+                $"Chốt danh sách phụ phí sau đối chiếu giao - trả cho đơn #{bookingId}.",
+                cancellationToken);
+        }
+
+        return RedirectToAction(nameof(Inspect), new { bookingId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReopenCharges(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _returnService.ReopenChargesAsync(
+            bookingId,
+            cancellationToken);
+
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã mở lại phần phụ phí để kiểm tra/chỉnh sửa."
+            : string.Join("; ", result.Errors);
+
+        if (result.Succeeded)
+        {
+            await WriteAuditAsync(
+                "ReopenReturnCharges",
+                nameof(AdditionalCharge),
+                bookingId,
+                $"Mở lại danh sách phụ phí chưa thanh toán của đơn #{bookingId}.",
+                cancellationToken);
+        }
+
+        return RedirectToAction(nameof(Inspect), new { bookingId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> CollectAdditionalChargeCash(
         int bookingId,
         CancellationToken cancellationToken)
@@ -553,15 +613,15 @@ public sealed class ReturnsController : Controller
             .OrderBy(payment => payment.PaymentId)
             .ToList();
 
-        var payment = pendingPayments.FirstOrDefault();
+        var payment = pendingPayments.FirstOrDefault(item =>
+            AdditionalChargeSettlementPolicy.IsReadyMarker(item.TransactionCode));
+
         if (payment is null)
         {
-            payment = new Payment
-            {
-                BookingId = booking.BookingId,
-                Type = PaymentType.AdditionalCharge
-            };
-            booking.Payments.Add(payment);
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Staff chưa chốt phụ phí sau đối chiếu giao - trả. Hãy chốt phụ phí trước khi thu tiền.";
+            return RedirectToAction(nameof(Inspect), new { bookingId });
         }
 
         var paidAt = DateTime.UtcNow;
@@ -593,7 +653,7 @@ public sealed class ReturnsController : Controller
         await WriteAuditAsync(
             "StaffCollectAdditionalChargeCash",
             nameof(Payment),
-            bookingId,
+            payment.PaymentId,
             $"Nhân viên thu {outstandingAmount:N0} đồng phụ phí bằng tiền mặt cho đơn #{bookingId}. Mã nội bộ: {payment.TransactionCode}.",
             cancellationToken);
 
@@ -1050,3 +1110,4 @@ public sealed class ReturnsController : Controller
         }
     }
 }
+

@@ -23,9 +23,19 @@
     }
 </div>
 
+@if (ViewBag.SelectedBookingId is int selectedBookingId)
+{
+    <div class="mb-3">
+        <strong>Đang xem đơn #@selectedBookingId</strong>
+        <a class="ms-3" asp-controller="Bookings" asp-action="Details" asp-route-id="@selectedBookingId">Quay lại đơn</a>
+        <a class="ms-3" asp-action="Index">Xem tất cả khoản phạt</a>
+    </div>
+}
 <div class="alert alert-light border small">
-    SmartCar không giữ một khoản cọc quá lớn trong nhiều tuần chỉ để chờ phạt nguội. Nếu thông báo vi phạm đến sau chuyến thuê,
-    hệ thống tạo khoản phải thu riêng; khoản chưa thanh toán sẽ tạm chặn việc tạo chuyến thuê mới.
+    Khoản phạt được thanh toán riêng, không tự khấu trừ vào cọc. Nếu cọc chưa được duyệt hoàn,
+    cần đủ thời gian giữ cọc của đơn và xử lý xong khoản phạt trước khi được duyệt.
+    Khoản còn nợ cũng tạm chặn việc tạo chuyến thuê mới.
+    Hồ sơ vi phạm “Đã xử lý” không đồng nghĩa khoản phạt đã được thanh toán; hãy xem trạng thái thanh toán của từng khoản bên dưới.
 </div>
 
 @if (Model.Items.Count == 0)
@@ -131,3 +141,4 @@ else
         </div>
     </div>
 }
+

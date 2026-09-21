@@ -8,6 +8,8 @@ using SmartCar.Application.Features.Reviews;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
+using SmartCar.Infrastructure.Persistence;
+using SmartCar.Infrastructure.Services;
 using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
@@ -22,6 +24,7 @@ public sealed class VehiclesController : Controller
     private readonly IDocumentService _documentService;
     private readonly IUserBankAccountService _bankAccountService;
     private readonly IConfiguration _configuration;
+    private readonly ApplicationDbContext _dbContext;
 
     public VehiclesController(
         IVehicleService vehicleService,
@@ -29,7 +32,8 @@ public sealed class VehiclesController : Controller
         IReviewService reviewService,
         IDocumentService documentService,
         IUserBankAccountService bankAccountService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ApplicationDbContext dbContext)
     {
         _vehicleService = vehicleService;
         _brandService = brandService;
@@ -37,6 +41,7 @@ public sealed class VehiclesController : Controller
         _documentService = documentService;
         _bankAccountService = bankAccountService;
         _configuration = configuration;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -49,10 +54,15 @@ public sealed class VehiclesController : Controller
         await LoadBrandsAsync(model.BrandId, cancellationToken);
         ViewBag.Search = model;
 
-        var now = DateTime.Now;
-        if (model.PickupDate <= now)
+        var policy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        ViewBag.VehicleTurnaroundMinutes = policy.VehicleTurnaroundMinutes;
+        ViewBag.MinimumPickupLeadMinutes = policy.MinimumPickupLeadMinutes;
+        var earliestPickup = DateTime.Now.AddMinutes(policy.MinimumPickupLeadMinutes);
+        if (model.PickupDate < earliestPickup)
         {
-            ModelState.AddModelError(nameof(model.PickupDate), "Ngày giờ nhận xe phải sau thời điểm hiện tại.");
+            ModelState.AddModelError(
+                nameof(model.PickupDate),
+                $"Ngày giờ nhận xe phải cách hiện tại ít nhất {policy.MinimumPickupLeadMinutes} phút.");
         }
 
         if (model.ReturnDate <= model.PickupDate)

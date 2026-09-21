@@ -135,7 +135,7 @@
         <table>
             <tr><th style="width:25%">Định mức kilomet</th><td>@handover.IncludedKilometers.ToString("N0") km/chuyến</td></tr>
             <tr><th>Phí vượt kilomet</th><td>@handover.ExcessKmFeePerKm.ToString("N0") đ/km vượt định mức</td></tr>
-            <tr><th>Phí trả xe muộn</th><td>@handover.LateReturnFeeMultiplier.ToString("0.##") x giá thuê/ngày cho mỗi ngày tính phí phát sinh</td></tr>
+            <tr><th>Phí trả xe muộn</th><td>@handover.LateReturnFeeMultiplier.ToString("0.##") x giá thuê/ngày cho mỗi ngày tính phí phát sinh. Miễn @Model.Policy.LateReturnGraceMinutes phút; sau đó mỗi 24 giờ bắt đầu tính 1 ngày phí</td></tr>
             <tr><th>Phạt giao thông</th><td>@handover.TrafficFineTerms</td></tr>
             <tr><th>Hư hỏng / bồi thường</th><td>@handover.DamageCompensationTerms</td></tr>
         </table>
@@ -165,3 +165,4 @@
     </div>
 </body>
 </html>
+

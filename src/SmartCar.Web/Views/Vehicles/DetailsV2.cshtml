@@ -3,20 +3,22 @@
 @using SmartCar.Domain.Constants
 @using SmartCar.Domain.Enums
 @using System.Globalization
+@inject SmartCar.Infrastructure.Persistence.ApplicationDbContext PolicyDb
 @{
+    var policy = await SmartCar.Infrastructure.Services.BusinessPolicyStore.ReadAsync(PolicyDb, Context.RequestAborted);
     ViewData["Title"] = Model.VehicleName;
     var pickupDate = (DateTime)ViewBag.PickupDate;
     var returnDate = (DateTime)ViewBag.ReturnDate;
     var numberOfDays = Math.Max(1, (int)Math.Ceiling((returnDate - pickupDate).TotalHours / 24d));
     var estimatedAmount = numberOfDays * Model.DailyPrice;
     var depositAmount =
-    RentalPolicy.CalculateDeposit(
+    policy.CalculateDeposit(
         estimatedAmount);
 
-    var deliveryBaseFee = RentalPolicy.BaseDeliveryFee;
-    var deliveryIncludedKm = RentalPolicy.IncludedDeliveryDistanceKm;
-    var deliveryFeePerExtraKm = RentalPolicy.DeliveryFeePerExtraKm;
-    var maxDeliveryKm = RentalPolicy.MaxDeliveryDistanceKm;
+    var deliveryBaseFee = policy.BaseDeliveryFee;
+    var deliveryIncludedKm = policy.IncludedDeliveryDistanceKm;
+    var deliveryFeePerExtraKm = policy.DeliveryFeePerExtraKm;
+    var maxDeliveryKm = policy.MaxDeliveryDistanceKm;
 
     var upfrontAmount =
         estimatedAmount + depositAmount;
@@ -116,7 +118,7 @@
                 <div class="invoice-mini-row">
                     <span>
                         Tiền cọc
-                        (@((RentalPolicy.DepositRate * 100)
+                        (@((policy.DepositPercent)
                                         .ToString("0"))%)
                     </span>
 
@@ -142,10 +144,10 @@
                             data-base-amount="@upfrontAmount.ToString(CultureInfo.InvariantCulture)"
                             data-store-latitude="@RentalPolicy.StoreLatitude.ToString(CultureInfo.InvariantCulture)"
                             data-store-longitude="@RentalPolicy.StoreLongitude.ToString(CultureInfo.InvariantCulture)"
-                            data-included-delivery-km="@RentalPolicy.IncludedDeliveryDistanceKm.ToString(CultureInfo.InvariantCulture)"
-                            data-base-delivery-fee="@RentalPolicy.BaseDeliveryFee.ToString(CultureInfo.InvariantCulture)"
-                            data-delivery-fee-per-extra-km="@RentalPolicy.DeliveryFeePerExtraKm.ToString(CultureInfo.InvariantCulture)"
-                            data-max-delivery-km="@RentalPolicy.MaxDeliveryDistanceKm.ToString(CultureInfo.InvariantCulture)">
+                            data-included-delivery-km="@policy.IncludedDeliveryDistanceKm.ToString(CultureInfo.InvariantCulture)"
+                            data-base-delivery-fee="@policy.BaseDeliveryFee.ToString(CultureInfo.InvariantCulture)"
+                            data-delivery-fee-per-extra-km="@policy.DeliveryFeePerExtraKm.ToString(CultureInfo.InvariantCulture)"
+                            data-max-delivery-km="@policy.MaxDeliveryDistanceKm.ToString(CultureInfo.InvariantCulture)">
                         @upfrontAmount.ToString("N0") đ
                     </strong>
                 </div>
@@ -184,6 +186,13 @@
                                   method="post"
                                   data-loading-form
                                   id="booking-form">
+                                <input type="hidden" name="PolicyVersion" value="@policy.Version" />
+                                <details class="border rounded p-3 mb-3"><summary>Chính sách áp dụng cho đơn này</summary>
+                                    <p class="mt-2">Định mức @policy.IncludedKilometersPerDay km/ngày; vượt mức @policy.ExcessKilometerFee.ToString("N0") đ/km.</p>
+                                    <p>Trả muộn: miễn @policy.LateReturnGraceMinutes phút; sau đó mỗi 24 giờ bắt đầu tính @policy.LateReturnFeeMultiplier.ToString("0.##") × giá thuê/ngày. Giữ cọc @policy.DepositHoldDays ngày sau khi trả xe trước khi xét duyệt hoàn.</p>
+                                    <strong>Vi phạm giao thông / phạt nguội</strong><p style="white-space:pre-wrap">@policy.TrafficFineTerms</p>
+                                    <strong>Hư hỏng / thiếu / trả muộn</strong><p style="white-space:pre-wrap">@policy.DamageCompensationTerms</p>
+                                </details>
 
                                 <input type="hidden"
                                        name="VehicleId"
@@ -451,7 +460,7 @@
                     Math.sqrt(a),
                     Math.sqrt(1 - a));
 
-                return earthRadiusKm * c;
+                return Math.round((earthRadiusKm * c + Number.EPSILON) * 100) / 100;
             };
 
             const calculateDeliveryFee = distanceKm => {

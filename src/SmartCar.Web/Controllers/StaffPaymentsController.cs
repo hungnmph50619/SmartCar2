@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Payments;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
@@ -553,7 +554,8 @@ public sealed class StaffPaymentsController : Controller
             {
                 item.BookingId,
                 item.CustomerId,
-                item.Status
+                item.Status,
+                item.PolicyJson
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -584,8 +586,9 @@ public sealed class StaffPaymentsController : Controller
             return RedirectToStaffDetails(bookingId);
         }
 
+        var bookingPolicy = RentalPolicySnapshot.FromJson(booking.PolicyJson);
         TempData["SuccessMessage"] =
-            $"Đã ghi nhận khách báo chuyển khoản. Staff có tối đa {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
+            $"Đã ghi nhận khách báo chuyển khoản. Staff có tối đa {bookingPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
         return RedirectToStaffDetails(bookingId);
     }
 
@@ -597,3 +600,4 @@ public sealed class StaffPaymentsController : Controller
     private IActionResult RedirectToStaffDetails(int bookingId) =>
         RedirectToAction("Details", "Staff", new { id = bookingId });
 }
+ 

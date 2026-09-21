@@ -64,6 +64,8 @@ public sealed class HandoverEditsController : Controller
             ExteriorCondition = record.ExteriorCondition,
             InteriorCondition = record.InteriorCondition,
             Accessories = record.Accessories,
+            IncludedKilometersPerDay = booking.Policy.IncludedKilometersPerDay,
+            LateReturnGraceMinutes = booking.Policy.LateReturnGraceMinutes,
             IncludedKilometers = record.IncludedKilometers,
             ExcessKmFeePerKm = record.ExcessKmFeePerKm,
             LateReturnFeeMultiplier = record.LateReturnFeeMultiplier,
@@ -180,6 +182,8 @@ public sealed class HandoverEditsController : Controller
         if (!ModelState.IsValid)
         {
             PopulatePolicyFields(model, booking.Handover);
+            model.IncludedKilometersPerDay = booking.Policy.IncludedKilometersPerDay;
+            model.LateReturnGraceMinutes = booking.Policy.LateReturnGraceMinutes;
             return View(model);
         }
 
@@ -329,3 +333,4 @@ public sealed class HandoverEditsController : Controller
         }
     }
 }
+

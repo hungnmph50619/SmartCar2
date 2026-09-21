@@ -19,6 +19,12 @@ public sealed class ReturnEditViewModel
     [RegularExpression(@"^(?:100|[0-9]{1,2})$", ErrorMessage = "Mức nhiên liệu phải là số từ 0 đến 100.")]
     public string FuelLevel { get; set; } = string.Empty;
 
+    [StringLength(1500, ErrorMessage = "Mô tả ngoại thất tối đa 1500 ký tự.")]
+    public string? ExteriorCondition { get; set; }
+
+    [StringLength(1500, ErrorMessage = "Mô tả nội thất tối đa 1500 ký tự.")]
+    public string? InteriorCondition { get; set; }
+
     [Required(ErrorMessage = "Vui lòng xác nhận phụ kiện khi trả.")]
     [RegularExpression(@"^(Đủ|Thiếu)$", ErrorMessage = "Tình trạng phụ kiện không hợp lệ.")]
     public string AccessoryStatus { get; set; } = "Đủ";
@@ -41,3 +47,4 @@ public sealed class ReturnEditViewModel
     [Display(Name = "Ảnh mới bổ sung")]
     public List<IFormFile>? NewImages { get; set; }
 }
+

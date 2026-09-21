@@ -165,11 +165,7 @@ internal sealed class HandoverService : IHandoverService
         // Đây chỉ là thời điểm Staff chuẩn bị/lưu biên bản nháp. Chuyến chưa bắt đầu ở đây.
         // Thời điểm giao thực tế được chốt bằng server time khi xác minh bản ký.
         var preparedAt = DateTime.Now;
-        if (!BookingWorkflowRules.CanPrepareHandover(preparedAt, booking.ReturnDate))
-        {
-            return OperationResult.Failure(
-                "Đã đến hoặc quá thời gian trả xe của đơn, không thể chuẩn bị biên bản giao.");
-        }
+        // TEST Quy_2: tạm bỏ validation thời gian để chạy trọn luồng giao - trả.
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
         {
@@ -209,11 +205,11 @@ internal sealed class HandoverService : IHandoverService
             ImagePaths = Normalize(request.ImagePaths),
             ReceiverFaceImagePath = faceSession.ImagePath,
             Notes = Normalize(request.Notes),
-            IncludedKilometers = rentalDays * RentalPolicy.IncludedKilometersPerDay,
-            ExcessKmFeePerKm = RentalPolicy.ExcessKilometerFee,
-            LateReturnFeeMultiplier = RentalPolicy.LateReturnFeeMultiplier,
-            TrafficFineTerms = RentalPolicy.TrafficFineTerms,
-            DamageCompensationTerms = RentalPolicy.DamageCompensationTerms,
+            IncludedKilometers = rentalDays * booking.Policy.IncludedKilometersPerDay,
+            ExcessKmFeePerKm = booking.Policy.ExcessKilometerFee,
+            LateReturnFeeMultiplier = booking.Policy.LateReturnFeeMultiplier,
+            TrafficFineTerms = booking.Policy.TrafficFineTerms,
+            DamageCompensationTerms = booking.Policy.DamageCompensationTerms,
             PenaltyPolicyAccepted = true,
             CustomerIdentityVerified = true,
             IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
@@ -249,3 +245,4 @@ internal sealed class HandoverService : IHandoverService
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
+

@@ -1,5 +1,6 @@
 @model SmartCar.Application.Features.Reports.FleetReportDto
 @using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Báo cáo kinh doanh";
     var today = (DateTime?)ViewBag.Today ?? DateTime.UtcNow.AddHours(7).Date;
@@ -32,6 +33,23 @@
         PaymentMethods.Cash => "Tiền mặt tại quầy",
         PaymentMethods.DepositDeduction => "Thu phụ phí từ cọc",
         _ => "Chưa xác định"
+    };
+
+    string TrafficFineStatusLabel(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending => "Chờ khách thanh toán",
+        PaymentStatus.Failed => "Chờ khách gửi lại",
+        PaymentStatus.AwaitingConfirmation => "Chờ Staff đối soát",
+        PaymentStatus.Paid => "Đã thu",
+        _ => status.ToString()
+    };
+
+    string TrafficFineStatusClass(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Paid => "bg-success",
+        PaymentStatus.AwaitingConfirmation => "bg-warning text-dark",
+        PaymentStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
     };
 
     var allRevenueTransactionRows = Model.Vehicles
@@ -169,8 +187,8 @@
 
     <div class="row g-3 mb-3">
         <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TỔNG DOANH THU</div><div class="kpi-number text-primary">@Model.TotalRevenue.ToString("N0") đ</div><div class="tiny mt-1">Không gồm cọc và bồi thường A → B</div></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">QR NGÂN HÀNG</div><div class="kpi-number text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</div><div class="tiny mt-1">Đã xác nhận thanh toán online</div></div></div>
-        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">TIỀN MẶT TẠI QUẦY</div><div class="kpi-number text-success">@Model.TotalCashRevenue.ToString("N0") đ</div><div class="tiny mt-1">Thu trực tiếp tại quầy</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">DOANH THU QUA QR</div><div class="kpi-number text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</div><div class="tiny mt-1">Không gồm tiền cọc</div></div></div>
+        <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">DOANH THU TIỀN MẶT</div><div class="kpi-number text-success">@Model.TotalCashRevenue.ToString("N0") đ</div><div class="tiny mt-1">Không gồm tiền cọc</div></div></div>
         <div class="col-sm-6 col-xl-3"><div class="panel kpi"><div class="kpi-label">KẾT QUẢ RÒNG TRONG KỲ</div><div class="kpi-number @(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</div><div class="tiny mt-1">Doanh thu − hoàn tiền − chi phí SmartCar</div></div></div>
     </div>
 
@@ -184,8 +202,8 @@
     <div class="row g-3 mb-3">
         <div class="col-lg-6">
             <div class="panel p-3 h-100">
-                <h2 class="section-title mb-2">Cách ghi nhận tiền</h2>
-                <div class="finance-line"><span>QR ngân hàng</span><strong class="text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</strong></div>
+                <h2 class="section-title mb-2">Doanh thu theo cách thu</h2>
+                <div class="finance-line"><span>Qua QR ngân hàng</span><strong class="text-info">@Model.TotalBankQrRevenue.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Tiền mặt tại quầy</span><strong class="text-success">@Model.TotalCashRevenue.ToString("N0") đ</strong></div>
                 @if (Model.TotalDepositDeductionRevenue > 0)
                 {
@@ -196,7 +214,7 @@
                     <div class="finance-line"><span>Chưa xác định</span><strong class="text-warning">@Model.TotalUnknownPaymentMethodRevenue.ToString("N0") đ</strong></div>
                 }
                 <div class="finance-line"><span><strong>Tổng doanh thu</strong></span><strong>@paymentMethodTotal.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Cọc A dùng bồi thường B được theo dõi riêng, không tính doanh thu.</div>
+                <div class="tiny mt-2">Các số trên là doanh thu đã ghi nhận theo cách thu; tiền cọc được theo dõi riêng và không tính vào doanh thu.</div>
             </div>
         </div>
         <div class="col-lg-6">
@@ -221,7 +239,7 @@
                 <div class="finance-line"><span>Chi phí vận hành</span><strong class="text-danger">@Model.TotalOperatingCost.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span><strong>Tổng giảm trừ</strong></span><strong class="text-danger">@totalExpense.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span><strong>Kết quả ròng</strong></span><strong class="@(Model.TotalNetOperatingProfit >= 0 ? "text-success" : "text-danger")">@Model.TotalNetOperatingProfit.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Hoàn cọc và bồi thường lấy từ cọc khách không phải chi phí SmartCar.</div>
+                <div class="tiny mt-2">Chi phí vận hành chỉ tính khoản SmartCar thực chịu. Phạt/vi phạm do khách chịu, hoàn cọc và bồi thường từ cọc không làm giảm kết quả ròng.</div>
 
                 @if (refundTransactionRows.Count > 0)
                 {
@@ -250,14 +268,18 @@
                     <h2 class="section-title">Tiền đang xử lý</h2>
                     <a class="btn btn-sm btn-outline-primary" asp-controller="AdminPayments" asp-action="Index">Mở thanh toán</a>
                 </div>
-                <div class="finance-line"><span>Cần thu</span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Doanh thu còn phải thu</span><strong class="text-warning">@Model.OutstandingReceivables.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Cọc còn phải thu</span><strong class="text-warning">@Model.OutstandingDeposits.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span><strong>Tổng doanh thu + cọc chờ thu</strong></span><strong class="text-warning">@totalOutstanding.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Phạt chờ khách thanh toán</span><strong class="text-warning">@Model.PendingTrafficFineAmount.ToString("N0") đ</strong></div>
+                <div class="finance-line"><span>Phạt chờ Staff đối soát</span><strong class="text-warning">@Model.AwaitingTrafficFineConfirmationAmount.ToString("N0") đ</strong></div>
                 <div class="finance-line"><span>Cọc đang giữ</span><strong>@Model.DepositsHeld.ToString("N0") đ</strong></div>
                 @if (Model.PendingCompensationTransfers > 0)
                 {
                     <div class="finance-line"><span>Bồi thường từ cọc chờ chuyển</span><strong class="text-warning">@Model.PendingCompensationTransfers.ToString("N0") đ</strong></div>
                 }
                 <div class="finance-line"><span>Chờ hoàn</span><strong class="text-warning">@Model.PendingRefunds.ToString("N0") đ</strong></div>
-                <div class="tiny mt-2">Bồi thường A → B không làm tăng doanh thu hoặc giảm kết quả ròng.</div>
+                <div class="tiny mt-2">Phạt/vi phạm và cọc được theo dõi riêng, không cộng vào doanh thu hoặc kết quả ròng. Bồi thường A → B cũng không làm tăng doanh thu.</div>
             </div>
         </div>
     </div>
@@ -330,6 +352,70 @@
                 <button id="revenue-next" class="pager-btn" type="button" aria-label="Trang giao dịch sau" title="Trang sau">›</button>
             </div>
         }
+    </div>
+
+    <div class="panel p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+            <div>
+                <h2 class="section-title">Phạt / vi phạm gần đây</h2>
+                <div class="tiny mt-1">Theo dõi riêng, không cộng vào doanh thu và không làm thay đổi kết quả ròng.</div>
+            </div>
+            <div class="d-flex gap-3 flex-wrap small">
+                <span>Chờ khách: <strong class="text-warning">@Model.PendingTrafficFineAmount.ToString("N0") đ</strong></span>
+                <span>Chờ Staff: <strong class="text-warning">@Model.AwaitingTrafficFineConfirmationAmount.ToString("N0") đ</strong></span>
+                <span>Đã thu trong kỳ: <strong class="text-success">@Model.CollectedTrafficFineAmount.ToString("N0") đ</strong></span>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm revenue-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Vi phạm lúc</th>
+                        <th>Đơn</th>
+                        <th>Xe</th>
+                        <th>Trạng thái</th>
+                        <th>Cách thu</th>
+                        <th>Mã GD</th>
+                        <th>Staff xác nhận</th>
+                        <th>Xác nhận lúc</th>
+                        <th class="text-end">Số tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @if (Model.TrafficFines.Count == 0)
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-4">Không có khoản phạt/vi phạm đang mở hoặc đã thu trong kỳ.</td></tr>
+                }
+                else
+                {
+                    @foreach (var fine in Model.TrafficFines)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@fine.ViolationAt.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td><a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@fine.BookingId">#@fine.BookingId</a></td>
+                            <td><strong>@fine.VehicleName</strong><div class="tiny">@fine.LicensePlate</div></td>
+                            <td><span class="badge @TrafficFineStatusClass(fine.Status)">@TrafficFineStatusLabel(fine.Status)</span></td>
+                            <td><span class="method-badge">@PaymentMethodLabel(fine.PaymentMethod)</span></td>
+                            <td><span class="small">@(string.IsNullOrWhiteSpace(fine.TransactionCode) ? "—" : fine.TransactionCode)</span></td>
+                            <td>
+                                @if (fine.Status == PaymentStatus.Paid)
+                                {
+                                    <span>@(string.IsNullOrWhiteSpace(fine.ConfirmedBy) ? "Chưa xác định" : fine.ConfirmedBy)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td class="text-nowrap">@(fine.ConfirmedAt.HasValue ? fine.ConfirmedAt.Value.ToString("dd/MM/yyyy HH:mm") : "—")</td>
+                            <td class="text-end fw-bold @(fine.Status == PaymentStatus.Paid ? "text-success" : "text-warning")">@fine.Amount.ToString("N0") đ</td>
+                        </tr>
+                    }
+                }
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <div class="panel vehicle-list mb-3">

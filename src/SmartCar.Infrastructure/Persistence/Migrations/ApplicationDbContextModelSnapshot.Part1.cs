@@ -287,6 +287,8 @@ partial class ApplicationDbContextModelSnapshot
                     .HasPrecision(18, 2)
                     .HasColumnType("decimal(18,2)");
 
+                b.Property<string>("PolicyJson").HasColumnType("nvarchar(max)");
+
                 b.Property<int>("DepositHoldDaysApplied")
                     .HasColumnType("int");
 
@@ -350,3 +352,4 @@ partial class ApplicationDbContextModelSnapshot
             });
     }
 }
+

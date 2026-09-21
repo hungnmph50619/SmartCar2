@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,6 +26,10 @@ public sealed class ReturnEditsController : Controller
     private const string AccessoriesMissingPrefix = "Thiếu/mất:";
     private const string ReturnAccessoriesLabel = "Phụ kiện khi trả:";
     private const string ReturnNoteSeparator = " | Ghi chú: ";
+    private static readonly string[] RequiredEvidencePrefixes =
+    {
+        "front-", "rear-", "left-", "right-", "interior-", "odometer-", "fuel-"
+    };
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
@@ -63,13 +68,17 @@ public sealed class ReturnEditsController : Controller
         }
 
         var parsedNotes = ParseReturnNotes(booking.VehicleReturn.Notes);
-        var parsedAccessory = ParseAccessoryValue(booking.VehicleReturn.AccessoryStatus);
+        var parsedAccessory = string.IsNullOrWhiteSpace(booking.VehicleReturn.AccessoryStatus)
+            ? (parsedNotes.AccessoryStatus, parsedNotes.MissingAccessories)
+            : ParseAccessoryValue(booking.VehicleReturn.AccessoryStatus);
         return View(new ReturnEditViewModel
         {
             BookingId = bookingId,
             ReturnedAt = booking.VehicleReturn.ReturnedAt,
             Mileage = booking.VehicleReturn.Mileage,
             FuelLevel = booking.VehicleReturn.FuelLevel.TrimEnd('%').Trim(),
+            ExteriorCondition = booking.VehicleReturn.ExteriorCondition,
+            InteriorCondition = booking.VehicleReturn.InteriorCondition,
             AccessoryStatus = parsedAccessory.AccessoryStatus,
             MissingAccessories = parsedAccessory.MissingAccessories,
             HasDamage = booking.VehicleReturn.HasDamage,
@@ -86,6 +95,12 @@ public sealed class ReturnEditsController : Controller
         ModelState.Remove(nameof(ReturnEditViewModel.ImagesToDelete));
         ModelState.Remove(nameof(ReturnEditViewModel.DamageImages));
         ModelState.Remove(nameof(ReturnEditViewModel.NewImages));
+        ModelState.Remove(nameof(ReturnEditViewModel.NewDamageImages));
+        ModelState.Remove(nameof(ReturnEditViewModel.ReturnedAt));
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -102,9 +117,12 @@ public sealed class ReturnEditsController : Controller
 
         if (!CanEdit(booking))
         {
-            TempData["ErrorMessage"] = "Biên bản trả đã có bản ký, khoản phụ phí đang/đã thanh toán hoặc đơn đã quyết toán nên không thể chỉnh sửa.";
+            TempData["ErrorMessage"] = "Biên bản trả đã có bản ký, phụ phí đã chốt/đang thanh toán hoặc đơn đã quyết toán nên không thể chỉnh sửa.";
             return RedirectToAction("Inspect", "Returns", new { bookingId = model.BookingId });
         }
+
+        // Thời gian trả thực tế do server ghi lúc nhận xe, không nhận lại giá trị từ trình duyệt.
+        model.ReturnedAt = booking.VehicleReturn.ReturnedAt;
 
         var currentPaths = SplitPaths(booking.VehicleReturn.ImagePaths).ToList();
         var returnPhotos = ReturnPhotos(booking.VehicleReturn.ImagePaths).ToList();
@@ -120,6 +138,13 @@ public sealed class ReturnEditsController : Controller
         var damageImages = (model.DamageImages ?? new List<IFormFile>())
             .Where(file => file.Length > 0)
             .ToList();
+        if (deleteSet.Any(IsRequiredEvidence))
+        {
+            ModelState.AddModelError(
+                nameof(model.ImagesToDelete),
+                "7 ảnh đối chiếu bắt buộc (trước, sau, trái, phải, nội thất, công-tơ-mét, nhiên liệu) không được xóa ở bước chỉnh sửa.");
+        }
+
         var newImages = (model.NewImages ?? new List<IFormFile>())
             .Where(file => file.Length > 0)
             .ToList();
@@ -171,24 +196,35 @@ public sealed class ReturnEditsController : Controller
 
         if (!model.Mileage.HasValue || model.Mileage.Value < booking.Handover.Mileage)
         {
+            var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
+            if (error is not null)
+            {
+                ModelState.AddModelError(nameof(model.NewDamageImages), $"{image.FileName}: {error}");
+            }
+        }
+
+        var survivingDamageEvidence = returnPhotos.Count(path =>
+            !deleteSet.Contains(path) &&
+            Path.GetFileName(path).StartsWith("damage-", StringComparison.OrdinalIgnoreCase));
+        if (model.HasDamage && survivingDamageEvidence + newDamageImages.Count == 0)
+        {
+            ModelState.AddModelError(
+                nameof(model.NewDamageImages),
+                "Đã ghi nhận hư hỏng mới thì phải giữ hoặc bổ sung ít nhất một ảnh hư hỏng.");
+        }
+
+        if (!model.Mileage.HasValue || model.Mileage.Value < booking.Handover.Mileage)
+        {
             ModelState.AddModelError(nameof(model.Mileage), $"Số km trả không được nhỏ hơn số km lúc giao ({booking.Handover.Mileage:N0} km).");
         }
 
-        if (model.ReturnedAt < booking.Handover.HandoverAt)
-        {
-            ModelState.AddModelError(nameof(model.ReturnedAt), "Thời gian trả không được trước thời gian giao xe.");
-        }
-
-        if (model.ReturnedAt > DateTime.Now.AddMinutes(5))
-        {
-            ModelState.AddModelError(nameof(model.ReturnedAt), "Thời gian trả xe không được ở tương lai.");
-        }
-
-        if (model.Mileage.HasValue && model.ReturnedAt >= booking.Handover.HandoverAt)
+        if (model.Mileage.HasValue &&
+            booking.VehicleReturn.ReturnedAt >= booking.Handover.HandoverAt)
         {
             var elapsedDays = Math.Max(
                 1,
-                (int)Math.Ceiling((model.ReturnedAt - booking.Handover.HandoverAt).TotalHours / 24d));
+                (int)Math.Ceiling(
+                    (booking.VehicleReturn.ReturnedAt - booking.Handover.HandoverAt).TotalHours / 24d));
             var drivenKilometers = model.Mileage.Value - booking.Handover.Mileage;
             var maximumReasonableKilometers = elapsedDays * MaximumReasonableKilometersPerDay;
             if (drivenKilometers > maximumReasonableKilometers)
@@ -211,6 +247,7 @@ public sealed class ReturnEditsController : Controller
 
         if (!ModelState.IsValid)
         {
+            await transaction.RollbackAsync(cancellationToken);
             PopulateExistingImages(model, booking.VehicleReturn);
             return View(model);
         }
@@ -231,9 +268,12 @@ public sealed class ReturnEditsController : Controller
 
             var normalizedAccessory = NormalizeAccessoryValue(model.AccessoryStatus, model.MissingAccessories);
 
-            booking.VehicleReturn.ReturnedAt = model.ReturnedAt;
             booking.VehicleReturn.Mileage = model.Mileage!.Value;
             booking.VehicleReturn.FuelLevel = $"{fuelPercent}%";
+            booking.VehicleReturn.ExteriorCondition =
+                string.IsNullOrWhiteSpace(model.ExteriorCondition) ? null : model.ExteriorCondition.Trim();
+            booking.VehicleReturn.InteriorCondition =
+                string.IsNullOrWhiteSpace(model.InteriorCondition) ? null : model.InteriorCondition.Trim();
             booking.VehicleReturn.HasDamage = model.HasDamage;
             booking.VehicleReturn.AccessoryStatus = normalizedAccessory;
             booking.VehicleReturn.Notes =
@@ -244,6 +284,7 @@ public sealed class ReturnEditsController : Controller
             RecalculateAutomaticCharges(booking);
             SynchronizePendingAdditionalChargePayment(booking);
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
@@ -270,40 +311,45 @@ public sealed class ReturnEditsController : Controller
     private static bool CanEdit(Booking booking) =>
         booking.Status == BookingStatus.PendingInspection &&
         booking.VehicleReturn is not null &&
-        !SplitPaths(booking.VehicleReturn.ImagePaths).Any(path => path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase)) &&
+        !SplitPaths(booking.VehicleReturn.ImagePaths)
+            .Any(path => path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase)) &&
         !booking.Payments.Any(payment =>
             payment.Type == PaymentType.AdditionalCharge &&
             payment.Method != PaymentMethods.DepositDeduction &&
-            payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid);
+            (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
+             payment.Status == PaymentStatus.Pending &&
+             AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
 
     private void SynchronizePendingAdditionalChargePayment(Booking booking)
     {
-        var pendingPayment = booking.Payments.FirstOrDefault(payment =>
-            payment.Type == PaymentType.AdditionalCharge &&
-            payment.Method != PaymentMethods.DepositDeduction &&
-            payment.Status == PaymentStatus.Pending);
+        var pendingPayments = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.AdditionalCharge &&
+                payment.Method != PaymentMethods.DepositDeduction &&
+                payment.Status == PaymentStatus.Pending)
+            .ToList();
 
-        if (booking.AdditionalAmount > 0)
+        var finalizedPayment = pendingPayments.FirstOrDefault(payment =>
+            AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode));
+
+        foreach (var payment in pendingPayments)
         {
-            if (pendingPayment is null)
+            if (payment != finalizedPayment)
             {
-                booking.Payments.Add(new Payment
-                {
-                    BookingId = booking.BookingId,
-                    Type = PaymentType.AdditionalCharge,
-                    Amount = booking.AdditionalAmount,
-                    Method = PaymentMethods.NotSelected,
-                    Status = PaymentStatus.Pending
-                });
+                _dbContext.Payments.Remove(payment);
+            }
+        }
+
+        if (finalizedPayment is not null)
+        {
+            if (booking.AdditionalAmount > 0m)
+            {
+                finalizedPayment.Amount = booking.AdditionalAmount;
             }
             else
             {
-                pendingPayment.Amount = booking.AdditionalAmount;
+                _dbContext.Payments.Remove(finalizedPayment);
             }
-        }
-        else if (pendingPayment is not null)
-        {
-            _dbContext.Payments.Remove(pendingPayment);
         }
     }
 
@@ -324,6 +370,13 @@ public sealed class ReturnEditsController : Controller
             .LastOrDefault();
         return !string.IsNullOrWhiteSpace(fileName) &&
                fileName.StartsWith("damage-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRequiredEvidence(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return RequiredEvidencePrefixes.Any(prefix =>
+            fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool TryParseFuel(string? value, out int percent)
@@ -458,9 +511,7 @@ public sealed class ReturnEditsController : Controller
         var lateMinutes = vehicleReturn.ReturnedAt > booking.ReturnDate
             ? (int)Math.Ceiling((vehicleReturn.ReturnedAt - booking.ReturnDate).TotalMinutes)
             : 0;
-        var lateDays = lateMinutes > 0
-            ? Math.Max(1, (int)Math.Ceiling(lateMinutes / 1440d))
-            : 0;
+        var lateDays = booking.Policy.LateChargeDays(lateMinutes);
         var lateMultiplier = booking.Handover.LateReturnFeeMultiplier >= 1
             ? booking.Handover.LateReturnFeeMultiplier
             : RentalPolicy.LateReturnFeeMultiplier;
@@ -493,7 +544,7 @@ public sealed class ReturnEditsController : Controller
             (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
         var effectiveIncludedKilometers = Math.Max(
             booking.Handover.IncludedKilometers,
-            paidRentalDays * RentalPolicy.IncludedKilometersPerDay);
+            paidRentalDays * booking.Policy.IncludedKilometersPerDay);
         var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
 
@@ -541,3 +592,4 @@ public sealed class ReturnEditsController : Controller
         }
     }
 }
+

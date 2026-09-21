@@ -1,5 +1,6 @@
 @model SmartCar.Application.Features.Audits.AuditLogDto
 @using System.Text.Json
+@using SmartCar.Web.Services
 @{
     ViewData["Title"] = $"Chi tiết nhật ký #{Model.AuditLogId}";
 
@@ -29,7 +30,7 @@
         "Delete" or "Reject" or "AdminCancel" or "CustomerCancel" or "LockCustomer" => "audit-action-danger",
         "Verify" or "VerifyAll" or "Confirm" or "CompleteBooking" or "Resolve" or "UnlockCustomer" => "audit-action-success",
         "ViewKycDocumentImage" => "audit-action-info",
-        "Submit" or "SubmitKycPackage" or "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" => "audit-action-primary",
+        "Submit" or "SubmitKycPackage" or "ChangePassword" or "UpdateBankAccount" or "UpdateAvatar" or "Update" or "ChangeStatus" or "UpdateRentalPolicy" or "UpdateDepositHoldPolicy" => "audit-action-primary",
         "RequestResubmission" or "RequestUpdate" or "AddCharge" => "audit-action-warning",
         _ => "audit-action-secondary"
     };
@@ -46,6 +47,13 @@
     var hasSnapshot = hasOldValues || hasNewValues;
     var payloadColumnClass = hasOldValues && hasNewValues ? "col-lg-6" : "col-12";
     var showEntityId = !string.IsNullOrWhiteSpace(Model.EntityId) && !Guid.TryParse(Model.EntityId, out _);
+    var isPolicyChange = Model.Action == "UpdateRentalPolicy" && Model.EntityName == "BusinessSetting";
+    var policyChanges = isPolicyChange
+        ? BusinessPolicyAuditFormatter.GetChanges(Model.OldValues, Model.NewValues)
+        : Array.Empty<BusinessPolicyAuditChange>();
+    var friendlyDescription = isPolicyChange
+        ? BusinessPolicyAuditFormatter.BuildSummary(Model.OldValues, Model.NewValues)
+        : Model.Description.ToFriendlyAuditDescription();
 }
 
 <link rel="stylesheet" href="~/css/admin-audit.css" asp-append-version="true" />
@@ -77,7 +85,7 @@
 
             <div class="audit-description-block mb-4">
                 <span>Nội dung thao tác</span>
-                <p class="mb-0">@Model.Description.ToFriendlyAuditDescription()</p>
+                <p class="mb-0">@friendlyDescription</p>
             </div>
 
             <dl class="audit-info-list mb-0">
@@ -146,52 +154,149 @@
         </div>
     </section>
 
-    <section class="card border-0 shadow-sm audit-data-card">
-        <div class="card-header bg-white border-0 px-4 pt-4 pb-2">
-            <h2 class="h5 fw-bold mb-1">Dữ liệu trước và sau thao tác</h2>
-            <p class="small text-muted mb-0">Chỉ hiển thị khi hệ thống có lưu lại dữ liệu để so sánh.</p>
-        </div>
-        <div class="card-body px-4 pt-2 pb-4">
-            @if (!hasSnapshot)
-            {
-                <div class="audit-no-snapshot">
-                    <span class="audit-no-snapshot-icon" aria-hidden="true">i</span>
+    @if (isPolicyChange && policyChanges.Count > 0)
+    {
+        <section class="card border-0 shadow-sm audit-data-card">
+            <div class="card-header bg-white border-0 px-4 pt-4 pb-2 d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h2 class="h5 fw-bold mb-1">Thay đổi chính sách</h2>
+                    <p class="small text-muted mb-0">Chỉ hiển thị những giá trị thực sự đã thay đổi.</p>
+                </div>
+                <span class="badge rounded-pill text-bg-light border">@policyChanges.Count thay đổi</span>
+            </div>
+
+            <div class="card-body px-4 pt-2 pb-4">
+                <div class="audit-change-list">
+                    @foreach (var change in policyChanges)
+                    {
+                        <div class="audit-change-item">
+                            <div class="audit-change-label">@change.Label</div>
+
+                            @if (change.IsLongText)
+                            {
+                                <div class="audit-change-long">
+                                    <span class="badge rounded-pill audit-change-updated">Đã cập nhật nội dung</span>
+                                    <details>
+                                        <summary>Xem nội dung trước / sau</summary>
+                                        <div class="row g-3 mt-1">
+                                            <div class="col-lg-6">
+                                                <div class="audit-text-compare audit-text-old">
+                                                    <span>TRƯỚC</span>
+                                                    <p>@change.OldValue</p>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-6">
+                                                <div class="audit-text-compare audit-text-new">
+                                                    <span>SAU</span>
+                                                    <p>@change.NewValue</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </details>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="audit-value-change">
+                                    <span class="audit-old-value">@change.OldValue</span>
+                                    <span class="audit-change-arrow" aria-hidden="true">→</span>
+                                    <strong class="audit-new-value">@change.NewValue</strong>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="audit-policy-note mt-3">
+                    <span aria-hidden="true">i</span>
                     <div>
-                        <strong>Không có dữ liệu trước/sau</strong>
-                        <p class="small text-muted mb-0">Thao tác này không lưu bản chụp dữ liệu để so sánh.</p>
+                        <strong>Áp dụng cho đơn mới</strong>
+                        <small>Đơn đã tạo trước thời điểm thay đổi vẫn giữ chính sách đã chốt.</small>
                     </div>
                 </div>
-            }
-            else
-            {
-                <div class="row g-3">
-                    @if (hasOldValues)
-                    {
-                        <div class="@payloadColumnClass">
-                            <div class="audit-payload audit-payload-old h-100">
-                                <div class="audit-payload-heading">
-                                    <span>TRƯỚC THAO TÁC</span>
-                                    <strong>Dữ liệu cũ</strong>
-                                </div>
-                                <pre>@FormatPayload(Model.OldValues)</pre>
-                            </div>
-                        </div>
-                    }
 
-                    @if (hasNewValues)
-                    {
-                        <div class="@payloadColumnClass">
-                            <div class="audit-payload audit-payload-new h-100">
-                                <div class="audit-payload-heading">
-                                    <span>SAU THAO TÁC</span>
-                                    <strong>Dữ liệu mới</strong>
+                <details class="audit-raw-details mt-3">
+                    <summary>Xem dữ liệu kỹ thuật (JSON)</summary>
+                    <div class="row g-3 mt-1">
+                        @if (hasOldValues)
+                        {
+                            <div class="@payloadColumnClass">
+                                <div class="audit-payload audit-payload-old h-100">
+                                    <div class="audit-payload-heading">
+                                        <span>TRƯỚC THAO TÁC</span>
+                                        <strong>Dữ liệu cũ</strong>
+                                    </div>
+                                    <pre>@FormatPayload(Model.OldValues)</pre>
                                 </div>
-                                <pre>@FormatPayload(Model.NewValues)</pre>
                             </div>
+                        }
+
+                        @if (hasNewValues)
+                        {
+                            <div class="@payloadColumnClass">
+                                <div class="audit-payload audit-payload-new h-100">
+                                    <div class="audit-payload-heading">
+                                        <span>SAU THAO TÁC</span>
+                                        <strong>Dữ liệu mới</strong>
+                                    </div>
+                                    <pre>@FormatPayload(Model.NewValues)</pre>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </details>
+            </div>
+        </section>
+    }
+    else
+    {
+        <section class="card border-0 shadow-sm audit-data-card">
+            <div class="card-header bg-white border-0 px-4 pt-4 pb-2">
+                <h2 class="h5 fw-bold mb-1">Dữ liệu trước và sau thao tác</h2>
+                <p class="small text-muted mb-0">Chỉ hiển thị khi hệ thống có lưu lại dữ liệu để so sánh.</p>
+            </div>
+            <div class="card-body px-4 pt-2 pb-4">
+                @if (!hasSnapshot)
+                {
+                    <div class="audit-no-snapshot">
+                        <span class="audit-no-snapshot-icon" aria-hidden="true">i</span>
+                        <div>
+                            <strong>Không có dữ liệu trước/sau</strong>
+                            <p class="small text-muted mb-0">Thao tác này không lưu bản chụp dữ liệu để so sánh.</p>
                         </div>
-                    }
-                </div>
-            }
-        </div>
-    </section>
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-3">
+                        @if (hasOldValues)
+                        {
+                            <div class="@payloadColumnClass">
+                                <div class="audit-payload audit-payload-old h-100">
+                                    <div class="audit-payload-heading">
+                                        <span>TRƯỚC THAO TÁC</span>
+                                        <strong>Dữ liệu cũ</strong>
+                                    </div>
+                                    <pre>@FormatPayload(Model.OldValues)</pre>
+                                </div>
+                            </div>
+                        }
+
+                        @if (hasNewValues)
+                        {
+                            <div class="@payloadColumnClass">
+                                <div class="audit-payload audit-payload-new h-100">
+                                    <div class="audit-payload-heading">
+                                        <span>SAU THAO TÁC</span>
+                                        <strong>Dữ liệu mới</strong>
+                                    </div>
+                                    <pre>@FormatPayload(Model.NewValues)</pre>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    }
 </div>

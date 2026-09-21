@@ -147,6 +147,8 @@ public sealed class AdminTripRecordsController : Controller
                 RecordedAt = records.VehicleReturn.ReturnedAt,
                 Mileage = records.VehicleReturn.Mileage,
                 FuelLevel = records.VehicleReturn.FuelLevel,
+                ExteriorCondition = records.VehicleReturn.ExteriorCondition,
+                InteriorCondition = records.VehicleReturn.InteriorCondition,
                 Accessories = records.VehicleReturn.AccessoryStatus,
                 HasDamage = records.VehicleReturn.HasDamage,
                 IsLateReturn = records.VehicleReturn.IsLateReturn,
@@ -193,3 +195,4 @@ public sealed class AdminTripRecordsController : Controller
                 .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToArray();
 }
+ 

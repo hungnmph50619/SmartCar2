@@ -1,11 +1,16 @@
 @model SmartCar.Web.ViewModels.ReturnEditViewModel
 @{
     ViewData["Title"] = "Chỉnh sửa biên bản trả xe";
-    var returnDate = Model.ReturnedAt.ToString("yyyy-MM-dd");
-    var returnTime = Model.ReturnedAt.ToString("HH:mm");
     var currentImages = Model.ExistingImagePaths ?? new List<string>();
     var accessoryIsMissing = Model.AccessoryStatus == "Thiếu";
     const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
+
+    bool IsRequiredEvidence(string path)
+    {
+        var fileName = System.IO.Path.GetFileName(path);
+        return new[] { "front-", "rear-", "left-", "right-", "interior-", "odometer-", "fuel-" }
+            .Any(prefix => fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
@@ -31,16 +36,9 @@
     <h2 class="h5 mb-3">Thông tin trả xe</h2>
     <div class="row g-3">
         <div class="col-md-6">
-            <label class="form-label fw-semibold">Thời gian trả</label>
-            <div class="row g-2">
-                <div class="col-7">
-                    <input type="date" id="return-date" value="@returnDate" class="form-control" required />
-                </div>
-                <div class="col-5">
-                    <input type="text" id="return-time" value="@returnTime" class="form-control" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" required />
-                </div>
-            </div>
-            <span asp-validation-for="ReturnedAt" class="text-danger small"></span>
+            <label class="form-label fw-semibold">Thời gian trả thực tế</label>
+            <div class="form-control bg-light">@Model.ReturnedAt.ToString("dd/MM/yyyy HH:mm")</div>
+            <div class="form-text">Thời gian này do server ghi khi nhận xe trả và không được chỉnh sửa.</div>
         </div>
 
         <div class="col-md-3">
@@ -59,6 +57,18 @@
         </div>
 
         <div class="col-md-6">
+            <label asp-for="ExteriorCondition" class="form-label fw-semibold">Ngoại thất khi trả</label>
+            <textarea asp-for="ExteriorCondition" class="form-control" rows="2" maxlength="1500"></textarea>
+            <span asp-validation-for="ExteriorCondition" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-6">
+            <label asp-for="InteriorCondition" class="form-label fw-semibold">Nội thất khi trả</label>
+            <textarea asp-for="InteriorCondition" class="form-control" rows="2" maxlength="1500"></textarea>
+            <span asp-validation-for="InteriorCondition" class="text-danger small"></span>
+        </div>
+
+        <div class="col-md-6">
             <label asp-for="AccessoryStatus" class="form-label fw-semibold">Phụ kiện khi trả</label>
             <select asp-for="AccessoryStatus" id="return-accessories-status" class="form-select" required>
                 <option value="Đủ">Đủ như lúc giao</option>
@@ -72,6 +82,13 @@
                 <input asp-for="HasDamage" class="form-check-input" id="has-damage" />
                 <label asp-for="HasDamage" class="form-check-label fw-semibold">Có hư hỏng mới</label>
             </div>
+        </div>
+
+        <div class="col-12 @(Model.HasDamage ? string.Empty : "d-none")" id="damage-evidence-edit-box">
+            <label asp-for="NewDamageImages" class="form-label fw-semibold text-danger">Bổ sung ảnh hư hỏng</label>
+            <input asp-for="NewDamageImages" id="new-damage-images" type="file" class="form-control" multiple accept="@imageAccept" />
+            <div class="form-text">Nếu đánh dấu có hư hỏng, hồ sơ phải có ít nhất một ảnh hư hỏng hợp lệ.</div>
+            <span asp-validation-for="NewDamageImages" class="text-danger small"></span>
         </div>
 
         <div class="col-12 @(accessoryIsMissing ? string.Empty : "d-none")" id="missing-accessories-box">
@@ -89,10 +106,11 @@
 
     <hr class="my-4" />
     <h2 class="h5 mb-2">Ảnh đối chiếu khi trả xe</h2>
-    <p class="text-muted mb-3">Có thể xóa ảnh chọn nhầm hoặc thêm ảnh còn thiếu trước khi in và ký biên bản.</p>
+    <p class="text-muted mb-3">7 ảnh vị trí bắt buộc được giữ nguyên. Chỉ ảnh bổ sung có thể xóa; nếu có hư hỏng phải giữ hoặc bổ sung ảnh hư hỏng.</p>
     <span asp-validation-for="ImagesToDelete" class="text-danger small d-block"></span>
     <span asp-validation-for="DamageImages" class="text-danger small d-block"></span>
     <span asp-validation-for="NewImages" class="text-danger small d-block"></span>
+    <span asp-validation-for="NewDamageImages" class="text-danger small d-block"></span>
     <div id="delete-image-summary" class="alert alert-danger d-none py-2 mb-3">
         <strong>Đã chọn xóa ảnh.</strong>
         <span id="delete-image-summary-text">Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và quay lại đối chiếu”.</span>
@@ -116,8 +134,15 @@
                     imageFileName.StartsWith("damage-", StringComparison.OrdinalIgnoreCase);
                 <div class="col-sm-6 col-lg-3 existing-image-card" data-is-damage="@(isDamageImage ? "true" : "false")">
                     <div class="border rounded-3 p-2 h-100 bg-light position-relative existing-image-box">
-                        <button type="button" class="btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center mark-delete-image" style="width:26px;height:26px;padding:0;top:-8px;right:-8px;z-index:2;line-height:1" title="Xóa ảnh này" aria-label="Xóa ảnh trả xe @(index + 1)">&times;</button>
-                        <input class="delete-image-check d-none" type="checkbox" name="ImagesToDelete" value="@imagePath" id="@checkboxId" />
+                        @if (IsRequiredEvidence(imagePath))
+                        {
+                            <span class="badge text-bg-primary position-absolute" style="top:-8px;right:-6px;z-index:2">Ảnh bắt buộc</span>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center mark-delete-image" style="width:26px;height:26px;padding:0;top:-8px;right:-8px;z-index:2;line-height:1" title="Xóa ảnh này" aria-label="Xóa ảnh trả xe @(index + 1)">&times;</button>
+                            <input class="delete-image-check d-none" type="checkbox" name="ImagesToDelete" value="@imagePath" id="@checkboxId" />
+                        }
                         <a href="@imagePath" target="_blank" rel="noopener" class="existing-image-link">
                             <img src="@imagePath" alt="Ảnh trả xe @(index + 1)" class="img-fluid rounded border bg-white existing-image-thumb" style="height:150px;width:100%;object-fit:contain" />
                         </a>
@@ -529,3 +554,4 @@
         })();
     </script>
 }
+ 

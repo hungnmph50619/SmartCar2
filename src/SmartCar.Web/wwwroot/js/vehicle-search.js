@@ -69,6 +69,10 @@
         const submitButton = form.querySelector('[data-search-submit]');
         const submitLabel = submitButton?.querySelector('[data-search-submit-label]');
         const submitLoading = submitButton?.querySelector('[data-search-submit-loading]');
+        const minimumPickupLeadMinutes = Math.max(
+            0,
+            Number(form.dataset.minimumPickupLeadMinutes || 0)
+        );
         if (!pickupDisplay || !returnDisplay || !pickupHidden || !returnHidden || !submitButton) return;
 
         function setFieldError(input, errorElement, message) {
@@ -146,7 +150,7 @@
         let pickupPicker = null;
         let returnPicker = null;
         pickupPicker = createNativePicker(pickupDisplay, pickupHidden, 'Mở lịch chọn ngày giờ nhận xe', function () {
-            return addMinutes(ceilToMinute(new Date()), 1);
+            return addMinutes(ceilToMinute(new Date()), minimumPickupLeadMinutes);
         }, function (selectedPickup) {
             setSubmitting(false);
             setFieldError(pickupDisplay, pickupError, '');
@@ -182,7 +186,16 @@
             const returnDate = parseVietnameseDateTime(returnDisplay.value);
             if (!pickup) { setFieldError(pickupDisplay, pickupError, 'Nhập ngày giờ nhận xe theo định dạng dd/MM/yyyy HH:mm.'); pickupDisplay.focus(); return null; }
             if (!returnDate) { setFieldError(returnDisplay, returnError, 'Nhập ngày giờ trả xe theo định dạng dd/MM/yyyy HH:mm.'); returnDisplay.focus(); return null; }
-            if (pickup.getTime() <= Date.now()) { setFieldError(pickupDisplay, pickupError, 'Ngày giờ nhận xe phải sau thời điểm hiện tại.'); pickupDisplay.focus(); return null; }
+            const earliestPickup = addMinutes(ceilToMinute(new Date()), minimumPickupLeadMinutes);
+            if (pickup.getTime() < earliestPickup.getTime()) {
+                setFieldError(
+                    pickupDisplay,
+                    pickupError,
+                    `Ngày giờ nhận xe phải cách hiện tại ít nhất ${minimumPickupLeadMinutes} phút.`
+                );
+                pickupDisplay.focus();
+                return null;
+            }
             if (returnDate.getTime() <= pickup.getTime()) { setFieldError(returnDisplay, returnError, 'Ngày giờ trả xe phải sau ngày giờ nhận xe.'); returnDisplay.focus(); return null; }
             return { pickup, returnDate };
         }
@@ -242,9 +255,14 @@
     document.querySelectorAll('#advancedFilters form, [data-vehicle-filter-form]').forEach(function (filterForm) {
         filterForm.addEventListener('submit', function (event) {
             const period = getCurrentPeriod();
-            if (!period || period.pickup.getTime() <= Date.now()) {
+            const searchForm = document.querySelector('[data-vehicle-search-form]');
+            const minimumPickupLeadMinutes = Math.max(
+                0,
+                Number(searchForm?.dataset.minimumPickupLeadMinutes || 0)
+            );
+            const earliestPickup = addMinutes(ceilToMinute(new Date()), minimumPickupLeadMinutes);
+            if (!period || period.pickup.getTime() < earliestPickup.getTime()) {
                 event.preventDefault();
-                const searchForm = document.querySelector('[data-vehicle-search-form]');
                 if (searchForm && typeof searchForm.requestSubmit === 'function') searchForm.requestSubmit();
                 return;
             }

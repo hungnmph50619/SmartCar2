@@ -1,205 +1,1033 @@
-@model int
-@using SmartCar.Domain.Constants
-
+@model SmartCar.Domain.Constants.RentalPolicySnapshot
 @{
     ViewData["Title"] = "Cấu hình nghiệp vụ";
-    var currentPolicyText = Model == 0
-        ? "Sau khi khách trả xe và hậu kiểm xong, cọc có thể được duyệt hoàn ngay nếu không còn khoản cần xử lý."
-        : $"Sau khi khách trả xe, cọc phải chờ {Model} ngày trước khi được duyệt hoàn.";
+    Layout = "_AdminLayout";
+    var current = (SmartCar.Domain.Constants.RentalPolicySnapshot)ViewData["CurrentPolicy"]!;
+    var editing = ViewData["EditingGroup"] as string;
+    var conflict = ViewData["PolicyConflict"] as bool? ?? false;
+    var vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+    string FriendlyHours(int hours) =>
+        hours % 24 == 0
+            ? $"{hours / 24} ngày"
+            : $"{hours} giờ";
 }
 
-<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
-    <div>
-        <h1 class="h3 mb-1">Cấu hình nghiệp vụ</h1>
-        <p class="text-muted mb-0">Thiết lập thời gian giữ cọc sau chuyến thuê cho các đơn tạo mới.</p>
-    </div>
-    <a class="btn btn-outline-secondary" asp-controller="AuditLogs" asp-action="Index" asp-route-auditAction="UpdateDepositHoldPolicy">
-        Xem lịch sử thay đổi
-    </a>
-</div>
+@section Styles {
+    <link rel="stylesheet" href="~/css/admin-business-settings.css" asp-append-version="true" />
+}
 
-<div class="row g-4">
-    <div class="col-lg-7">
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
-                <div class="rounded-3 border bg-light p-3 mb-4">
-                    <div class="text-muted small mb-1">Số ngày giữ cọc sau khi trả xe</div>
-                    <div class="d-flex align-items-end gap-2 flex-wrap">
-                        <div class="display-6 fw-bold text-primary lh-1">@Model</div>
-                        <div class="fw-semibold mb-1">ngày</div>
+<div class="policy-settings-page">
+    <div class="policy-settings-header">
+        <div>
+            <h1 class="policy-settings-title">Cấu hình nghiệp vụ</h1>
+            <p class="policy-settings-subtitle">Quản lý chính sách áp dụng cho đơn mới.</p>
+        </div>
+        <a class="btn btn-outline-primary policy-history-btn"
+           asp-controller="AuditLogs"
+           asp-action="Index"
+           asp-route-search="BusinessSetting">
+            <span aria-hidden="true">↶</span>
+            <span>Lịch sử thay đổi</span>
+        </a>
+    </div>
+
+    <div class="policy-overview" aria-label="Tóm tắt cấu hình">
+        <div class="policy-overview-item">
+            <span class="policy-overview-icon" aria-hidden="true">▱</span>
+            <div class="policy-overview-copy">
+                <strong>9 nhóm chính sách</strong>
+                <span>Cọc, đặt xe, lịch xe, hủy đơn, phí và điều khoản</span>
+            </div>
+        </div>
+        <div class="policy-overview-item">
+            <span class="policy-overview-icon" aria-hidden="true">✓</span>
+            <div class="policy-overview-copy">
+                <strong>Áp dụng cho đơn mới</strong>
+                <span>Đơn cũ giữ chính sách đã chốt</span>
+            </div>
+        </div>
+        <div class="policy-overview-item">
+            <span class="policy-overview-icon" aria-hidden="true">₫</span>
+            <div class="policy-overview-copy">
+                <strong>Giá thuê/ngày</strong>
+                <span>Chỉnh riêng trong Quản lý xe</span>
+            </div>
+        </div>
+    </div>
+
+    @if (conflict)
+    {
+        <div class="alert alert-warning policy-conflict-alert">
+            Chính sách vừa thay đổi. Nội dung bạn nhập vẫn được giữ.
+            <a asp-action="Index" class="alert-link">Tải lại</a> trước khi sửa tiếp.
+        </div>
+    }
+
+    <noscript>
+        <div class="alert alert-warning policy-conflict-alert">Vui lòng bật JavaScript để chỉnh sửa chính sách.</div>
+    </noscript>
+
+    <div id="policy-groups" class="policy-grid" data-conflict="@(conflict ? "true" : "false")">
+        <section class="policy-card" data-policy-group="deposit">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">₫</span>
+                    <div class="policy-card-heading">
+                        <h2>Tiền cọc</h2>
+                        <p>Tỷ lệ cọc và thời gian giữ cọc</p>
                     </div>
-                    <div class="small text-muted mt-2">@currentPolicyText</div>
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-deposit"
+                            aria-expanded="@(editing == "deposit" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
+                    </button>
                 </div>
 
-                <form asp-action="Update" method="post" id="depositHoldForm" novalidate>
-                    <div class="mb-3">
-                        <label for="depositHoldDays" class="form-label fw-semibold">Đổi số ngày giữ cọc</label>
-                        <div class="input-group" style="max-width:320px">
-                            <input id="depositHoldDays"
-                                   name="depositHoldDays"
-                                   type="text"
-                                   inputmode="numeric"
-                                   pattern="[0-9]*"
-                                   maxlength="2"
-                                   autocomplete="off"
-                                   spellcheck="false"
+                <div class="policy-metrics">
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Tỷ lệ trên tiền thuê</span>
+                        <strong class="policy-metric-value">@current.DepositPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Giữ cọc sau trả xe</span>
+                        <strong class="policy-metric-value">@current.DepositHoldDays.ToString("N0", vi) ngày</strong>
+                    </div>
+                </div>
+
+                <p class="policy-helper">
+                    <span class="policy-helper-icon" aria-hidden="true">i</span>
+                    <span>Hoàn cọc sau hậu kiểm và xử lý các khoản còn mở.</span>
+                </p>
+            </div>
+
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-deposit"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "deposit")"
+                  data-server-edit="@(editing == "deposit" ? "true" : "false")">
+                <input type="hidden" name="group" value="deposit" />
+                <input type="hidden" name="version" value="@(editing == "deposit" ? Model.Version : current.Version)" />
+                @if (editing == "deposit")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="DepositPercent" class="form-label">Tỷ lệ trên tiền thuê</label>
+                        <div class="input-group">
+                            <input asp-for="DepositPercent"
+                                   type="number"
+                                   min="1"
+                                   max="1000"
+                                   step="1"
+                                   required
                                    class="form-control"
-                                   value="@Model"
-                                   aria-describedby="depositHoldHelp depositHoldError"
-                                   required />
+                                   data-policy-input
+                                   data-label="Tỷ lệ trên tiền thuê"
+                                   data-unit="%"
+                                   data-current="@current.DepositPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <span asp-validation-for="DepositPercent" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="DepositHoldDays" class="form-label">Giữ cọc sau trả xe</label>
+                        <div class="input-group">
+                            <input asp-for="DepositHoldDays"
+                                   type="number"
+                                   min="0"
+                                   max="30"
+                                   step="1"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Giữ cọc sau trả xe"
+                                   data-unit="ngày"
+                                   data-current="@current.DepositHoldDays.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
                             <span class="input-group-text">ngày</span>
                         </div>
-                        <div id="depositHoldHelp" class="form-text">Chỉ nhập số nguyên từ 0 đến @DepositHoldPolicy.MaxConfigurableDays.</div>
-                        <div id="depositHoldError" class="text-danger small mt-1 d-none" role="alert" aria-live="polite"></div>
+                        <span asp-validation-for="DepositHoldDays" class="text-danger small"></span>
                     </div>
+                </div>
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
+                </div>
+            </form>
+        </section>
 
-                    <div class="alert alert-warning border py-2 px-3 small mb-3">
-                        <strong>Chỉ áp dụng sau chuyến thuê.</strong> Đơn hủy trước khi giao xe không phải chờ số ngày giữ cọc này.
+        <section class="policy-card" data-policy-group="mileage">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">↔</span>
+                    <div class="policy-card-heading">
+                        <h2>Quãng đường</h2>
+                        <p>Định mức và phí vượt</p>
                     </div>
-
-                    <div class="alert alert-light border py-2 px-3 small mb-3">
-                        <strong>Lưu ý:</strong> chỉ đơn thuê tạo sau khi lưu mới dùng số ngày mới. Đơn cũ giữ nguyên.
-                    </div>
-
-                    <button type="submit" id="saveDepositHoldButton" class="btn btn-primary px-4">
-                        Lưu thay đổi
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-mileage"
+                            aria-expanded="@(editing == "mileage" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
                     </button>
-                </form>
+                </div>
+
+                <div class="policy-metrics">
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Định mức mỗi ngày</span>
+                        <strong class="policy-metric-value">@current.IncludedKilometersPerDay.ToString("N0", vi) km/ngày</strong>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Phí vượt định mức</span>
+                        <strong class="policy-metric-value">@current.ExcessKilometerFee.ToString("N0", vi) đ/km</strong>
+                    </div>
+                </div>
+
+                <p class="policy-helper">
+                    <span class="policy-helper-icon" aria-hidden="true">i</span>
+                    <span>Định mức chuyến = định mức/ngày × số ngày tính phí.</span>
+                </p>
             </div>
-        </div>
-    </div>
 
-    <div class="col-lg-5">
-        <div class="card shadow-sm border-0 h-100">
-            <div class="card-body p-4">
-                <h2 class="h5 mb-3">Cách áp dụng</h2>
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-mileage"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "mileage")"
+                  data-server-edit="@(editing == "mileage" ? "true" : "false")">
+                <input type="hidden" name="group" value="mileage" />
+                <input type="hidden" name="version" value="@(editing == "mileage" ? Model.Version : current.Version)" />
+                @if (editing == "mileage")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="IncludedKilometersPerDay" class="form-label">Định mức mỗi ngày</label>
+                        <div class="input-group">
+                            <input asp-for="IncludedKilometersPerDay"
+                                   type="number"
+                                   min="1"
+                                   max="1000"
+                                   step="1"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Định mức mỗi ngày"
+                                   data-unit="km/ngày"
+                                   data-current="@current.IncludedKilometersPerDay.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">km/ngày</span>
+                        </div>
+                        <span asp-validation-for="IncludedKilometersPerDay" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="ExcessKilometerFee" class="form-label">Phí vượt định mức</label>
+                        <div class="input-group">
+                            <input asp-for="ExcessKilometerFee"
+                                   type="number"
+                                   min="0"
+                                   max="50000"
+                                   step="1"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Phí vượt định mức"
+                                   data-unit="đ/km"
+                                   data-current="@current.ExcessKilometerFee.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">đ/km</span>
+                        </div>
+                        <span asp-validation-for="ExcessKilometerFee" class="text-danger small"></span>
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
+                </div>
+            </form>
+        </section>
 
-                <div class="d-grid gap-3">
-                    <div class="d-flex gap-3">
-                        <span class="badge rounded-pill text-bg-primary align-self-start">1</span>
-                        <div>
-                            <div class="fw-semibold">Tạo đơn</div>
-                            <div class="small text-muted">Đơn giữ nguyên số ngày đang áp dụng lúc tạo.</div>
+        <section class="policy-card" data-policy-group="late">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">◷</span>
+                    <div class="policy-card-heading">
+                        <h2>Trả muộn</h2>
+                        <p>Hệ số phí và thời gian miễn phí</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-late"
+                            aria-expanded="@(editing == "late" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
+                    </button>
+                </div>
+
+                <div class="policy-metrics">
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Hệ số phí/ngày</span>
+                        <strong class="policy-metric-value">@current.LateReturnFeeMultiplier.ToString("0.##", vi) lần/ngày</strong>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Thời gian miễn phí</span>
+                        <strong class="policy-metric-value">@current.LateReturnGraceMinutes.ToString("N0", vi) phút</strong>
+                    </div>
+                </div>
+
+                <p class="policy-helper">
+                    <span class="policy-helper-icon" aria-hidden="true">i</span>
+                    <span>Quá thời gian miễn phí, mỗi 24 giờ bắt đầu tính một ngày phí.</span>
+                </p>
+            </div>
+
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-late"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "late")"
+                  data-server-edit="@(editing == "late" ? "true" : "false")">
+                <input type="hidden" name="group" value="late" />
+                <input type="hidden" name="version" value="@(editing == "late" ? Model.Version : current.Version)" />
+                @if (editing == "late")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="LateReturnFeeMultiplier" class="form-label">Hệ số phí/ngày</label>
+                        <div class="input-group">
+                            <input asp-for="LateReturnFeeMultiplier"
+                                   type="number"
+                                   min="1"
+                                   max="5"
+                                   step=".01"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Hệ số phí/ngày"
+                                   data-unit="lần"
+                                   data-current="@current.LateReturnFeeMultiplier.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">lần</span>
+                        </div>
+                        <span asp-validation-for="LateReturnFeeMultiplier" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="LateReturnGraceMinutes" class="form-label">Thời gian miễn phí</label>
+                        <div class="input-group">
+                            <input asp-for="LateReturnGraceMinutes"
+                                   type="number"
+                                   min="0"
+                                   max="1440"
+                                   step="1"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Thời gian miễn phí"
+                                   data-unit="phút"
+                                   data-current="@current.LateReturnGraceMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">phút</span>
+                        </div>
+                        <span asp-validation-for="LateReturnGraceMinutes" class="text-danger small"></span>
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="policy-card policy-card-half" data-policy-group="reservation">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">⌛</span>
+                    <div class="policy-card-heading">
+                        <h2>Đặt xe & thanh toán</h2>
+                        <p>Thời hạn xử lý đơn và thanh toán</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-reservation"
+                            aria-expanded="@(editing == "reservation" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
+                    </button>
+                </div>
+
+                <div class="policy-metrics four policy-reservation-metrics">
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Chờ duyệt đơn</span>
+                        <strong class="policy-metric-value">@current.BookingConfirmationHoldMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-note">Quá thời gian này chưa duyệt → đơn hết hạn</span>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Chờ khách thanh toán</span>
+                        <strong class="policy-metric-value">@current.BookingPaymentHoldMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-note">Tính từ lúc đơn được duyệt</span>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Kiểm tra chuyển khoản</span>
+                        <strong class="policy-metric-value">@current.BookingTransferReconciliationHoldMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-note">Tính từ lúc khách báo đã chuyển tiền</span>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Đặt trước giờ nhận</span>
+                        <strong class="policy-metric-value">@current.MinimumPickupLeadMinutes.ToString("N0", vi) phút</strong>
+                        <span class="policy-metric-note">Ví dụ 20:00 → nhận sớm nhất @DateTime.Today.AddHours(20).AddMinutes(current.MinimumPickupLeadMinutes).ToString("HH:mm")</span>
+                    </div>
+                </div>
+
+                <p class="policy-helper">
+                    <span class="policy-helper-icon" aria-hidden="true">i</span>
+                    <span>Các thời hạn trên áp dụng cho đơn mới tạo sau khi lưu cấu hình.</span>
+                </p>
+            </div>
+
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-reservation"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "reservation")"
+                  data-server-edit="@(editing == "reservation" ? "true" : "false")">
+                <input type="hidden" name="group" value="reservation" />
+                <input type="hidden" name="version" value="@(editing == "reservation" ? Model.Version : current.Version)" />
+                @if (editing == "reservation")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="BookingConfirmationHoldMinutes" class="form-label">Chờ duyệt đơn</label>
+                        <div class="input-group">
+                            <input asp-for="BookingConfirmationHoldMinutes" type="number" min="5" max="240" step="1" required
+                                   class="form-control" data-policy-input data-label="Chờ duyệt đơn" data-unit="phút"
+                                   data-current="@current.BookingConfirmationHoldMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">phút</span>
+                        </div>
+                        <span asp-validation-for="BookingConfirmationHoldMinutes" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="BookingPaymentHoldMinutes" class="form-label">Chờ khách thanh toán</label>
+                        <div class="input-group">
+                            <input asp-for="BookingPaymentHoldMinutes" type="number" min="5" max="180" step="1" required
+                                   class="form-control" data-policy-input data-label="Chờ khách thanh toán" data-unit="phút"
+                                   data-current="@current.BookingPaymentHoldMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">phút</span>
+                        </div>
+                        <span asp-validation-for="BookingPaymentHoldMinutes" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="BookingTransferReconciliationHoldMinutes" class="form-label">Chờ Staff kiểm tra chuyển khoản</label>
+                        <div class="input-group">
+                            <input asp-for="BookingTransferReconciliationHoldMinutes" type="number" min="15" max="720" step="1" required
+                                   class="form-control" data-policy-input data-label="Chờ Staff kiểm tra chuyển khoản" data-unit="phút"
+                                   data-current="@current.BookingTransferReconciliationHoldMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">phút</span>
+                        </div>
+                        <span asp-validation-for="BookingTransferReconciliationHoldMinutes" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="MinimumPickupLeadMinutes" class="form-label">Đặt trước giờ nhận</label>
+                        <div class="input-group">
+                            <input asp-for="MinimumPickupLeadMinutes" type="number" min="0" max="1440" step="1" required
+                                   class="form-control" data-policy-input data-label="Đặt trước giờ nhận" data-unit="phút"
+                                   data-current="@current.MinimumPickupLeadMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">phút</span>
+                        </div>
+                        <span asp-validation-for="MinimumPickupLeadMinutes" class="text-danger small"></span>
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="policy-card policy-card-half" data-policy-group="schedule">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">⇄</span>
+                    <div class="policy-card-heading">
+                        <h2>Lịch xe</h2>
+                        <p>Khoảng chuẩn bị giữa hai lượt thuê</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-schedule"
+                            aria-expanded="@(editing == "schedule" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
+                    </button>
+                </div>
+
+                <div class="policy-metrics">
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Thời gian chuẩn bị giữa 2 lượt thuê</span>
+                        <strong class="policy-metric-value">@current.VehicleTurnaroundMinutes.ToString("N0", vi) phút</strong>
+                    </div>
+                </div>
+
+                <p class="policy-helper">
+                    <span class="policy-helper-icon" aria-hidden="true">i</span>
+                    <span>Xe chỉ xuất hiện cho lượt thuê tiếp theo sau khi đã đủ thời gian này. Ví dụ xe trả 09:00, xoay vòng @current.VehicleTurnaroundMinutes phút → có thể nhận lượt mới từ @DateTime.Today.AddHours(9).AddMinutes(current.VehicleTurnaroundMinutes).ToString("HH:mm").</span>
+                </p>
+            </div>
+
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-schedule"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "schedule")"
+                  data-server-edit="@(editing == "schedule" ? "true" : "false")">
+                <input type="hidden" name="group" value="schedule" />
+                <input type="hidden" name="version" value="@(editing == "schedule" ? Model.Version : current.Version)" />
+                @if (editing == "schedule")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="VehicleTurnaroundMinutes" class="form-label">Thời gian chuẩn bị giữa 2 lượt thuê</label>
+                        <div class="input-group">
+                            <input asp-for="VehicleTurnaroundMinutes" type="number" min="0" max="360" step="1" required
+                                   class="form-control" data-policy-input data-label="Thời gian chuẩn bị giữa 2 lượt thuê" data-unit="phút"
+                                   data-current="@current.VehicleTurnaroundMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">phút</span>
+                        </div>
+                        <span asp-validation-for="VehicleTurnaroundMinutes" class="text-danger small"></span>
+                        <div class="form-text">Áp dụng giống nhau dù khách nhận tại cửa hàng hay chọn giao tận nơi.</div>
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="policy-card policy-card-wide" data-policy-group="cancellation">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">↩</span>
+                    <div class="policy-card-heading">
+                        <h2>Hủy đơn & hoàn tiền</h2>
+                        <p>Mức hoàn tiền thuê theo thời điểm hủy</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-cancellation"
+                            aria-expanded="@(editing == "cancellation" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
+                    </button>
+                </div>
+
+                <div class="policy-refund-primary">
+                    <div class="policy-refund-primary-title">Hoàn 100% tiền thuê</div>
+                    <div class="policy-refund-primary-rule">
+                        <span>Khách hủy trong <strong>@current.FreeCancellationWindowMinutes phút</strong> đầu sau khi thanh toán.</span>
+                    </div>
+                </div>
+
+                <div class="policy-refund-cases">
+                    <div class="policy-refund-case">
+                        <span>Còn từ @FriendlyHours(current.CancellationTier1Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationTier1RefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-refund-case">
+                        <span>Còn từ @FriendlyHours(current.CancellationTier2Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationTier2RefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-refund-case">
+                        <span>Còn từ @FriendlyHours(current.CancellationTier3Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationTier3RefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-refund-case">
+                        <span>Còn từ @FriendlyHours(current.CancellationTier4Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationTier4RefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                    <div class="policy-refund-case policy-refund-case-last">
+                        <span>Còn dưới @FriendlyHours(current.CancellationTier4Hours) trước giờ nhận</span>
+                        <strong>Hoàn @current.CancellationBelowTierRefundPercent.ToString("0.##", vi)%</strong>
+                    </div>
+                </div>
+
+                <p class="policy-helper">
+                    <span class="policy-helper-icon" aria-hidden="true">i</span>
+                    <span>Nếu không đủ điều kiện hoàn 100%, dùng mức theo thời gian còn lại. Khoản hoàn được xử lý mục tiêu trong @current.CancellationRefundProcessingHours giờ.</span>
+                </p>
+            </div>
+
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-cancellation"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "cancellation")"
+                  data-server-edit="@(editing == "cancellation" ? "true" : "false")">
+                <input type="hidden" name="group" value="cancellation" />
+                <input type="hidden" name="version" value="@(editing == "cancellation" ? Model.Version : current.Version)" />
+                @if (editing == "cancellation")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+
+                <div class="policy-form-section-title">Hủy ngay sau thanh toán</div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="FreeCancellationWindowMinutes" class="form-label">Hoàn 100% nếu hủy trong</label>
+                        <div class="input-group">
+                            <input asp-for="FreeCancellationWindowMinutes" type="number" min="0" max="1440" step="1" required
+                                   class="form-control" data-policy-input data-label="Thời gian hủy được hoàn 100%" data-unit="phút"
+                                   data-current="@current.FreeCancellationWindowMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">phút sau thanh toán</span>
+                        </div>
+                        <span asp-validation-for="FreeCancellationWindowMinutes" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="CancellationRefundProcessingHours" class="form-label">Mục tiêu xử lý khoản hoàn</label>
+                        <div class="input-group">
+                            <input asp-for="CancellationRefundProcessingHours" type="number" min="1" max="168" step="1" required
+                                   class="form-control" data-policy-input data-label="Xử lý hoàn tiền sau hủy" data-unit="giờ"
+                                   data-current="@current.CancellationRefundProcessingHours.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">giờ</span>
+                        </div>
+                        <span asp-validation-for="CancellationRefundProcessingHours" class="text-danger small"></span>
+                    </div>
+                </div>
+
+                <div class="policy-rule-example">
+                    Trong khoảng này, khách được hoàn 100% tiền thuê dù giờ nhận xe đã gần. Sau khoảng này mới áp dụng bảng bên dưới.
+                </div>
+                <div class="policy-form-section-title mt-3">Sau thời gian hoàn 100%</div>
+                <div class="policy-tier-grid">
+                    <div class="policy-tier-row">
+                        <span class="policy-tier-name">Còn từ</span>
+                        <div class="input-group">
+                            <input asp-for="CancellationTier1Hours" type="number" min="1" max="720" step="1" required
+                                   class="form-control" data-policy-input data-label="Ngưỡng giờ hoàn mức 1" data-unit="giờ"
+                                   data-current="@current.CancellationTier1Hours.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">giờ</span>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
+                            <input asp-for="CancellationTier1RefundPercent" type="number" min="0" max="100" step="1" required
+                                   class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 1" data-unit="%"
+                                   data-current="@current.CancellationTier1RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">%</span>
                         </div>
                     </div>
-                    <div class="d-flex gap-3">
-                        <span class="badge rounded-pill text-bg-primary align-self-start">2</span>
-                        <div>
-                            <div class="fw-semibold">Trả xe</div>
-                            <div class="small text-muted">Bắt đầu tính thời gian giữ cọc.</div>
+                    <div class="policy-tier-row">
+                        <span class="policy-tier-name">Còn từ</span>
+                        <div class="input-group">
+                            <input asp-for="CancellationTier2Hours" type="number" min="1" max="720" step="1" required
+                                   class="form-control" data-policy-input data-label="Ngưỡng giờ hoàn mức 2" data-unit="giờ"
+                                   data-current="@current.CancellationTier2Hours.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">giờ</span>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
+                            <input asp-for="CancellationTier2RefundPercent" type="number" min="0" max="100" step="1" required
+                                   class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 2" data-unit="%"
+                                   data-current="@current.CancellationTier2RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">%</span>
                         </div>
                     </div>
-                    <div class="d-flex gap-3">
-                        <span class="badge rounded-pill text-bg-primary align-self-start">3</span>
-                        <div>
-                            <div class="fw-semibold">Đủ ngày</div>
-                            <div class="small text-muted">Nếu không còn khoản cần xử lý, Admin được duyệt hoàn cọc.</div>
+                    <div class="policy-tier-row">
+                        <span class="policy-tier-name">Còn từ</span>
+                        <div class="input-group">
+                            <input asp-for="CancellationTier3Hours" type="number" min="1" max="720" step="1" required
+                                   class="form-control" data-policy-input data-label="Ngưỡng giờ hoàn mức 3" data-unit="giờ"
+                                   data-current="@current.CancellationTier3Hours.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">giờ</span>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
+                            <input asp-for="CancellationTier3RefundPercent" type="number" min="0" max="100" step="1" required
+                                   class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 3" data-unit="%"
+                                   data-current="@current.CancellationTier3RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+                    <div class="policy-tier-row">
+                        <span class="policy-tier-name">Còn từ</span>
+                        <div class="input-group">
+                            <input asp-for="CancellationTier4Hours" type="number" min="1" max="720" step="1" required
+                                   class="form-control" data-policy-input data-label="Ngưỡng giờ hoàn mức 4" data-unit="giờ"
+                                   data-current="@current.CancellationTier4Hours.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">giờ</span>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
+                            <input asp-for="CancellationTier4RefundPercent" type="number" min="0" max="100" step="1" required
+                                   class="form-control" data-policy-input data-label="Tỷ lệ hoàn mức 4" data-unit="%"
+                                   data-current="@current.CancellationTier4RefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+                    <div class="policy-tier-row policy-tier-row-last">
+                        <span class="policy-tier-name">Còn dưới @current.CancellationTier4Hours giờ</span>
+                        <span class="policy-tier-muted">Hoàn tiền thuê</span>
+                        <div class="input-group">
+                            <span class="input-group-text">hoàn</span>
+                            <input asp-for="CancellationBelowTierRefundPercent" type="number" min="0" max="100" step="1" required
+                                   class="form-control" data-policy-input data-label="Tỷ lệ hoàn khi dưới ngưỡng cuối" data-unit="%"
+                                   data-current="@current.CancellationBelowTierRefundPercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">%</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="alert alert-info small mt-4 mb-0">
-                    <strong>Ví dụ:</strong> giữ 15 ngày, trả xe 10/09 → từ 25/09 có thể duyệt hoàn.
+                <span asp-validation-for="CancellationTier1Hours" class="text-danger small"></span>
+                <span asp-validation-for="CancellationTier1RefundPercent" class="text-danger small"></span>
+                <span asp-validation-for="CancellationTier2Hours" class="text-danger small"></span>
+                <span asp-validation-for="CancellationTier2RefundPercent" class="text-danger small"></span>
+                <span asp-validation-for="CancellationTier3Hours" class="text-danger small"></span>
+                <span asp-validation-for="CancellationTier3RefundPercent" class="text-danger small"></span>
+                <span asp-validation-for="CancellationTier4Hours" class="text-danger small"></span>
+                <span asp-validation-for="CancellationTier4RefundPercent" class="text-danger small"></span>
+                <span asp-validation-for="CancellationBelowTierRefundPercent" class="text-danger small"></span>
+
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
                 </div>
+            </form>
+        </section>
+
+        <section class="policy-card policy-card-side" data-policy-group="noshow">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">⌚</span>
+                    <div class="policy-card-heading">
+                        <h2>Không đến nhận xe</h2>
+                        <p>Thời gian chờ và mức giữ tiền thuê</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-noshow"
+                            aria-expanded="@(editing == "noshow" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
+                    </button>
+                </div>
+
+                <div class="policy-metrics">
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Chờ sau giờ nhận</span>
+                        <strong class="policy-metric-value">@current.NoShowGraceMinutes.ToString("N0", vi) phút</strong>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Giữ tiền thuê</span>
+                        <strong class="policy-metric-value">@current.NoShowFeePercent.ToString("0.##", vi)%</strong>
+                    </div>
+                </div>
+
+                <p class="policy-helper">
+                    <span class="policy-helper-icon" aria-hidden="true">i</span>
+                    <span>Chỉ áp dụng sau khi xe đã sẵn sàng và Staff xác nhận đã liên hệ khách.</span>
+                </p>
             </div>
-        </div>
+
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-noshow"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "noshow")"
+                  data-server-edit="@(editing == "noshow" ? "true" : "false")">
+                <input type="hidden" name="group" value="noshow" />
+                <input type="hidden" name="version" value="@(editing == "noshow" ? Model.Version : current.Version)" />
+                @if (editing == "noshow")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="NoShowGraceMinutes" class="form-label">Chờ khách đến nhận</label>
+                        <div class="input-group">
+                            <input asp-for="NoShowGraceMinutes" type="number" min="0" max="180" step="1" required
+                                   class="form-control" data-policy-input data-label="Chờ khách đến nhận" data-unit="phút"
+                                   data-current="@current.NoShowGraceMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">phút</span>
+                        </div>
+                        <span asp-validation-for="NoShowGraceMinutes" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="NoShowFeePercent" class="form-label">Giữ lại tiền thuê</label>
+                        <div class="input-group">
+                            <input asp-for="NoShowFeePercent" type="number" min="0" max="100" step="1" required
+                                   class="form-control" data-policy-input data-label="Giữ lại tiền thuê khi No-show" data-unit="%"
+                                   data-current="@current.NoShowFeePercent.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <span asp-validation-for="NoShowFeePercent" class="text-danger small"></span>
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="policy-card policy-card-wide" data-policy-group="delivery">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">➜</span>
+                    <div class="policy-card-heading">
+                        <h2>Giao xe tận nơi</h2>
+                        <p>Chi phí và phạm vi giao xe</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-delivery"
+                            aria-expanded="@(editing == "delivery" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
+                    </button>
+                </div>
+
+                <div class="policy-metrics four">
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Trong phí cơ bản</span>
+                        <strong class="policy-metric-value">@current.IncludedDeliveryDistanceKm.ToString("0.##", vi) km</strong>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Phí giao cơ bản</span>
+                        <strong class="policy-metric-value">@current.BaseDeliveryFee.ToString("N0", vi) đ</strong>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Mỗi km tiếp theo</span>
+                        <strong class="policy-metric-value">@current.DeliveryFeePerExtraKm.ToString("N0", vi) đ/km</strong>
+                    </div>
+                    <div class="policy-metric">
+                        <span class="policy-metric-label">Phạm vi tối đa</span>
+                        <strong class="policy-metric-value">@current.MaxDeliveryDistanceKm.ToString("0.##", vi) km</strong>
+                    </div>
+                </div>
+
+                <p class="policy-helper">
+                    <span class="policy-helper-icon" aria-hidden="true">i</span>
+                    <span>Nhận tại cửa hàng miễn phí; giao tận nơi tính phần km vượt.</span>
+                </p>
+            </div>
+
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-delivery"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "delivery")"
+                  data-server-edit="@(editing == "delivery" ? "true" : "false")">
+                <input type="hidden" name="group" value="delivery" />
+                <input type="hidden" name="version" value="@(editing == "delivery" ? Model.Version : current.Version)" />
+                @if (editing == "delivery")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="IncludedDeliveryDistanceKm" class="form-label">Quãng đường trong phí cơ bản</label>
+                        <div class="input-group">
+                            <input asp-for="IncludedDeliveryDistanceKm"
+                                   type="number"
+                                   min="0"
+                                   max="20"
+                                   step="1"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Quãng đường trong phí cơ bản"
+                                   data-unit="km"
+                                   data-current="@current.IncludedDeliveryDistanceKm.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">km</span>
+                        </div>
+                        <span asp-validation-for="IncludedDeliveryDistanceKm" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="BaseDeliveryFee" class="form-label">Phí giao cơ bản</label>
+                        <div class="input-group">
+                            <input asp-for="BaseDeliveryFee"
+                                   type="number"
+                                   min="0"
+                                   max="100000"
+                                   step="1"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Phí giao cơ bản"
+                                   data-unit="đ"
+                                   data-current="@current.BaseDeliveryFee.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">đ</span>
+                        </div>
+                        <span asp-validation-for="BaseDeliveryFee" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="DeliveryFeePerExtraKm" class="form-label">Phí mỗi km tiếp theo</label>
+                        <div class="input-group">
+                            <input asp-for="DeliveryFeePerExtraKm"
+                                   type="number"
+                                   min="0"
+                                   max="50000"
+                                   step="1"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Phí mỗi km tiếp theo"
+                                   data-unit="đ/km"
+                                   data-current="@current.DeliveryFeePerExtraKm.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">đ/km</span>
+                        </div>
+                        <span asp-validation-for="DeliveryFeePerExtraKm" class="text-danger small"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <label asp-for="MaxDeliveryDistanceKm" class="form-label">Phạm vi giao tối đa</label>
+                        <div class="input-group">
+                            <input asp-for="MaxDeliveryDistanceKm"
+                                   type="number"
+                                   min="1"
+                                   max="80"
+                                   step="1"
+                                   required
+                                   class="form-control"
+                                   data-policy-input
+                                   data-label="Phạm vi giao tối đa"
+                                   data-unit="km"
+                                   data-current="@current.MaxDeliveryDistanceKm.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                            <span class="input-group-text">km</span>
+                        </div>
+                        <span asp-validation-for="MaxDeliveryDistanceKm" class="text-danger small"></span>
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="policy-card policy-card-terms" data-policy-group="terms">
+            <div class="policy-card-main">
+                <div class="policy-card-header">
+                    <span class="policy-card-icon" aria-hidden="true">§</span>
+                    <div class="policy-card-heading">
+                        <h2>Điều khoản biên bản</h2>
+                        <p>Quy định khi phát sinh sự cố</p>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary policy-edit-btn"
+                            data-edit
+                            aria-controls="edit-terms"
+                            aria-expanded="@(editing == "terms" ? "true" : "false")"
+                            disabled="@conflict">
+                        <span aria-hidden="true">✎</span> Chỉnh sửa
+                    </button>
+                </div>
+
+                <div class="policy-terms-list">
+                    <div class="policy-term-row">
+                        <span class="policy-term-row-icon" aria-hidden="true">!</span>
+                        <div class="policy-term-row-copy">
+                            <strong>Vi phạm giao thông / phạt nguội</strong>
+                            <span>Khách chịu trách nhiệm trong thời gian thực tế giữ xe.</span>
+                        </div>
+                    </div>
+                    <div class="policy-term-row">
+                        <span class="policy-term-row-icon" aria-hidden="true">⌁</span>
+                        <div class="policy-term-row-copy">
+                            <strong>Hư hỏng / thiếu / trả muộn</strong>
+                            <span>Bồi thường theo thiệt hại thực tế và chứng cứ.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <details class="policy-terms-details">
+                    <summary>Xem nội dung đầy đủ</summary>
+                    <div class="policy-terms-full">
+                        <h3>Vi phạm giao thông / phạt nguội</h3>
+                        <p>@current.TrafficFineTerms</p>
+                        <h3>Hư hỏng / thiếu / trả muộn</h3>
+                        <p>@current.DamageCompensationTerms</p>
+                    </div>
+                </details>
+            </div>
+
+            <form asp-action="Update"
+                  method="post"
+                  id="edit-terms"
+                  class="policy-edit-form"
+                  data-policy-form
+                  hidden="@(editing != "terms")"
+                  data-server-edit="@(editing == "terms" ? "true" : "false")">
+                <input type="hidden" name="group" value="terms" />
+                <input type="hidden" name="version" value="@(editing == "terms" ? Model.Version : current.Version)" />
+                @if (editing == "terms")
+                {
+                    <div asp-validation-summary="All" class="text-danger mb-3" role="alert"></div>
+                }
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label asp-for="TrafficFineTerms" class="form-label">Vi phạm giao thông / phạt nguội</label>
+                        <textarea asp-for="TrafficFineTerms"
+                                  rows="6"
+                                  maxlength="1500"
+                                  required
+                                  class="form-control"
+                                  data-policy-input
+                                  data-label="Vi phạm giao thông / phạt nguội"
+                                  data-current="@current.TrafficFineTerms"></textarea>
+                        <span asp-validation-for="TrafficFineTerms" class="text-danger small"></span>
+                    </div>
+                    <div class="col-12">
+                        <label asp-for="DamageCompensationTerms" class="form-label">Hư hỏng / thiếu / trả muộn</label>
+                        <textarea asp-for="DamageCompensationTerms"
+                                  rows="6"
+                                  maxlength="1500"
+                                  required
+                                  class="form-control"
+                                  data-policy-input
+                                  data-label="Hư hỏng / thiếu / trả muộn"
+                                  data-current="@current.DamageCompensationTerms"></textarea>
+                        <span asp-validation-for="DamageCompensationTerms" class="text-danger small"></span>
+                    </div>
+                </div>
+                <div class="alert alert-warning mt-3" data-changes hidden aria-live="polite"></div>
+                <div class="policy-edit-actions">
+                    <button type="submit" class="btn btn-primary" data-save disabled>Lưu thay đổi</button>
+                    <button type="button" class="btn btn-outline-secondary" data-cancel>Hủy</button>
+                </div>
+            </form>
+        </section>
     </div>
 </div>
 
 @section Scripts {
-<script>
-(() => {
-    const form = document.getElementById('depositHoldForm');
-    const input = document.getElementById('depositHoldDays');
-    const error = document.getElementById('depositHoldError');
-    const maxDays = @DepositHoldPolicy.MaxConfigurableDays;
-    const currentDays = @Model;
-
-    if (!form || !input || !error) return;
-
-    const showError = (message) => {
-        error.textContent = message;
-        error.classList.remove('d-none');
-        input.classList.add('is-invalid');
-    };
-
-    const clearError = () => {
-        error.textContent = '';
-        error.classList.add('d-none');
-        input.classList.remove('is-invalid');
-    };
-
-    const validate = () => {
-        const value = input.value.trim();
-
-        if (!value) {
-            showError('Vui lòng nhập số ngày giữ cọc.');
-            return false;
-        }
-
-        if (!/^\d+$/.test(value)) {
-            showError('Chỉ được nhập số nguyên, không nhập chữ, số âm hoặc số thập phân.');
-            return false;
-        }
-
-        const days = Number(value);
-        if (!Number.isInteger(days) || days < 0 || days > maxDays) {
-            showError(`Số ngày phải từ 0 đến ${maxDays}.`);
-            return false;
-        }
-
-        clearError();
-        return true;
-    };
-
-    input.addEventListener('focus', () => input.select());
-    input.addEventListener('click', () => input.select());
-
-    input.addEventListener('beforeinput', (event) => {
-        if (event.inputType.startsWith('delete')) return;
-        if (event.data && /[^0-9]/.test(event.data)) {
-            event.preventDefault();
-            showError(`Chỉ được nhập số nguyên từ 0 đến ${maxDays}.`);
-        }
-    });
-
-    input.addEventListener('paste', (event) => {
-        const text = event.clipboardData?.getData('text') ?? '';
-        if (!/^\d+$/.test(text.trim())) {
-            event.preventDefault();
-            showError(`Nội dung dán không hợp lệ. Chỉ được nhập số nguyên từ 0 đến ${maxDays}.`);
-        }
-    });
-
-    input.addEventListener('input', () => {
-        if (/^\d*$/.test(input.value)) {
-            validate();
-        }
-    });
-
-    form.addEventListener('submit', (event) => {
-        if (!validate()) {
-            event.preventDefault();
-            input.focus();
-            return;
-        }
-
-        const newDays = Number(input.value);
-        if (newDays === currentDays) {
-            event.preventDefault();
-            showError(`Số ngày hiện tại đã là ${currentDays} ngày, không có thay đổi để lưu.`);
-            input.focus();
-            return;
-        }
-
-        const confirmed = window.confirm(
-            `Đổi thời gian giữ cọc từ ${currentDays} ngày thành ${newDays} ngày?\n\nChỉ các đơn thuê tạo mới sau khi lưu mới áp dụng.`
-        );
-
-        if (!confirmed) {
-            event.preventDefault();
-        }
-    });
-})();
-</script>
+    <script src="~/js/business-policy-settings.js" asp-append-version="true"></script>
 }

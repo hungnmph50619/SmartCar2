@@ -65,6 +65,7 @@ internal sealed class BookingReservationPolicy
 
         foreach (var booking in candidates)
         {
+            var bookingPolicy = booking.Policy;
             var transferAwaitingConfirmation =
                 booking.Status == BookingStatus.PendingPayment &&
                 booking.Payments.Any(payment =>
@@ -74,11 +75,11 @@ internal sealed class BookingReservationPolicy
             if (!booking.ReservationExpiresAt.HasValue)
             {
                 booking.ReservationExpiresAt = booking.Status == BookingStatus.PendingConfirmation
-                    ? booking.CreatedAt.AddMinutes(RentalPolicy.BookingConfirmationHoldMinutes)
+                    ? booking.CreatedAt.AddMinutes(bookingPolicy.BookingConfirmationHoldMinutes)
                     : now.AddMinutes(
                         transferAwaitingConfirmation
-                            ? RentalPolicy.BookingTransferReconciliationHoldMinutes
-                            : RentalPolicy.BookingPaymentHoldMinutes);
+                            ? bookingPolicy.BookingTransferReconciliationHoldMinutes
+                            : bookingPolicy.BookingPaymentHoldMinutes);
                 changed = true;
             }
 
@@ -94,10 +95,10 @@ internal sealed class BookingReservationPolicy
             booking.CancelledBy = "Hệ thống";
             booking.CancelledAt = now;
             booking.CancelReason = oldStatus == BookingStatus.PendingConfirmation
-                ? $"Yêu cầu đặt xe hết hạn sau {RentalPolicy.BookingConfirmationHoldMinutes} phút chờ xác nhận."
+                ? $"Yêu cầu đặt xe hết hạn sau {bookingPolicy.BookingConfirmationHoldMinutes} phút chờ xác nhận."
                 : expiredDuringTransferReconciliation
-                    ? $"Đơn hết hạn sau {RentalPolicy.BookingTransferReconciliationHoldMinutes} phút chờ đối soát chuyển khoản."
-                    : $"Đơn hết hạn sau {RentalPolicy.BookingPaymentHoldMinutes} phút chờ thanh toán.";
+                    ? $"Đơn hết hạn sau {bookingPolicy.BookingTransferReconciliationHoldMinutes} phút chờ đối soát chuyển khoản."
+                    : $"Đơn hết hạn sau {bookingPolicy.BookingPaymentHoldMinutes} phút chờ thanh toán.";
             booking.ReservationExpiresAt = null;
 
             // Booking hết hold phải giải phóng lịch xe, nhưng KHÔNG được tự cho rằng
@@ -295,7 +296,7 @@ internal sealed class BookingReservationPolicy
         }
 
         booking.ReservationExpiresAt = DateTime.UtcNow
-            .AddMinutes(RentalPolicy.BookingConfirmationHoldMinutes);
+            .AddMinutes(booking.Policy.BookingConfirmationHoldMinutes);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -312,7 +313,7 @@ internal sealed class BookingReservationPolicy
         }
 
         booking.ReservationExpiresAt = DateTime.UtcNow
-            .AddMinutes(RentalPolicy.BookingPaymentHoldMinutes);
+            .AddMinutes(booking.Policy.BookingPaymentHoldMinutes);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -329,11 +330,11 @@ internal sealed class BookingReservationPolicy
         }
 
         booking.ReservationExpiresAt = DateTime.UtcNow
-            .AddMinutes(RentalPolicy.BookingTransferReconciliationHoldMinutes);
+            .AddMinutes(booking.Policy.BookingTransferReconciliationHoldMinutes);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public Task<bool> HasBufferedConflictAsync(
+    public async Task<bool> HasBufferedConflictAsync(
         int vehicleId,
         DateTime pickupDate,
         DateTime returnDate,
@@ -341,29 +342,61 @@ internal sealed class BookingReservationPolicy
         int? excludedBookingId,
         CancellationToken cancellationToken = default)
     {
-        var turnaroundMinutes = RentalPolicy.VehicleTurnaroundMinutes;
-        var requestedLeadMinutes = pickupMethod == VehiclePickupMethod.Delivery
-            ? RentalPolicy.DeliveryLeadMinutes
-            : 0;
+        RentalPolicySnapshot requestedPolicy;
+        if (excludedBookingId.HasValue)
+        {
+            var bookingPolicyRow = await _dbContext.Bookings
+                .AsNoTracking()
+                .Where(booking => booking.BookingId == excludedBookingId.Value)
+                .Select(booking => new { booking.PolicyJson })
+                .FirstOrDefaultAsync(cancellationToken);
+            requestedPolicy = bookingPolicyRow is null
+                ? await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken)
+                : RentalPolicySnapshot.FromJson(bookingPolicyRow.PolicyJson);
+        }
+        else
+        {
+            requestedPolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        }
 
-        return _dbContext.Bookings
+        var candidates = await _dbContext.Bookings
             .AsNoTracking()
-            .AnyAsync(booking =>
+            .Where(booking =>
                 booking.VehicleId == vehicleId &&
                 (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
-                BlockingStatuses.Contains(booking.Status) &&
-                pickupDate < booking.ReturnDate.AddMinutes(turnaroundMinutes + requestedLeadMinutes) &&
-                returnDate.AddMinutes(
-                    turnaroundMinutes +
-                    (booking.PickupMethod == VehiclePickupMethod.Delivery
-                        ? RentalPolicy.DeliveryLeadMinutes
-                        : 0)) > booking.PickupDate,
-                cancellationToken);
+                BlockingStatuses.Contains(booking.Status))
+            .Select(booking => new
+            {
+                booking.PickupDate,
+                booking.ReturnDate,
+                booking.PickupMethod,
+                booking.PolicyJson
+            })
+            .ToListAsync(cancellationToken);
+
+        var requestedPreparation = TimeSpan.FromMinutes(
+            requestedPolicy.GetOperationalPreparationMinutes(pickupMethod));
+
+        foreach (var existing in candidates)
+        {
+            var existingPolicy = RentalPolicySnapshot.FromJson(existing.PolicyJson);
+            var existingPreparation = TimeSpan.FromMinutes(
+                existingPolicy.GetOperationalPreparationMinutes(existing.PickupMethod));
+
+            if (pickupDate < existing.ReturnDate.Add(requestedPreparation) &&
+                returnDate.Add(existingPreparation) > existing.PickupDate)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public async Task<DateTime?> GetActualTurnaroundBlockedUntilAsync(
         int vehicleId,
         DateTime pickupDate,
+        VehiclePickupMethod pickupMethod,
         int? excludedBookingId = null,
         CancellationToken cancellationToken = default)
     {
@@ -388,7 +421,30 @@ internal sealed class BookingReservationPolicy
             .Select(vehicleReturn => (DateTime?)vehicleReturn.ReturnedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return latestReturnedAt?.AddMinutes(RentalPolicy.VehicleTurnaroundMinutes);
+        if (!latestReturnedAt.HasValue)
+        {
+            return null;
+        }
+
+        RentalPolicySnapshot requestedPolicy;
+        if (excludedBookingId.HasValue)
+        {
+            var bookingPolicyRow = await _dbContext.Bookings
+                .AsNoTracking()
+                .Where(booking => booking.BookingId == excludedBookingId.Value)
+                .Select(booking => new { booking.PolicyJson })
+                .FirstOrDefaultAsync(cancellationToken);
+            requestedPolicy = bookingPolicyRow is null
+                ? await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken)
+                : RentalPolicySnapshot.FromJson(bookingPolicyRow.PolicyJson);
+        }
+        else
+        {
+            requestedPolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
+        }
+
+        return latestReturnedAt.Value.AddMinutes(
+            requestedPolicy.GetOperationalPreparationMinutes(pickupMethod));
     }
 
     public async Task<decimal> GetOutstandingTrafficFineDebtAsync(
@@ -418,3 +474,4 @@ internal sealed class BookingReservationPolicy
             : $"{current.Trim()} {addition}";
 
 }
+ 

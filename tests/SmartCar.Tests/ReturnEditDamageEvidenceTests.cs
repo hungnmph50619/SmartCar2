@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -118,6 +119,8 @@ public sealed class ReturnEditDamageEvidenceTests
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase($"return-edit-damage-{Guid.NewGuid():N}")
+            .ConfigureWarnings(warnings => warnings.Ignore(
+                InMemoryEventId.TransactionIgnoredWarning))
             .Options;
         return new ApplicationDbContext(options);
     }
@@ -164,3 +167,4 @@ public sealed class ReturnEditDamageEvidenceTests
 }
 
 // CI trigger for the red regression test.
+ 

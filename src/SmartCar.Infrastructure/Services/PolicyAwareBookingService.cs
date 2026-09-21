@@ -29,6 +29,7 @@ internal sealed class PolicyAwareBookingService : IBookingService
         CancellationToken cancellationToken = default)
     {
         await _policy.ExpireStaleReservationsAsync(cancellationToken);
+        var activePolicy = await BusinessPolicyStore.ReadAsync(_dbContext, cancellationToken);
 
         if (await _policy.HasActiveUnpaidHoldAsync(customerId, cancellationToken))
         {
@@ -76,18 +77,15 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 null,
                 cancellationToken))
         {
-            var deliveryLead = request.PickupMethod == VehiclePickupMethod.Delivery
-                ? $" và thêm {RentalPolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
-                : string.Empty;
-
             return BookingMutationResult.Failure(
-                $"Xe không đủ khoảng vận hành giữa hai lượt thuê. SmartCar cần tối thiểu " +
-                $"{RentalPolicy.VehicleTurnaroundMinutes} phút để nhận xe, kiểm tra và chuẩn bị lại{deliveryLead}.");
+                $"Xe không đủ khoảng chuẩn bị giữa hai lượt thuê. SmartCar cần tối thiểu " +
+                $"{activePolicy.VehicleTurnaroundMinutes} phút sau lượt trả trước khi xe có thể nhận lượt mới.");
         }
 
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
             request.VehicleId,
             request.PickupDate,
+            request.PickupMethod,
             null,
             cancellationToken);
 
@@ -98,7 +96,7 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 $"{blockedUntil.Value:dd/MM/yyyy HH:mm}.");
         }
 
-        var depositHoldDaysApplied = await GetConfiguredDepositHoldDaysAsync(cancellationToken);
+
 
         var result = await _inner.CreateAsync(customerId, request, cancellationToken);
         if (!result.Succeeded || !result.BookingId.HasValue)
@@ -117,11 +115,6 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 "Đơn đã được tạo nhưng không thể tải lại để áp dụng chính sách giữ cọc.");
         }
 
-        if (createdBooking.DepositHoldDaysApplied != depositHoldDaysApplied)
-        {
-            createdBooking.DepositHoldDaysApplied = depositHoldDaysApplied;
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
 
         var postConflict = await _policy.HasBufferedConflictAsync(
             request.VehicleId,
@@ -219,17 +212,15 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 booking.BookingId,
                 cancellationToken))
         {
-            var deliveryLead = booking.PickupMethod == VehiclePickupMethod.Delivery
-                ? $" và thêm {RentalPolicy.DeliveryLeadMinutes} phút chuẩn bị giao tận nơi"
-                : string.Empty;
-
+            var bookingPolicy = booking.Policy;
             return OperationResult.Failure(
-                $"Không thể duyệt vì lịch xe không còn đủ {RentalPolicy.VehicleTurnaroundMinutes} phút xoay vòng{deliveryLead}.");
+                $"Không thể duyệt vì lịch xe không còn đủ {bookingPolicy.VehicleTurnaroundMinutes} phút chuẩn bị giữa hai lượt thuê.");
         }
 
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
             booking.VehicleId,
             booking.PickupDate,
+            booking.PickupMethod,
             booking.BookingId,
             cancellationToken);
 
@@ -272,31 +263,20 @@ internal sealed class PolicyAwareBookingService : IBookingService
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
             booking.VehicleId,
             booking.PickupDate,
+            booking.PickupMethod,
             booking.BookingId,
             cancellationToken);
 
         if (blockedUntil.HasValue && blockedUntil.Value > DateTime.Now)
         {
             return OperationResult.Failure(
-                $"Xe vừa được trả thực tế. Cần đủ {RentalPolicy.VehicleTurnaroundMinutes} phút để kiểm tra/vệ sinh; " +
+                $"Xe vừa được trả thực tế. Cần đủ {booking.Policy.VehicleTurnaroundMinutes} phút để kiểm tra/vệ sinh; " +
                 $"có thể xác nhận sẵn sàng từ {blockedUntil.Value:dd/MM/yyyy HH:mm}.");
         }
 
         return await _inner.MarkReadyForPickupAsync(bookingId, cancellationToken);
     }
 
-    private async Task<int> GetConfiguredDepositHoldDaysAsync(
-        CancellationToken cancellationToken)
-    {
-        var values = await _dbContext.Database
-            .SqlQueryRaw<int>(
-                "SELECT [DepositHoldDays] AS [Value] FROM [dbo].[BusinessSettings] WHERE [BusinessSettingId] = 1")
-            .ToListAsync(cancellationToken);
-
-        return values.Count == 0
-            ? DepositHoldPolicy.DefaultDays
-            : DepositHoldPolicy.NormalizeDays(values[0]);
-    }
 
     private static string FormatRemaining(TimeSpan remaining)
     {
@@ -314,3 +294,4 @@ internal sealed class PolicyAwareBookingService : IBookingService
         return $"{Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes))} phút";
     }
 }
+

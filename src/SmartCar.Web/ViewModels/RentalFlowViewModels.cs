@@ -110,6 +110,7 @@ public sealed class VehicleSearchViewModel
 
 public sealed class CreateBookingViewModel
 {
+    public string? PolicyVersion { get; set; }
     [Range(1, int.MaxValue, ErrorMessage = "Xe không hợp lệ.")]
     public int VehicleId { get; set; }
 
@@ -199,10 +200,12 @@ public sealed class HandoverViewModel
     public List<string> ExistingImagePaths { get; set; } = new();
     public List<string>? ImagesToDelete { get; set; }
 
+    public int IncludedKilometersPerDay { get; set; } = 300;
+    public int LateReturnGraceMinutes { get; set; }
     [Range(0, int.MaxValue)]
     public int IncludedKilometers { get; set; }
 
-    [Range(1, 1000000, ErrorMessage = "Phí vượt km phải lớn hơn 0.")]
+    [Range(0, 1000000, ErrorMessage = "Phí vượt km phải từ 0 đến 1.000.000 đồng.")]
     public decimal ExcessKmFeePerKm { get; set; }
 
     [Range(1, 10, ErrorMessage = "Hệ số phí trả muộn không hợp lệ.")]
@@ -302,3 +305,4 @@ public sealed class CompleteBookingViewModel
     public bool RequiresMaintenance { get; set; }
     public string? MaintenanceNote { get; set; }
 }
+

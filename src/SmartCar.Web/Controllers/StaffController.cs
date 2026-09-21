@@ -241,7 +241,8 @@ public sealed class StaffController : Controller
                 VehiclePickupMethod.StorePickup,
                 null,
                 null,
-                null),
+                null,
+                model.PolicyVersion),
             cancellationToken);
 
         if (!createResult.Succeeded || !createResult.BookingId.HasValue)
@@ -1117,3 +1118,5 @@ public sealed class StaffController : Controller
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 }
+
+

@@ -68,3 +68,4 @@ public sealed record OverdueSettlementViewModel(
     decimal DebtAmount,
     decimal DebtPaidAmount,
     decimal DebtOpenAmount);
+

@@ -161,3 +161,4 @@ public static class BookingWorkflowRules
                status is BookingStatus.Cancelled or BookingStatus.NoShow;
     }
 }
+

@@ -148,11 +148,10 @@ else
                                             {
                                                 var currentUpfront =
                                                     alternative.CurrentRentalAmount +
-                                                    RentalPolicy.CalculateDeposit(
-                                                        alternative.CurrentRentalAmount);
+                                                    conflict.CurrentDepositAmount;
                                                 var newUpfront =
                                                     alternative.EstimatedRentalAmount +
-                                                    RentalPolicy.CalculateDeposit(
+                                                    conflict.Policy.CalculateDeposit(
                                                         alternative.EstimatedRentalAmount);
                                                 var difference =
                                                     newUpfront - currentUpfront;
@@ -200,3 +199,4 @@ else
         }
     </div>
 }
+
