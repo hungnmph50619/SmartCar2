@@ -5,14 +5,22 @@
     const string accessoryLabel = "Phụ kiện khi trả:";
     const string noteSeparator = " | Ghi chú: ";
     var rawNotes = Model.Notes?.Trim();
-    string? returnedAccessories = null;
+    string? returnedAccessories = Model.Accessories;
     string? returnNote = rawNotes;
-    if (!string.IsNullOrWhiteSpace(rawNotes) && rawNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
+
+    // Bản ghi cũ có thể vẫn chứa phụ kiện trong Notes; bản ghi mới đọc cột riêng.
+    if (!string.IsNullOrWhiteSpace(rawNotes) &&
+        rawNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
     {
         var body = rawNotes[accessoryLabel.Length..].Trim();
         var separatorIndex = body.IndexOf(noteSeparator, StringComparison.Ordinal);
-        if (separatorIndex >= 0) { returnedAccessories = body[..separatorIndex].Trim(); returnNote = body[(separatorIndex + noteSeparator.Length)..].Trim(); }
-        else { returnedAccessories = body; returnNote = null; }
+        var legacyAccessory = separatorIndex >= 0
+            ? body[..separatorIndex].Trim()
+            : body;
+        returnedAccessories ??= legacyAccessory;
+        returnNote = separatorIndex >= 0
+            ? body[(separatorIndex + noteSeparator.Length)..].Trim()
+            : null;
     }
 }
 <!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/><title>Biên bản trả xe #@booking.BookingId</title><style>
