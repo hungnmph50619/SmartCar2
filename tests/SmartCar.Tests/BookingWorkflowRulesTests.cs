@@ -200,6 +200,29 @@ public sealed class BookingWorkflowRulesTests
     }
 
     [Theory]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Pending, 500000, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.AwaitingConfirmation, 500000, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Failed, 500000, true)]
+    [InlineData(PaymentType.OverdueCompensationDebt, PaymentStatus.Pending, 500000, true)]
+    [InlineData(PaymentType.OverdueCompensationDebt, PaymentStatus.AwaitingConfirmation, 500000, true)]
+    [InlineData(PaymentType.OverdueCompensationDebt, PaymentStatus.Paid, 500000, false)]
+    [InlineData(PaymentType.OverdueCompensationDebt, PaymentStatus.Pending, 0, false)]
+    [InlineData(PaymentType.AdditionalCharge, PaymentStatus.Pending, 500000, false)]
+    public void BlocksNewRentalForOutstandingCustomerObligation_UsesOnlyOpenLiabilities(
+        PaymentType type,
+        PaymentStatus status,
+        decimal amount,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.BlocksNewRentalForOutstandingCustomerObligation(
+                type,
+                status,
+                amount));
+    }
+
+    [Theory]
     [InlineData(PaymentStatus.Pending, 500000, true)]
     [InlineData(PaymentStatus.AwaitingConfirmation, 500000, true)]
     [InlineData(PaymentStatus.Failed, 500000, true)]
