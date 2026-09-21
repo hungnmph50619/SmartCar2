@@ -200,6 +200,30 @@ public sealed class BookingWorkflowRulesTests
     }
 
     [Theory]
+    [InlineData(PaymentStatus.Pending, 500000, true)]
+    [InlineData(PaymentStatus.AwaitingConfirmation, 500000, true)]
+    [InlineData(PaymentStatus.Failed, 500000, true)]
+    [InlineData(PaymentStatus.Paid, 500000, false)]
+    [InlineData(PaymentStatus.Pending, 0, false)]
+    public void IsOutstandingTrafficFine_UsesOnlyOpenTrafficFineStates(
+        PaymentStatus status,
+        decimal amount,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.IsOutstandingTrafficFine(
+                PaymentType.TrafficFine,
+                status,
+                amount));
+        Assert.False(
+            BookingWorkflowRules.IsOutstandingTrafficFine(
+                PaymentType.AdditionalCharge,
+                status,
+                amount));
+    }
+
+    [Theory]
     [InlineData(PaymentStatus.AwaitingRefund, true)]
     [InlineData(PaymentStatus.RefundApproved, true)]
     [InlineData(PaymentStatus.Refunded, false)]
