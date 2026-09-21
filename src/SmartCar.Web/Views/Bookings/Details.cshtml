@@ -39,7 +39,7 @@
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
     var hasPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
-        (payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.VehicleSwapAdjustment ||
+        (payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
          payment.Type == PaymentType.AdditionalCharge &&
          AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
@@ -581,7 +581,7 @@
 
                     @foreach (var payment in Model.Payments
                         .Where(payment =>
-                            payment.Type is PaymentType.Extension or PaymentType.VehicleSwapAdjustment ||
+                            payment.Type is PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
                             payment.Type == PaymentType.AdditionalCharge &&
                             (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
                              payment.Status == PaymentStatus.Pending &&
@@ -617,6 +617,13 @@
                                     else if (payment.Type == PaymentType.VehicleSwapAdjustment)
                                     {
                                         <div class="small text-muted">Chênh lệch tiền thuê và cọc sau khi đổi xe.</div>
+                                    }
+                                    else if (payment.Type == PaymentType.OverdueCompensationDebt)
+                                    {
+                                        <div class="small text-danger">
+                                            Phần bồi thường còn thiếu sau khi đã khấu trừ tối đa từ tiền cọc.
+                                            Khoản này độc lập với phụ phí trả xe.
+                                        </div>
                                     }
                                 </div>
                                 <span class="badge @badgeClass">@payment.Status.ToVietnamese()</span>
