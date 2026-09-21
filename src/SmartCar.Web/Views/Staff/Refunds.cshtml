@@ -1,27 +1,158 @@
-﻿@model IReadOnlyList<SmartCar.Web.ViewModels.StaffRefundViewModel>
+@model IReadOnlyList<SmartCar.Web.ViewModels.StaffRefundViewModel>
+@using SmartCar.Web.Extensions
+@using SmartCar.Domain.Constants
+@using SmartCar.Domain.Enums
 @{
     ViewData["Title"] = "Hoàn tiền đã duyệt";
 }
-<div class="mb-3"><h1 class="h3 mb-1">Hoàn tiền đã được chủ/Admin duyệt</h1><p class="text-muted mb-0">Nhân viên chỉ chuyển tiền cho các khoản đã duyệt và phải nhập mã giao dịch thực tế.</p></div>
-<div class="alert alert-warning"><strong>Không tự ý hoàn khoản đang chờ duyệt.</strong> Hãy đối chiếu đúng tên chủ tài khoản, số tài khoản và tổng tiền trước khi chuyển.</div>
+
+<div class="mb-3">
+    <h1 class="h3 mb-1">Hoàn tiền đã được chủ/Admin duyệt</h1>
+    <p class="text-muted mb-0">
+        Nhân viên chỉ chuyển tiền khi toàn bộ khoản hoàn đang mở của cùng đơn đã được duyệt
+        và phải nhập mã giao dịch thực tế.
+    </p>
+</div>
+
+<div class="alert alert-warning">
+    <strong>Không tự ý hoàn khoản đang chờ duyệt.</strong>
+    Hãy đối chiếu đúng tên chủ tài khoản, số tài khoản và tổng tiền trước khi chuyển.
+    Nếu cùng đơn phát sinh thêm khoản chờ Admin duyệt, hệ thống sẽ khóa chuyển tách lẻ.
+</div>
+
 @if (Model.Count == 0)
 {
-    <div class="card card-body shadow-sm text-muted">Hiện không có khoản hoàn tiền nào đã được duyệt chờ nhân viên thực hiện.</div>
+    <div class="card card-body shadow-sm text-muted">
+        Hiện không có khoản hoàn tiền nào đã được duyệt chờ nhân viên thực hiện.
+    </div>
 }
 else
 {
-    <div class="vstack gap-3">@foreach(var item in Model){
-        <div class="card shadow-sm"><div class="card-header bg-white d-flex justify-content-between gap-2 flex-wrap"><div><strong>Đơn #@item.BookingId · @item.CustomerName</strong><div class="small text-muted">@item.VehicleName · @item.LicensePlate</div></div><div class="text-end"><div class="small text-muted">Tổng cần hoàn</div><strong class="fs-5 text-danger">@item.TotalAmount.ToString("N0") đ</strong></div></div><div class="card-body"><div class="row g-3"><div class="col-md-7"><h2 class="h6">Tài khoản nhận tiền</h2>@if(string.IsNullOrWhiteSpace(item.AccountNumber)){
-            <div class="alert alert-danger mb-0">Khách chưa có tài khoản ngân hàng mặc định. Chưa được chuyển tiền.</div>
-        }else
+    <div class="vstack gap-3">
+        @foreach (var item in Model)
         {
+            var bankMissing = string.IsNullOrWhiteSpace(item.AccountNumber);
+            var batchBlocked = item.HasAwaitingApproval;
+            var hasApprovedDepositRefund = item.Lines.Any(line =>
+                line.Status == PaymentStatus.RefundApproved &&
+                line.Method == PaymentMethods.DepositRefund);
+            var trafficFineBlocked =
+                hasApprovedDepositRefund && item.HasOutstandingTrafficFine;
+            var canTransfer =
+                !bankMissing &&
+                !batchBlocked &&
+                !trafficFineBlocked;
 
-            <dl class="row mb-0"><dt class="col-sm-4">Ngân hàng</dt><dd class="col-sm-8">@item.BankName</dd><dt class="col-sm-4">Số tài khoản</dt><dd class="col-sm-8"><strong>@item.AccountNumber</strong></dd><dt class="col-sm-4">Chủ tài khoản</dt><dd class="col-sm-8"><strong>@item.AccountHolderName</strong></dd></dl>
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between gap-2 flex-wrap">
+                    <div>
+                        <strong>Đơn #@item.BookingId · @item.CustomerName</strong>
+                        <div class="small text-muted">@item.VehicleName · @item.LicensePlate</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="small text-muted">Đã duyệt để Staff chuyển</div>
+                        <strong class="fs-5 text-danger">@item.TotalAmount.ToString("N0") đ</strong>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    @if (batchBlocked)
+                    {
+                        <div class="alert alert-warning">
+                            <strong>Chưa được chuyển tiền.</strong>
+                            Đơn này còn <strong>@item.AwaitingApprovalAmount.ToString("N0") đ</strong>
+                            đang chờ Admin duyệt. Staff phải chờ toàn bộ batch được duyệt rồi mới chuyển một lần,
+                            tránh hoàn thiếu hoặc dùng nhiều mã giao dịch cho cùng đợt quyết toán.
+                        </div>
+                    }
+
+                    @if (trafficFineBlocked)
+                    {
+                        <div class="alert alert-danger">
+                            <strong>Tạm khóa hoàn cọc.</strong>
+                            Đơn còn <strong>@item.OutstandingTrafficFineAmount.ToString("N0") đ</strong>
+                            phạt/vi phạm chưa xử lý. Staff phải chờ nghĩa vụ này được xử lý rồi mới hoàn cọc.
+                        </div>
+                    }
+
+                    <div class="row g-3">
+                        <div class="col-md-7">
+                            <h2 class="h6">Tài khoản nhận tiền</h2>
+                            @if (bankMissing)
+                            {
+                                <div class="alert alert-danger mb-0">
+                                    Khách chưa có tài khoản ngân hàng mặc định. Chưa được chuyển tiền.
+                                </div>
+                            }
+                            else
+                            {
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-4">Ngân hàng</dt>
+                                    <dd class="col-sm-8">@item.BankName</dd>
+
+                                    <dt class="col-sm-4">Số tài khoản</dt>
+                                    <dd class="col-sm-8"><strong>@item.AccountNumber</strong></dd>
+
+                                    <dt class="col-sm-4">Chủ tài khoản</dt>
+                                    <dd class="col-sm-8"><strong>@item.AccountHolderName</strong></dd>
+                                </dl>
+                                <div class="form-text mt-2">
+                                    Khi đã có khoản hoàn được Admin duyệt, khách không được đổi tài khoản nhận hoàn
+                                    cho tới khi batch này hoàn tất.
+                                </div>
+                            }
+                        </div>
+
+                        <div class="col-md-5">
+                            <h2 class="h6">Thực hiện hoàn</h2>
+                            <form asp-action="CompleteRefund"
+                                  method="post"
+                                  data-confirm="Xác nhận bạn đã thực sự chuyển đúng số tiền cho đúng tài khoản khách?">
+                                <input type="hidden" name="bookingId" value="@item.BookingId" />
+
+                                <label class="form-label">Mã giao dịch ngân hàng *</label>
+                                <input class="form-control mb-2"
+                                       name="transactionCode"
+                                       maxlength="100"
+                                       required
+                                       autocomplete="off"
+                                       disabled="@(!canTransfer ? "disabled" : null)"
+                                       placeholder="Nhập mã sau khi đã chuyển tiền" />
+
+                                <button class="btn btn-success w-100"
+                                        type="submit"
+                                        disabled="@(!canTransfer ? "disabled" : null)">
+                                    Xác nhận đã chuyển @item.TotalAmount.ToString("N0") đ
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <hr />
+                    <div class="small text-muted mb-2">
+                        Các khoản hoàn đang mở của đơn:
+                    </div>
+                    <div class="vstack gap-1 small">
+                        @foreach (var line in item.Lines)
+                        {
+                            <div class="d-flex justify-content-between gap-3 border-bottom py-1">
+                                <span>
+                                    #@line.PaymentId ·
+                                    @(line.Method == PaymentMethods.DepositRefund
+                                        ? "Hoàn cọc"
+                                        : line.Method == PaymentMethods.CompensationRefund
+                                            ? "Bồi thường"
+                                            : line.Method == PaymentMethods.VehicleSwapRefund
+                                                ? "Hoàn chênh lệch đổi xe"
+                                                : "Hoàn tiền")
+                                    · @line.Status.ToVietnamese()
+                                </span>
+                                <strong>@line.Amount.ToString("N0") đ</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
         }
-    </div><div class="col-md-5"><h2 class="h6">Thực hiện hoàn</h2><form asp-action="CompleteRefund" method="post" data-confirm="Xác nhận bạn đã thực sự chuyển đúng số tiền cho đúng tài khoản khách?"><input type="hidden" name="bookingId" value="@item.BookingId" /><label class="form-label">Mã giao dịch ngân hàng *</label><input class="form-control mb-2" name="transactionCode" maxlength="100" required autocomplete="off" placeholder="Nhập mã sau khi đã chuyển tiền" /><button class="btn btn-success w-100" type="submit" disabled="@(string.IsNullOrWhiteSpace(item.AccountNumber))">Xác nhận đã chuyển @item.TotalAmount.ToString("N0") đ</button></form></div></div>@if(item.Lines.Count>1){
-    <hr /><div class="small text-muted">Gồm @item.Lines.Count khoản hoàn: @string.Join(" · ", item.Lines.Select(x => $"#{x.PaymentId}: {x.Amount:N0} đ"))</div>
-}
-</div></div>
-}
-</div>
+    </div>
 }
