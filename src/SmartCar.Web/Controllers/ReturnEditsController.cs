@@ -95,7 +95,6 @@ public sealed class ReturnEditsController : Controller
         ModelState.Remove(nameof(ReturnEditViewModel.ImagesToDelete));
         ModelState.Remove(nameof(ReturnEditViewModel.DamageImages));
         ModelState.Remove(nameof(ReturnEditViewModel.NewImages));
-        ModelState.Remove(nameof(ReturnEditViewModel.NewDamageImages));
         ModelState.Remove(nameof(ReturnEditViewModel.ReturnedAt));
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -192,25 +191,6 @@ public sealed class ReturnEditsController : Controller
             ModelState.AddModelError(
                 nameof(model.DamageImages),
                 "Đã đánh dấu hư hỏng thì bộ ảnh cuối cùng phải có ít nhất một ảnh hư hỏng.");
-        }
-
-        if (!model.Mileage.HasValue || model.Mileage.Value < booking.Handover.Mileage)
-        {
-            var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
-            if (error is not null)
-            {
-                ModelState.AddModelError(nameof(model.NewDamageImages), $"{image.FileName}: {error}");
-            }
-        }
-
-        var survivingDamageEvidence = returnPhotos.Count(path =>
-            !deleteSet.Contains(path) &&
-            Path.GetFileName(path).StartsWith("damage-", StringComparison.OrdinalIgnoreCase));
-        if (model.HasDamage && survivingDamageEvidence + newDamageImages.Count == 0)
-        {
-            ModelState.AddModelError(
-                nameof(model.NewDamageImages),
-                "Đã ghi nhận hư hỏng mới thì phải giữ hoặc bổ sung ít nhất một ảnh hư hỏng.");
         }
 
         if (!model.Mileage.HasValue || model.Mileage.Value < booking.Handover.Mileage)
