@@ -60,7 +60,7 @@ public sealed class BookingSchedulingConsistencyTests
         var bookingAStart = new DateTime(2026, 9, 18, 12, 0, 0);
         var bookingAEnd = new DateTime(2026, 9, 18, 18, 0, 0);
         var bookingBStart = new DateTime(2026, 9, 18, 10, 31, 0);
-        var bookingBEnd = new DateTime(2026, 9, 18, 11, 0, 0);
+        var bookingBEnd = new DateTime(2026, 9, 18, 11, 1, 0);
 
         var ab = RentalPolicy.HasOperationalConflict(
             bookingAStart,
