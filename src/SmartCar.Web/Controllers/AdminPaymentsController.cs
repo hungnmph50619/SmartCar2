@@ -156,9 +156,10 @@ public sealed class AdminPaymentsController : Controller
             }
 
             var outstandingTrafficFine = booking.Payments
-                .Where(payment =>
-                    payment.Type == PaymentType.TrafficFine &&
-                    payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation or PaymentStatus.Failed)
+                .Where(payment => BookingWorkflowRules.IsOutstandingTrafficFine(
+                    payment.Type,
+                    payment.Status,
+                    payment.Amount))
                 .Sum(payment => payment.Amount);
 
             if (outstandingTrafficFine > 0)
@@ -176,22 +177,33 @@ public sealed class AdminPaymentsController : Controller
             refund.Status = PaymentStatus.RefundApproved;
         }
 
+        var newlyApprovedTotal = awaitingApproval.Sum(item => item.Amount);
+        var approvedBatchTotal = booking.Payments
+            .Where(payment =>
+                payment.Type == PaymentType.Refund &&
+                payment.Status == PaymentStatus.RefundApproved)
+            .Sum(payment => payment.Amount);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        var totalRefund = awaitingApproval.Sum(item => item.Amount);
         var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         await _auditService.WriteAsync(
             adminId,
             "ApproveRefundBatch",
             nameof(Payment),
             booking.BookingId.ToString(),
-            $"Chủ/admin duyệt hoàn tiền cho đơn #{booking.BookingId}: tổng {totalRefund:N0} đồng. Chờ nhân viên thực hiện.",
+            $"Chủ/admin duyệt thêm {newlyApprovedTotal:N0} đồng hoàn tiền cho đơn #{booking.BookingId}; " +
+            $"tổng batch đã duyệt chờ nhân viên chuyển là {approvedBatchTotal:N0} đồng; " +
+            $"tài khoản đã đối chiếu: {refundBankAccount.BankName} - {refundBankAccount.MaskedAccountNumber}, " +
+            $"chủ tài khoản {refundBankAccount.AccountHolderName}.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] =
-            $"Đã duyệt hoàn {totalRefund:N0} đ cho đơn #{booking.BookingId}. Nhân viên sẽ thực hiện chuyển tiền.";
+            newlyApprovedTotal == approvedBatchTotal
+                ? $"Đã duyệt hoàn {approvedBatchTotal:N0} đ cho đơn #{booking.BookingId}. Nhân viên sẽ thực hiện chuyển tiền."
+                : $"Đã duyệt thêm {newlyApprovedTotal:N0} đ. Tổng batch chờ nhân viên chuyển của đơn #{booking.BookingId} là {approvedBatchTotal:N0} đ.";
 
         return RedirectToAction(nameof(Index), new { section = "refund" });
     }
