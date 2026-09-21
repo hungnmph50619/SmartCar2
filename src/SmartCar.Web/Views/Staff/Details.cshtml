@@ -21,7 +21,7 @@
             or BookingStatus.ReadyForPickup;
     var canMarkNoShow = b.Status == BookingStatus.ReadyForPickup
         && !b.HasHandover
-        && DateTime.Now >= b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes);
+        && DateTime.Now >= b.PickupDate.AddMinutes(b.Policy.NoShowGraceMinutes);
     var rentalAwaitingConfirmation = b.Payments.Any(payment =>
         payment.Type == PaymentType.Rental &&
         payment.Status == PaymentStatus.AwaitingConfirmation);
@@ -343,10 +343,10 @@
             <details>
                 <summary class="text-danger fw-semibold">Khách yêu cầu hủy trước khi lập biên bản giao</summary>
                 <div class="alert alert-light border mt-3 small">
-                    <div>@CancellationRefundPolicy.GetVietnamesePolicySummary()</div>
+                    <div>@CancellationRefundPolicy.GetVietnamesePolicySummary(b.Policy)</div>
                     <div class="mt-1">Nếu xe chưa bàn giao, phần cọc còn lại được hoàn 100%. Khoản hoàn phát sinh chỉ chuyển sang <strong>chờ Admin duyệt</strong>; Staff không thể tự duyệt và cũng chưa được coi là đã chuyển tiền.</div>
                 </div>
-                <form asp-controller="StaffBookingOperations" asp-action="Cancel" method="post" class="row g-2" data-confirm="Xác nhận khách yêu cầu hủy? Hệ thống sẽ khóa đơn, giải phóng lịch và tính khoản hoàn theo chính sách hiện tại.">
+                <form asp-controller="StaffBookingOperations" asp-action="Cancel" method="post" class="row g-2" data-confirm="Xác nhận khách yêu cầu hủy? Hệ thống sẽ khóa đơn, giải phóng lịch và tính khoản hoàn theo chính sách đã chốt của đơn.">
                     <input type="hidden" name="BookingId" value="@b.BookingId" />
                     <div class="col-md-9">
                         <input class="form-control" name="Reason" required maxlength="500" placeholder="Lý do khách yêu cầu hủy" />
@@ -373,7 +373,7 @@
                     }
                     else
                     {
-                        <div class="small text-muted">Có thể ghi nhận No-show từ @b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm").</div>
+                        <div class="small text-muted">Có thể ghi nhận No-show từ @b.PickupDate.AddMinutes(b.Policy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm").</div>
                     }
                 }
             </details>
@@ -597,7 +597,11 @@
 
             <div class="d-flex gap-2 flex-wrap mt-3">
                 <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản trả</a>
-                @if (Model.ReturnSignedPaths.Count > 0)
+                @if (Model.ReturnSignedPaths.Count == 0)
+                {
+                    <a class="btn btn-outline-warning" asp-controller="ReturnEdits" asp-action="Edit" asp-route-bookingId="@b.BookingId">Chỉnh sửa biên bản trả</a>
+                }
+                else
                 {
                     <a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Return" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
                 }
