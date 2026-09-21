@@ -113,6 +113,7 @@ public sealed class AdminRentalDocumentsController : Controller
             FuelLevel = record.FuelLevel,
             ExteriorCondition = record.ExteriorCondition,
             InteriorCondition = record.InteriorCondition,
+            Accessories = record.AccessoryStatus,
             HasDamage = record.HasDamage,
             IsLateReturn = record.IsLateReturn,
             LateMinutes = record.LateMinutes,
