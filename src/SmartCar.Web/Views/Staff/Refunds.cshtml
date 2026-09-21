@@ -38,10 +38,20 @@ else
                 line.Method == PaymentMethods.DepositRefund);
             var trafficFineBlocked =
                 hasApprovedDepositRefund && item.HasOutstandingTrafficFine;
+            var hasApprovedUnfundedLegacyCompensationRefund = item.Lines.Any(line =>
+                line.Status == PaymentStatus.RefundApproved &&
+                line.Method == PaymentMethods.CompensationRefund &&
+                !CompensationLedger.IsFundedRefund(
+                    line.LedgerReference,
+                    line.TransactionCode));
+            var compensationFundingBlocked =
+                hasApprovedUnfundedLegacyCompensationRefund &&
+                item.HasUnfundedCompensation;
             var canTransfer =
                 !bankMissing &&
                 !batchBlocked &&
-                !trafficFineBlocked;
+                !trafficFineBlocked &&
+                !compensationFundingBlocked;
 
             <div class="card shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between gap-2 flex-wrap">
@@ -70,8 +80,21 @@ else
                     {
                         <div class="alert alert-danger">
                             <strong>Tạm khóa hoàn cọc.</strong>
-                            Đơn còn <strong>@item.OutstandingTrafficFineAmount.ToString("N0") đ</strong>
-                            phạt/vi phạm chưa xử lý. Staff phải chờ nghĩa vụ này được xử lý rồi mới hoàn cọc.
+                            Sau khi Admin duyệt hoàn đã phát sinh
+                            <strong>@item.OutstandingTrafficFineAmount.ToString("N0") đ</strong>
+                            phạt/vi phạm chưa xử lý. Vì tiền cọc chưa được chuyển thực tế,
+                            Staff phải chờ nghĩa vụ này được xử lý rồi mới hoàn cọc.
+                        </div>
+                    }
+
+                    @if (compensationFundingBlocked)
+                    {
+                        <div class="alert alert-danger">
+                            <strong>Tạm khóa chuyển bồi thường.</strong>
+                            Còn <strong>@item.UnfundedCompensationAmount.ToString("N0") đ</strong>
+                            chưa được thực thu từ khách gây ảnh hưởng cho đơn này.
+                            Không dùng tiền SmartCar ứng trước; Staff chỉ được chuyển khi khoản nợ nguồn đã thanh toán
+                            hoặc được đối soát thành công.
                         </div>
                     }
 
