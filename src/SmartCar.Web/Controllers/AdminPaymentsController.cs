@@ -71,12 +71,71 @@ public sealed class AdminPaymentsController : Controller
                 payment.Type is
                     PaymentType.Extension or
                     PaymentType.AdditionalCharge or
-                    PaymentType.VehicleSwapAdjustment,
+                    PaymentType.VehicleSwapAdjustment or
+                    PaymentType.OverdueCompensationDebt,
             "refund" =>
                 payment.Type == PaymentType.Refund &&
                 payment.Status != PaymentStatus.Failed,
             _ => payment.Type is PaymentType.Rental or PaymentType.Deposit
         }).ToList();
+
+        var compensationRefundBookingIds = section == "refund"
+            ? filtered
+                .Where(payment =>
+                    payment.Type == PaymentType.Refund &&
+                    payment.Method == PaymentMethods.CompensationRefund &&
+                    (payment.Status == PaymentStatus.AwaitingRefund ||
+                     payment.Status == PaymentStatus.RefundApproved) &&
+                    !CompensationLedger.IsFundedRefund(
+                        payment.LedgerReference,
+                        payment.TransactionCode))
+                .Select(payment => payment.BookingId)
+                .Distinct()
+                .ToHashSet()
+            : new HashSet<int>();
+
+        var unfundedCompensationByBooking = new Dictionary<int, decimal>();
+        if (compensationRefundBookingIds.Count > 0)
+        {
+            var openDebtRows = await _dbContext.Payments
+                .AsNoTracking()
+                .Where(payment =>
+                    payment.Amount > 0m &&
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation) &&
+                    payment.TransactionCode != null &&
+                    (
+                        payment.Type == PaymentType.OverdueCompensationDebt ||
+                        (payment.Type == PaymentType.AdditionalCharge &&
+                         payment.TransactionCode.StartsWith(OverdueCompensationLedger.DebtPrefix))
+                    ))
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    payment.TransactionCode
+                })
+                .ToListAsync(cancellationToken);
+
+            unfundedCompensationByBooking = openDebtRows
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    Parsed = OverdueCompensationLedger.TryParseDebtRelation(
+                        payment.TransactionCode,
+                        out _,
+                        out var affectedBookingId),
+                    AffectedBookingId = affectedBookingId
+                })
+                .Where(item =>
+                    item.Parsed &&
+                    compensationRefundBookingIds.Contains(item.AffectedBookingId))
+                .GroupBy(item => item.AffectedBookingId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Sum(item => item.Amount));
+        }
+
+        ViewBag.UnfundedCompensationByBooking = unfundedCompensationByBooking;
 
         return View(filtered);
     }
@@ -133,6 +192,52 @@ public sealed class AdminPaymentsController : Controller
             TempData["ErrorMessage"] =
                 "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền. Chưa được duyệt hoàn.";
             return RedirectToAction(nameof(Index), new { section = "refund" });
+        }
+
+        var hasUnfundedLegacyCompensationRefund = awaitingApproval.Any(item =>
+            item.Method == PaymentMethods.CompensationRefund &&
+            !CompensationLedger.IsFundedRefund(
+                item.LedgerReference,
+                item.TransactionCode));
+
+        if (hasUnfundedLegacyCompensationRefund)
+        {
+            var openOverdueDebts = await _dbContext.Payments
+                .AsNoTracking()
+                .Where(payment =>
+                    payment.Amount > 0m &&
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation) &&
+                    payment.TransactionCode != null &&
+                    (
+                        payment.Type == PaymentType.OverdueCompensationDebt ||
+                        (payment.Type == PaymentType.AdditionalCharge &&
+                         payment.TransactionCode.StartsWith(OverdueCompensationLedger.DebtPrefix))
+                    ))
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    payment.TransactionCode
+                })
+                .ToListAsync(cancellationToken);
+
+            var unfundedCompensation = openOverdueDebts
+                .Where(payment =>
+                    OverdueCompensationLedger.TryParseDebtRelation(
+                        payment.TransactionCode,
+                        out _,
+                        out var affectedBookingId) &&
+                    affectedBookingId == booking.BookingId)
+                .Sum(payment => payment.Amount);
+
+            if (unfundedCompensation > 0m)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Đơn #{booking.BookingId} còn {unfundedCompensation:N0} đồng bồi thường chưa được thực thu từ khách gây ảnh hưởng. " +
+                    "Chưa được duyệt khoản bồi thường cho đến khi khoản nợ này được thanh toán/đối soát xong.";
+                return RedirectToAction(nameof(Index), new { section = "refund" });
+            }
         }
 
         var hasDepositRefund = awaitingApproval.Any(item =>
@@ -297,7 +402,10 @@ public sealed class AdminPaymentsController : Controller
                         payment.Type == PaymentType.Refund &&
                         payment.Method == PaymentMethods.CompensationRefund &&
                         payment.Status == PaymentStatus.AwaitingRefund &&
-                        payment.Amount == reservation.Amount)
+                        payment.Amount == reservation.Amount &&
+                        !CompensationLedger.IsFundedRefund(
+                            payment.LedgerReference,
+                            payment.TransactionCode))
                     .OrderByDescending(payment => payment.PaymentId)
                     .FirstOrDefault();
 
