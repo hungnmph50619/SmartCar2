@@ -18,6 +18,7 @@ internal sealed class ReturnService : IReturnService
     private const int MaximumChargeDescriptionLength = 250;
     private const string AccessoriesComplete = "Đủ";
     private const string AccessoriesMissingPrefix = "Thiếu/mất:";
+    private const string ReturnAccessoriesLabel = "Phụ kiện khi trả:";
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
     private static readonly string[] RequiredReturnEvidencePrefixes =
@@ -240,7 +241,6 @@ internal sealed class ReturnService : IReturnService
             LateFee = lateFee,
             ImagePaths = string.Join(';', evidencePaths),
             ReturnerFaceImagePath = faceSession.ImagePath,
-            AccessoryStatus = accessoryStatus,
             ReturnerFaceCapturedAt = faceSession.CompletedAt,
             ReturnerFaceCaptureMethod = faceSession.CaptureMethod,
             Notes = Normalize(request.Notes),
@@ -904,10 +904,6 @@ internal sealed class ReturnService : IReturnService
                     record.Status == MaintenanceStatus.InProgress)
                 .OrderByDescending(record => record.StartDate)
                 .FirstOrDefaultAsync(cancellationToken);
-
-            var normalizedMaintenanceNote = string.IsNullOrWhiteSpace(maintenanceNote)
-                ? null
-                : maintenanceNote.Trim();
 
             if (openMaintenance is null)
             {
