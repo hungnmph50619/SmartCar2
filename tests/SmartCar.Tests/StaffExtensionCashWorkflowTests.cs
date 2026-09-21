@@ -193,7 +193,8 @@ public sealed class StaffExtensionCashWorkflowTests
             string customerId,
             PaymentType paymentType,
             string actorId,
-            CancellationToken cancellationToken = default) =>
+            CancellationToken cancellationToken = default,
+            int? paymentId = null) =>
             Task.FromResult(OperationResult.Success());
 
         public Task<OperationResult> ConfirmQrPaymentAsync(
