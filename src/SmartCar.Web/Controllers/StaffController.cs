@@ -827,39 +827,9 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Refunds));
         }
 
-        var customerId = await _dbContext.Bookings.AsNoTracking()
-            .Where(item => item.BookingId == bookingId)
-            .Select(item => item.CustomerId)
-            .FirstOrDefaultAsync(cancellationToken);
-
-        if (string.IsNullOrWhiteSpace(customerId))
-        {
-            TempData["ErrorMessage"] = "Không tìm thấy đơn thuê.";
-            return RedirectToAction(nameof(Refunds));
-        }
-
-        var bank = await _bankAccountService.GetDefaultAsync(customerId, cancellationToken);
-        if (bank is null)
-        {
-            TempData["ErrorMessage"] = "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền.";
-            return RedirectToAction(nameof(Refunds));
-        }
-
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
             IsolationLevel.Serializable,
             cancellationToken);
-
-        var duplicateCode = await _dbContext.Payments.AsNoTracking().AnyAsync(
-            item => item.Type == PaymentType.Refund &&
-                    item.Status == PaymentStatus.Refunded &&
-                    item.TransactionCode == transactionCode,
-            cancellationToken);
-        if (duplicateCode)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Mã giao dịch này đã được sử dụng cho một khoản hoàn tiền khác.";
-            return RedirectToAction(nameof(Refunds));
-        }
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
@@ -876,24 +846,74 @@ public sealed class StaffController : Controller
         if (hasWaitingApproval)
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Vẫn còn khoản hoàn chưa được Admin duyệt. Staff chưa được phép chuyển tiền.";
+            TempData["ErrorMessage"] =
+                "Vẫn còn khoản hoàn chưa được Admin duyệt. Staff chưa được phép chuyển tiền.";
             return RedirectToAction(nameof(Refunds));
         }
 
         var approvedRefunds = booking.Payments
-            .Where(item => item.Type == PaymentType.Refund && item.Status == PaymentStatus.RefundApproved)
+            .Where(item =>
+                item.Type == PaymentType.Refund &&
+                item.Status == PaymentStatus.RefundApproved)
             .OrderBy(item => item.PaymentId)
             .ToList();
+
         if (approvedRefunds.Count == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Đơn không có khoản hoàn nào đã được Admin duyệt.";
             return RedirectToAction(nameof(Refunds));
         }
+
         if (approvedRefunds.Any(item => item.Amount <= 0))
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ.";
+            return RedirectToAction(nameof(Refunds));
+        }
+
+        if (approvedRefunds.Any(item => item.Method == PaymentMethods.DepositRefund))
+        {
+            var outstandingTrafficFine = booking.Payments
+                .Where(payment => BookingWorkflowRules.IsOutstandingTrafficFine(
+                    payment.Type,
+                    payment.Status,
+                    payment.Amount))
+                .Sum(payment => payment.Amount);
+
+            if (outstandingTrafficFine > 0m)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Đơn vừa phát sinh {outstandingTrafficFine:N0} đồng phạt/vi phạm chưa xử lý. " +
+                    "Chưa được chuyển khoản hoàn cọc cho đến khi nghĩa vụ này được xử lý.";
+                return RedirectToAction(nameof(Refunds));
+            }
+        }
+
+        var duplicateCode = await _dbContext.Payments.AsNoTracking().AnyAsync(
+            item => item.Type == PaymentType.Refund &&
+                    item.Status == PaymentStatus.Refunded &&
+                    item.TransactionCode == transactionCode,
+            cancellationToken);
+        if (duplicateCode)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Mã giao dịch này đã được sử dụng cho một khoản hoàn tiền khác.";
+            return RedirectToAction(nameof(Refunds));
+        }
+
+        // Đọc tài khoản nhận tiền bên trong cùng transaction để không thể đổi tài khoản
+        // ở giữa lúc Staff đang thực hiện khoản hoàn đã được duyệt.
+        var bank = await _bankAccountService.GetDefaultAsync(
+            booking.CustomerId,
+            cancellationToken);
+        if (bank is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Khách chưa có tài khoản ngân hàng mặc định để nhận hoàn tiền.";
             return RedirectToAction(nameof(Refunds));
         }
 
@@ -918,16 +938,21 @@ public sealed class StaffController : Controller
         {
             UserId = booking.CustomerId,
             Title = "Hoàn tiền thành công",
-            Message = $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {total:N0} đồng vào {bank.BankName} - {bank.MaskedAccountNumber}. Mã giao dịch: {transactionCode}."
+            Message =
+                $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {total:N0} đồng vào " +
+                $"{bank.BankName} - {bank.MaskedAccountNumber}. Mã giao dịch: {transactionCode}."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
         await WriteAuditAsync(
             "StaffExecuteApprovedRefund",
             nameof(Payment),
             bookingId,
-            $"Thực hiện khoản hoàn đã được Admin duyệt cho đơn #{bookingId}: {total:N0} đồng, mã GD {transactionCode}.",
+            $"Thực hiện khoản hoàn đã được Admin duyệt cho đơn #{bookingId}: {total:N0} đồng, " +
+            $"mã GD {transactionCode}; chuyển tới {bank.BankName} - {bank.MaskedAccountNumber}, " +
+            $"chủ tài khoản {bank.AccountHolderName}.",
             cancellationToken);
 
         TempData["SuccessMessage"] = $"Đã hoàn {total:N0} đ cho đơn #{bookingId}.";
