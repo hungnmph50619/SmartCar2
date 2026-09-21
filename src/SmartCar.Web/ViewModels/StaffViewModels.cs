@@ -61,6 +61,10 @@ public sealed class StaffRefundViewModel
     public string VehicleName { get; init; } = string.Empty;
     public string LicensePlate { get; init; } = string.Empty;
     public decimal TotalAmount { get; init; }
+    public decimal AwaitingApprovalAmount { get; init; }
+    public bool HasAwaitingApproval => AwaitingApprovalAmount > 0m;
+    public decimal OutstandingTrafficFineAmount { get; init; }
+    public bool HasOutstandingTrafficFine => OutstandingTrafficFineAmount > 0m;
     public string? BankName { get; init; }
     public string? AccountNumber { get; init; }
     public string? AccountHolderName { get; init; }
