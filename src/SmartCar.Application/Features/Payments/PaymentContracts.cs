@@ -15,7 +15,8 @@ public sealed record AdminPaymentListItemDto(
     string Method,
     PaymentStatus Status,
     DateTime? PaidAt,
-    string? TransactionCode);
+    string? TransactionCode,
+    string? LedgerReference = null);
 
 public interface IPaymentService
 {
