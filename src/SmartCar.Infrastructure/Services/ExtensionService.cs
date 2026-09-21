@@ -211,11 +211,12 @@ internal sealed class ExtensionService : IExtensionService
                 $"Không thể duyệt: xe đã được giữ cho đơn #{conflict.BookingId} từ {conflict.PickupDate:dd/MM/yyyy HH:mm}.");
         }
 
-        if (conflict is not null && !confirmConflictHandled)
+        if (conflict is not null)
         {
             return OperationResult.Failure(
                 $"Yêu cầu bất khả kháng đang xung đột đơn #{conflict.BookingId}. " +
-                "Chỉ duyệt sau khi đã liên hệ và xử lý phương án xe/hoàn tiền cho khách kế tiếp, rồi đánh dấu xác nhận trên màn duyệt.");
+                "Chỉ duyệt sau khi đơn kế tiếp đã thực sự được đổi sang xe khác hoặc hủy; " +
+                "xác nhận từ trình duyệt không thay thế được trạng thái lịch xe trên hệ thống.");
         }
 
         extension.Status = BookingExtensionStatus.Approved;
