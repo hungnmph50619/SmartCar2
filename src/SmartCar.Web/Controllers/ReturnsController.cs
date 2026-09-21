@@ -268,11 +268,21 @@ public sealed class ReturnsController : Controller
             .AsNoTracking()
             .Where(payment =>
                 payment.BookingId == bookingId &&
-                payment.Type == PaymentType.AdditionalCharge &&
                 payment.TransactionCode != null &&
-                (payment.TransactionCode.StartsWith(OverdueCompPrefix) ||
-                 payment.TransactionCode.StartsWith(OverdueDebtPrefix)))
-            .Select(payment => new { payment.Amount, payment.TransactionCode })
+                (
+                    (payment.Type == PaymentType.AdditionalCharge &&
+                     payment.Method == PaymentMethods.DepositDeduction &&
+                     payment.TransactionCode.StartsWith(OverdueCompPrefix)) ||
+                    (payment.Type == PaymentType.OverdueCompensationDebt &&
+                     payment.TransactionCode.StartsWith(OverdueDebtPrefix))
+                ))
+            .Select(payment => new
+            {
+                payment.Type,
+                payment.Amount,
+                payment.Status,
+                payment.TransactionCode
+            })
             .ToListAsync(cancellationToken);
 
         var overdueImpacts = overdueRows
@@ -313,6 +323,16 @@ public sealed class ReturnsController : Controller
                 (payment.Status is PaymentStatus.AwaitingConfirmation or PaymentStatus.Paid ||
                  payment.Status == PaymentStatus.Pending &&
                  AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode))),
+            OverdueCompensationDebtAmount = booking.Payments
+                .Where(payment =>
+                    payment.Type == PaymentType.OverdueCompensationDebt &&
+                    payment.Amount > 0m &&
+                    payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
+                .Sum(payment => payment.Amount),
+            OverdueCompensationDebtAwaitingConfirmation = booking.Payments.Any(payment =>
+                payment.Type == PaymentType.OverdueCompensationDebt &&
+                payment.Amount > 0m &&
+                payment.Status == PaymentStatus.AwaitingConfirmation),
             RefundStatus = refundPayment?.Status,
             RefundAmount = refundPayment?.Amount ?? 0m,
             AdditionalCharges = booking.AdditionalCharges,
