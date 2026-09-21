@@ -36,13 +36,6 @@ public sealed class ReturnInspectionViewModel
 
     public decimal RefundAmount { get; init; }
 
-    public decimal OverdueCompensationDebtAmount { get; init; }
-
-    public bool OverdueCompensationDebtAwaitingConfirmation { get; init; }
-
-    public bool HasOpenOverdueCompensationDebt =>
-        OverdueCompensationDebtAmount > 0m;
-
     public IReadOnlyList<ChargeSummaryDto> AdditionalCharges { get; init; }
         = Array.Empty<ChargeSummaryDto>();
 
