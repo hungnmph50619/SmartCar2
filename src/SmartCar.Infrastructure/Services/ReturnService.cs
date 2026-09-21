@@ -1047,12 +1047,12 @@ internal sealed class ReturnService : IReturnService
                    StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string BuildReturnNotes(string accessoryStatus, string? note)
+    private static string? BuildReturnNotes(string accessoryStatus, string? note)
     {
-        var normalizedNote = Normalize(note);
-        return normalizedNote is null
-            ? $"{ReturnAccessoriesLabel} {accessoryStatus}"
-            : $"{ReturnAccessoriesLabel} {accessoryStatus}{ReturnNoteSeparator}{normalizedNote}";
+        // Dữ liệu mới lưu phụ kiện ở VehicleReturn.AccessoryStatus.
+        // Notes chỉ giữ ghi chú nghiệp vụ thực tế; phần đọc dữ liệu cũ vẫn fallback
+        // từ chuỗi "Phụ kiện khi trả: ..." trong HasMissingAccessories/UI.
+        return Normalize(note);
     }
 
     private static IReadOnlyList<string> SplitImagePaths(string? imagePaths) =>
