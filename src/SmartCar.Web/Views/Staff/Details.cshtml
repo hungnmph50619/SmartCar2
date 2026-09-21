@@ -21,7 +21,7 @@
             or BookingStatus.ReadyForPickup;
     var canMarkNoShow = b.Status == BookingStatus.ReadyForPickup
         && !b.HasHandover
-        && DateTime.Now >= b.PickupDate.AddMinutes(b.Policy.NoShowGraceMinutes);
+        && DateTime.Now >= b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes);
     var rentalAwaitingConfirmation = b.Payments.Any(payment =>
         payment.Type == PaymentType.Rental &&
         payment.Status == PaymentStatus.AwaitingConfirmation);
@@ -44,6 +44,16 @@
         extension.Status == BookingExtensionStatus.NeedsEvidence);
     var extensionAwaitingConfirmation = b.Payments.Any(payment =>
         payment.Type == PaymentType.Extension &&
+        payment.Status == PaymentStatus.AwaitingConfirmation);
+    var overdueCompensationDebtOpen = b.Payments
+        .Where(payment =>
+            payment.Type == PaymentType.OverdueCompensationDebt &&
+            payment.Amount > 0m &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation)
+        .Sum(payment => payment.Amount);
+    var overdueCompensationDebtAwaiting = b.Payments.Any(payment =>
+        payment.Type == PaymentType.OverdueCompensationDebt &&
+        payment.Amount > 0m &&
         payment.Status == PaymentStatus.AwaitingConfirmation);
 
     var paymentBankName = Configuration["PaymentQr:BankName"]?.Trim() ?? "Vietcombank";
@@ -333,10 +343,10 @@
             <details>
                 <summary class="text-danger fw-semibold">Khách yêu cầu hủy trước khi lập biên bản giao</summary>
                 <div class="alert alert-light border mt-3 small">
-                    <div>@CancellationRefundPolicy.GetVietnamesePolicySummary(b.Policy)</div>
+                    <div>@CancellationRefundPolicy.GetVietnamesePolicySummary()</div>
                     <div class="mt-1">Nếu xe chưa bàn giao, phần cọc còn lại được hoàn 100%. Khoản hoàn phát sinh chỉ chuyển sang <strong>chờ Admin duyệt</strong>; Staff không thể tự duyệt và cũng chưa được coi là đã chuyển tiền.</div>
                 </div>
-                <form asp-controller="StaffBookingOperations" asp-action="Cancel" method="post" class="row g-2" data-confirm="Xác nhận khách yêu cầu hủy? Hệ thống sẽ khóa đơn, giải phóng lịch và tính khoản hoàn theo chính sách đã chốt của đơn.">
+                <form asp-controller="StaffBookingOperations" asp-action="Cancel" method="post" class="row g-2" data-confirm="Xác nhận khách yêu cầu hủy? Hệ thống sẽ khóa đơn, giải phóng lịch và tính khoản hoàn theo chính sách hiện tại.">
                     <input type="hidden" name="BookingId" value="@b.BookingId" />
                     <div class="col-md-9">
                         <input class="form-control" name="Reason" required maxlength="500" placeholder="Lý do khách yêu cầu hủy" />
@@ -363,7 +373,7 @@
                     }
                     else
                     {
-                        <div class="small text-muted">Có thể ghi nhận No-show từ @b.PickupDate.AddMinutes(b.Policy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm").</div>
+                        <div class="small text-muted">Có thể ghi nhận No-show từ @b.PickupDate.AddMinutes(RentalPolicy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm").</div>
                     }
                 }
             </details>
@@ -392,6 +402,43 @@
 
     @if (b.Status == BookingStatus.Rented)
     {
+        @if (overdueCompensationDebtOpen > 0m)
+        {
+            <section class="card card-body shadow-sm mb-3 border-danger rounded-4">
+                <h2 class="h5 text-danger">Bồi thường quá hạn còn thiếu</h2>
+                <p class="mb-2">
+                    Sau khi khấu trừ phần cọc khả dụng, khách còn phải thanh toán
+                    <strong>@overdueCompensationDebtOpen.ToString("N0") đ</strong>.
+                    Khoản này độc lập với phí gia hạn và phụ phí trả xe.
+                </p>
+
+                @if (overdueCompensationDebtAwaiting)
+                {
+                    <div class="alert alert-warning py-2">
+                        Khách đã báo chuyển khoản/QR. Không thu tiền mặt đồng thời.
+                    </div>
+                    <a class="btn btn-sm btn-warning"
+                       asp-controller="StaffPayments"
+                       asp-action="Reconciliation">
+                        Mở đối soát thanh toán
+                    </a>
+                }
+                else
+                {
+                    <form asp-controller="StaffPayments"
+                          asp-action="CollectOverdueCompensationDebtCash"
+                          method="post"
+                          data-loading-form
+                          data-confirm="Xác nhận bạn đã thực nhận đủ @overdueCompensationDebtOpen.ToString("N0") đ bồi thường quá hạn bằng tiền mặt?">
+                        <input type="hidden" name="bookingId" value="@b.BookingId" />
+                        <button class="btn btn-success" type="submit">
+                            Thu đủ @overdueCompensationDebtOpen.ToString("N0") đ tiền mặt
+                        </button>
+                    </form>
+                }
+            </section>
+        }
+
         <section class="card card-body shadow-sm mb-3 rounded-4">
             <div class="d-flex gap-3 align-items-start">
                 <span class="staff-step-number">5</span>
@@ -550,11 +597,7 @@
 
             <div class="d-flex gap-2 flex-wrap mt-3">
                 <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản trả</a>
-                @if (Model.ReturnSignedPaths.Count == 0)
-                {
-                    <a class="btn btn-outline-warning" asp-controller="ReturnEdits" asp-action="Edit" asp-route-bookingId="@b.BookingId">Chỉnh sửa biên bản trả</a>
-                }
-                else
+                @if (Model.ReturnSignedPaths.Count > 0)
                 {
                     <a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Return" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
                 }
