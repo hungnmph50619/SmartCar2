@@ -83,7 +83,8 @@ internal sealed class PaymentService : IPaymentService
         string customerId,
         PaymentType paymentType,
         string actorId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? paymentId = null)
     {
         if (string.IsNullOrWhiteSpace(customerId))
         {
@@ -120,9 +121,27 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure(stateError);
         }
 
-        var awaitingPayment = booking.Payments.FirstOrDefault(payment =>
-            payment.Type == paymentType &&
-            payment.Status == PaymentStatus.AwaitingConfirmation);
+        Payment? targetedPayment = null;
+        if (paymentId.HasValue)
+        {
+            targetedPayment = booking.Payments
+                .FirstOrDefault(payment => payment.PaymentId == paymentId.Value);
+
+            if (targetedPayment is null ||
+                targetedPayment.Type != paymentType)
+            {
+                return OperationResult.Failure(
+                    "Khoản thanh toán được chọn không thuộc đơn hoặc không đúng loại giao dịch.");
+            }
+        }
+
+        var awaitingPayment = paymentId.HasValue
+            ? targetedPayment?.Status == PaymentStatus.AwaitingConfirmation
+                ? targetedPayment
+                : null
+            : booking.Payments.FirstOrDefault(payment =>
+                payment.Type == paymentType &&
+                payment.Status == PaymentStatus.AwaitingConfirmation);
 
         if (awaitingPayment is not null)
         {
@@ -139,9 +158,24 @@ internal sealed class PaymentService : IPaymentService
                 "Tiền cọc của đơn đang chờ SmartCar đối soát. Không tạo thêm yêu cầu chuyển khoản để tránh thu trùng.");
         }
 
-        var payment = booking.Payments.FirstOrDefault(item =>
-            item.Type == paymentType &&
-            item.Status == PaymentStatus.Pending);
+        var payment = paymentId.HasValue
+            ? targetedPayment?.Status == PaymentStatus.Pending
+                ? targetedPayment
+                : null
+            : booking.Payments
+                .Where(item =>
+                    item.Type == paymentType &&
+                    item.Status == PaymentStatus.Pending)
+                .OrderBy(item => item.PaymentId)
+                .FirstOrDefault();
+
+        if (payment is null && paymentId.HasValue)
+        {
+            return targetedPayment?.Status == PaymentStatus.Paid
+                ? OperationResult.Failure("Khoản tiền này đã được thanh toán.")
+                : OperationResult.Failure(
+                    "Khoản thanh toán được chọn không còn ở trạng thái chờ thanh toán.");
+        }
 
         if (payment is null && paymentType == PaymentType.Rental)
         {
