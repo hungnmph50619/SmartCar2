@@ -8,5 +8,6 @@ public enum PaymentType
     Extension = 4,
     Deposit = 5,
     VehicleSwapAdjustment = 6,
-    TrafficFine = 7
+    TrafficFine = 7,
+    OverdueCompensationDebt = 8
 }
