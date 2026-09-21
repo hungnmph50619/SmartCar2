@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
@@ -19,6 +20,8 @@ internal sealed class BookingReservationPolicy
         BookingStatus.PendingInspection
     };
 
+    private static readonly SemaphoreSlim ExpiryGate = new(1, 1);
+
     private readonly ApplicationDbContext _dbContext;
 
     public BookingReservationPolicy(ApplicationDbContext dbContext)
@@ -29,6 +32,27 @@ internal sealed class BookingReservationPolicy
     public async Task ExpireStaleReservationsAsync(
         CancellationToken cancellationToken = default)
     {
+        await ExpiryGate.WaitAsync(cancellationToken);
+        try
+        {
+            await ExpireStaleReservationsCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            ExpiryGate.Release();
+        }
+    }
+
+    private async Task ExpireStaleReservationsCoreAsync(
+        CancellationToken cancellationToken)
+    {
+        await using var ownedTransaction =
+            _dbContext.Database.CurrentTransaction is null
+                ? await _dbContext.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable,
+                    cancellationToken)
+                : null;
+
         var now = DateTime.UtcNow;
         var candidates = await _dbContext.Bookings
             .Include(item => item.Payments)
@@ -200,6 +224,11 @@ internal sealed class BookingReservationPolicy
         if (changed)
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        if (ownedTransaction is not null)
+        {
+            await ownedTransaction.CommitAsync(cancellationToken);
         }
     }
 
