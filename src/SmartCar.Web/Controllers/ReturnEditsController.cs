@@ -260,7 +260,8 @@ public sealed class ReturnEditsController : Controller
                 string.IsNullOrWhiteSpace(model.InteriorCondition) ? null : model.InteriorCondition.Trim();
             booking.VehicleReturn.HasDamage = model.HasDamage;
             booking.VehicleReturn.AccessoryStatus = normalizedAccessory;
-            booking.VehicleReturn.Notes = BuildReturnNotes(model.AccessoryStatus, model.MissingAccessories, model.Notes);
+            booking.VehicleReturn.Notes =
+                string.IsNullOrWhiteSpace(model.Notes) ? null : model.Notes.Trim();
             booking.VehicleReturn.ImagePaths = string.Join(';', updatedPaths);
             booking.Vehicle.CurrentMileage = model.Mileage.Value;
 
