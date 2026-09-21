@@ -724,22 +724,25 @@ public sealed class StaffController : Controller
             .ThenBy(item => item.PaymentId)
             .ToListAsync(cancellationToken);
 
-        // Chỉ hiện booking đã có ít nhất một khoản được Admin duyệt, nhưng giữ toàn bộ
-        // khoản AwaitingRefund cùng batch để Staff biết vì sao chưa được chuyển tiền.
+        // Trang này chỉ hiển thị booking đã có ít nhất một khoản được Admin duyệt.
+        // Tuy nhiên phải giữ cả AwaitingRefund trong cùng batch để Staff không nhìn thấy
+        // một nút "được phép chuyển" trong khi backend chắc chắn sẽ chặn chuyển tách lẻ.
         var actionableGroups = openRefunds
             .GroupBy(item => item.BookingId)
             .Where(group => group.Any(item => item.Status == PaymentStatus.RefundApproved))
             .OrderByDescending(group => group.Key)
             .ToList();
 
-        var bookingIds = actionableGroups.Select(group => group.Key).ToArray();
+        var bookingIds = actionableGroups
+            .Select(group => group.Key)
+            .ToArray();
+
         var outstandingTrafficFineByBooking = bookingIds.Length == 0
             ? new Dictionary<int, decimal>()
             : await _dbContext.Payments.AsNoTracking()
                 .Where(payment =>
                     bookingIds.Contains(payment.BookingId) &&
                     payment.Type == PaymentType.TrafficFine &&
-                    payment.Amount > 0m &&
                     (payment.Status == PaymentStatus.Pending ||
                      payment.Status == PaymentStatus.AwaitingConfirmation ||
                      payment.Status == PaymentStatus.Failed))
@@ -749,10 +752,51 @@ public sealed class StaffController : Controller
                     BookingId = group.Key,
                     Amount = group.Sum(payment => payment.Amount)
                 })
+                .Where(item => item.Amount > 0m)
                 .ToDictionaryAsync(
                     item => item.BookingId,
                     item => item.Amount,
                     cancellationToken);
+
+        var openOverdueDebtRows = bookingIds.Length == 0
+            ? new List<(decimal Amount, string? TransactionCode)>()
+            : (await _dbContext.Payments.AsNoTracking()
+                .Where(payment =>
+                    payment.Amount > 0m &&
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation) &&
+                    payment.TransactionCode != null &&
+                    (
+                        payment.Type == PaymentType.OverdueCompensationDebt ||
+                        (payment.Type == PaymentType.AdditionalCharge &&
+                         payment.TransactionCode.StartsWith(OverdueCompensationLedger.DebtPrefix))
+                    ))
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    payment.TransactionCode
+                })
+                .ToListAsync(cancellationToken))
+                .Select(payment => (payment.Amount, payment.TransactionCode))
+                .ToList();
+
+        var unfundedCompensationByAffectedBooking = openOverdueDebtRows
+            .Select(payment => new
+            {
+                payment.Amount,
+                Parsed = OverdueCompensationLedger.TryParseDebtRelation(
+                    payment.TransactionCode,
+                    out _,
+                    out var affectedBookingId),
+                AffectedBookingId = affectedBookingId
+            })
+            .Where(item =>
+                item.Parsed &&
+                bookingIds.Contains(item.AffectedBookingId))
+            .GroupBy(item => item.AffectedBookingId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Sum(item => item.Amount));
 
         var customerIds = actionableGroups
             .Select(group => group.First().Booking.CustomerId)
@@ -789,6 +833,8 @@ public sealed class StaffController : Controller
                 AwaitingApprovalAmount = awaitingApprovalAmount,
                 OutstandingTrafficFineAmount =
                     outstandingTrafficFineByBooking.GetValueOrDefault(first.BookingId),
+                UnfundedCompensationAmount =
+                    unfundedCompensationByAffectedBooking.GetValueOrDefault(first.BookingId),
                 BankName = bank?.BankName,
                 AccountNumber = bank?.AccountNumber,
                 AccountHolderName = bank?.AccountHolderName,
@@ -798,7 +844,9 @@ public sealed class StaffController : Controller
                         item.PaymentId,
                         item.Amount,
                         item.Method,
-                        item.Status))
+                        item.Status,
+                        item.TransactionCode,
+                        item.LedgerReference))
                     .ToList()
             });
         }
@@ -831,6 +879,9 @@ public sealed class StaffController : Controller
             IsolationLevel.Serializable,
             cancellationToken);
 
+        // Khóa booking + refund state trước, sau đó mới đọc tài khoản nhận tiền trong
+        // CÙNG transaction. UserBankAccountService sẽ enlist vào transaction này,
+        // nên không thể đổi tài khoản ở giữa lúc Staff đang hoàn tiền.
         var booking = await _dbContext.Bookings
             .Include(item => item.Payments)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
@@ -846,30 +897,69 @@ public sealed class StaffController : Controller
         if (hasWaitingApproval)
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] =
-                "Vẫn còn khoản hoàn chưa được Admin duyệt. Staff chưa được phép chuyển tiền.";
+            TempData["ErrorMessage"] = "Vẫn còn khoản hoàn chưa được Admin duyệt. Staff chưa được phép chuyển tiền.";
             return RedirectToAction(nameof(Refunds));
         }
 
         var approvedRefunds = booking.Payments
-            .Where(item =>
-                item.Type == PaymentType.Refund &&
-                item.Status == PaymentStatus.RefundApproved)
+            .Where(item => item.Type == PaymentType.Refund && item.Status == PaymentStatus.RefundApproved)
             .OrderBy(item => item.PaymentId)
             .ToList();
-
         if (approvedRefunds.Count == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Đơn không có khoản hoàn nào đã được Admin duyệt.";
             return RedirectToAction(nameof(Refunds));
         }
-
         if (approvedRefunds.Any(item => item.Amount <= 0))
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Có khoản hoàn tiền không hợp lệ.";
             return RedirectToAction(nameof(Refunds));
+        }
+
+        if (approvedRefunds.Any(item =>
+                item.Method == PaymentMethods.CompensationRefund &&
+                !CompensationLedger.IsFundedRefund(
+                    item.LedgerReference,
+                    item.TransactionCode)))
+        {
+            var openOverdueDebts = await _dbContext.Payments
+                .AsNoTracking()
+                .Where(payment =>
+                    payment.Amount > 0m &&
+                    (payment.Status == PaymentStatus.Pending ||
+                     payment.Status == PaymentStatus.AwaitingConfirmation) &&
+                    payment.TransactionCode != null &&
+                    (
+                        payment.Type == PaymentType.OverdueCompensationDebt ||
+                        (payment.Type == PaymentType.AdditionalCharge &&
+                         payment.TransactionCode.StartsWith(OverdueCompensationLedger.DebtPrefix))
+                    ))
+                .Select(payment => new
+                {
+                    payment.Amount,
+                    payment.TransactionCode
+                })
+                .ToListAsync(cancellationToken);
+
+            var unfundedCompensation = openOverdueDebts
+                .Where(payment =>
+                    OverdueCompensationLedger.TryParseDebtRelation(
+                        payment.TransactionCode,
+                        out _,
+                        out var affectedBookingId) &&
+                    affectedBookingId == booking.BookingId)
+                .Sum(payment => payment.Amount);
+
+            if (unfundedCompensation > 0m)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                TempData["ErrorMessage"] =
+                    $"Khoản bồi thường của đơn #{booking.BookingId} còn {unfundedCompensation:N0} đồng chưa được thực thu từ khách gây ảnh hưởng. " +
+                    "Không được chuyển tiền cho đến khi phần này được thanh toán/đối soát xong.";
+                return RedirectToAction(nameof(Refunds));
+            }
         }
 
         if (approvedRefunds.Any(item => item.Method == PaymentMethods.DepositRefund))
@@ -899,13 +989,10 @@ public sealed class StaffController : Controller
         if (duplicateCode)
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] =
-                "Mã giao dịch này đã được sử dụng cho một khoản hoàn tiền khác.";
+            TempData["ErrorMessage"] = "Mã giao dịch này đã được sử dụng cho một khoản hoàn tiền khác.";
             return RedirectToAction(nameof(Refunds));
         }
 
-        // Đọc tài khoản nhận tiền bên trong cùng transaction để không thể đổi tài khoản
-        // ở giữa lúc Staff đang thực hiện khoản hoàn đã được duyệt.
         var bank = await _bankAccountService.GetDefaultAsync(
             booking.CustomerId,
             cancellationToken);
@@ -921,6 +1008,15 @@ public sealed class StaffController : Controller
         var total = approvedRefunds.Sum(item => item.Amount);
         foreach (var refund in approvedRefunds)
         {
+            if (refund.Method == PaymentMethods.CompensationRefund &&
+                string.IsNullOrWhiteSpace(refund.LedgerReference) &&
+                CompensationLedger.IsFundedRefund(
+                    refund.LedgerReference,
+                    refund.TransactionCode))
+            {
+                refund.LedgerReference = refund.TransactionCode;
+            }
+
             refund.Status = PaymentStatus.Refunded;
             refund.PaidAt = refundedAt;
             refund.TransactionCode = transactionCode;
@@ -938,14 +1034,11 @@ public sealed class StaffController : Controller
         {
             UserId = booking.CustomerId,
             Title = "Hoàn tiền thành công",
-            Message =
-                $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {total:N0} đồng vào " +
-                $"{bank.BankName} - {bank.MaskedAccountNumber}. Mã giao dịch: {transactionCode}."
+            Message = $"Đơn #{booking.BookingId}: SmartCar đã hoàn tổng {total:N0} đồng vào {bank.BankName} - {bank.MaskedAccountNumber}. Mã giao dịch: {transactionCode}."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-
         await WriteAuditAsync(
             "StaffExecuteApprovedRefund",
             nameof(Payment),
