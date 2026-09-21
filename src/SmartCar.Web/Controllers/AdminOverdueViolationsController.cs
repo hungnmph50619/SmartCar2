@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.Data;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,9 +15,6 @@ namespace SmartCar.Web.Controllers;
 [Authorize(Roles = RoleNames.Admin)]
 public sealed class AdminOverdueViolationsController : Controller
 {
-    private const string CompensationPrefix = "OVERDUE-COMP-";
-    private const string DebtPrefix = "OVERDUE-DEBT-";
-
     private static readonly BookingStatus[] BlockingStatuses =
     {
         BookingStatus.PendingConfirmation,
@@ -57,6 +55,10 @@ public sealed class AdminOverdueViolationsController : Controller
             return Back();
         }
 
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var renter = await _dbContext.Bookings
             .Include(x => x.Payments)
             .Include(x => x.VehicleReturn)
@@ -86,10 +88,42 @@ public sealed class AdminOverdueViolationsController : Controller
             return Back();
         }
 
-        var duplicatePrefix = $"{CompensationPrefix}{renterBookingId}-{affectedBookingId}-";
-        if (renter.Payments.Any(x => !string.IsNullOrWhiteSpace(x.TransactionCode) && x.TransactionCode.StartsWith(duplicatePrefix)))
+        var authoritativeAffectedBookingId = await _dbContext.Bookings
+            .Where(item =>
+                item.VehicleId == renter.VehicleId &&
+                item.BookingId != renter.BookingId &&
+                item.PickupDate >= renter.ReturnDate &&
+                BlockingStatuses.Contains(item.Status))
+            .OrderBy(item => item.PickupDate)
+            .ThenBy(item => item.BookingId)
+            .Select(item => (int?)item.BookingId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (!authoritativeAffectedBookingId.HasValue ||
+            authoritativeAffectedBookingId.Value != affectedBookingId)
         {
-            TempData["ErrorMessage"] = "Vi phạm giữa hai đơn này đã được xử lý trước đó.";
+            TempData["ErrorMessage"] = authoritativeAffectedBookingId.HasValue
+                ? $"Đơn bị ảnh hưởng hợp lệ kế tiếp là #{authoritativeAffectedBookingId.Value}, không phải #{affectedBookingId}. Hãy tải lại trang trước khi xử lý."
+                : "Không còn đơn hoạt động kế tiếp bị ảnh hưởng để xử lý bồi thường. Hãy tải lại trang.";
+            return Back();
+        }
+
+        var duplicateDeductionPrefix =
+            $"{OverdueCompensationLedger.DepositDeductionPrefix}{renterBookingId}-{affectedBookingId}-";
+        var duplicateDebtPrefix =
+            $"{OverdueCompensationLedger.DebtPrefix}{renterBookingId}-{affectedBookingId}-";
+
+        if (renter.Payments.Any(payment =>
+                !string.IsNullOrWhiteSpace(payment.TransactionCode) &&
+                (payment.TransactionCode.StartsWith(
+                     duplicateDeductionPrefix,
+                     StringComparison.OrdinalIgnoreCase) ||
+                 payment.TransactionCode.StartsWith(
+                     duplicateDebtPrefix,
+                     StringComparison.OrdinalIgnoreCase))))
+        {
+            TempData["ErrorMessage"] =
+                "Vi phạm giữa hai đơn này đã được xử lý trước đó; không tạo thêm khấu trừ, nợ hoặc bồi thường trùng.";
             return Back();
         }
 
@@ -132,7 +166,10 @@ public sealed class AdminOverdueViolationsController : Controller
                 Method = PaymentMethods.DepositDeduction,
                 Status = PaymentStatus.Paid,
                 PaidAt = now,
-                TransactionCode = $"{duplicatePrefix}{now:yyyyMMddHHmmss}"
+                TransactionCode = OverdueCompensationLedger.BuildDepositDeductionCode(
+                    renterBookingId,
+                    affectedBookingId,
+                    now)
             });
         }
 
@@ -140,28 +177,51 @@ public sealed class AdminOverdueViolationsController : Controller
         {
             renter.Payments.Add(new Payment
             {
-                Type = PaymentType.AdditionalCharge,
+                Type = PaymentType.OverdueCompensationDebt,
                 Amount = outstanding,
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending,
-                TransactionCode = $"{DebtPrefix}{renterBookingId}-{affectedBookingId}-{now:yyyyMMddHHmmss}"
+                TransactionCode = OverdueCompensationLedger.BuildDebtCode(
+                    renterBookingId,
+                    affectedBookingId,
+                    now)
             });
         }
 
-        affected.Payments.Add(new Payment
+        // Chỉ tạo khoản bồi thường cho B bằng phần đã có nguồn thực tế từ cọc A.
+        // Phần còn thiếu nằm ở OverdueCompensationDebt và chỉ trở thành Refund của B
+        // sau khi A thanh toán/được Staff đối soát thành công.
+        if (depositDeduction > 0m)
         {
-            Type = PaymentType.Refund,
-            Amount = contractCompensation,
-            Method = PaymentMethods.CompensationRefund,
-            Status = PaymentStatus.AwaitingRefund
-        });
+            var fundedRefundReference =
+                OverdueCompensationLedger.BuildFundedRefundCode(
+                    renterBookingId,
+                    affectedBookingId,
+                    now);
+
+            affected.Payments.Add(new Payment
+            {
+                Type = PaymentType.Refund,
+                Amount = depositDeduction,
+                Method = PaymentMethods.CompensationRefund,
+                Status = PaymentStatus.AwaitingRefund,
+                TransactionCode = fundedRefundReference,
+                LedgerReference = fundedRefundReference
+            });
+        }
+
         affected.RefundAmount = affected.Payments
             .Where(payment =>
                 payment.Type == PaymentType.Refund &&
                 BookingWorkflowRules.CountsTowardRefundTotal(payment.Status))
             .Sum(payment => payment.Amount);
-        affected.RefundReason = AppendText(affected.RefundReason,
-            $"Bồi thường {contractCompensation:N0} đồng bằng giá hợp đồng do đơn #{renterBookingId} giữ xe quá hạn sau khi bị từ chối gia hạn.");
+        affected.RefundReason = AppendText(
+            affected.RefundReason,
+            $"Bồi thường do đơn #{renterBookingId} giữ xe quá hạn: tổng nghĩa vụ {contractCompensation:N0} đồng; " +
+            $"đã có nguồn từ cọc {depositDeduction:N0} đồng" +
+            (outstanding > 0m
+                ? $"; còn {outstanding:N0} đồng chỉ tạo khoản hoàn bổ sung sau khi thực thu từ khách vi phạm."
+                : "; đã đủ nguồn."));
 
         _dbContext.Notifications.Add(new Notification
         {
@@ -175,10 +235,18 @@ public sealed class AdminOverdueViolationsController : Controller
         {
             UserId = affected.CustomerId,
             Title = "Hoàn tiền và bồi thường do không thể giao xe",
-            Message = $"Đơn #{affectedBookingId}: SmartCar ghi nhận bồi thường {contractCompensation:N0} đ do đơn trước giữ xe quá hạn. Khoản này được gộp với các khoản hoàn của đơn."
+            Message =
+                $"Đơn #{affectedBookingId}: tổng mức bồi thường được ghi nhận là {contractCompensation:N0} đ. " +
+                $"Hiện đã có nguồn {depositDeduction:N0} đ từ cọc khách gây ảnh hưởng" +
+                (outstanding > 0m
+                    ? $"; {outstanding:N0} đ còn lại sẽ chuyển sang khoản hoàn khi SmartCar thực thu được từ khách đó."
+                    : " và đã đủ nguồn bồi thường.") +
+                " Các khoản tiền bạn đã thanh toán cho đơn bị hủy vẫn được xử lý hoàn độc lập."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
         await _auditService.WriteAsync(adminId, "ProcessOverdueVehicleConflict", nameof(Booking), renterBookingId.ToString(),
             $"Đơn #{renterBookingId} ảnh hưởng #{affectedBookingId}. Bồi thường {contractCompensation:N0}; khấu trừ cọc {depositDeduction:N0}; còn phải thu {outstanding:N0}.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken: cancellationToken);
