@@ -350,6 +350,38 @@ else
         }
 
         <div class="small text-muted mt-1">Khoản bồi thường này được theo dõi riêng với phụ phí trả muộn, vượt km hoặc hư hỏng và được tính khi quyết toán tiền cọc.</div>
+
+        @if (hasOpenOverdueDebt)
+        {
+            <div class="alert alert-warning mt-3 mb-0">
+                <strong>Còn @Model.OverdueCompensationDebtAmount.ToString("N0") đ phải thu thêm sau khi đã khấu trừ cọc.</strong>
+                @if (Model.OverdueCompensationDebtAwaitingConfirmation)
+                {
+                    <div>Khách đã báo chuyển khoản. Staff phải đối soát giao dịch trước khi quyết toán cọc.</div>
+                    <a class="btn btn-sm btn-warning mt-2"
+                       asp-controller="StaffPayments"
+                       asp-action="Reconciliation">
+                        Đi tới đối soát thanh toán
+                    </a>
+                }
+                else
+                {
+                    <div class="mb-2">
+                        Khách có thể thanh toán QR từ màn đơn thuê, hoặc Staff ghi nhận tiền mặt khi thực tế đã thu đủ tại quầy.
+                    </div>
+                    <form asp-controller="StaffPayments"
+                          asp-action="CollectOverdueCompensationDebtCash"
+                          method="post"
+                          data-loading-form
+                          data-confirm="Xác nhận bạn đã thực nhận đủ @Model.OverdueCompensationDebtAmount.ToString("N0") đ bồi thường quá hạn bằng tiền mặt?">
+                        <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                        <button class="btn btn-sm btn-success" type="submit">
+                            Thu đủ @Model.OverdueCompensationDebtAmount.ToString("N0") đ tiền mặt
+                        </button>
+                    </form>
+                }
+            </div>
+        }
     </div>
 }
 
