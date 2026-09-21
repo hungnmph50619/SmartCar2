@@ -86,6 +86,8 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (booking.Handover is not null)
             return OperationResult.Failure("Đơn đã có biên bản giao xe điện tử nên không thể ghi nhận khách không đến nhận.");
 
+        VoidPendingCollections(booking);
+
         var bookingPolicy = booking.Policy;
         if (DateTime.Now < booking.PickupDate.AddMinutes(bookingPolicy.NoShowGraceMinutes))
             return OperationResult.Failure($"Chỉ được ghi nhận không đến sau giờ nhận ít nhất {bookingPolicy.NoShowGraceMinutes} phút.");
@@ -191,9 +193,13 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (string.IsNullOrWhiteSpace(request.Reason))
             return RefundResult.Failure("Vui lòng nhập lý do hủy đơn.");
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
+        await using var ownedTransaction =
+            _dbContext.Database.CurrentTransaction is null
+                ? await _dbContext.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable,
+                    cancellationToken)
+                : null;
+
         var query = _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
@@ -230,6 +236,8 @@ internal sealed class BookingOperationService : IBookingOperationService
                     ? "Đơn đã lập biên bản giao xe nên không thể hủy. Nếu giao xe chưa hoàn tất, hãy xử lý hồ sơ bàn giao thay vì hủy đơn."
                     : "Trạng thái hiện tại không cho phép hủy đơn.");
         }
+
+        VoidPendingCollections(booking);
 
         var grossRevenuePaid = booking.Payments
             .Where(payment => payment.Status == PaymentStatus.Paid
@@ -358,7 +366,11 @@ internal sealed class BookingOperationService : IBookingOperationService
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        if (ownedTransaction is not null)
+        {
+            await ownedTransaction.CommitAsync(cancellationToken);
+        }
+
         await _auditService.WriteAsync(
             actorId,
             auditAction,
@@ -368,6 +380,20 @@ internal sealed class BookingOperationService : IBookingOperationService
             cancellationToken: cancellationToken);
 
         return RefundResult.Success(newRefundAmount);
+    }
+
+    private static void VoidPendingCollections(Booking booking)
+    {
+        foreach (var payment in booking.Payments.Where(payment =>
+                     BookingWorkflowRules.ShouldVoidPendingCollectionOnTerminalBooking(
+                         payment.Type,
+                         payment.Status)))
+        {
+            payment.Status = PaymentStatus.Failed;
+            payment.Method = PaymentMethods.NotSelected;
+            payment.PaidAt = null;
+            payment.TransactionCode = null;
+        }
     }
 
     private static string AppendText(string? current, string addition) =>
