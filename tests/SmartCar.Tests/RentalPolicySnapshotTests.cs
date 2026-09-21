@@ -88,7 +88,7 @@ public sealed class RentalPolicySnapshotTests
     }
 
     [Fact]
-    public void OperationalPreparationUsesSameTurnaroundForAllPickupMethods()
+    public void OperationalPreparationAddsDeliveryLeadForDeliveryPickup()
     {
         var policy = new RentalPolicySnapshot
         {
@@ -96,7 +96,7 @@ public sealed class RentalPolicySnapshotTests
         };
 
         Assert.Equal(90, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.StorePickup));
-        Assert.Equal(90, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
+        Assert.Equal(120, policy.GetOperationalPreparationMinutes(VehiclePickupMethod.Delivery));
     }
 
     [Fact]
