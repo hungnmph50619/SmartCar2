@@ -244,7 +244,7 @@ internal sealed class ReturnService : IReturnService
             ReturnerFaceImagePath = faceSession.ImagePath,
             ReturnerFaceCapturedAt = faceSession.CompletedAt,
             ReturnerFaceCaptureMethod = faceSession.CaptureMethod,
-            Notes = BuildReturnNotes(accessoryStatus, request.Notes),
+            Notes = Normalize(request.Notes),
             CustomerIdentityVerified = true,
             IdentityVerifiedByStaffId = request.IdentityVerifiedByStaffId,
             IdentityVerifiedAt = identityVerifiedAt
@@ -828,42 +828,28 @@ internal sealed class ReturnService : IReturnService
             payment.Type == PaymentType.VehicleSwapAdjustment &&
             payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
 
+        var hasOpenOverdueCompensationDebt = booking.Payments.Any(payment =>
+            payment.Type == PaymentType.OverdueCompensationDebt &&
+            payment.Amount > 0m &&
+            payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
+
         if (!upfrontSatisfied ||
             !additionalPaid ||
             hasOpenAdditionalPayment ||
-            hasOpenSwapAdjustment)
+            hasOpenSwapAdjustment ||
+            hasOpenOverdueCompensationDebt)
         {
             return OperationResult.Failure(
-                "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền thuê/cọc.");
+                hasOpenOverdueCompensationDebt
+                    ? "Đơn còn phần bồi thường quá hạn chưa thanh toán hoặc đang chờ đối soát. Cần xử lý khoản này trước khi quyết toán cọc."
+                    : "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền thuê/cọc.");
         }
 
-        var depositAvailableBeforeNewDeduction = Math.Max(
-            0m,
-            effectiveDepositPaid - depositAlreadyDeducted);
-        var reservedCompensation = booking.Extensions.Sum(extension =>
-            CompensationLedger.SumReservedAmount(extension.CustomerNote));
-        var compensationNotYetApplied = Math.Max(0m, reservedCompensation - depositAlreadyDeducted);
-        var newDepositDeduction = Math.Min(
-            depositAvailableBeforeNewDeduction,
-            compensationNotYetApplied);
-
-        if (newDepositDeduction > 0)
-        {
-            booking.Payments.Add(new Payment
-            {
-                Type = PaymentType.AdditionalCharge,
-                Amount = newDepositDeduction,
-                Method = PaymentMethods.DepositDeduction,
-                Status = PaymentStatus.Paid,
-                PaidAt = DateTime.UtcNow,
-                TransactionCode = $"EXT-COMP-{booking.BookingId}-{DateTime.UtcNow:yyyyMMddHHmmss}"
-            });
-        }
-
-        var totalDepositDeducted = depositAlreadyDeducted + newDepositDeduction;
+        // Chỉ khấu trừ cọc theo các Payment DepositDeduction đã được nghiệp vụ xác minh.
+        var totalDepositDeducted = depositAlreadyDeducted;
         var depositToRefund = Math.Max(
             0m,
-            depositAvailableBeforeNewDeduction - newDepositDeduction);
+            effectiveDepositPaid - totalDepositDeducted);
 
         if (depositToRefund > 0)
         {
@@ -887,9 +873,8 @@ internal sealed class ReturnService : IReturnService
         {
             booking.RefundReason = AppendText(
                 booking.RefundReason,
-                $"Cọc còn giữ trước quyết toán: {depositAvailableBeforeNewDeduction:N0} đồng. " +
-                $"Khấu trừ bồi thường: {newDepositDeduction:N0} đồng. " +
-                $"Cọc còn hoàn: {depositToRefund:N0} đồng.");
+                $"Cọc đã khấu trừ theo các nghĩa vụ được ghi nhận trước quyết toán: {totalDepositDeducted:N0} đồng. " +
+                $"Cọc còn lại chờ hoàn: {depositToRefund:N0} đồng.");
         }
         else if (depositToRefund > 0)
         {
@@ -912,15 +897,35 @@ internal sealed class ReturnService : IReturnService
 
         if (requiresMaintenance)
         {
-            _dbContext.MaintenanceRecords.Add(new MaintenanceRecord
+            var openMaintenance = await _dbContext.MaintenanceRecords
+                .Where(record =>
+                    record.VehicleId == booking.VehicleId &&
+                    record.Status == MaintenanceStatus.InProgress)
+                .OrderByDescending(record => record.StartDate)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (openMaintenance is null)
             {
-                VehicleId = booking.VehicleId,
-                StartDate = DateTime.UtcNow,
-                Content = normalizedMaintenanceNote!,
-                Cost = 0,
-                Mileage = booking.Vehicle.CurrentMileage,
-                Status = MaintenanceStatus.InProgress
-            });
+                _dbContext.MaintenanceRecords.Add(new MaintenanceRecord
+                {
+                    VehicleId = booking.VehicleId,
+                    StartDate = DateTime.UtcNow,
+                    Content = normalizedMaintenanceNote
+                        ?? "Kiểm tra hoặc sửa chữa sau lượt thuê",
+                    Cost = 0,
+                    Mileage = booking.Vehicle.CurrentMileage,
+                    Status = MaintenanceStatus.InProgress
+                });
+            }
+            else if (!string.IsNullOrWhiteSpace(normalizedMaintenanceNote) &&
+                     !openMaintenance.Content.Contains(
+                         normalizedMaintenanceNote,
+                         StringComparison.OrdinalIgnoreCase))
+            {
+                openMaintenance.Content = AppendText(
+                    openMaintenance.Content,
+                    $"Bổ sung khi quyết toán đơn #{booking.BookingId}: {normalizedMaintenanceNote}");
+            }
         }
 
         var hasPendingRefund = booking.Payments.Any(payment =>
