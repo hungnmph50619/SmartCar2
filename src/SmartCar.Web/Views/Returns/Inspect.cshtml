@@ -37,9 +37,15 @@
     const string accessoryLabel = "Phụ kiện khi trả:";
     const string noteSeparator = " | Ghi chú: ";
     var rawReturnNotes = Model.Return.Notes?.Trim();
-    string? returnAccessoryStatus = null;
+    string? returnAccessoryStatus = string.IsNullOrWhiteSpace(Model.Return.Accessories)
+        ? null
+        : Model.Return.Accessories.Trim();
     string? returnNote = rawReturnNotes;
-    if (!string.IsNullOrWhiteSpace(rawReturnNotes) && rawReturnNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
+
+    // Đơn mới dùng AccessoryStatus riêng. Đơn cũ vẫn có thể lưu phụ kiện trong Notes.
+    if (string.IsNullOrWhiteSpace(returnAccessoryStatus) &&
+        !string.IsNullOrWhiteSpace(rawReturnNotes) &&
+        rawReturnNotes.StartsWith(accessoryLabel, StringComparison.OrdinalIgnoreCase))
     {
         var body = rawReturnNotes[accessoryLabel.Length..].Trim();
         var separatorIndex = body.IndexOf(noteSeparator, StringComparison.Ordinal);
