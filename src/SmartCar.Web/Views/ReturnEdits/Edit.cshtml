@@ -84,12 +84,6 @@
             </div>
         </div>
 
-        <div class="col-12 @(Model.HasDamage ? string.Empty : "d-none")" id="damage-evidence-edit-box">
-            <label asp-for="NewDamageImages" class="form-label fw-semibold text-danger">Bổ sung ảnh hư hỏng</label>
-            <input asp-for="NewDamageImages" id="new-damage-images" type="file" class="form-control" multiple accept="@imageAccept" />
-            <div class="form-text">Nếu đánh dấu có hư hỏng, hồ sơ phải có ít nhất một ảnh hư hỏng hợp lệ.</div>
-            <span asp-validation-for="NewDamageImages" class="text-danger small"></span>
-        </div>
 
         <div class="col-12 @(accessoryIsMissing ? string.Empty : "d-none")" id="missing-accessories-box">
             <label asp-for="MissingAccessories" class="form-label fw-semibold text-danger">Thiếu / mất phụ kiện nào?</label>
@@ -110,7 +104,6 @@
     <span asp-validation-for="ImagesToDelete" class="text-danger small d-block"></span>
     <span asp-validation-for="DamageImages" class="text-danger small d-block"></span>
     <span asp-validation-for="NewImages" class="text-danger small d-block"></span>
-    <span asp-validation-for="NewDamageImages" class="text-danger small d-block"></span>
     <div id="delete-image-summary" class="alert alert-danger d-none py-2 mb-3">
         <strong>Đã chọn xóa ảnh.</strong>
         <span id="delete-image-summary-text">Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và quay lại đối chiếu”.</span>
