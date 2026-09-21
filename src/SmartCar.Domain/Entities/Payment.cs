@@ -18,6 +18,9 @@ public class Payment
     public DateTime? PaidAt { get; set; }
     public string? TransactionCode { get; set; }
 
+    // Liên kết nghiệp vụ nội bộ tách khỏi mã giao dịch ngân hàng.
+    public string? LedgerReference { get; set; }
+
     public Booking Booking { get; set; } = null!;
     public VehicleIncident? VehicleIncident { get; set; }
 }
