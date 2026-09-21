@@ -8,6 +8,9 @@
     ViewData["Title"] = "Quản lý thanh toán";
     var currentSection = ViewBag.Section as string ?? "collection";
     var selectedStatus = ViewBag.Status as PaymentStatus?;
+    var unfundedCompensationByBooking =
+        ViewBag.UnfundedCompensationByBooking as IDictionary<int, decimal>
+        ?? new Dictionary<int, decimal>();
 
     string StatusText(PaymentStatus status) => status switch
     {
@@ -38,6 +41,7 @@
         PaymentType.VehicleSwapAdjustment => "Chênh lệch đổi xe",
         PaymentType.AdditionalCharge when method == PaymentMethods.DepositDeduction => "Khấu trừ tiền cọc",
         PaymentType.AdditionalCharge => "Phụ phí",
+        PaymentType.OverdueCompensationDebt => "Bồi thường quá hạn còn thiếu",
         PaymentType.Refund when method == PaymentMethods.DepositRefund => "Hoàn tiền cọc",
         PaymentType.Refund when method == PaymentMethods.VehicleSwapRefund => "Hoàn chênh lệch đổi xe",
         PaymentType.Refund when method == PaymentMethods.CompensationRefund => "Hỗ trợ / bồi thường",
@@ -135,12 +139,16 @@ else if (currentSection == "refund")
                             .Where(payment => payment.Status == PaymentStatus.RefundApproved)
                             .OrderBy(payment => payment.PaymentId)
                             .ToList();
-                        var shown = awaitingApproval.Count > 0
-                            ? awaitingApproval
-                            : approved.Count > 0
-                                ? approved
-                                : group.OrderBy(payment => payment.PaymentId).ToList();
+                        var openBatch = awaitingApproval
+                            .Concat(approved)
+                            .OrderBy(payment => payment.PaymentId)
+                            .ToList();
+                        var shown = openBatch.Count > 0
+                            ? openBatch
+                            : group.OrderBy(payment => payment.PaymentId).ToList();
                         var shownTotal = shown.Sum(payment => payment.Amount);
+                        var awaitingApprovalTotal = awaitingApproval.Sum(payment => payment.Amount);
+                        var alreadyApprovedTotal = approved.Sum(payment => payment.Amount);
                         var alreadyRefunded = group
                             .Where(payment => payment.Status == PaymentStatus.Refunded && !shown.Contains(payment))
                             .Sum(payment => payment.Amount);
@@ -166,6 +174,17 @@ else if (currentSection == "refund")
                             payment.Method == PaymentMethods.BankTransferRefund);
                         var hasDepositRefund = shown.Any(payment =>
                             payment.Method == PaymentMethods.DepositRefund);
+                        var hasUnfundedLegacyCompensationRefund = shown.Any(payment =>
+                            payment.Method == PaymentMethods.CompensationRefund &&
+                            !CompensationLedger.IsFundedRefund(
+                                payment.LedgerReference,
+                                payment.TransactionCode));
+                        unfundedCompensationByBooking.TryGetValue(
+                            first.BookingId,
+                            out var unfundedCompensationAmount);
+                        var compensationFundingBlocked =
+                            hasUnfundedLegacyCompensationRefund &&
+                            unfundedCompensationAmount > 0m;
                         UserBankAccountDto? bank = null;
                         if (awaitingApproval.Count > 0 || approved.Count > 0)
                         {
@@ -187,10 +206,20 @@ else if (currentSection == "refund")
                                 {
                                     <div class="mb-2"><span class="badge bg-light text-dark border">Hoàn cọc · nếu đã trả xe thì áp dụng thời gian giữ cọc</span></div>
                                 }
+                                @if (compensationFundingBlocked)
+                                {
+                                    <div class="alert alert-danger py-2 small">
+                                        <strong>Chưa đủ nguồn bồi thường.</strong>
+                                        Còn @unfundedCompensationAmount.ToString("N0") đ chưa thực thu từ khách gây ảnh hưởng.
+                                    </div>
+                                }
                                 @foreach (var refund in shown)
                                 {
                                     <div class="d-flex justify-content-between gap-3 small py-1 border-bottom">
-                                        <span>@TypeText(refund.Type, refund.Method)</span>
+                                        <span>
+                                            @TypeText(refund.Type, refund.Method)
+                                            <span class="text-muted">· @StatusText(refund.Status)</span>
+                                        </span>
                                         <strong class="text-nowrap">@refund.Amount.ToString("N0") đ</strong>
                                     </div>
                                 }
@@ -205,7 +234,15 @@ else if (currentSection == "refund")
                             <td>
                                 @if (awaitingApproval.Count > 0)
                                 {
-                                    @if (bank is null)
+                                    @if (compensationFundingBlocked)
+                                    {
+                                        <div class="alert alert-danger py-2 small mb-0">
+                                            <strong>Không được duyệt bồi thường lúc này.</strong><br />
+                                            Còn @unfundedCompensationAmount.ToString("N0") đ chưa được thực thu từ khách gây ảnh hưởng.
+                                            SmartCar không ứng tiền trước cho khoản này.
+                                        </div>
+                                    }
+                                    else if (bank is null)
                                     {
                                         <div class="text-warning small mb-2">
                                             Khách chưa có tài khoản nhận hoàn mặc định. Không thể duyệt hoàn.
@@ -217,15 +254,41 @@ else if (currentSection == "refund")
                                             <strong>@bank.BankName</strong> · @bank.MaskedAccountNumber<br />
                                             @bank.AccountHolderName
                                         </div>
-                                        <form asp-action="ApproveRefundBatch" method="post" data-confirm="Xác nhận duyệt toàn bộ khoản hoàn của đơn này cho nhân viên thực hiện? Sau khi duyệt, khách sẽ tạm thời không thể đổi tài khoản nhận hoàn cho đến khi chuyển tiền xong.">
+                                        @if (alreadyApprovedTotal > 0m)
+                                        {
+                                            <div class="alert alert-info py-2 small">
+                                                Đã duyệt trước: <strong>@alreadyApprovedTotal.ToString("N0") đ</strong><br />
+                                                Duyệt thêm lần này: <strong>@awaitingApprovalTotal.ToString("N0") đ</strong><br />
+                                                Sau khi duyệt, Staff sẽ được phép chuyển toàn bộ batch:
+                                                <strong>@shownTotal.ToString("N0") đ</strong>.
+                                            </div>
+                                        }
+                                        <form asp-action="ApproveRefundBatch"
+                                              method="post"
+                                              data-confirm="Xác nhận duyệt thêm @awaitingApprovalTotal.ToString("N0") đ? Sau thao tác này tổng batch Staff được phép chuyển là @shownTotal.ToString("N0") đ và khách sẽ tạm thời không thể đổi tài khoản nhận hoàn cho đến khi chuyển xong.">
                                             <input type="hidden" name="bookingId" value="@first.BookingId" />
-                                            <button class="btn btn-sm btn-warning" type="submit">Duyệt hoàn @shownTotal.ToString("N0") đ</button>
+                                            <button class="btn btn-sm btn-warning" type="submit">
+                                                @(alreadyApprovedTotal > 0m
+                                                    ? $"Duyệt thêm {awaitingApprovalTotal:N0} đ"
+                                                    : $"Duyệt hoàn {shownTotal:N0} đ")
+                                            </button>
                                         </form>
                                     }
                                 }
                                 else if (rowStatus == PaymentStatus.RefundApproved)
                                 {
-                                    <span class="text-primary small">✓ Chủ/Admin đã duyệt. Chờ nhân viên thực hiện chuyển tiền.</span>
+                                    @if (compensationFundingBlocked)
+                                    {
+                                        <div class="alert alert-danger py-2 small mb-0">
+                                            Khoản bồi thường đã được duyệt trước đó nhưng hiện còn
+                                            <strong>@unfundedCompensationAmount.ToString("N0") đ</strong> chưa có nguồn thực thu.
+                                            Staff đang bị khóa chuyển tiền.
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-primary small">✓ Chủ/Admin đã duyệt. Chờ nhân viên thực hiện chuyển tiền.</span>
+                                    }
                                 }
                                 else if (rowStatus == PaymentStatus.Refunded)
                                 {
