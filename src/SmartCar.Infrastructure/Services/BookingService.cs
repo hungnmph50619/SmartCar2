@@ -117,23 +117,50 @@ internal sealed class BookingService : IBookingService
         if (currentPolicy.Version != policy.Version)
             return BookingMutationResult.Failure("Chính sách vừa thay đổi. Vui lòng tải lại báo giá trước khi đặt xe.");
 
-        var outstandingTrafficFine = await _dbContext.Payments
+        var openCustomerLiabilities = await _dbContext.Payments
             .AsNoTracking()
             .Where(payment =>
                 payment.Booking.CustomerId == customerId &&
-                payment.Type == PaymentType.TrafficFine &&
                 payment.Amount > 0m &&
-                (payment.Status == PaymentStatus.Pending ||
-                 payment.Status == PaymentStatus.AwaitingConfirmation ||
-                 payment.Status == PaymentStatus.Failed))
-            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken)
-            ?? 0m;
+                (
+                    (payment.Type == PaymentType.TrafficFine &&
+                     (payment.Status == PaymentStatus.Pending ||
+                      payment.Status == PaymentStatus.AwaitingConfirmation ||
+                      payment.Status == PaymentStatus.Failed)) ||
+                    (payment.Type == PaymentType.OverdueCompensationDebt &&
+                     (payment.Status == PaymentStatus.Pending ||
+                      payment.Status == PaymentStatus.AwaitingConfirmation))
+                ))
+            .Select(payment => new
+            {
+                payment.Type,
+                payment.Amount
+            })
+            .ToListAsync(cancellationToken);
 
-        if (outstandingTrafficFine > 0m)
+        if (openCustomerLiabilities.Count > 0)
         {
+            var trafficFineDebt = openCustomerLiabilities
+                .Where(item => item.Type == PaymentType.TrafficFine)
+                .Sum(item => item.Amount);
+            var overdueCompensationDebt = openCustomerLiabilities
+                .Where(item => item.Type == PaymentType.OverdueCompensationDebt)
+                .Sum(item => item.Amount);
+
+            var obligations = new List<string>();
+            if (trafficFineDebt > 0m)
+            {
+                obligations.Add($"{trafficFineDebt:N0} đồng phạt/vi phạm");
+            }
+
+            if (overdueCompensationDebt > 0m)
+            {
+                obligations.Add($"{overdueCompensationDebt:N0} đồng bồi thường quá hạn");
+            }
+
             return BookingMutationResult.Failure(
-                $"Bạn còn {outstandingTrafficFine:N0} đồng phạt/vi phạm chưa xử lý. " +
-                "Vui lòng thanh toán và đối soát xong trước khi tạo đơn thuê mới.");
+                $"Bạn còn nghĩa vụ chưa xử lý: {string.Join(", ", obligations)}. " +
+                "Vui lòng thanh toán/đối soát xong trước khi tạo đơn thuê mới.");
         }
 
         var vehicle = await _dbContext.Vehicles
