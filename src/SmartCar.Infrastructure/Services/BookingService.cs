@@ -117,6 +117,25 @@ internal sealed class BookingService : IBookingService
         if (currentPolicy.Version != policy.Version)
             return BookingMutationResult.Failure("Chính sách vừa thay đổi. Vui lòng tải lại báo giá trước khi đặt xe.");
 
+        var outstandingTrafficFine = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment =>
+                payment.Booking.CustomerId == customerId &&
+                payment.Type == PaymentType.TrafficFine &&
+                payment.Amount > 0m &&
+                (payment.Status == PaymentStatus.Pending ||
+                 payment.Status == PaymentStatus.AwaitingConfirmation ||
+                 payment.Status == PaymentStatus.Failed))
+            .SumAsync(payment => (decimal?)payment.Amount, cancellationToken)
+            ?? 0m;
+
+        if (outstandingTrafficFine > 0m)
+        {
+            return BookingMutationResult.Failure(
+                $"Bạn còn {outstandingTrafficFine:N0} đồng phạt/vi phạm chưa xử lý. " +
+                "Vui lòng thanh toán và đối soát xong trước khi tạo đơn thuê mới.");
+        }
+
         var vehicle = await _dbContext.Vehicles
             .FirstOrDefaultAsync(item => item.VehicleId == request.VehicleId, cancellationToken);
 
