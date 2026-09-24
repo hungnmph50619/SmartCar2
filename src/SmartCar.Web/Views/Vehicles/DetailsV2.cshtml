@@ -507,8 +507,14 @@
                 error.classList.add('d-none');
             };
 
-            // Từ tọa độ GPS/map -> tự điền địa chỉ gần nhất.
-            // Nominatim reverse geocoding trả về một object có display_name.
+            // Tọa độ chỉ là vị trí; tên đường cần dịch vụ dữ liệu địa chỉ.
+            let reverseFailureMessage = 'Không tra được địa chỉ từ tọa độ lúc này.';
+            const showReverseFailure = () => {
+                if (address.value.trim()) return;
+                error.textContent = reverseFailureMessage +
+                    ' Tọa độ đã giữ để tính phí; hãy nhập địa chỉ giao xe thủ công.';
+                error.classList.remove('d-none');
+            };
             const reverseGeocode = async (lat, lng) => {
                 try {
                     const url =
@@ -521,16 +527,20 @@
                         }
                     });
 
+                    const result = await response.json().catch(() => null);
                     if (!response.ok) {
-                        throw new Error('reverse-geocode');
+                        throw new Error(result?.message || 'Dịch vụ địa chỉ chưa phản hồi.');
                     }
-
-                    const result = await response.json();
                     if (result && result.display_name) {
                         address.value = result.display_name;
+                        error.classList.add('d-none');
                         return true;
                     }
+                    throw new Error(result?.error || 'Không có tên địa chỉ tại điểm này.');
                 } catch (ex) {
+                    reverseFailureMessage = ex instanceof TypeError
+                        ? 'Không kết nối được máy chủ tìm địa chỉ.'
+                        : ex instanceof Error ? ex.message : 'Không tra được địa chỉ lúc này.';
                     console.warn('Không reverse geocode được địa chỉ:', ex);
                 }
 
@@ -585,9 +595,7 @@
                             point.lng,
                             map.getZoom());
 
-                        await reverseGeocode(
-                            point.lat,
-                            point.lng);
+                        if (!await reverseGeocode(point.lat, point.lng)) showReverseFailure();
                     });
 
                 map.setView(
@@ -621,7 +629,7 @@
 
                 map.on('click', async event => {
                     setPoint(event.latlng.lat, event.latlng.lng);
-                    await reverseGeocode(event.latlng.lat, event.latlng.lng);
+                    if (!await reverseGeocode(event.latlng.lat, event.latlng.lng)) showReverseFailure();
                 });
             };
 
@@ -653,13 +661,15 @@
             store.addEventListener('change', toggle);
             delivery.addEventListener('change', toggle);
 
-            manualButton.addEventListener('click', () => {
+            manualButton.addEventListener('click', async () => {
                 if (!manualLat.value || !manualLng.value) {
                     error.textContent = 'Nhập cả vĩ độ và kinh độ của điểm giao.';
                     error.classList.remove('d-none');
                     return;
                 }
                 setPoint(manualLat.value, manualLng.value);
+                if (latInput.value && lngInput.value &&
+                    !await reverseGeocode(latInput.value, lngInput.value)) showReverseFailure();
             });
 
             locationButton.addEventListener('click', () => {
@@ -703,12 +713,7 @@
                         locationButton.textContent = 'Đang tìm địa chỉ...';
                         const filled = await reverseGeocode(lat, lng);
 
-                        if (!filled) {
-                            error.textContent =
-                                'Đã lấy được tọa độ nhưng chưa tìm được tên địa chỉ. ' +
-                                'Bạn có thể nhập/chỉnh địa chỉ thủ công; tọa độ vẫn được giữ để tính phí.';
-                            error.classList.remove('d-none');
-                        }
+                        if (!filled) showReverseFailure();
 
                         locationButton.disabled = false;
                         locationButton.textContent = oldLocationText;
