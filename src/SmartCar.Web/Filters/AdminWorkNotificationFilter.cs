@@ -86,12 +86,13 @@ public sealed class AdminWorkNotificationFilter : IAsyncActionFilter
             _dbContext.Notifications.RemoveRange(legacyExtensionNotifications);
         }
 
-        // Đơn thuê mới đang chờ Admin xác nhận.
+        // Admin only receives bookings that Staff has reviewed and sent for approval.
         var pendingBookings = await _dbContext.Bookings
             .AsNoTracking()
             .Where(booking =>
                 booking.CustomerId == customerId &&
-                booking.Status == BookingStatus.PendingConfirmation)
+                booking.Status == BookingStatus.PendingConfirmation &&
+                booking.StaffReviewedAt.HasValue)
             .Select(booking => new
             {
                 booking.BookingId,
