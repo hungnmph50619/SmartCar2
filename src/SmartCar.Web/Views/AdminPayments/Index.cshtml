@@ -61,15 +61,12 @@
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
     <div>
         <h1 class="h3 mb-1">Quản lý tài chính</h1>
-        <p class="text-muted mb-0">Admin theo dõi tài chính và duyệt hoàn tiền; đối soát tiền khách chuyển thuộc Staff.</p>
+        <p class="text-muted mb-0">Admin đối soát tiền khách chuyển và duyệt hoàn tiền; Staff ghi nhận tiền mặt thực nhận tại quầy.</p>
     </div>
 </div>
 
 <div class="nav nav-pills gap-2 mb-4">
-    @if (currentSection == "review")
-    {
-        <a class="nav-link active" asp-action="Index" asp-route-status="@PaymentStatus.AwaitingConfirmation">Chờ Staff đối soát</a>
-    }
+    <a class="nav-link @(currentSection == "review" ? "active" : "")" asp-action="Reconciliation">Chờ Admin đối soát</a>
     <a class="nav-link @(currentSection == "collection" ? "active" : "")" asp-action="Index" asp-route-section="collection">Tiền thu</a>
     <a class="nav-link @(currentSection == "adjustment" ? "active" : "")" asp-action="Index" asp-route-section="adjustment">Phát sinh</a>
     <a class="nav-link @(currentSection == "refund" ? "active" : "")" asp-action="Index" asp-route-section="refund">Hoàn tiền</a>
@@ -349,8 +346,8 @@ else
                                 @if (payment.Status == PaymentStatus.AwaitingConfirmation)
                                 {
                                     <div class="small">
-                                        <span class="text-warning fw-semibold">Chờ Staff đối soát giao dịch.</span>
-                                        <div class="text-muted">Admin theo dõi, không xác nhận tiền thay cho nhân viên vận hành.</div>
+                                        <span class="text-warning fw-semibold">Chờ Admin đối soát giao dịch.</span>
+                                        <div class="text-muted"><a class="btn btn-sm btn-warning mt-1" asp-action="Reconciliation">Mở đối soát</a></div>
                                         <a class="btn btn-sm btn-link text-decoration-none px-0" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@payment.BookingId">Xem đơn</a>
                                     </div>
                                 }

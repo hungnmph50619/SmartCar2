@@ -153,7 +153,7 @@
             @if (rentalAwaitingConfirmation)
             {
                 <div class="alert alert-warning mb-0">
-                    <strong>Đang chờ Staff đối soát chuyển khoản.</strong> Không được đồng thời thu/ghi nhận tiền mặt cho đơn này. Sau khi Staff xác nhận tiền thực nhận, đơn sẽ tự chuyển sang Đã thanh toán.
+                    <strong>Đang chờ Admin đối soát chuyển khoản.</strong> Không được đồng thời thu/ghi nhận tiền mặt cho đơn này. Sau khi Admin xác nhận tiền thực nhận, đơn sẽ tự chuyển sang Đã thanh toán.
                 </div>
             }
             else
@@ -192,7 +192,7 @@
                                     <div class="small text-muted">QR dùng chung cấu hình thanh toán với màn Customer; ảnh được hiển thị nguyên tỷ lệ, không crop.</div>
                                 </div>
                             </div>
-                            <form asp-controller="StaffPayments" asp-action="SubmitCounterQr" method="post" class="mt-3" data-confirm="Xác nhận khách đã thực hiện chuyển khoản/QR? Thao tác này CHƯA coi là đã thanh toán; giao dịch sẽ chờ Staff đối soát.">
+                            <form asp-controller="StaffPayments" asp-action="SubmitCounterQr" method="post" class="mt-3" data-confirm="Xác nhận khách đã thực hiện chuyển khoản/QR? Thao tác này CHƯA coi là đã thanh toán; giao dịch sẽ chờ Admin đối soát.">
                                 <input type="hidden" name="bookingId" value="@b.BookingId" />
                                 <div class="form-check mb-2">
                                     <input class="form-check-input" type="checkbox" name="transferConfirmed" value="true" id="counter-transfer-confirmed" required />
@@ -403,12 +403,10 @@
                 <div class="flex-grow-1">
                     <h2 class="h5 mb-1">Chưa thể hủy đơn vì còn giao dịch chờ đối soát</h2>
                     <p class="text-muted mb-3">
-                        Có khoản chuyển khoản/QR đang ở trạng thái chờ xác nhận. Staff phải xác nhận đã nhận tiền hoặc từ chối giao dịch trước,
-                        sau đó hệ thống mới cho hủy và tính hoàn tiền để tránh bỏ sót tiền khách đã chuyển.
+                        Có khoản chuyển khoản/QR đang chờ Admin xác nhận tiền thực nhận hoặc từ chối giao dịch.
+                        Sau khi Admin xử lý, Staff mới có thể hủy và tính hoàn tiền để tránh bỏ sót tiền khách đã chuyển.
                     </p>
-                    <a class="btn btn-warning" asp-controller="StaffPayments" asp-action="Reconciliation">
-                        Mở danh sách giao dịch chờ đối soát
-                    </a>
+                    <span class="badge text-bg-warning">Đang chờ Admin đối soát</span>
                 </div>
             </div>
         </section>
@@ -431,11 +429,7 @@
                     <div class="alert alert-warning py-2">
                         Khách đã báo chuyển khoản/QR. Không thu tiền mặt đồng thời.
                     </div>
-                    <a class="btn btn-sm btn-warning"
-                       asp-controller="StaffPayments"
-                       asp-action="Reconciliation">
-                        Mở đối soát thanh toán
-                    </a>
+                    <span class="badge text-bg-warning">Đang chờ Admin đối soát</span>
                 }
                 else
                 {
@@ -478,13 +472,9 @@
                                 @if (extensionAwaitingConfirmation)
                                 {
                                     <div class="alert alert-info py-2 mb-2">
-                                        Khách đã báo chuyển khoản/QR. Không thu tiền mặt cùng lúc; Staff phải đối soát giao dịch trước.
+                                        Khách đã báo chuyển khoản/QR. Không thu tiền mặt cùng lúc; Admin phải đối soát giao dịch trước.
                                     </div>
-                                    <a class="btn btn-sm btn-outline-primary"
-                                       asp-controller="StaffPayments"
-                                       asp-action="Reconciliation">
-                                        Mở đối soát chuyển khoản
-                                    </a>
+                                    <span class="badge text-bg-warning">Đang chờ Admin đối soát</span>
                                 }
                                 else
                                 {
