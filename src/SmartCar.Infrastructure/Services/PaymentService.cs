@@ -369,8 +369,8 @@ internal sealed class PaymentService : IPaymentService
                 .AddMinutes(booking.Policy.BookingTransferReconciliationHoldMinutes);
         }
 
-        await NotifyStaffAsync(
-            "Có giao dịch chờ đối soát",
+        await NotifyAdminAsync(
+            booking.BookingId,
             paymentType == PaymentType.Rental
                 ? $"Đơn #{booking.BookingId} báo đã chuyển {submittedAmount:N0} đồng gồm tiền thuê/phí giao và cọc."
                 : $"Đơn #{booking.BookingId} báo đã chuyển {submittedAmount:N0} đồng cho {GetPaymentLabel(payment.Type)}.",
@@ -865,6 +865,7 @@ internal sealed class PaymentService : IPaymentService
             }
         });
 
+        await CloseAdminReconciliationWorkAsync(booking, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -956,6 +957,7 @@ internal sealed class PaymentService : IPaymentService
                   "Vui lòng kiểm tra và gửi lại xác nhận."
         });
 
+        await CloseAdminReconciliationWorkAsync(payment.Booking, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -1085,34 +1087,54 @@ internal sealed class PaymentService : IPaymentService
         booking.VehicleReturn.CustomerIdentityVerified &&
         booking.VehicleReturn.SignedDocumentVerified;
 
-    private async Task NotifyStaffAsync(
-        string title,
+    private async Task NotifyAdminAsync(
+        int bookingId,
         string message,
         CancellationToken cancellationToken)
     {
+        var title = $"Thanh toán QR chờ xác nhận|{bookingId}";
+        if (await _dbContext.Notifications.AnyAsync(item =>
+                item.Title == title && !item.IsRead, cancellationToken)) return;
+
         var roleId = await _dbContext.Roles
-            .Where(role => role.Name == RoleNames.Staff)
+            .Where(role => role.Name == RoleNames.Admin)
             .Select(role => role.Id)
             .FirstOrDefaultAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(roleId)) return;
 
-        if (string.IsNullOrWhiteSpace(roleId))
-        {
-            return;
-        }
-
-        var staffIds = await _dbContext.UserRoles
+        var adminIds = await _dbContext.UserRoles
             .Where(item => item.RoleId == roleId)
             .Select(item => item.UserId)
             .ToListAsync(cancellationToken);
-
-        foreach (var staffId in staffIds)
+        foreach (var adminId in adminIds)
         {
             _dbContext.Notifications.Add(new Notification
             {
-                UserId = staffId,
+                UserId = adminId,
                 Title = title,
                 Message = message
             });
+        }
+    }
+
+    private async Task CloseAdminReconciliationWorkAsync(
+        Booking booking,
+        CancellationToken cancellationToken)
+    {
+        if (booking.Payments.Any(item =>
+                item.Type != PaymentType.Deposit &&
+                item.Method == PaymentMethods.BankQr &&
+                item.Status == PaymentStatus.AwaitingConfirmation)) return;
+
+        var title = $"Thanh toán QR chờ xác nhận|{booking.BookingId}";
+        var notifications = await _dbContext.Notifications
+            .Where(item => item.Title == title && !item.IsRead)
+            .ToListAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        foreach (var notification in notifications)
+        {
+            notification.IsRead = true;
+            notification.ReadAt = now;
         }
     }
 

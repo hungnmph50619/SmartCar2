@@ -39,6 +39,121 @@ public sealed class AdminPaymentsController : Controller
     }
 
     [HttpGet]
+    public async Task<IActionResult> Reconciliation(
+        CancellationToken cancellationToken)
+    {
+        var payments = await _paymentService.GetAdminPaymentsAsync(
+            PaymentStatus.AwaitingConfirmation,
+            null,
+            cancellationToken);
+
+        ViewBag.BundledDepositByBooking = await _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment =>
+                payment.Type == PaymentType.Deposit &&
+                payment.Status == PaymentStatus.AwaitingConfirmation)
+            .GroupBy(payment => payment.BookingId)
+            .Select(group => new
+            {
+                BookingId = group.Key,
+                Amount = group.Sum(payment => payment.Amount)
+            })
+            .ToDictionaryAsync(
+                item => item.BookingId,
+                item => item.Amount,
+                cancellationToken);
+
+        return View(payments
+            .Where(payment =>
+                payment.Type != PaymentType.Refund &&
+                payment.Status == PaymentStatus.AwaitingConfirmation)
+            .OrderBy(payment => payment.PaymentId)
+            .ToList());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmQr(
+        int paymentId,
+        CancellationToken cancellationToken)
+    {
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var result = await _paymentService.ConfirmQrPaymentAsync(
+            paymentId,
+            adminId,
+            cancellationToken);
+
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã đối soát và xác nhận nhận được tiền."
+            : string.Join("; ", result.Errors);
+
+        return RedirectToAction(nameof(Reconciliation));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RejectQr(
+        int paymentId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        reason = reason?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            TempData["ErrorMessage"] =
+                "Vui lòng nhập lý do yêu cầu khách kiểm tra/gửi lại giao dịch.";
+            return RedirectToAction(nameof(Reconciliation));
+        }
+
+        if (reason.Length > 500)
+        {
+            TempData["ErrorMessage"] = "Lý do tối đa 500 ký tự.";
+            return RedirectToAction(nameof(Reconciliation));
+        }
+
+        var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var result = await _paymentService.RejectQrPaymentAsync(
+            paymentId,
+            adminId,
+            cancellationToken);
+
+        if (result.Succeeded)
+        {
+            var payment = await _dbContext.Payments
+                .AsNoTracking()
+                .Include(item => item.Booking)
+                .FirstOrDefaultAsync(item => item.PaymentId == paymentId, cancellationToken);
+
+            if (payment is not null)
+            {
+                var notification = await _dbContext.Notifications
+                    .Where(item =>
+                        item.UserId == payment.Booking.CustomerId &&
+                        item.Title == "Chưa xác nhận được chuyển khoản")
+                    .OrderByDescending(item => item.NotificationId)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (notification is not null)
+                {
+                    notification.Message =
+                        $"SmartCar chưa thể xác nhận giao dịch của đơn #{payment.BookingId}. " +
+                        $"Lý do: {reason}. Vui lòng kiểm tra lại và gửi xác nhận lần nữa.";
+                    notification.IsRead = false;
+                    notification.ReadAt = null;
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
+            }
+        }
+
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Đã từ chối giao dịch và gửi lý do cho khách."
+            : string.Join("; ", result.Errors);
+
+        return RedirectToAction(nameof(Reconciliation));
+    }
+
+
+    [HttpGet]
     public async Task<IActionResult> Index(
         PaymentStatus? status,
         PaymentType? type,

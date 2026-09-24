@@ -90,15 +90,22 @@ public sealed class StaffOperationsAuthorizationTests
 
 
     [Fact]
-    public void AdminPaymentsController_DoesNotExposeIncomingPaymentReconciliationActions()
+    public void IncomingPaymentReconciliation_BelongsToAdminOnly()
     {
         var publicActions = typeof(AdminPaymentsController)
             .GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
             .Select(method => method.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.DoesNotContain("ConfirmQr", publicActions);
-        Assert.DoesNotContain("RejectQr", publicActions);
+        Assert.Contains("ConfirmQr", publicActions);
+        Assert.Contains("RejectQr", publicActions);
+
+        var staffActions = typeof(StaffPaymentsController)
+            .GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+            .Select(method => method.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.DoesNotContain("ConfirmQr", staffActions);
+        Assert.DoesNotContain("RejectQr", staffActions);
     }
 
 
