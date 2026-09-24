@@ -192,7 +192,7 @@ public sealed class HandoverViewModel
     public IFormFile? FuelImage { get; set; }
 
     [Display(Name = "Ảnh khác")]
-    public List<IFormFile> Images { get; set; } = new();
+    public List<IFormFile>? Images { get; set; } = new();
 
     [Display(Name = "Ảnh mới bổ sung")]
     public List<IFormFile>? NewImages { get; set; }
@@ -275,10 +275,10 @@ public sealed class ReturnViewModel
     public IFormFile? FuelImage { get; set; }
 
     [Display(Name = "Ảnh hư hỏng")]
-    public List<IFormFile> DamageImages { get; set; } = new();
+    public List<IFormFile>? DamageImages { get; set; } = new();
 
     [Display(Name = "Ảnh khác")]
-    public List<IFormFile> Images { get; set; } = new();
+    public List<IFormFile>? Images { get; set; } = new();
 
     [StringLength(1500, ErrorMessage = "Ghi chú tối đa 1500 ký tự.")]
     public string? Notes { get; set; }

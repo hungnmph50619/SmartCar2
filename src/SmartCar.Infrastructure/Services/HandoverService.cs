@@ -162,10 +162,13 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
 
-        // Đây chỉ là thời điểm Staff chuẩn bị/lưu biên bản nháp. Chuyến chưa bắt đầu ở đây.
-        // Thời điểm giao thực tế được chốt bằng server time khi xác minh bản ký.
         var preparedAt = DateTime.Now;
-        // TEST Quy_2: tạm bỏ validation thời gian để chạy trọn luồng giao - trả.
+        if (!BookingWorkflowRules.CanPrepareHandover(
+                preparedAt, booking.PickupDate, booking.ReturnDate))
+        {
+            return OperationResult.Failure(
+                $"Chỉ lập biên bản giao từ {booking.PickupDate:dd/MM/yyyy HH:mm} đến trước {booking.ReturnDate:dd/MM/yyyy HH:mm}.");
+        }
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
         {

@@ -117,6 +117,11 @@ public sealed class ReturnsController : Controller
         ModelState.Remove(nameof(ReturnViewModel.VerifiedCustomerName));
         ModelState.Remove(nameof(ReturnViewModel.VerifiedCitizenId));
         ModelState.Remove(nameof(ReturnViewModel.ReturnedAt));
+        // Optional image groups are validated explicitly below; damage needs proof only when present.
+        ModelState.Remove(nameof(ReturnViewModel.Images));
+        ModelState.Remove(nameof(ReturnViewModel.DamageImages));
+        model.Images ??= new();
+        model.DamageImages ??= new();
         model.ReturnedAt = DateTime.Now;
 
         var identityFailures = new List<string>();

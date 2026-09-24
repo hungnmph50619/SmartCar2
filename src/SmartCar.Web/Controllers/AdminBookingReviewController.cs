@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SmartCar.Infrastructure.Persistence;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Documents;
 using SmartCar.Domain.Constants;
@@ -13,15 +15,18 @@ public sealed class AdminBookingReviewController : Controller
     private readonly IBookingService _bookingService;
     private readonly IDocumentService _documentService;
     private readonly IConfiguration _configuration;
+    private readonly ApplicationDbContext _dbContext;
 
     public AdminBookingReviewController(
         IBookingService bookingService,
         IDocumentService documentService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ApplicationDbContext dbContext)
     {
         _bookingService = bookingService;
         _documentService = documentService;
         _configuration = configuration;
+        _dbContext = dbContext;
     }
 
     [HttpGet]
@@ -37,6 +42,11 @@ public sealed class AdminBookingReviewController : Controller
         {
             return NotFound();
         }
+
+        if (booking.Status == BookingStatus.PendingConfirmation &&
+            !await _dbContext.Bookings.AsNoTracking().AnyAsync(
+                item => item.BookingId == id && item.StaffReviewedAt.HasValue,
+                cancellationToken)) return NotFound();
 
         if (booking.Status != BookingStatus.PendingConfirmation)
         {

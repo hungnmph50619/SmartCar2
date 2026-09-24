@@ -13,6 +13,34 @@ public sealed class GeocodingController : ControllerBase
         _httpClientFactory = httpClientFactory;
     }
 
+    [HttpGet("search")]
+    public async Task<IActionResult> Search([FromQuery] string? q, CancellationToken cancellationToken)
+    {
+        var query = q?.Trim();
+        if (string.IsNullOrWhiteSpace(query) || query.Length < 3 || query.Length > 200)
+            return BadRequest(new { message = "Nhập địa chỉ từ 3 đến 200 ký tự." });
+
+        var client = _httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("SmartCar/1.0 (student project)");
+        client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("vi-VN,vi;q=0.9,en;q=0.7");
+        var url = $"https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=vn&q={Uri.EscapeDataString(query)}";
+        try
+        {
+            using var response = await client.GetAsync(url, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                return StatusCode(502, new { message = "Không thể tìm địa chỉ lúc này." });
+            return Content(await response.Content.ReadAsStringAsync(cancellationToken), "application/json");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return StatusCode(504, new { message = "Tìm địa chỉ quá thời gian." });
+        }
+        catch (HttpRequestException)
+        {
+            return StatusCode(502, new { message = "Không thể kết nối dịch vụ bản đồ." });
+        }
+    }
+
     [HttpGet("reverse")]
     public async Task<IActionResult> Reverse(
         [FromQuery] double lat,
