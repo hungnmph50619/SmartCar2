@@ -93,6 +93,38 @@ public sealed class StaffBookingOperationsController : Controller
 
         booking.StaffReviewedAt = DateTime.UtcNow;
         booking.StaffReviewedByStaffId = staffId;
+
+        var adminRoleId = await _dbContext.Roles
+            .Where(role => role.Name == RoleNames.Admin)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(adminRoleId))
+        {
+            var adminIds = await _dbContext.UserRoles
+                .Where(item => item.RoleId == adminRoleId)
+                .Select(item => item.UserId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            var title = $"Đơn thuê chờ xử lý|{bookingId}";
+            var existing = await _dbContext.Notifications
+                .Where(item => adminIds.Contains(item.UserId) && item.Title == title)
+                .ToListAsync(cancellationToken);
+            foreach (var adminId in adminIds)
+            {
+                var notification = existing.FirstOrDefault(item => item.UserId == adminId);
+                if (notification is null)
+                {
+                    notification = new Notification { UserId = adminId, Title = title };
+                    _dbContext.Notifications.Add(notification);
+                }
+
+                notification.Message =
+                    $"Nhân viên đã kiểm tra đơn #{bookingId} và gửi quản trị viên duyệt.";
+                notification.IsRead = false;
+                notification.ReadAt = null;
+            }
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
