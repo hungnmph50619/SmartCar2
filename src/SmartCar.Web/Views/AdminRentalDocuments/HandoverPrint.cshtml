@@ -58,20 +58,8 @@
 
     @if (awaitingSignature)
     {
-        <div class="hint"><strong>Bước tiếp:</strong> In, ký từng trang rồi tải ảnh bản ký lên.</div>
-        <form class="upload" action="/AdminRentalDocuments/UploadHandoverSigned" method="post" enctype="multipart/form-data">
-            @Html.AntiForgeryToken()
-            <input type="hidden" name="bookingId" value="@booking.BookingId" />
-            <div class="signed-upload-panel">
-                <div class="upload-row">
-                    <input id="signed-documents" type="file" name="signedDocuments" accept="@signedAccept" multiple required />
-                    <button type="submit">Tải các trang đã ký & bắt đầu chuyến</button>
-                    <span id="signed-document-count" class="signed-count">Chưa chọn trang ký</span>
-                </div>
-                <div class="hint">JPG/PNG/WEBP · tối đa 12 ảnh · 8 MB/ảnh.</div>
-                <div id="signed-document-preview" class="signed-preview"></div>
-            </div>
-        </form>
+        <div class="hint"><strong>Bước tiếp:</strong> In và cho khách ký, rồi quay lại đơn để tải bản ký một lần và đối chiếu trước khi bắt đầu chuyến.</div>
+        <a class="back primary" href="/Staff/Details/@booking.BookingId">Về đơn để tải bản ký</a>
     }
     else if (signedDocumentPaths.Count > 0)
     {
@@ -96,108 +84,6 @@
 <div class="evidence"><h2>ẢNH ĐỐI CHIẾU TÌNH TRẠNG XE KHI GIAO</h2><div class="evidence-note">Các ảnh dưới đây là một phần của biên bản và được dùng để đối chiếu tình trạng xe khi trả.</div>@if(Model.ImagePaths.Count>0){<div class="photo-grid">@for(var i=0;i<Model.ImagePaths.Count;i++){<div class="photo"><img src="@Model.ImagePaths[i]" alt="Ảnh đối chiếu khi giao @(i+1)"/><div class="photo-label">Ảnh @(i+1)</div></div>}</div>}else{<div class="no-evidence">Chưa có ảnh đối chiếu được lưu cho biên bản giao xe này.</div>}</div>
 <div class="confirm"><strong>XÁC NHẬN CỦA BÊN THUÊ:</strong><br/>Bên B xác nhận đã kiểm tra xe, số km, nhiên liệu, phụ kiện và các ảnh đối chiếu đính kèm trong biên bản; đã đọc, hiểu và đồng ý các chính sách phí/phạt, điều khoản gia hạn, nghĩa vụ trả xe đúng hạn và cơ chế khấu trừ tiền cọc nêu trên trước khi nhận xe.</div>
 <div class="signatures"><div><strong>ĐẠI DIỆN BÊN A</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div><div><strong>BÊN B – KHÁCH HÀNG</strong><div class="signature-space"></div><div>(Ký, ghi rõ họ tên)</div></div></div>
-<script>
-(() => {
-    const input = document.getElementById('signed-documents');
-    const preview = document.getElementById('signed-document-preview');
-    const count = document.getElementById('signed-document-count');
-    if (!input || !preview || !count) return;
 
-    const maximumPages = 12;
-    const maximumBytes = 8 * 1024 * 1024;
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    let selectedFiles = Array.from(input.files || []);
-    let previewUrls = [];
-
-    function clearPreviewUrls() {
-        previewUrls.forEach(url => URL.revokeObjectURL(url));
-        previewUrls = [];
-    }
-
-    function syncInputFiles() {
-        const transfer = new DataTransfer();
-        selectedFiles.forEach(file => transfer.items.add(file));
-        input.files = transfer.files;
-    }
-
-    function validateFiles() {
-        let message = '';
-        if (selectedFiles.length === 0) {
-            message = 'Vui lòng chọn ít nhất một ảnh chụp/scan biên bản đã ký.';
-        } else if (selectedFiles.length > maximumPages) {
-            message = `Chỉ được chọn tối đa ${maximumPages} trang bản ký.`;
-        } else {
-            const oversized = selectedFiles.find(file => file.size > maximumBytes);
-            if (oversized) message = `Ảnh "${oversized.name}" vượt quá 8 MB.`;
-        }
-        if (!message) {
-            const invalid = selectedFiles.find(file => {
-                const lower = file.name.toLowerCase();
-                const extensionValid = allowedExtensions.some(ext => lower.endsWith(ext));
-                const typeValid = !file.type || allowedTypes.includes(file.type.toLowerCase());
-                return !extensionValid || !typeValid;
-            });
-            if (invalid) message = `Ảnh "${invalid.name}" không đúng định dạng. Chỉ chấp nhận JPG, PNG hoặc WEBP.`;
-        }
-        input.setCustomValidity(message);
-        return message === '';
-    }
-
-    function removeFile(index) {
-        selectedFiles.splice(index, 1);
-        syncInputFiles();
-        renderPreview();
-        validateFiles();
-    }
-
-    function renderPreview() {
-        clearPreviewUrls();
-        preview.innerHTML = '';
-        count.textContent = selectedFiles.length > 0 ? `Đã chọn ${selectedFiles.length} trang ký` : 'Chưa chọn trang ký';
-        count.className = `signed-count ${selectedFiles.length > 0 ? 'ok' : ''}`;
-        selectedFiles.forEach((file, index) => {
-            const url = URL.createObjectURL(file);
-            previewUrls.push(url);
-
-            const card = document.createElement('div');
-            card.className = 'signed-preview-card';
-
-            const remove = document.createElement('button');
-            remove.type = 'button';
-            remove.className = 'remove-signed-page';
-            remove.innerHTML = '&times;';
-            remove.title = 'Xóa trang này';
-            remove.setAttribute('aria-label', `Xóa trang ký ${index + 1}`);
-            remove.addEventListener('click', () => removeFile(index));
-
-            const img = document.createElement('img');
-            img.src = url;
-            img.alt = `Trang ký ${index + 1}`;
-
-            const caption = document.createElement('div');
-            caption.className = 'caption';
-            caption.title = file.name;
-            caption.textContent = `Trang ${index + 1}: ${file.name}`;
-
-            card.append(remove, img, caption);
-            preview.appendChild(card);
-        });
-    }
-
-    input.addEventListener('change', () => {
-        selectedFiles = Array.from(input.files || []);
-        renderPreview();
-        validateFiles();
-    });
-
-    input.form?.addEventListener('submit', event => {
-        if (!validateFiles()) {
-            event.preventDefault();
-            input.reportValidity();
-        }
-    });
-})();
-</script>
 </body>
 </html>

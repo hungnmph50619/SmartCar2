@@ -234,10 +234,17 @@
                     else
                     {
                         <p class="text-muted">Kiểm tra xe thực tế trước khi xác nhận sẵn sàng bàn giao.</p>
-                        <form asp-action="MarkReady" method="post" data-confirm="Xác nhận xe đã được kiểm tra thực tế và sẵn sàng để giao cho khách?">
-                            <input type="hidden" name="bookingId" value="@b.BookingId" />
-                            <button class="btn btn-primary">Xe đã sẵn sàng</button>
-                        </form>
+                        @if (DateTime.Now.Date == b.PickupDate.Date)
+                        {
+                            <form asp-action="MarkReady" method="post" data-confirm="Xác nhận xe đã được kiểm tra thực tế và sẵn sàng để giao cho khách?">
+                                <input type="hidden" name="bookingId" value="@b.BookingId" />
+                                <button class="btn btn-primary">Xe đã sẵn sàng</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info">Chỉ xác nhận xe sẵn sàng trong ngày nhận xe: @b.PickupDate.ToString("dd/MM/yyyy").</div>
+                        }
                     }
                 </div>
             </div>
@@ -258,7 +265,14 @@
             @if (!b.HasHandover)
             {
                 <div class="alert alert-info">Chưa có biên bản giao. Màn bàn giao sẽ đối chiếu hồ sơ đã xác minh và yêu cầu ảnh tình trạng xe.</div>
-                <a class="btn btn-primary align-self-start" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@b.BookingId">Lập biên bản giao xe</a>
+                @if (BookingWorkflowRules.CanPrepareHandover(DateTime.Now, b.PickupDate, b.ReturnDate))
+                {
+                    <a class="btn btn-primary align-self-start" asp-controller="Handovers" asp-action="Create" asp-route-bookingId="@b.BookingId">Lập biên bản giao xe</a>
+                }
+                else
+                {
+                    <div class="alert alert-info">Chỉ lập biên bản giao từ @b.PickupDate.ToString("dd/MM/yyyy HH:mm").</div>
+                }
             }
             else
             {

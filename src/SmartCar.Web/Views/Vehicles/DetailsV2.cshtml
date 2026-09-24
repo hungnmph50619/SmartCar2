@@ -291,7 +291,7 @@
                                         align-items-center gap-2 mb-2 flex-wrap">
 
                                         <small class="text-muted" id="delivery-map-help">
-                                            Tìm địa chỉ hoặc bấm lên bản đồ để chọn chính xác điểm giao. Hệ thống cần tọa độ để tính phí theo khoảng cách.
+                                            Tìm địa chỉ hoặc bấm lên bản đồ để chọn chính xác điểm giao. Nếu bản đồ không tải, có thể nhập tọa độ từ điện thoại.
                                         </small>
 
                                         <button type="button"
@@ -304,12 +304,18 @@
                                     <div id="delivery-map"
                                          aria-label="Bản đồ chọn vị trí giao xe">
                                     </div>
+                                    <div class="row g-2 mt-2">
+                                        <div class="col-sm-5"><label for="manual-delivery-lat" class="form-label small">Vĩ độ (nếu bản đồ lỗi)</label><input id="manual-delivery-lat" type="number" step="any" min="-90" max="90" class="form-control form-control-sm" placeholder="21.0285" /></div>
+                                        <div class="col-sm-5"><label for="manual-delivery-lng" class="form-label small">Kinh độ</label><input id="manual-delivery-lng" type="number" step="any" min="-180" max="180" class="form-control form-control-sm" placeholder="105.8542" /></div>
+                                        <div class="col-sm-2 d-flex align-items-end"><button id="use-manual-coordinates" type="button" class="btn btn-outline-primary btn-sm w-100">Chọn điểm</button></div>
+                                    </div>
 
                                     <div class="small text-muted mt-2" id="delivery-coordinate-text"></div>
                                     <div class="small text-danger mt-2 d-none"
                                          id="delivery-location-error"></div>
                                 </div>
 
+                                <p class="small text-muted">Thanh toán sau khi Staff kiểm tra và Admin duyệt đơn: khách chuyển khoản/QR hoặc trả tiền mặt tại quầy. Chưa thu tiền ở bước gửi yêu cầu.</p>
                                 <button class="btn btn-primary btn-lg w-100"
                                         type="submit"
                                         data-loading-text="Đang gửi yêu cầu...">
@@ -416,6 +422,9 @@
             const error = document.getElementById('delivery-location-error');
             const locationButton = document.getElementById('use-current-location');
             const findAddressButton = document.getElementById('find-delivery-address');
+            const manualLat = document.getElementById('manual-delivery-lat');
+            const manualLng = document.getElementById('manual-delivery-lng');
+            const manualButton = document.getElementById('use-manual-coordinates');
             const coordinateText = document.getElementById('delivery-coordinate-text');
             const mapHelp = document.getElementById('delivery-map-help');
             const deliveryFeeRow = document.getElementById('delivery-fee-row');
@@ -503,9 +512,7 @@
             const reverseGeocode = async (lat, lng) => {
                 try {
                     const url =
-                        'https://nominatim.openstreetmap.org/reverse' +
-                        '?format=jsonv2&addressdetails=1' +
-                        '&lat=' + encodeURIComponent(lat) +
+                        '/api/geocoding/reverse?lat=' + encodeURIComponent(lat) +
                         '&lon=' + encodeURIComponent(lng);
 
                     const response = await fetch(url, {
@@ -593,7 +600,7 @@
                     document.getElementById('delivery-map')
                         .classList.add('d-none');
                     mapHelp.textContent =
-                        'Bản đồ không tải được nên chưa thể tính phí giao theo khoảng cách. Hãy tải lại trang và thử lại.';
+                        'Bản đồ không tải được. Tìm địa chỉ, dùng GPS hoặc nhập tọa độ để chọn điểm giao và tính phí.';
                     return;
                 }
 
@@ -645,6 +652,15 @@
 
             store.addEventListener('change', toggle);
             delivery.addEventListener('change', toggle);
+
+            manualButton.addEventListener('click', () => {
+                if (!manualLat.value || !manualLng.value) {
+                    error.textContent = 'Nhập cả vĩ độ và kinh độ của điểm giao.';
+                    error.classList.remove('d-none');
+                    return;
+                }
+                setPoint(manualLat.value, manualLng.value);
+            });
 
             locationButton.addEventListener('click', () => {
                 error.classList.add('d-none');
@@ -750,9 +766,7 @@
 
                 try {
                     const url =
-                        'https://nominatim.openstreetmap.org/search' +
-                        '?format=jsonv2&limit=1&countrycodes=vn&q=' +
-                        encodeURIComponent(query);
+                        '/api/geocoding/search?q=' + encodeURIComponent(query);
 
                     const response = await fetch(url, {
                         headers: {
@@ -782,7 +796,7 @@
                     }
                 } catch {
                     error.textContent =
-                        'Không thể tìm địa chỉ trên bản đồ lúc này. Hãy thử lại hoặc bấm trực tiếp lên bản đồ.';
+                        'Không thể tìm địa chỉ lúc này. Hãy dùng GPS hoặc nhập tọa độ của điểm giao.';
                     error.classList.remove('d-none');
                 } finally {
                     findAddressButton.disabled = false;

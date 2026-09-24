@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Handovers;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -63,7 +64,11 @@ public sealed class HandoversController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        // TEST Quy_2: tạm bỏ chặn thời gian để có thể lập biên bản và chạy hết chuyến.
+        if (!BookingWorkflowRules.CanPrepareHandover(DateTime.Now, booking.PickupDate, booking.ReturnDate))
+        {
+            TempData["ErrorMessage"] = $"Chưa đến giờ nhận xe ({booking.PickupDate:dd/MM/yyyy HH:mm}); chưa thể lập biên bản giao.";
+            return RedirectToBookingDetails(bookingId);
+        }
 
         var model = new HandoverViewModel
         {
@@ -109,7 +114,11 @@ public sealed class HandoversController : Controller
             return RedirectToBookingDetails(model.BookingId);
         }
 
-        // TEST Quy_2: tạm bỏ chặn thời gian để có thể lập biên bản và chạy hết chuyến.
+        if (!BookingWorkflowRules.CanPrepareHandover(DateTime.Now, booking.PickupDate, booking.ReturnDate))
+        {
+            TempData["ErrorMessage"] = $"Chưa đến giờ nhận xe ({booking.PickupDate:dd/MM/yyyy HH:mm}); chưa thể lập biên bản giao.";
+            return RedirectToBookingDetails(model.BookingId);
+        }
 
         ModelState.Remove(nameof(HandoverViewModel.CustomerId));
         ModelState.Remove(nameof(HandoverViewModel.VerifiedCustomerName));
@@ -122,6 +131,7 @@ public sealed class HandoversController : Controller
         ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
         ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
         ModelState.Remove(nameof(HandoverViewModel.Images));
+        model.Images ??= new();
 
         model.HandoverAt = DateTime.Now;
         model.IncludedKilometersPerDay = booking.Policy.IncludedKilometersPerDay;

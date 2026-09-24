@@ -44,6 +44,12 @@ public sealed class AdminBookingsController : Controller
         ViewBag.Query = query;
 
         var bookings = await _bookingService.GetAdminBookingsAsync(status, cancellationToken);
+        // Unreviewed requests belong to Staff, not the Admin approval queue.
+        var unreviewedIds = await _dbContext.Bookings.AsNoTracking()
+            .Where(item => item.Status == BookingStatus.PendingConfirmation && !item.StaffReviewedAt.HasValue)
+            .Select(item => item.BookingId)
+            .ToListAsync(cancellationToken);
+        bookings = bookings.Where(item => !unreviewedIds.Contains(item.BookingId)).ToList();
         if (string.IsNullOrWhiteSpace(query))
             return View(bookings);
 
@@ -66,7 +72,12 @@ public sealed class AdminBookingsController : Controller
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(id, cancellationToken);
-        return booking is null ? NotFound() : View(booking);
+        if (booking is null) return NotFound();
+        if (booking.Status == BookingStatus.PendingConfirmation &&
+            !await _dbContext.Bookings.AsNoTracking().AnyAsync(
+                item => item.BookingId == id && item.StaffReviewedAt.HasValue,
+                cancellationToken)) return NotFound();
+        return View(booking);
     }
 
     [HttpGet]

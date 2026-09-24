@@ -162,17 +162,14 @@ public sealed class BookingWorkflowRulesTests
     }
 
     [Fact]
-    public void CanPrepareHandover_AllowsDraftBeforePickupButNotAfterReturn()
+    public void CanPrepareHandover_RequiresBookedPickupWindow()
     {
         var pickup = new DateTime(2026, 9, 20, 10, 0, 0);
         var returnAt = new DateTime(2026, 9, 21, 10, 0, 0);
 
-        Assert.True(BookingWorkflowRules.CanPrepareHandover(
-            pickup.AddHours(-2),
-            returnAt));
-        Assert.False(BookingWorkflowRules.CanPrepareHandover(
-            returnAt,
-            returnAt));
+        Assert.False(BookingWorkflowRules.CanPrepareHandover(pickup.AddSeconds(-1), pickup, returnAt));
+        Assert.True(BookingWorkflowRules.CanPrepareHandover(pickup, pickup, returnAt));
+        Assert.False(BookingWorkflowRules.CanPrepareHandover(returnAt, pickup, returnAt));
     }
 
     [Fact]

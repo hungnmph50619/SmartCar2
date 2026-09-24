@@ -593,6 +593,12 @@ internal sealed class BookingService : IBookingService
                 $"{vehicleStateMessage} Chỉ được xác nhận sẵn sàng khi trạng thái xe là Có sẵn.");
         }
 
+        if (DateTime.Now.Date != booking.PickupDate.Date)
+        {
+            return OperationResult.Failure(
+                $"Chỉ xác nhận xe sẵn sàng trong ngày nhận xe ({booking.PickupDate:dd/MM/yyyy}).");
+        }
+
         booking.Status = BookingStatus.ReadyForPickup;
         _dbContext.Notifications.Add(new Notification
         {
