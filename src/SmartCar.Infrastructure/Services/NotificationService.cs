@@ -226,6 +226,20 @@ internal sealed class NotificationService : INotificationService
 
         foreach (var item in workItems)
         {
+            // Remove legacy Admin work items created before Staff review.
+            if (GetRawTitle(item.Title) == "Đơn thuê chờ xử lý" &&
+                int.TryParse(item.Title[(item.Title.IndexOf('|') + 1)..], out var bookingId) &&
+                await _dbContext.Bookings.AsNoTracking().AnyAsync(
+                    booking => booking.BookingId == bookingId &&
+                               booking.Status == BookingStatus.PendingConfirmation &&
+                               !booking.StaffReviewedAt.HasValue,
+                    cancellationToken))
+            {
+                _dbContext.Notifications.Remove(item);
+                changed = true;
+                continue;
+            }
+
             var isStillActive =
                 await IsWorkItemStillActiveAsync(
                     item.Title,
@@ -495,7 +509,8 @@ internal sealed class NotificationService : INotificationService
                                        bookingId &&
                                    booking.Status ==
                                        BookingStatus
-                                           .PendingConfirmation,
+                                           .PendingConfirmation &&
+                                   booking.StaffReviewedAt.HasValue,
                                cancellationToken);
 
             case "Yêu cầu gia hạn chờ xử lý":
