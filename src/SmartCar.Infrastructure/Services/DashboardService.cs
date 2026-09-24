@@ -44,6 +44,7 @@ internal sealed class DashboardService : IDashboardService
         var recentBookings =
             await _dbContext.Bookings
                 .AsNoTracking()
+                .Where(booking => booking.Status != BookingStatus.PendingConfirmation || booking.StaffReviewedAt.HasValue)
                 .OrderByDescending(
                     booking => booking.CreatedAt)
                 .Take(8)
@@ -192,9 +193,8 @@ internal sealed class DashboardService : IDashboardService
                 await _dbContext.Bookings
                     .CountAsync(
                         booking =>
-                            booking.Status ==
-                            BookingStatus
-                                .PendingConfirmation,
+                            booking.Status == BookingStatus.PendingConfirmation &&
+                            booking.StaffReviewedAt.HasValue,
                         cancellationToken),
 
             PendingKycPackages =
