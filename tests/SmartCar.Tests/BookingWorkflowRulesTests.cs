@@ -1,4 +1,5 @@
 using SmartCar.Application.Features.Operations;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using Xunit;
 
@@ -170,6 +171,50 @@ public sealed class BookingWorkflowRulesTests
         Assert.False(BookingWorkflowRules.CanPrepareHandover(pickup.AddSeconds(-1), pickup, returnAt));
         Assert.True(BookingWorkflowRules.CanPrepareHandover(pickup, pickup, returnAt));
         Assert.False(BookingWorkflowRules.CanPrepareHandover(returnAt, pickup, returnAt));
+    }
+
+    [Fact]
+    public void HasActualTurnaroundElapsed_UsesNextBookingSnapshotForStorePickup()
+    {
+        var returnedAt = new DateTime(2026, 9, 25, 10, 0, 0);
+        var policy = new RentalPolicySnapshot
+        {
+            VehicleTurnaroundMinutes = 75,
+            DeliveryLeadMinutes = 20
+        };
+
+        Assert.False(BookingWorkflowRules.HasActualTurnaroundElapsed(
+            returnedAt.AddMinutes(74),
+            returnedAt,
+            policy,
+            VehiclePickupMethod.StorePickup));
+        Assert.True(BookingWorkflowRules.HasActualTurnaroundElapsed(
+            returnedAt.AddMinutes(75),
+            returnedAt,
+            policy,
+            VehiclePickupMethod.StorePickup));
+    }
+
+    [Fact]
+    public void HasActualTurnaroundElapsed_AddsDeliveryLeadForDeliveryPickup()
+    {
+        var returnedAt = new DateTime(2026, 9, 25, 10, 0, 0);
+        var policy = new RentalPolicySnapshot
+        {
+            VehicleTurnaroundMinutes = 60,
+            DeliveryLeadMinutes = 30
+        };
+
+        Assert.False(BookingWorkflowRules.HasActualTurnaroundElapsed(
+            returnedAt.AddMinutes(89),
+            returnedAt,
+            policy,
+            VehiclePickupMethod.Delivery));
+        Assert.True(BookingWorkflowRules.HasActualTurnaroundElapsed(
+            returnedAt.AddMinutes(90),
+            returnedAt,
+            policy,
+            VehiclePickupMethod.Delivery));
     }
 
     [Fact]
