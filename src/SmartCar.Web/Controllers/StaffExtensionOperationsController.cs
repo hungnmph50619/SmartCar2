@@ -340,11 +340,14 @@ public sealed class StaffExtensionOperationsController : Controller
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending
             });
+        }
 
-            if (conflict.Status == BookingStatus.ReadyForPickup)
-            {
-                conflict.Status = BookingStatus.Paid;
-            }
+        // Đổi VehicleId làm vô hiệu bước "xe đã sẵn sàng" của chiếc xe cũ.
+        // Dù xe mới cùng giá/rẻ hơn và không cần thu thêm, Staff vẫn phải kiểm tra
+        // thực tế chiếc xe thay thế rồi MarkReady lại trước khi bàn giao.
+        if (conflict.Status == BookingStatus.ReadyForPickup)
+        {
+            conflict.Status = BookingStatus.Paid;
         }
 
         if (rentalRefund > 0m)
