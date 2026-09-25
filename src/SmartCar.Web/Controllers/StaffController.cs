@@ -159,10 +159,31 @@ public sealed class StaffController : Controller
                 .Where(user => staffIds.Contains(user.Id))
                 .ToDictionaryAsync(user => user.Id, user => user.FullName, cancellationToken);
 
+        DateTime? actualTurnaroundReadyAt = null;
+        if (booking.Status == BookingStatus.Paid)
+        {
+            var latestPreviousReturn = await _dbContext.VehicleReturns
+                .AsNoTracking()
+                .Where(vehicleReturn =>
+                    vehicleReturn.Booking.VehicleId == booking.VehicleId &&
+                    vehicleReturn.BookingId != booking.BookingId &&
+                    vehicleReturn.Booking.PickupDate < booking.PickupDate)
+                .OrderByDescending(vehicleReturn => vehicleReturn.ReturnedAt)
+                .Select(vehicleReturn => (DateTime?)vehicleReturn.ReturnedAt)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (latestPreviousReturn.HasValue)
+            {
+                actualTurnaroundReadyAt = latestPreviousReturn.Value.AddMinutes(
+                    booking.Policy.GetOperationalPreparationMinutes(booking.PickupMethod));
+            }
+        }
+
         return View(new StaffBookingDetailsViewModel
         {
             Booking = booking,
             StaffReviewedAt = records.StaffReviewedAt,
+            ActualTurnaroundReadyAt = actualTurnaroundReadyAt,
             HandoverIdentityVerified = records.Handover?.CustomerIdentityVerified == true,
             HandoverIdentityVerifiedBy = ResolveStaffName(staffNames, records.Handover?.IdentityVerifiedByStaffId),
             HandoverIdentityVerifiedAt = records.Handover?.IdentityVerifiedAt,
