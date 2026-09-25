@@ -424,6 +424,8 @@ public sealed class StaffPaymentsController : Controller
     public async Task<IActionResult> SubmitCounterQr(
         int bookingId,
         bool transferConfirmed,
+        PaymentType type,
+        int? paymentId,
         CancellationToken cancellationToken)
     {
         if (!transferConfirmed)
@@ -458,10 +460,25 @@ public sealed class StaffPaymentsController : Controller
             return RedirectToStaffDetails(bookingId);
         }
 
-        if (booking.Status != BookingStatus.PendingPayment)
+        if (type is not (PaymentType.Rental or PaymentType.VehicleSwapAdjustment))
         {
             TempData["ErrorMessage"] =
-                "Chỉ đơn đã được Admin duyệt và đang Chờ thanh toán mới được báo chuyển khoản tại quầy.";
+                "Tại quầy chỉ hỗ trợ ghi nhận QR cho tiền trước giao xe hoặc chênh lệch đổi xe.";
+            return RedirectToStaffDetails(bookingId);
+        }
+
+        if (type == PaymentType.Rental && booking.Status != BookingStatus.PendingPayment)
+        {
+            TempData["ErrorMessage"] =
+                "Chỉ đơn đã được Admin duyệt và đang Chờ thanh toán mới được báo chuyển khoản tiền thuê tại quầy.";
+            return RedirectToStaffDetails(bookingId);
+        }
+
+        if (type == PaymentType.VehicleSwapAdjustment &&
+            booking.Status is not (BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup))
+        {
+            TempData["ErrorMessage"] =
+                "Đơn không còn ở trạng thái cho phép thanh toán chênh lệch đổi xe.";
             return RedirectToStaffDetails(bookingId);
         }
 
@@ -469,9 +486,10 @@ public sealed class StaffPaymentsController : Controller
         var result = await _paymentService.SubmitQrPaymentAsync(
             bookingId,
             booking.CustomerId,
-            PaymentType.Rental,
+            type,
             staffId,
-            cancellationToken);
+            cancellationToken,
+            paymentId);
 
         if (!result.Succeeded)
         {
@@ -480,8 +498,9 @@ public sealed class StaffPaymentsController : Controller
         }
 
         var bookingPolicy = RentalPolicySnapshot.FromJson(booking.PolicyJson);
-        TempData["SuccessMessage"] =
-            $"Đã ghi nhận khách báo chuyển khoản. Admin có tối đa {bookingPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
+        TempData["SuccessMessage"] = type == PaymentType.VehicleSwapAdjustment
+            ? $"Đã ghi nhận khách báo chuyển khoản chênh lệch đổi xe. Admin có tối đa {bookingPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; chưa được coi là đã thanh toán."
+            : $"Đã ghi nhận khách báo chuyển khoản. Admin có tối đa {bookingPolicy.BookingTransferReconciliationHoldMinutes} phút để đối soát; giao dịch chưa được coi là đã thanh toán.";
         return RedirectToStaffDetails(bookingId);
     }
 
