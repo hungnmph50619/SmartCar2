@@ -446,7 +446,7 @@ public sealed class StaffExtensionOperationsController : Controller
                     extension.ConflictingBookingId.Value,
                 cancellationToken);
 
-        if (conflict is null || conflict.Handover is not null)
+        if (conflict is null || conflict.Handover?.SignedDocumentVerified == true)
         {
             return null;
         }
@@ -458,9 +458,11 @@ public sealed class StaffExtensionOperationsController : Controller
             .FirstOrDefaultAsync(cancellationToken)
             ?? "Khách hàng";
 
-        var alternatives = await GetAlternativeVehiclesAsync(
-            conflict,
-            cancellationToken);
+        var alternatives = conflict.Handover is null
+            ? await GetAlternativeVehiclesAsync(
+                conflict,
+                cancellationToken)
+            : Array.Empty<ExtensionAlternativeVehicleViewModel>();
 
         return new ExtensionConflictResolutionViewModel
         {
@@ -473,6 +475,7 @@ public sealed class StaffExtensionOperationsController : Controller
             LicensePlate = conflict.Vehicle.LicensePlate,
             PickupDate = conflict.PickupDate,
             ReturnDate = conflict.ReturnDate,
+            HandoverDraftExists = conflict.Handover is not null,
             Alternatives = alternatives
         };
     }
