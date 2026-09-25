@@ -60,7 +60,11 @@ public sealed class AdminKycController : Controller
         var customerIds = pendingPackages.Select(item => item.CustomerId).ToList();
         var customers = await _dbContext.Users
             .AsNoTracking()
-            .Where(user => customerIds.Contains(user.Id))
+            .Where(user =>
+                customerIds.Contains(user.Id) &&
+                user.IdentityFaceImagePath != null &&
+                user.IdentityFaceImagePath != "" &&
+                user.IdentityFaceCapturedAt.HasValue)
             .Select(user => new
             {
                 user.Id,
