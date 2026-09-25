@@ -111,7 +111,7 @@ internal sealed class BookingReservationPolicy
 
             // Booking hết hold phải giải phóng lịch xe, nhưng KHÔNG được tự cho rằng
             // tiền đang chờ đối soát là chưa vào tài khoản. Khoản AwaitingConfirmation được giữ
-            // nguyên để Staff đối soát muộn; nếu xác nhận đã nhận tiền thì hệ thống tạo refund,
+            // nguyên để Admin đối soát muộn; nếu xác nhận đã nhận tiền thì hệ thống tạo refund,
             // không hồi sinh booking đã Expired.
             foreach (var payment in booking.Payments.Where(payment =>
                          payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment &&
