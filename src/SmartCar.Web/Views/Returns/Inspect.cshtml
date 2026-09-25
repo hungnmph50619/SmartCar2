@@ -442,18 +442,33 @@ else
                             name="ChargeType"
                             required>
                         <option value="">Chọn loại phụ phí</option>
-                        <option value="@AdditionalChargeType.Fuel" disabled="@(!fuelReduced)">
-                            Nhiên liệu@(fuelReduced ? string.Empty : " — không giảm")
-                        </option>
+                        @if (fuelReduced)
+                        {
+                            <option value="@AdditionalChargeType.Fuel">Nhiên liệu</option>
+                        }
+                        else
+                        {
+                            <option value="@AdditionalChargeType.Fuel" disabled>Nhiên liệu — không giảm</option>
+                        }
                         <option value="@AdditionalChargeType.Cleaning">
                             Vệ sinh
                         </option>
-                        <option value="@AdditionalChargeType.Damage" disabled="@(Model.Return.HasDamage != true)">
-                            Hư hỏng@(Model.Return.HasDamage == true ? string.Empty : " — biên bản không ghi hư hỏng")
-                        </option>
-                        <option value="@AdditionalChargeType.MissingAccessory" disabled="@(!missingAccessories)">
-                            Thiếu/mất phụ kiện@(missingAccessories ? string.Empty : " — phụ kiện đủ")
-                        </option>
+                        @if (Model.Return.HasDamage == true)
+                        {
+                            <option value="@AdditionalChargeType.Damage">Hư hỏng</option>
+                        }
+                        else
+                        {
+                            <option value="@AdditionalChargeType.Damage" disabled>Hư hỏng — biên bản không ghi hư hỏng</option>
+                        }
+                        @if (missingAccessories)
+                        {
+                            <option value="@AdditionalChargeType.MissingAccessory">Thiếu/mất phụ kiện</option>
+                        }
+                        else
+                        {
+                            <option value="@AdditionalChargeType.MissingAccessory" disabled>Thiếu/mất phụ kiện — phụ kiện đủ</option>
+                        }
                         <option value="@AdditionalChargeType.Other">
                             Khác
                         </option>
