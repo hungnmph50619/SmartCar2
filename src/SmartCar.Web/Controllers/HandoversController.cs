@@ -357,17 +357,6 @@ public sealed class HandoversController : Controller
         HandoverViewModel model,
         CancellationToken cancellationToken)
     {
-        var required = new IFormFile?[]
-        {
-            model.FrontImage,
-            model.RearImage,
-            model.LeftImage,
-            model.RightImage,
-            model.InteriorImage,
-            model.OdometerImage,
-            model.FuelImage
-        };
-
         await ValidateRequiredImageAsync(model.FrontImage, nameof(HandoverViewModel.FrontImage), "ảnh mặt trước xe", cancellationToken);
         await ValidateRequiredImageAsync(model.RearImage, nameof(HandoverViewModel.RearImage), "ảnh mặt sau xe", cancellationToken);
         await ValidateRequiredImageAsync(model.LeftImage, nameof(HandoverViewModel.LeftImage), "ảnh bên trái xe", cancellationToken);
@@ -376,7 +365,9 @@ public sealed class HandoversController : Controller
         await ValidateRequiredImageAsync(model.OdometerImage, nameof(HandoverViewModel.OdometerImage), "ảnh đồng hồ số km", cancellationToken);
         await ValidateRequiredImageAsync(model.FuelImage, nameof(HandoverViewModel.FuelImage), "ảnh mức nhiên liệu", cancellationToken);
 
-        var additional = model.Images.Where(file => file.Length > 0).ToList();
+        var additional = (model.Images ?? new List<IFormFile>())
+            .Where(file => file.Length > 0)
+            .ToList();
         if (additional.Count > MaximumAdditionalImages)
         {
             ModelState.AddModelError(
@@ -466,7 +457,9 @@ public sealed class HandoversController : Controller
                 paths.Add(await SaveOneImageAsync(folder, relativeFolder, label, file, cancellationToken));
             }
 
-            var extras = model.Images.Where(file => file.Length > 0).ToList();
+            var extras = (model.Images ?? new List<IFormFile>())
+                .Where(file => file.Length > 0)
+                .ToList();
             for (var index = 0; index < extras.Count; index++)
             {
                 paths.Add(await SaveOneImageAsync(
