@@ -205,14 +205,28 @@ public sealed class StaffController : Controller
     }
 
     [HttpGet]
-    public IActionResult CounterRental() =>
-        View(new StaffCounterRentalViewModel { IsImmediatePickup = true });
+    public async Task<IActionResult> CounterRental(string? customerId, CancellationToken cancellationToken)
+    {
+        var model = new StaffCounterRentalViewModel { IsImmediatePickup = true };
+        await PopulateSelectedCustomerAsync(model, customerId, cancellationToken);
+        return View(model);
+    }
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> CounterRental(
         StaffCounterRentalViewModel model,
         CancellationToken cancellationToken)
     {
+        await PopulateSelectedCustomerAsync(model, model.CustomerId, cancellationToken);
+        if (model.VehicleId > 0)
+        {
+            var vehicle = await _dbContext.Vehicles.AsNoTracking()
+                .Where(item => item.VehicleId == model.VehicleId)
+                .Select(item => new { item.VehicleName, item.LicensePlate })
+                .FirstOrDefaultAsync(cancellationToken);
+            model.SelectedVehicleName = vehicle?.VehicleName;
+            model.SelectedVehicleDetail = vehicle?.LicensePlate;
+        }
         if (!ModelState.IsValid)
             return View(model);
 
@@ -244,7 +258,8 @@ public sealed class StaffController : Controller
                 null,
                 null,
                 model.PolicyVersion,
-                model.IsImmediatePickup),
+                model.IsImmediatePickup,
+                IsStaffCounterRental: true),
             cancellationToken);
 
         if (!createResult.Succeeded || !createResult.BookingId.HasValue)
@@ -1065,6 +1080,32 @@ public sealed class StaffController : Controller
             .ToListAsync(cancellationToken))
         .ToHashSet();
 
+    private async Task PopulateSelectedCustomerAsync(
+        StaffCounterRentalViewModel model,
+        string? customerId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(customerId)) return;
+        var customerRoleId = await _dbContext.Roles.AsNoTracking()
+            .Where(role => role.Name == RoleNames.Customer)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        var customer = await _dbContext.Users.AsNoTracking()
+            .Where(user => user.Id == customerId && user.IsActive &&
+                _dbContext.UserRoles.Any(role => role.UserId == user.Id && role.RoleId == customerRoleId))
+            .Select(user => new { user.FullName, user.PhoneNumber, user.Email })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (customer is null)
+        {
+            model.CustomerId = string.Empty;
+            return;
+        }
+        model.CustomerId = customerId;
+        model.SelectedCustomerName = customer.FullName;
+        model.SelectedCustomerDetail = (customer.PhoneNumber ?? "Chưa có SĐT") + " · " +
+            (customer.Email ?? "Chưa có email");
+    }
+
     private async Task<bool> IsActiveCustomerAsync(
         string customerId,
         CancellationToken cancellationToken)
@@ -1120,4 +1161,3 @@ public sealed class StaffController : Controller
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 }
-

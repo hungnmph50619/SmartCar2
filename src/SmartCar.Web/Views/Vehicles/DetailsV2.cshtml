@@ -291,7 +291,7 @@
                                         align-items-center gap-2 mb-2 flex-wrap">
 
                                         <small class="text-muted" id="delivery-map-help">
-                                            Tìm địa chỉ hoặc bấm lên bản đồ để chọn chính xác điểm giao. Nếu bản đồ không tải, có thể nhập tọa độ từ điện thoại.
+                                            Tìm địa chỉ, bấm lên bản đồ hoặc dùng GPS để chọn điểm giao. Có thể chỉnh tên đường sau khi chọn điểm.
                                         </small>
 
                                         <button type="button"
@@ -304,13 +304,7 @@
                                     <div id="delivery-map"
                                          aria-label="Bản đồ chọn vị trí giao xe">
                                     </div>
-                                    <div class="row g-2 mt-2">
-                                        <div class="col-sm-5"><label for="manual-delivery-lat" class="form-label small">Vĩ độ (nếu bản đồ lỗi)</label><input id="manual-delivery-lat" type="number" step="any" min="-90" max="90" class="form-control form-control-sm" placeholder="21.0285" /></div>
-                                        <div class="col-sm-5"><label for="manual-delivery-lng" class="form-label small">Kinh độ</label><input id="manual-delivery-lng" type="number" step="any" min="-180" max="180" class="form-control form-control-sm" placeholder="105.8542" /></div>
-                                        <div class="col-sm-2 d-flex align-items-end"><button id="use-manual-coordinates" type="button" class="btn btn-outline-primary btn-sm w-100">Chọn điểm</button></div>
-                                    </div>
-
-                                    <div class="small text-muted mt-2" id="delivery-coordinate-text"></div>
+                                    <div class="small text-muted mt-2" id="delivery-coordinate-text" aria-live="polite"></div>
                                     <div class="small text-danger mt-2 d-none"
                                          id="delivery-location-error"></div>
                                 </div>
@@ -422,9 +416,6 @@
             const error = document.getElementById('delivery-location-error');
             const locationButton = document.getElementById('use-current-location');
             const findAddressButton = document.getElementById('find-delivery-address');
-            const manualLat = document.getElementById('manual-delivery-lat');
-            const manualLng = document.getElementById('manual-delivery-lng');
-            const manualButton = document.getElementById('use-manual-coordinates');
             const coordinateText = document.getElementById('delivery-coordinate-text');
             const mapHelp = document.getElementById('delivery-map-help');
             const deliveryFeeRow = document.getElementById('delivery-fee-row');
@@ -569,8 +560,7 @@
                 latInput.value = normalizedLat.toFixed(7);
                 lngInput.value = normalizedLng.toFixed(7);
 
-                coordinateText.textContent =
-                    `Điểm giao: ${latInput.value}, ${lngInput.value}`;
+                coordinateText.textContent = 'Đã chọn điểm giao trên bản đồ. Có thể kéo ghim để chỉnh vị trí.';
 
                 updatePriceByPoint(normalizedLat, normalizedLng);
 
@@ -608,7 +598,7 @@
                     document.getElementById('delivery-map')
                         .classList.add('d-none');
                     mapHelp.textContent =
-                        'Bản đồ không tải được. Tìm địa chỉ, dùng GPS hoặc nhập tọa độ để chọn điểm giao và tính phí.';
+                        'Bản đồ không tải được. Bạn có thể tìm địa chỉ hoặc dùng GPS để chọn điểm giao và tính phí.';
                     return;
                 }
 
@@ -660,17 +650,6 @@
 
             store.addEventListener('change', toggle);
             delivery.addEventListener('change', toggle);
-
-            manualButton.addEventListener('click', async () => {
-                if (!manualLat.value || !manualLng.value) {
-                    error.textContent = 'Nhập cả vĩ độ và kinh độ của điểm giao.';
-                    error.classList.remove('d-none');
-                    return;
-                }
-                setPoint(manualLat.value, manualLng.value);
-                if (latInput.value && lngInput.value &&
-                    !await reverseGeocode(latInput.value, lngInput.value)) showReverseFailure();
-            });
 
             locationButton.addEventListener('click', () => {
                 error.classList.add('d-none');
@@ -758,9 +737,9 @@
             findAddressButton.addEventListener('click', async () => {
                 const query = address.value.trim();
 
-                if (!query) {
+                if (query.length < 3) {
                     address.focus();
-                    error.textContent = 'Vui lòng nhập địa chỉ cần tìm.';
+                    error.textContent = 'Nhập ít nhất 3 ký tự địa chỉ cần tìm.';
                     error.classList.remove('d-none');
                     return;
                 }
@@ -779,11 +758,11 @@
                         }
                     });
 
+                    const results = await response.json().catch(() => null);
                     if (!response.ok) {
-                        throw new Error('geocode');
+                        throw new Error(results?.message || 'Dịch vụ tìm địa chỉ chưa phản hồi.');
                     }
-
-                    const results = await response.json();
+                    if (!Array.isArray(results)) throw new Error('Dữ liệu địa chỉ chưa hợp lệ.');
 
                     if (!results.length) {
                         error.textContent =
@@ -799,9 +778,10 @@
                     if (results[0].display_name) {
                         address.value = results[0].display_name;
                     }
-                } catch {
+                } catch (ex) {
                     error.textContent =
-                        'Không thể tìm địa chỉ lúc này. Hãy dùng GPS hoặc nhập tọa độ của điểm giao.';
+                        (ex instanceof Error ? ex.message : 'Không thể tìm địa chỉ lúc này.') +
+                        ' Bạn có thể bấm trực tiếp lên bản đồ hoặc dùng GPS để chọn điểm giao.';
                     error.classList.remove('d-none');
                 } finally {
                     findAddressButton.disabled = false;

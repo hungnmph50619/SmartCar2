@@ -289,6 +289,39 @@
     text-align: center;
 }
 
+.staff-op-page .staff-vehicle-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+    gap: .75rem;
+    max-height: 440px;
+    overflow-y: auto;
+    padding: .25rem;
+}
+
+.staff-op-page .staff-vehicle-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .45rem;
+    padding: 1rem;
+    border: 1px solid #dfe4ea;
+    border-radius: 14px;
+    background: #fff;
+    text-align: left;
+}
+
+.staff-op-page .staff-vehicle-card:hover,
+.staff-op-page .staff-vehicle-card:focus-visible,
+.staff-op-page .staff-vehicle-card[aria-selected="true"] {
+    border-color: #198754;
+    background: #f2faf6;
+}
+
+.staff-op-page .staff-vehicle-card:disabled {
+    opacity: .7;
+    cursor: not-allowed;
+}
+
 .staff-op-page .staff-selected-result {
     padding: .75rem .9rem;
     border: 1px solid rgba(25, 135, 84, .2);

@@ -258,6 +258,7 @@ internal sealed class BookingService : IBookingService
 
         var booking = new Booking
         {
+            Source = request.IsStaffCounterRental ? BookingSource.StaffCounter : BookingSource.CustomerWeb,
             PolicyJson = policy.ToJson(),
             DepositHoldDaysApplied = policy.DepositHoldDays,
             CustomerId = customerId,
@@ -622,6 +623,7 @@ internal sealed class BookingService : IBookingService
             .AsNoTracking()
             .Select(booking => new BookingListItemDto
             {
+                Source = booking.Source,
                 BookingId = booking.BookingId,
                 CustomerId = booking.CustomerId,
                 CustomerName = _dbContext.Users
@@ -737,6 +739,7 @@ internal sealed class BookingService : IBookingService
 
         return new BookingDetailsDto
         {
+            Source = booking.Source,
             PolicyJson = booking.PolicyJson,
             BookingId = booking.BookingId,
             CustomerId = booking.CustomerId,

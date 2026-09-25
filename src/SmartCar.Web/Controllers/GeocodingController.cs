@@ -32,7 +32,7 @@ public sealed class GeocodingController : ControllerBase
         {
             using var response = await client.GetAsync(url, cancellationToken);
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                return StatusCode(503, new { message = "Dịch vụ địa chỉ đang giới hạn lượt tìm. Vui lòng thử lại sau hoặc nhập tọa độ và địa chỉ thủ công." });
+                return StatusCode(503, new { message = "Dịch vụ địa chỉ đang giới hạn lượt tìm. Vui lòng thử lại sau." });
             if (!response.IsSuccessStatusCode)
                 return StatusCode(502, new { message = $"Dịch vụ tìm địa chỉ trả lỗi {(int)response.StatusCode}. Vui lòng thử lại sau." });
             return Content(await response.Content.ReadAsStringAsync(cancellationToken), "application/json");

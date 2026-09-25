@@ -18,6 +18,32 @@ namespace SmartCar.Tests;
 
 public sealed class StaffExtensionCashWorkflowTests
 {
+    [Theory]
+    [InlineData(BookingSource.CustomerWeb, 0)]
+    [InlineData(BookingSource.StaffCounter, 1)]
+    public async Task SubmitCounterQr_OnlyAcceptsBookingsCreatedAtCounter(
+        BookingSource source, int expectedCalls)
+    {
+        await using var db = CreateDbContext();
+        db.Bookings.Add(new Booking
+        {
+            BookingId = 300,
+            CustomerId = "customer-1",
+            VehicleId = 10,
+            Source = source,
+            PickupDate = DateTime.Now.AddHours(1),
+            ReturnDate = DateTime.Now.AddDays(1),
+            Status = BookingStatus.PendingPayment
+        });
+        await db.SaveChangesAsync();
+        var payments = new PaymentServiceStub();
+        var controller = CreateController(db, payments);
+
+        await controller.SubmitCounterQr(300, true, default);
+
+        Assert.Equal(expectedCalls, payments.SubmitQrCalls);
+    }
+
     [Fact]
     public async Task CollectExtensionCash_AppliesApprovedExtensionAndPayment()
     {
@@ -405,11 +431,12 @@ public sealed class StaffExtensionCashWorkflowTests
     }
 
     private static StaffPaymentsController CreateController(
-        ApplicationDbContext db)
+        ApplicationDbContext db,
+        PaymentServiceStub? payments = null)
     {
         var controller = new StaffPaymentsController(
             db,
-            new PaymentServiceStub(),
+            payments ?? new PaymentServiceStub(),
             new AuditServiceStub());
 
         var identity = new ClaimsIdentity(
@@ -444,6 +471,7 @@ public sealed class StaffExtensionCashWorkflowTests
 
     private sealed class PaymentServiceStub : IPaymentService
     {
+        public int SubmitQrCalls { get; private set; }
         public Task<IReadOnlyList<AdminPaymentListItemDto>>
             GetAdminPaymentsAsync(
                 PaymentStatus? status = null,
@@ -458,8 +486,11 @@ public sealed class StaffExtensionCashWorkflowTests
             PaymentType paymentType,
             string actorId,
             CancellationToken cancellationToken = default,
-            int? paymentId = null) =>
-            Task.FromResult(OperationResult.Success());
+            int? paymentId = null)
+        {
+            SubmitQrCalls++;
+            return Task.FromResult(OperationResult.Success());
+        }
 
         public Task<OperationResult> ConfirmQrPaymentAsync(
             int paymentId,

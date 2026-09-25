@@ -146,7 +146,7 @@
                 <span class="staff-step-number">2</span>
                 <div>
                     <h2 class="h5 mb-1">Thanh toán sau khi Admin duyệt</h2>
-                    <div class="text-muted">Chọn đúng thao tác khách đang thực hiện tại quầy. Cả hai luồng đều ghi dữ liệu thật.</div>
+                    <div class="text-muted">@(b.Source == BookingSource.StaffCounter ? "Đơn lập tại quầy: nhận tiền mặt hoặc đưa QR để khách chuyển khoản." : "Đơn đặt trên web: nhân viên chỉ ghi nhận tiền mặt thực nhận. Khách tự báo chuyển khoản trên trang thanh toán.")</div>
                 </div>
             </div>
 
@@ -169,6 +169,8 @@
                             </form>
                         </div>
                     </div>
+                    @if (b.Source == BookingSource.StaffCounter)
+                    {
                     <div class="col-lg-6">
                         <div class="border rounded-4 p-3 h-100">
                             <h3 class="h6 mb-3">Chuyển khoản / QR</h3>
@@ -202,6 +204,7 @@
                             </form>
                         </div>
                     </div>
+                    }
                 </div>
             }
         </section>
@@ -685,4 +688,3 @@
         <div class="alert alert-success"><strong>✓ Đơn đã hoàn tất.</strong> Không còn thao tác vận hành bắt buộc.</div>
     }
 </div>
-

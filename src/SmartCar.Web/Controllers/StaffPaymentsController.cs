@@ -441,6 +441,7 @@ public sealed class StaffPaymentsController : Controller
                 item.BookingId,
                 item.CustomerId,
                 item.Status,
+                item.Source,
                 item.PolicyJson
             })
             .FirstOrDefaultAsync(cancellationToken);
@@ -449,6 +450,12 @@ public sealed class StaffPaymentsController : Controller
         {
             TempData["ErrorMessage"] = "Không tìm thấy đơn thuê.";
             return RedirectToAction("Bookings", "Staff");
+        }
+
+        if (booking.Source != BookingSource.StaffCounter)
+        {
+            TempData["ErrorMessage"] = "Chỉ đơn lập tại quầy mới cho nhân viên ghi nhận chuyển khoản/QR. Khách đặt trên web tự báo chuyển khoản trong trang thanh toán.";
+            return RedirectToStaffDetails(bookingId);
         }
 
         if (booking.Status != BookingStatus.PendingPayment)

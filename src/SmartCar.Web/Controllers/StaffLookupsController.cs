@@ -13,6 +13,7 @@ namespace SmartCar.Web.Controllers;
 public sealed class StaffLookupsController : Controller
 {
     private const int MaximumResults = 15;
+    private const int MaximumVehicleResults = 60;
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IVehicleService _vehicleService;
@@ -122,7 +123,7 @@ public sealed class StaffLookupsController : Controller
                 .ToList();
         }
 
-        var candidates = vehicles.Take(MaximumResults).ToList();
+        var candidates = vehicles.ToList();
         var candidateIds = candidates.Select(vehicle => vehicle.VehicleId).ToArray();
         var upcoming = await _dbContext.Bookings.AsNoTracking()
             .Where(booking => candidateIds.Contains(booking.VehicleId) &&
@@ -162,7 +163,8 @@ public sealed class StaffLookupsController : Controller
             .Where(item => item.canBook ||
                 (item.latestReturn.HasValue && item.latestReturn.Value > pickupDate &&
                  item.latestReturn.Value < returnDate))
-            .Take(MaximumResults)
+            .OrderByDescending(item => item.canBook)
+            .Take(MaximumVehicleResults)
             .Select(item => new
             {
                 value = item.vehicle.VehicleId,

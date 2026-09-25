@@ -306,6 +306,11 @@ partial class ApplicationDbContextModelSnapshot
                     .HasMaxLength(30)
                     .HasColumnType("nvarchar(30)");
 
+                b.Property<string>("Source")
+                    .IsRequired()
+                    .HasMaxLength(30)
+                    .HasColumnType("nvarchar(30)");
+
                 b.Property<decimal>("RefundAmount")
                     .HasPrecision(18, 2)
                     .HasColumnType("decimal(18,2)");
@@ -352,4 +357,3 @@ partial class ApplicationDbContextModelSnapshot
             });
     }
 }
-

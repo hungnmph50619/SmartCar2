@@ -39,6 +39,10 @@ public sealed class StaffBookingDetailsViewModel
 
 public sealed class StaffCounterRentalViewModel
 {
+    public string? SelectedCustomerName { get; set; }
+    public string? SelectedCustomerDetail { get; set; }
+    public string? SelectedVehicleName { get; set; }
+    public string? SelectedVehicleDetail { get; set; }
     public bool IsImmediatePickup { get; set; }
 
     [Required(ErrorMessage = "Vui lòng chọn khách hàng.")]

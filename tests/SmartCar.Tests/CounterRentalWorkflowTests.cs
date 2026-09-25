@@ -87,6 +87,30 @@ public sealed class CounterRentalWorkflowTests
         Assert.NotNull(bookings.LastRequest);
         Assert.True(bookings.LastRequest.IsImmediateCounterRental);
         Assert.InRange(bookings.LastRequest.PickupDate, before, DateTime.Now);
+        Assert.True(bookings.LastRequest.IsStaffCounterRental);
+    }
+
+    [Fact]
+    public async Task CounterRental_FromCustomerList_PrefillsActiveCustomer()
+    {
+        await using var db = CreateDbContext();
+        await SeedActiveCustomerAsync(db);
+        var controller = CreateController(db, new BookingServiceStub(), new BankAccountServiceStub(null));
+
+        var result = Assert.IsType<ViewResult>(await controller.CounterRental("customer-1", default));
+        var model = Assert.IsType<StaffCounterRentalViewModel>(result.Model);
+        Assert.Equal("customer-1", model.CustomerId);
+        Assert.Equal("Nguyễn Văn A", model.SelectedCustomerName);
+    }
+
+    [Fact]
+    public async Task CounterRental_FromCustomerList_RejectsUnknownCustomer()
+    {
+        await using var db = CreateDbContext();
+        var controller = CreateController(db, new BookingServiceStub(), new BankAccountServiceStub(null));
+
+        var result = Assert.IsType<ViewResult>(await controller.CounterRental("unknown", default));
+        Assert.Equal(string.Empty, Assert.IsType<StaffCounterRentalViewModel>(result.Model).CustomerId);
     }
 
     private static StaffCounterRentalViewModel ValidModel() => new()

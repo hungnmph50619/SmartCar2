@@ -27,6 +27,7 @@ public class Booking
     public decimal TotalAmount { get; set; }
     public VehiclePickupMethod PickupMethod { get; set; }
         = VehiclePickupMethod.StorePickup;
+    public BookingSource Source { get; set; } = BookingSource.CustomerWeb;
     public string? DeliveryAddress { get; set; }
     public decimal? DeliveryLatitude { get; set; }
     public decimal? DeliveryLongitude { get; set; }
@@ -56,4 +57,3 @@ public class Booking
     public VehicleReturn? VehicleReturn { get; set; }
     public Review? Review { get; set; }
 }
-
