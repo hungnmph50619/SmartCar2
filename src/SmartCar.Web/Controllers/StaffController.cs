@@ -595,6 +595,16 @@ public sealed class StaffController : Controller
             TempData["ErrorMessage"] = "Xe không còn ở trạng thái sẵn sàng để giao.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
+
+        var finalEligibilityError = await GetFinalHandoverEligibilityErrorAsync(
+            booking,
+            cancellationToken);
+        if (finalEligibilityError is not null)
+        {
+            TempData["ErrorMessage"] = finalEligibilityError;
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
         var grossHandoverRentalPaid = booking.Payments
             .Where(item =>
                 item.Status == PaymentStatus.Paid &&
@@ -1154,6 +1164,81 @@ public sealed class StaffController : Controller
                 userRole.UserId == user.Id &&
                 userRole.RoleId == customerRoleId),
             cancellationToken);
+    }
+
+    private async Task<string?> GetFinalHandoverEligibilityErrorAsync(
+        Booking booking,
+        CancellationToken cancellationToken)
+    {
+        var customerIsActive = await _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(user =>
+                user.Id == booking.CustomerId &&
+                user.IsActive,
+                cancellationToken);
+        if (!customerIsActive)
+        {
+            return "Tài khoản khách đã bị khóa hoặc không còn hoạt động. Dừng bắt đầu chuyến và báo quản lý.";
+        }
+
+        var verifiedDocuments = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == booking.CustomerId &&
+                document.Status == DocumentStatus.Verified &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.CitizenIdBack ||
+                 document.DocumentType == DocumentTypes.DrivingLicense ||
+                 document.DocumentType == DocumentTypes.DrivingLicenseBack))
+            .ToListAsync(cancellationToken);
+
+        var citizenFront = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenIdBack);
+        var licenseFront = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.DrivingLicense);
+        var licenseBack = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.DrivingLicenseBack);
+
+        if (citizenFront is null || citizenBack is null ||
+            licenseFront is null || licenseBack is null ||
+            !string.Equals(citizenFront.DocumentNumber, citizenBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(licenseFront.DocumentNumber, licenseBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !citizenFront.ExpiryDate.HasValue ||
+            citizenFront.ExpiryDate.Value.Date < booking.ReturnDate.Date ||
+            !licenseFront.ExpiryDate.HasValue ||
+            licenseFront.ExpiryDate.Value.Date < booking.ReturnDate.Date)
+        {
+            return "KYC của khách không còn đủ CCCD/GPLX hai mặt hợp lệ đến ngày trả. Dừng bắt đầu chuyến và kiểm tra lại hồ sơ.";
+        }
+
+        foreach (var requirement in new[]
+        {
+            (Type: VehicleDocumentType.Registration, AllowNoExpiry: true),
+            (Type: VehicleDocumentType.Inspection, AllowNoExpiry: false),
+            (Type: VehicleDocumentType.Insurance, AllowNoExpiry: false),
+            (Type: VehicleDocumentType.RoadFee, AllowNoExpiry: false)
+        })
+        {
+            var valid = await _dbContext.VehicleDocuments
+                .AsNoTracking()
+                .AnyAsync(document =>
+                    document.VehicleId == booking.VehicleId &&
+                    document.DocumentType == requirement.Type &&
+                    document.IssuedDate.Date <= booking.PickupDate.Date &&
+                    ((requirement.AllowNoExpiry && !document.ExpiryDate.HasValue) ||
+                     (document.ExpiryDate.HasValue &&
+                      document.ExpiryDate.Value.Date >= booking.ReturnDate.Date)),
+                    cancellationToken);
+
+            if (!valid)
+            {
+                return "Giấy tờ xe không còn đủ hiệu lực cho toàn bộ chuyến. Dừng bắt đầu chuyến và kiểm tra lại Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ.";
+            }
+        }
+
+        return null;
     }
 
     private static IReadOnlyList<string> FindSignedPaths(string? paths, string marker) =>
