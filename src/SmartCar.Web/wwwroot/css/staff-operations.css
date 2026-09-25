@@ -272,6 +272,11 @@
     text-align: left;
 }
 
+.staff-op-page .staff-search-option:disabled {
+    opacity: .65;
+    cursor: not-allowed;
+}
+
 .staff-op-page .staff-search-option:hover,
 .staff-op-page .staff-search-option:focus {
     background: rgba(13, 110, 253, .075);

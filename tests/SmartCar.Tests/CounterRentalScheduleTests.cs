@@ -26,4 +26,14 @@ public sealed class CounterRentalScheduleTests
         Assert.Equal(new DateTime(2026, 9, 26, 16, 30, 0),
             CounterRentalSchedule.LatestReturn(nextPickup, VehiclePickupMethod.Delivery, policy));
     }
+
+    [Fact]
+    public void CashHold_EndsAfterPickupAndNoShowWindow()
+    {
+        var pickupLocal = DateTime.Now.Date.AddDays(1).AddHours(10);
+        var policy = new RentalPolicySnapshot { NoShowGraceMinutes = 30 };
+
+        Assert.Equal(pickupLocal.AddMinutes(30).ToUniversalTime(),
+            CounterRentalSchedule.CashHoldExpiresAtUtc(pickupLocal, policy));
+    }
 }

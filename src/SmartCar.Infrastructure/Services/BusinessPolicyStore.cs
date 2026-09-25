@@ -21,10 +21,7 @@ public static class BusinessPolicyStore
         var policy = RentalPolicySnapshot.FromJson(row?.PolicyJson);
         policy.DepositHoldDays = row == null ? DepositHoldPolicy.DefaultDays : DepositHoldPolicy.NormalizeDays(row.DepositHoldDays);
 
-        // Chính sách hiện hành cho đơn mới: hủy trong cửa sổ miễn phí sau thanh toán
-        // được hoàn 100% tiền thuê, không yêu cầu còn tối thiểu 24 giờ trước nhận.
-        // Booking đã tạo vẫn đọc PolicyJson snapshot riêng và giữ rule cũ.
-        policy.FreeCancellationRequiresMinimumLead = false;
+        policy = PrepareForNewBooking(policy);
         if (row?.PolicyJson == null)
         {
             policy.Version = "legacy-" + policy.DepositHoldDays;
@@ -32,6 +29,14 @@ public static class BusinessPolicyStore
                 "khoản bồi thường bằng giá hợp đồng của đơn thuê bị ảnh hưởng",
                 "khoản bồi thường theo thiệt hại thực tế có căn cứ của đơn thuê bị ảnh hưởng");
         }
+        return policy;
+    }
+
+    public static RentalPolicySnapshot PrepareForNewBooking(RentalPolicySnapshot policy)
+    {
+        // Chỉ tiền thuê cần còn đủ lead time mới hưởng cửa sổ hoàn 100%.
+        // PolicyJson của booking đã tồn tại không bị sửa.
+        policy.FreeCancellationRequiresMinimumLead = true;
         return policy;
     }
 }

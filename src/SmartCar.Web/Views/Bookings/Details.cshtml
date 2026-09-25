@@ -502,10 +502,16 @@
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white"><strong>Thanh toán</strong></div>
             <div class="card-body">
-                @if (Model.Status is BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup)
+                @if (Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup)
                 {
                     <div class="alert alert-light border small py-2">
                         <strong>Không đến nhận sau @Model.Policy.NoShowGraceMinutes phút:</strong> giữ @Model.Policy.NoShowFeePercent.ToString("0.##")% tiền thuê, hoàn @((100m - Model.Policy.NoShowFeePercent).ToString("0.##"))% tiền thuê và 100% cọc còn lại.
+                    </div>
+                }
+                @if (Model.Status == BookingStatus.PendingPayment && rentalPayment?.Method == PaymentMethods.Cash)
+                {
+                    <div class="alert alert-light border small py-2">
+                        Chưa thu tiền mặt: nếu quá giờ nhận + @Model.Policy.NoShowGraceMinutes phút mà nhân viên chưa nhận đủ tiền, đơn hết hạn giữ xe. Phí no-show chỉ áp dụng cho đơn đã thanh toán và sẵn sàng giao.
                     </div>
                 }
 
@@ -521,18 +527,22 @@
                 {
                     <fieldset class="border rounded p-3 mb-3" id="upfront-payment-methods">
                         <legend class="float-none w-auto fs-6 fw-semibold px-1">Chọn cách thanh toán tiền thuê và cọc</legend>
+                        <form asp-controller="Payments" asp-action="ChooseUpfrontMethod" method="post">
+                            <input type="hidden" name="bookingId" value="@Model.BookingId" />
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="radio" name="upfrontPaymentMethod" id="pay-upfront-qr" value="qr" checked />
+                            <input class="form-check-input" type="radio" name="method" id="pay-upfront-qr" value="qr" checked="@(rentalPayment.Method != PaymentMethods.Cash ? "checked" : null)" />
                             <label class="form-check-label" for="pay-upfront-qr">Chuyển khoản / quét QR</label>
                         </div>
                         <div class="form-check">
-                            <input class="form-check-input" type="radio" name="upfrontPaymentMethod" id="pay-upfront-cash" value="cash" />
+                            <input class="form-check-input" type="radio" name="method" id="pay-upfront-cash" value="cash" checked="@(rentalPayment.Method == PaymentMethods.Cash ? "checked" : null)" />
                             <label class="form-check-label" for="pay-upfront-cash">Tiền mặt tại quầy</label>
                         </div>
                         <div class="alert alert-info small mt-3 mb-0 d-none" id="upfront-cash-instructions">
-                            Mang <strong>@Model.UpfrontAmount.ToString("N0") đ</strong> đến quầy SmartCar (@storeAddress) trước giờ nhận/giao xe.
-                            Đơn vẫn chờ thanh toán cho tới khi nhân viên thực nhận đủ tiền thuê và cọc rồi ghi nhận; không bấm “Đã chuyển” khi chọn tiền mặt.
+                            Mang <strong>@Model.UpfrontAmount.ToString("N0") đ</strong> đến quầy SmartCar (@storeAddress) muộn nhất lúc @(Model.PickupDate.AddMinutes(Model.Policy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm")).
+                            Bấm “Lưu phương thức thanh toán” để giữ lịch đến mốc này. Nhân viên chỉ xác nhận sau khi thực nhận đủ tiền thuê và cọc.
                         </div>
+                        <button class="btn btn-outline-primary btn-sm mt-2" type="submit">Lưu phương thức thanh toán</button>
+                        </form>
                     </fieldset>
                 }
                 else if (hasPayablePending || hasAwaitingConfirmation)
@@ -940,5 +950,3 @@
         sync();
     })();
 </script>
-
-

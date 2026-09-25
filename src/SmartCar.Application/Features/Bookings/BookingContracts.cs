@@ -11,7 +11,8 @@ public sealed record CreateBookingRequest(
     string? DeliveryAddress,
     decimal? DeliveryLatitude,
     decimal? DeliveryLongitude,
-    string? PolicyVersion = null);
+    string? PolicyVersion = null,
+    bool IsImmediateCounterRental = false);
 
 public class BookingListItemDto
 {
@@ -213,4 +214,3 @@ public interface IBookingService
         int bookingId,
         CancellationToken cancellationToken = default);
 }
-

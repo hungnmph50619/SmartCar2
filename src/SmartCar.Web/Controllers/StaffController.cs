@@ -206,7 +206,7 @@ public sealed class StaffController : Controller
 
     [HttpGet]
     public IActionResult CounterRental() =>
-        View(new StaffCounterRentalViewModel());
+        View(new StaffCounterRentalViewModel { IsImmediatePickup = true });
 
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> CounterRental(
@@ -232,17 +232,19 @@ public sealed class StaffController : Controller
             return View(model);
         }
 
+        var requestedPickup = model.IsImmediatePickup ? DateTime.Now : model.PickupDate;
         var createResult = await _bookingService.CreateAsync(
             model.CustomerId,
             new CreateBookingRequest(
                 model.VehicleId,
-                model.PickupDate,
+                requestedPickup,
                 model.ReturnDate,
                 VehiclePickupMethod.StorePickup,
                 null,
                 null,
                 null,
-                model.PolicyVersion),
+                model.PolicyVersion,
+                model.IsImmediatePickup),
             cancellationToken);
 
         if (!createResult.Succeeded || !createResult.BookingId.HasValue)
@@ -1118,5 +1120,4 @@ public sealed class StaffController : Controller
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 }
-
 

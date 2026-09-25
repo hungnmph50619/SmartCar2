@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
@@ -71,15 +72,20 @@ internal sealed class BookingReservationPolicy
                 booking.Payments.Any(payment =>
                     payment.Status == PaymentStatus.AwaitingConfirmation &&
                     payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment);
+            var cashAtCounter = booking.Status == BookingStatus.PendingPayment &&
+                booking.Payments.Any(payment => payment.Type == PaymentType.Rental &&
+                    payment.Status == PaymentStatus.Pending && payment.Method == PaymentMethods.Cash);
 
             if (!booking.ReservationExpiresAt.HasValue)
             {
                 booking.ReservationExpiresAt = booking.Status == BookingStatus.PendingConfirmation
                     ? booking.CreatedAt.AddMinutes(bookingPolicy.BookingConfirmationHoldMinutes)
-                    : now.AddMinutes(
-                        transferAwaitingConfirmation
-                            ? bookingPolicy.BookingTransferReconciliationHoldMinutes
-                            : bookingPolicy.BookingPaymentHoldMinutes);
+                    : cashAtCounter
+                        ? CounterRentalSchedule.CashHoldExpiresAtUtc(booking.PickupDate, bookingPolicy)
+                        : now.AddMinutes(
+                            transferAwaitingConfirmation
+                                ? bookingPolicy.BookingTransferReconciliationHoldMinutes
+                                : bookingPolicy.BookingPaymentHoldMinutes);
                 changed = true;
             }
 
@@ -98,6 +104,8 @@ internal sealed class BookingReservationPolicy
                 ? $"Yêu cầu đặt xe hết hạn sau {bookingPolicy.BookingConfirmationHoldMinutes} phút chờ xác nhận."
                 : expiredDuringTransferReconciliation
                     ? $"Đơn hết hạn sau {bookingPolicy.BookingTransferReconciliationHoldMinutes} phút chờ đối soát chuyển khoản."
+                    : cashAtCounter
+                        ? "Đơn chọn tiền mặt tại quầy đã quá giờ nhận và thời gian chờ khách đến."
                     : $"Đơn hết hạn sau {bookingPolicy.BookingPaymentHoldMinutes} phút chờ thanh toán.";
             booking.ReservationExpiresAt = null;
 

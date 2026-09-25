@@ -48,13 +48,19 @@ internal sealed class BookingService : IBookingService
             return BookingMutationResult.Failure("Không xác định được khách hàng.");
         }
 
-        if (!BookingDateRules.IsValidRange(
+        var validRange = request.IsImmediateCounterRental
+            ? request.PickupMethod == VehiclePickupMethod.StorePickup &&
+              BookingDateRules.IsValidImmediateCounterRange(request.PickupDate, request.ReturnDate)
+            : BookingDateRules.IsValidRange(
                 request.PickupDate,
                 request.ReturnDate,
-                policy.MinimumPickupLeadMinutes))
+                policy.MinimumPickupLeadMinutes);
+        if (!validRange)
         {
             return BookingMutationResult.Failure(
-                $"Thời gian nhận xe phải cách hiện tại ít nhất {policy.MinimumPickupLeadMinutes} phút và trước thời gian trả xe.");
+                request.IsImmediateCounterRental
+                    ? "Nhận ngay chỉ áp dụng tại quầy, thời gian trả phải ở tương lai. Vui lòng thử lại nếu thao tác đã quá lâu."
+                    : $"Thời gian nhận xe phải cách hiện tại ít nhất {policy.MinimumPickupLeadMinutes} phút và trước thời gian trả xe.");
         }
 
         if (!Enum.IsDefined(request.PickupMethod))
@@ -862,4 +868,3 @@ internal sealed class BookingService : IBookingService
              (document.ExpiryDate.HasValue && document.ExpiryDate.Value.Date >= requiredUntil.Date)),
             cancellationToken);
 }
-
