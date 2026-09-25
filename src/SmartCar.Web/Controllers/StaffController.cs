@@ -640,15 +640,22 @@ public sealed class StaffController : Controller
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
-        if (DateTime.Now < booking.PickupDate)
+        var tripConfirmedAt = DateTime.Now;
+        if (tripConfirmedAt < booking.PickupDate)
         {
             TempData["ErrorMessage"] =
                 $"Chưa đến giờ nhận xe đã đặt ({booking.PickupDate:dd/MM/yyyy HH:mm}). Không thể bắt đầu chuyến sớm hơn lịch.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
+        if (tripConfirmedAt >= booking.ReturnDate)
+        {
+            TempData["ErrorMessage"] =
+                $"Đã đến hoặc quá giờ trả dự kiến ({booking.ReturnDate:dd/MM/yyyy HH:mm}). Không thể bắt đầu một chuyến thuê đã hết thời gian.";
+            return RedirectToAction(nameof(Details), new { id = bookingId });
+        }
+
         var staffId = CurrentUserId();
-        var tripConfirmedAt = DateTime.Now;
         booking.Handover.SignedDocumentVerified = true;
         booking.Handover.SignedDocumentVerifiedByStaffId = staffId;
         booking.Handover.SignedDocumentVerifiedAt = DateTime.UtcNow;
