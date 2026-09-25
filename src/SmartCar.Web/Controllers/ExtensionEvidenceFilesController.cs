@@ -8,7 +8,7 @@ using SmartCar.Web.Services;
 
 namespace SmartCar.Web.Controllers;
 
-[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Customer)]
+[Authorize(Roles = RoleNames.Admin + "," + RoleNames.Staff + "," + RoleNames.Customer)]
 public sealed class ExtensionEvidenceFilesController : Controller
 {
     private readonly ApplicationDbContext _dbContext;
