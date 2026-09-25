@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Bookings;
+using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -85,6 +86,57 @@ public sealed class CustomerCashHoldTests
         Assert.IsType<NotFoundResult>(result);
         Assert.All((await db.Bookings.Include(item => item.Payments).SingleAsync()).Payments,
             payment => Assert.Equal(PaymentMethods.NotSelected, payment.Method));
+    }
+
+    [Fact]
+    public async Task QrSubmission_NearPickup_DoesNotExtendHoldPastOperationalCutoff()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await CreateBookingAsync(connection);
+
+        var booking = await db.Bookings.Include(item => item.Payments).SingleAsync();
+        booking.PickupDate = DateTime.Now.AddMinutes(20);
+        booking.ReturnDate = DateTime.Now.AddDays(1);
+        booking.PolicyJson = new RentalPolicySnapshot
+        {
+            NoShowGraceMinutes = 30,
+            BookingPaymentHoldMinutes = 30,
+            BookingTransferReconciliationHoldMinutes = 120
+        }.ToJson();
+        await db.SaveChangesAsync();
+
+        var controller = CreateController(db, "customer-1");
+        await controller.ChooseUpfrontMethod(1, "cash", default);
+
+        var serviceType = typeof(ApplicationDbContext).Assembly.GetType(
+            "SmartCar.Infrastructure.Services.PaymentService",
+            throwOnError: true)!;
+        var service = (SmartCar.Application.Features.Payments.IPaymentService)
+            Activator.CreateInstance(
+                serviceType,
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { db, new NoopAuditService() },
+                culture: null)!;
+
+        var result = await service.SubmitQrPaymentAsync(
+            1,
+            "customer-1",
+            PaymentType.Rental,
+            "customer-1");
+
+        Assert.True(result.Succeeded, string.Join("; ", result.Errors));
+
+        booking = await db.Bookings.SingleAsync();
+        var cutoff = CounterRentalSchedule.CashHoldExpiresAtUtc(
+            booking.PickupDate,
+            booking.Policy);
+
+        Assert.True(booking.ReservationExpiresAt.HasValue);
+        Assert.True(booking.ReservationExpiresAt.Value <= cutoff);
     }
 
     [Fact]
@@ -171,6 +223,36 @@ public sealed class CustomerCashHoldTests
             builder.Entity<Vehicle>().Property(item => item.RowVersion).ValueGeneratedNever();
             builder.Entity<Booking>().Property(item => item.RowVersion).ValueGeneratedNever();
         }
+    }
+
+    private sealed class NoopAuditService : IAuditService
+    {
+        public Task WriteAsync(
+            string? userId,
+            string action,
+            string entityName,
+            string entityId,
+            string description,
+            string? oldValues = null,
+            string? newValues = null,
+            string? ipAddress = null,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<IReadOnlyList<AuditLogDto>> GetRecentAsync(
+            int take = 200,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<AuditLogSearchResult> SearchAsync(
+            AuditLogQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<AuditLogDto?> GetByIdAsync(
+            long auditLogId,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private sealed class TempDataProviderStub : ITempDataProvider
