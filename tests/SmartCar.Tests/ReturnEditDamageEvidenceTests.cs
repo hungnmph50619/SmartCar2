@@ -115,6 +115,126 @@ public sealed class ReturnEditDamageEvidenceTests
         Assert.False(saved.HasDamage);
     }
 
+    [Fact]
+    public async Task Edit_RemovesDamageChargeWhenDamageBasisIsCleared()
+    {
+        await using var db = CreateDbContext();
+        var now = DateTime.Now;
+
+        db.Brands.Add(new Brand
+        {
+            BrandId = 2,
+            BrandName = "Test Brand 2"
+        });
+        db.Vehicles.Add(new Vehicle
+        {
+            VehicleId = 20,
+            BrandId = 2,
+            VehicleName = "Test Car 2",
+            LicensePlate = "30A-54321",
+            ManufactureYear = 2025,
+            Seats = 5,
+            Transmission = "AT",
+            FuelType = "Gasoline",
+            DailyPrice = 700_000m,
+            CurrentMileage = 2_050,
+            Status = VehicleStatus.Inspection,
+            RowVersion = new byte[] { 2 }
+        });
+        db.Bookings.Add(new Booking
+        {
+            BookingId = 702,
+            CustomerId = "customer-2",
+            VehicleId = 20,
+            PickupDate = now.AddDays(-1),
+            ReturnDate = now.AddHours(1),
+            DailyPrice = 700_000m,
+            NumberOfDays = 1,
+            RentalAmount = 700_000m,
+            DepositAmount = 0m,
+            AdditionalAmount = 250_000m,
+            TotalAmount = 950_000m,
+            Status = BookingStatus.PendingInspection,
+            RowVersion = new byte[] { 2 }
+        });
+        db.VehicleHandovers.Add(new VehicleHandover
+        {
+            BookingId = 702,
+            HandoverAt = now.AddDays(-1),
+            Mileage = 2_000,
+            FuelLevel = "80%",
+            IncludedKilometers = 300,
+            ExcessKmFeePerKm = 5_000m,
+            LateReturnFeeMultiplier = 1.5m,
+            TrafficFineTerms = "Test",
+            DamageCompensationTerms = "Test",
+            PenaltyPolicyAccepted = true,
+            ImagePaths = "/uploads/handovers/702/front-test.png"
+        });
+        db.VehicleReturns.Add(new VehicleReturn
+        {
+            BookingId = 702,
+            ReturnedAt = now,
+            Mileage = 2_050,
+            FuelLevel = "80%",
+            AccessoryStatus = "Đủ",
+            HasDamage = true,
+            ImagePaths = string.Join(';', new[]
+            {
+                "/uploads/returns/702/front-test.png",
+                "/uploads/returns/702/rear-test.png",
+                "/uploads/returns/702/left-test.png",
+                "/uploads/returns/702/right-test.png",
+                "/uploads/returns/702/interior-test.png",
+                "/uploads/returns/702/odometer-test.png",
+                "/uploads/returns/702/fuel-test.png",
+                "/uploads/returns/702/damage-test.png"
+            }),
+            AdditionalCharges = new List<AdditionalCharge>
+            {
+                new()
+                {
+                    ChargeType = AdditionalChargeType.Damage,
+                    Description = "Trầy xước",
+                    Amount = 250_000m
+                }
+            }
+        });
+        await db.SaveChangesAsync();
+
+        var controller = new ReturnEditsController(
+            db,
+            new AuditServiceStub(),
+            new TestWebHostEnvironment());
+
+        var result = await controller.Edit(
+            new ReturnEditViewModel
+            {
+                BookingId = 702,
+                Mileage = 2_050,
+                FuelLevel = "80",
+                AccessoryStatus = "Đủ",
+                HasDamage = false,
+                ImagesToDelete = new List<string>
+                {
+                    "/uploads/returns/702/damage-test.png"
+                }
+            },
+            default);
+
+        Assert.IsType<Microsoft.AspNetCore.Mvc.RedirectToActionResult>(result);
+
+        db.ChangeTracker.Clear();
+        var saved = await db.VehicleReturns
+            .Include(item => item.AdditionalCharges)
+            .SingleAsync(item => item.BookingId == 702);
+
+        Assert.False(saved.HasDamage);
+        Assert.DoesNotContain(
+            saved.AdditionalCharges,
+            charge => charge.ChargeType == AdditionalChargeType.Damage);
+    }
+
     private static ApplicationDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
