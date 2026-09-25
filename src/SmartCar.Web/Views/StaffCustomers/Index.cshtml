@@ -16,7 +16,7 @@
                     <h1 class="display-6 fw-bold mb-2">Tìm khách trước khi lập đơn</h1>
                     <p class="text-muted mb-0">
                         Tìm theo <strong>họ tên, số điện thoại hoặc email/Gmail</strong>. Nếu khách chưa có tài khoản,
-                        tạo mới và xác minh CCCD/GPLX tại quầy rồi quay lại lập đơn thuê.
+                        tạo mới, tiếp nhận CCCD/GPLX, tài khoản nhận hoàn và chụp mặt trực tiếp tại quầy rồi chờ Admin duyệt KYC.
                     </p>
                 </div>
                 <a class="btn btn-primary staff-action-button px-4"
@@ -120,6 +120,14 @@
                                 <td class="text-end text-nowrap">
                                     @if (customer.IsActive)
                                     {
+                                        @if (!customer.HasIdentityFace)
+                                        {
+                                            <a class="btn btn-sm btn-warning"
+                                               asp-action="FaceCapture"
+                                               asp-route-customerId="@customer.CustomerId">
+                                                Chụp mặt KYC
+                                            </a>
+                                        }
                                         <a class="btn btn-sm btn-primary"
                                            asp-controller="Staff"
                                            asp-action="CounterRental"
