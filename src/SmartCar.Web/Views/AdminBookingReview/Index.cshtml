@@ -189,11 +189,18 @@
                       data-loading-form
                       data-confirm="Xác nhận đơn thuê này?">
                     <input type="hidden" name="id" value="@Model.BookingId" />
-                    <button class="btn btn-success w-100"
-                            type="submit"
-                            disabled="@(!kycVerified)">
-                        Xác nhận đơn
-                    </button>
+                    @if (kycVerified)
+                    {
+                        <button class="btn btn-success w-100" type="submit">
+                            Xác nhận đơn
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-success w-100" type="submit" disabled>
+                            Xác nhận đơn
+                        </button>
+                    }
                 </form>
 
                 @if (!kycVerified)
