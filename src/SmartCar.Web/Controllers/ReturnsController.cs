@@ -597,7 +597,7 @@ public sealed class ReturnsController : Controller
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] =
-                "Phụ phí đang có chuyển khoản/QR chờ Staff đối soát. Không được đồng thời thu tiền mặt.";
+                "Phụ phí đang có chuyển khoản/QR chờ Admin đối soát. Không được đồng thời thu tiền mặt.";
             return RedirectToAction(nameof(Inspect), new { bookingId });
         }
 
