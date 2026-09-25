@@ -401,6 +401,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
             crossorigin=""></script>
+    <script src="~/js/delivery-geocoding.js" asp-append-version="true"></script>
 
     <script>
         (() => {
@@ -508,20 +509,7 @@
             };
             const reverseGeocode = async (lat, lng) => {
                 try {
-                    const url =
-                        '/api/geocoding/reverse?lat=' + encodeURIComponent(lat) +
-                        '&lon=' + encodeURIComponent(lng);
-
-                    const response = await fetch(url, {
-                        headers: {
-                            'Accept': 'application/json'
-                        }
-                    });
-
-                    const result = await response.json().catch(() => null);
-                    if (!response.ok) {
-                        throw new Error(result?.message || 'Dịch vụ địa chỉ chưa phản hồi.');
-                    }
+                    const result = await window.SmartCarDeliveryGeocoding.reverse(lat, lng);
                     if (result && result.display_name) {
                         address.value = result.display_name;
                         error.classList.add('d-none');
@@ -749,19 +737,7 @@
                 findAddressButton.textContent = 'Đang tìm...';
 
                 try {
-                    const url =
-                        '/api/geocoding/search?q=' + encodeURIComponent(query);
-
-                    const response = await fetch(url, {
-                        headers: {
-                            'Accept': 'application/json'
-                        }
-                    });
-
-                    const results = await response.json().catch(() => null);
-                    if (!response.ok) {
-                        throw new Error(results?.message || 'Dịch vụ tìm địa chỉ chưa phản hồi.');
-                    }
+                    const results = await window.SmartCarDeliveryGeocoding.search(query);
                     if (!Array.isArray(results)) throw new Error('Dữ liệu địa chỉ chưa hợp lệ.');
 
                     if (!results.length) {

@@ -43,6 +43,9 @@ jobs:
         if: hashFiles('tests/SmartCar.Tests/SmartCar.Tests.csproj') != ''
         run: dotnet test tests/SmartCar.Tests/SmartCar.Tests.csproj --configuration Release --no-build
 
+      - name: Verify address lookup fallback
+        run: node --test tests/js/delivery-geocoding.test.js
+
       - name: Wait for SQL Server
         shell: bash
         run: |
@@ -102,4 +105,3 @@ jobs:
         run: |
           echo "EF Core model differs from ApplicationDbContextModelSnapshot.cs."
           exit 1
-

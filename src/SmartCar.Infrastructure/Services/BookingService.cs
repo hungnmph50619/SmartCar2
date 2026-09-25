@@ -49,7 +49,8 @@ internal sealed class BookingService : IBookingService
         }
 
         var validRange = request.IsImmediateCounterRental
-            ? request.PickupMethod == VehiclePickupMethod.StorePickup &&
+            ? request.IsStaffCounterRental &&
+              request.PickupMethod == VehiclePickupMethod.StorePickup &&
               BookingDateRules.IsValidImmediateCounterRange(request.PickupDate, request.ReturnDate)
             : BookingDateRules.IsValidRange(
                 request.PickupDate,
@@ -259,6 +260,7 @@ internal sealed class BookingService : IBookingService
         var booking = new Booking
         {
             Source = request.IsStaffCounterRental ? BookingSource.StaffCounter : BookingSource.CustomerWeb,
+            IsImmediateCounterRental = request.IsStaffCounterRental && request.IsImmediateCounterRental,
             PolicyJson = policy.ToJson(),
             DepositHoldDaysApplied = policy.DepositHoldDays,
             CustomerId = customerId,
@@ -347,14 +349,22 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure("Chỉ đơn đang chờ xác nhận mới có thể được duyệt.");
         }
 
-        if (booking.PickupDate <= DateTime.Now)
+        var approvalTime = DateTime.Now;
+        var isImmediateCounter = CounterRentalSchedule.IsImmediate(
+            booking.Source, booking.IsImmediateCounterRental, booking.CreatedAt, booking.PickupDate);
+        var (approvedPickup, approvedReturn) = CounterRentalSchedule.ForApproval(
+            booking.Source, booking.IsImmediateCounterRental, booking.CreatedAt,
+            booking.PickupDate, booking.ReturnDate, approvalTime);
+
+        if ((!isImmediateCounter && booking.PickupDate <= approvalTime) ||
+            approvedReturn <= approvedPickup)
         {
             return OperationResult.Failure("Đã quá thời gian nhận xe, không thể xác nhận đơn.");
         }
 
         var documentsValid = await _documentService.HasValidRentalDocumentsAsync(
             booking.CustomerId,
-            booking.ReturnDate,
+            approvedReturn,
             cancellationToken);
 
         if (!documentsValid)
@@ -362,10 +372,22 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure("CCCD hoặc GPLX của khách không còn hiệu lực đến ngày trả xe.");
         }
 
+        if (!await HasValidVehicleDocumentAsync(booking.VehicleId, VehicleDocumentType.Registration,
+                approvedPickup, approvedReturn, allowNoExpiry: true, cancellationToken) ||
+            !await HasValidVehicleDocumentAsync(booking.VehicleId, VehicleDocumentType.Inspection,
+                approvedPickup, approvedReturn, allowNoExpiry: false, cancellationToken) ||
+            !await HasValidVehicleDocumentAsync(booking.VehicleId, VehicleDocumentType.Insurance,
+                approvedPickup, approvedReturn, allowNoExpiry: false, cancellationToken) ||
+            !await HasValidVehicleDocumentAsync(booking.VehicleId, VehicleDocumentType.RoadFee,
+                approvedPickup, approvedReturn, allowNoExpiry: false, cancellationToken))
+        {
+            return OperationResult.Failure("Giấy tờ xe không còn hiệu lực tới thời điểm trả mới. Hãy chọn xe hoặc thời gian khác trước khi thu tiền.");
+        }
+
         var hasConflict = await HasConflictAsync(
             booking.VehicleId,
-            booking.PickupDate,
-            booking.ReturnDate,
+            approvedPickup,
+            approvedReturn,
             booking.PickupMethod,
             booking.Policy,
             booking.BookingId,
@@ -373,7 +395,15 @@ internal sealed class BookingService : IBookingService
 
         if (hasConflict)
         {
-            return OperationResult.Failure("Xe đã phát sinh lịch thuê khác không đủ khoảng đệm vận hành trước/sau chuyến này.");
+            return OperationResult.Failure("Xe đã phát sinh lịch thuê khác không đủ khoảng đệm vận hành trước/sau chuyến này. Hãy chọn xe hoặc thời gian khác trước khi thu tiền.");
+        }
+
+        if (isImmediateCounter)
+        {
+            // Persist this for legacy immediate bookings whose original flag did not exist.
+            booking.IsImmediateCounterRental = true;
+            booking.PickupDate = approvedPickup;
+            booking.ReturnDate = approvedReturn;
         }
 
         booking.Status = BookingStatus.PendingPayment;
@@ -624,6 +654,7 @@ internal sealed class BookingService : IBookingService
             .Select(booking => new BookingListItemDto
             {
                 Source = booking.Source,
+                IsImmediateCounterRental = booking.IsImmediateCounterRental,
                 BookingId = booking.BookingId,
                 CustomerId = booking.CustomerId,
                 CustomerName = _dbContext.Users
@@ -740,6 +771,8 @@ internal sealed class BookingService : IBookingService
         return new BookingDetailsDto
         {
             Source = booking.Source,
+            IsImmediateCounterRental = CounterRentalSchedule.IsImmediate(
+                booking.Source, booking.IsImmediateCounterRental, booking.CreatedAt, booking.PickupDate),
             PolicyJson = booking.PolicyJson,
             BookingId = booking.BookingId,
             CustomerId = booking.CustomerId,

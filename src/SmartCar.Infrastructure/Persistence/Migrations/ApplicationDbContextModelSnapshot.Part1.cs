@@ -267,6 +267,9 @@ partial class ApplicationDbContextModelSnapshot
                     .HasMaxLength(450)
                     .HasColumnType("nvarchar(450)");
 
+                b.Property<bool>("IsImmediateCounterRental")
+                    .HasColumnType("bit");
+
                 b.Property<decimal>("DailyPrice")
                     .HasPrecision(18, 2)
                     .HasColumnType("decimal(18,2)");

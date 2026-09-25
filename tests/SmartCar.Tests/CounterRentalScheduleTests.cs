@@ -36,4 +36,44 @@ public sealed class CounterRentalScheduleTests
         Assert.Equal(pickupLocal.AddMinutes(30).ToUniversalTime(),
             CounterRentalSchedule.CashHoldExpiresAtUtc(pickupLocal, policy));
     }
+
+    [Fact]
+    public void ImmediateCounterApproval_PreservesBookedDurationAfterReviewDelay()
+    {
+        var createdAt = DateTime.UtcNow.AddMinutes(-12);
+        var pickup = createdAt.ToLocalTime();
+        var returnDate = pickup.AddDays(1);
+        var approval = pickup.AddMinutes(12);
+
+        var adjusted = CounterRentalSchedule.ForApproval(
+            BookingSource.StaffCounter, true, createdAt, pickup, returnDate, approval);
+
+        Assert.Equal(approval, adjusted.PickupDate);
+        Assert.Equal(returnDate.AddMinutes(12), adjusted.ReturnDate);
+    }
+
+    [Fact]
+    public void ScheduledCounterApproval_DoesNotMovePickupOrReturn()
+    {
+        var pickup = DateTime.Now.AddHours(2);
+        var returnDate = pickup.AddDays(1);
+
+        var adjusted = CounterRentalSchedule.ForApproval(
+            BookingSource.StaffCounter, false, DateTime.UtcNow, pickup, returnDate, pickup.AddMinutes(1));
+
+        Assert.Equal(pickup, adjusted.PickupDate);
+        Assert.Equal(returnDate, adjusted.ReturnDate);
+    }
+
+    [Fact]
+    public void LegacyImmediateCounterApproval_RecognizesPickupNearCreation()
+    {
+        var createdAt = DateTime.UtcNow.AddMinutes(-10);
+        var pickup = createdAt.ToLocalTime();
+
+        Assert.True(CounterRentalSchedule.IsImmediate(
+            BookingSource.StaffCounter, false, createdAt, pickup));
+        Assert.False(CounterRentalSchedule.IsImmediate(
+            BookingSource.CustomerWeb, false, createdAt, pickup));
+    }
 }

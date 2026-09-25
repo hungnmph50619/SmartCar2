@@ -19,6 +19,7 @@ public class BookingListItemDto
 {
     public int BookingId { get; init; }
     public BookingSource Source { get; init; }
+    public bool IsImmediateCounterRental { get; init; }
     public string CustomerId { get; init; } = string.Empty;
     public string CustomerName { get; init; } = string.Empty;
     public string? CustomerPhone { get; init; }

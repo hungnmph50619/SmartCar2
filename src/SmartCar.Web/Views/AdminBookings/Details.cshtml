@@ -68,6 +68,11 @@ else if (isOperational)
 
                 <dt class="col-sm-4">Trả dự kiến</dt>
                 <dd class="col-sm-8">@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</dd>
+                @if (Model.IsImmediateCounterRental && Model.Status == BookingStatus.PendingConfirmation)
+                {
+                    <dt class="col-sm-4">Nhận ngay tại quầy</dt>
+                    <dd class="col-sm-8">Hệ thống sẽ dời giờ nhận và trả tới thời điểm duyệt, giữ nguyên thời lượng; kiểm tra lại xe và giấy tờ trước khi thu tiền.</dd>
+                }
 
                 <dt class="col-sm-4">Hình thức nhận</dt>
                 <dd class="col-sm-8">
