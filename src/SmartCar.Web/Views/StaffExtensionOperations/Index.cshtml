@@ -228,7 +228,24 @@ else
                                 </a>
                             </div>
 
-                            @if (conflict.Alternatives.Count == 0)
+                            @if (conflict.HandoverDraftExists)
+                            {
+                                <div class="alert alert-warning">
+                                    <strong>Đơn kế tiếp đang có biên bản giao nháp chưa ký.</strong>
+                                    Phải hủy draft cũ trước khi đổi xe để ảnh/biên bản của xe cũ không bị gắn sang xe thay thế.
+                                </div>
+                                <form asp-controller="HandoverEdits"
+                                      asp-action="DiscardDraft"
+                                      method="post"
+                                      data-confirm="Hủy biên bản giao nháp chưa ký của đơn kế tiếp để xử lý đổi xe? Ảnh tình trạng xe trong draft cũ sẽ bị loại khỏi hồ sơ.">
+                                    <input type="hidden" name="bookingId" value="@conflict.BookingId" />
+                                    <input type="hidden" name="returnTo" value="extension-conflict" />
+                                    <button class="btn btn-outline-warning w-100" type="submit">
+                                        Hủy biên bản giao nháp để tiếp tục đổi xe
+                                    </button>
+                                </form>
+                            }
+                            else if (conflict.Alternatives.Count == 0)
                             {
                                 <div class="alert alert-warning mb-0">
                                     Không có xe thay thế phù hợp lịch hiện tại.
