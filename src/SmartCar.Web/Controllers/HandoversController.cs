@@ -242,6 +242,10 @@ public sealed class HandoversController : Controller
 
         TempData["SuccessMessage"] =
             "Đã lưu biên bản, ảnh mặt trực tiếp và kết quả đối chiếu người nhận. Hãy in, ký và tải bản ký để Staff kiểm tra trước khi bắt đầu chuyến.";
+        TempData["ClearFileDraftKeys"] =
+            $"handover-{model.BookingId}-front|handover-{model.BookingId}-rear|handover-{model.BookingId}-left|" +
+            $"handover-{model.BookingId}-right|handover-{model.BookingId}-interior|handover-{model.BookingId}-odometer|" +
+            $"handover-{model.BookingId}-fuel|handover-{model.BookingId}-extra|giao-{model.BookingId}-citizen-front|giao-{model.BookingId}-citizen-back";
         return RedirectToBookingDetails(model.BookingId);
     }
 
