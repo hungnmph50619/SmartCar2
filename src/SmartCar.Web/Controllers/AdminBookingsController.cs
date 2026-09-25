@@ -299,6 +299,29 @@ public sealed class AdminBookingsController : Controller
             return RedirectToAction(nameof(Details), new { id = model.BookingId });
         }
 
+        var staffReview = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.BookingId == model.BookingId)
+            .Select(item => new
+            {
+                item.StaffReviewedAt,
+                item.StaffReviewedByStaffId
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (staffReview is null)
+        {
+            return NotFound();
+        }
+
+        if (!staffReview.StaffReviewedAt.HasValue ||
+            string.IsNullOrWhiteSpace(staffReview.StaffReviewedByStaffId))
+        {
+            TempData["ErrorMessage"] =
+                "Đơn chưa được nhân viên kiểm tra và gửi duyệt. Quản trị viên không thể bỏ qua bước vận hành này.";
+            return RedirectToAction(nameof(Details), new { id = model.BookingId });
+        }
+
         var result = await _bookingService.RejectAsync(
             model.BookingId,
             model.Reason,
