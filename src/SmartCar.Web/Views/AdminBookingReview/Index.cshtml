@@ -248,10 +248,32 @@
                 scrollWheelZoom: false
             }).setView([latitude, longitude], 16);
 
+            let tileLoaded = false;
+            let tileErrors = 0;
+            let fallbackStarted = false;
+
+            const addFallbackTiles = () => {
+                if (fallbackStarted || tileLoaded) return;
+                fallbackStarted = true;
+                L.tileLayer(
+                    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                    {
+                        maxZoom: 19,
+                        attribution: 'Tiles &copy; Esri'
+                    })
+                    .on('tileload', () => { tileLoaded = true; })
+                    .addTo(map);
+            };
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
+            })
+                .on('tileload', () => { tileLoaded = true; })
+                .on('tileerror', () => {
+                    if (++tileErrors >= 2 && !tileLoaded) addFallbackTiles();
+                })
+                .addTo(map);
 
             L.marker([latitude, longitude])
                 .addTo(map)
