@@ -339,6 +339,12 @@ internal sealed class ExtensionService : IExtensionService
             return OperationResult.Failure("Yêu cầu gia hạn không còn hợp lệ để bổ sung minh chứng.");
         }
 
+        if (!IsForceMajeure(extension.CustomerNote))
+        {
+            return OperationResult.Failure(
+                "Yêu cầu này là gia hạn thông thường, không được chuyển sang luồng bổ sung minh chứng bất khả kháng.");
+        }
+
         var resolvedCustomerNote = string.IsNullOrWhiteSpace(customerNote)
             ? ExtractCustomerNote(extension.CustomerNote)
             : customerNote.Trim();
