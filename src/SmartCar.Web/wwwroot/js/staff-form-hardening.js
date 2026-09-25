@@ -141,9 +141,9 @@
                 <span class="small text-muted" data-counter-citizen-message>Chưa có đủ bằng chứng CCCD tại quầy.</span>
             </div>`;
 
-        const confirmationPanel = firstSection.querySelector('.bg-light, .bg-body-tertiary');
-        if (confirmationPanel && confirmationPanel.parentElement === firstSection) {
-            confirmationPanel.before(block);
+        const identityWidget = firstSection.querySelector(':scope > [data-identity-capture-widget]');
+        if (identityWidget) {
+            identityWidget.before(block);
         } else {
             firstSection.appendChild(block);
         }
