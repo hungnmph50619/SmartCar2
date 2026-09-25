@@ -40,7 +40,7 @@
     <section class="border rounded-4 p-3 p-lg-4 mb-4">
         <div class="text-uppercase small text-primary fw-semibold">Bước 1/4</div>
         <h2 class="h5 mb-1">Xác minh đúng người trả</h2>
-        <p class="small text-muted">Không nhập lại số CCCD. Staff xem CCCD đã KYC, kiểm bản gốc và chụp mặt người đang đứng trước quầy.</p>
+        <p class="small text-muted">Chụp lại hai mặt CCCD người đang trả, nhập số đọc trực tiếp từ giấy tờ và đối chiếu ảnh lúc giao, hồ sơ KYC, người có mặt.</p>
 
         <div class="row g-3 mb-3">
             <div class="col-lg-8">
@@ -55,6 +55,36 @@
                     <div class="small text-muted">Ảnh KYC chỉ là ảnh tham chiếu; ảnh người trả hiện tại được lưu riêng cho biên bản trả.</div>
                 </div>
             </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+            @foreach (var side in new[] { "front", "back" })
+            {
+                <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded-3 p-2 h-100">
+                        <div class="small fw-semibold">CCCD @(side == "front" ? "mặt trước" : "mặt sau") đã duyệt</div>
+                        <img src="@Url.Action("KycCitizen", "StaffCounterIdentityEvidence", new { bookingId = Model.BookingId, side })"
+                             alt="CCCD KYC @side" class="img-fluid rounded-2 mt-1" style="max-height:125px;object-fit:contain" />
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded-3 p-2 h-100">
+                        <div class="small fw-semibold">CCCD @(side == "front" ? "mặt trước" : "mặt sau") lúc giao</div>
+                        <img src="@Url.Action("HandoverCitizen", "StaffCounterIdentityEvidence", new { bookingId = Model.BookingId, side })"
+                             alt="CCCD lúc giao @side" class="img-fluid rounded-2 mt-1" style="max-height:125px;object-fit:contain" />
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="alert alert-warning small mb-3">
+            Nếu người trả xuất trình CCCD khác hoặc không phải khách đứng tên đơn, dừng xác minh trả xe thông thường và báo quản lý. Ghi nhận thời điểm xe thực tế được đưa tới để xử lý riêng.
+        </div>
+        <div class="mb-3">
+            <label asp-for="ObservedCitizenId" class="form-label fw-semibold">Số CCCD đọc từ bản gốc người đang trả xe *</label>
+            <input asp-for="ObservedCitizenId" class="form-control" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" required />
+            <div class="form-text">Nhập từ thẻ đang cầm, hệ thống sẽ so với hồ sơ đã duyệt. Không chép số hiển thị phía trên.</div>
+            <span asp-validation-for="ObservedCitizenId" class="text-danger small"></span>
         </div>
 
         <partial name="_IdentityCaptureWidget" model="@(new IdentityCaptureWidgetViewModel

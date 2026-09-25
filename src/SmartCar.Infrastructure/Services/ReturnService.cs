@@ -149,6 +149,51 @@ internal sealed class ReturnService : IReturnService
                 "Thời gian trả xe không được trước thời gian giao xe.");
         }
 
+        var verifiedCitizenId = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == booking.CustomerId &&
+                document.DocumentType == DocumentTypes.CitizenId &&
+                document.Status == DocumentStatus.Verified)
+            .OrderByDescending(document => document.VerifiedAt)
+            .Select(document => document.DocumentNumber)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(verifiedCitizenId) ||
+            !string.Equals(request.ObservedCitizenId?.Trim(), verifiedCitizenId, StringComparison.Ordinal))
+        {
+            return OperationResult.Failure(
+                "Số CCCD người đang trả khác CCCD đã được Admin xác minh của khách đứng tên đơn. " +
+                "Dừng xác minh trả xe thông thường và báo quản lý xử lý trường hợp khác người.");
+        }
+
+        var returnCitizenSessions = await _dbContext.Set<IdentityCaptureSession>()
+            .Where(session =>
+                session.BookingId == booking.BookingId &&
+                session.TargetCustomerId == booking.CustomerId &&
+                session.CreatedByUserId == request.IdentityVerifiedByStaffId &&
+                !session.ConsumedAt.HasValue &&
+                session.CompletedAt.HasValue &&
+                session.ExpiresAt > DateTime.UtcNow &&
+                session.ImagePath != null &&
+                session.CaptureMethod == IdentityCaptureMethods.StaffCounterDocument &&
+                (session.Purpose == IdentityCapturePurposes.ReturnCitizenFront ||
+                 session.Purpose == IdentityCapturePurposes.ReturnCitizenBack))
+            .OrderByDescending(session => session.CompletedAt)
+            .ToListAsync(cancellationToken);
+
+        var citizenFront = returnCitizenSessions.FirstOrDefault(session =>
+            session.Purpose == IdentityCapturePurposes.ReturnCitizenFront);
+        var citizenBack = returnCitizenSessions.FirstOrDefault(session =>
+            session.Purpose == IdentityCapturePurposes.ReturnCitizenBack);
+
+        if (citizenFront is null || citizenBack is null)
+        {
+            return OperationResult.Failure(
+                "Cần chụp và lưu đủ CCCD mặt trước + mặt sau của người đang trả xe " +
+                "trong đúng đơn và bởi đúng nhân viên trước khi lập biên bản.");
+        }
+
         var evidencePaths = SplitImagePaths(request.ImagePaths)
             .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
@@ -254,6 +299,8 @@ internal sealed class ReturnService : IReturnService
         };
 
         faceSession.ConsumedAt = identityVerifiedAt;
+        citizenFront.ConsumedAt = identityVerifiedAt;
+        citizenBack.ConsumedAt = identityVerifiedAt;
 
         var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
@@ -1092,5 +1139,4 @@ internal sealed class ReturnService : IReturnService
             ? addition
             : $"{current.Trim()} {addition}";
 }
-
 

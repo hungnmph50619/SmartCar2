@@ -6,7 +6,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         hardenImageInputs();
-        initializeHandoverCitizenEvidence();
+        initializeCounterCitizenEvidence();
         explainBlockedInspectionState();
         normalizeOptionalImageErrors();
     });
@@ -91,10 +91,13 @@
         host.classList.remove('border-danger');
     }
 
-    async function initializeHandoverCitizenEvidence() {
-        if (!/^\/Handovers\/Create/i.test(window.location.pathname)) return;
+    async function initializeCounterCitizenEvidence() {
+        const isReturn = /^\/Returns\/Create/i.test(window.location.pathname);
+        if (!isReturn && !/^\/Handovers\/Create/i.test(window.location.pathname)) return;
 
-        const form = document.querySelector('form[action*="/Handovers/Create"], form[action$="/Handovers/Create"]') ||
+        const form = document.querySelector(isReturn
+            ? 'form[action*="/Returns/Create"], form[action$="/Returns/Create"]'
+            : 'form[action*="/Handovers/Create"], form[action$="/Handovers/Create"]') ||
             document.querySelector('form[enctype="multipart/form-data"]');
         if (!(form instanceof HTMLFormElement)) return;
 
@@ -105,26 +108,30 @@
         const firstSection = form.querySelector('section');
         if (!firstSection) return;
 
+        const observedId = isReturn ? form.querySelector('input[name="ObservedCitizenId"]') : null;
+        const evidenceAction = isReturn ? 'UploadReturn' : 'UploadHandover';
+        const statusAction = isReturn ? 'ReturnStatus' : 'HandoverStatus';
+        const stage = isReturn ? 'trả' : 'giao';
         const block = document.createElement('div');
         block.className = 'border rounded-4 p-3 mt-3 bg-body-tertiary';
         block.dataset.counterCitizenEvidence = 'true';
         block.innerHTML = `
             <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start">
                 <div>
-                    <div class="fw-semibold">CCCD khách đang có mặt tại quầy *</div>
-                    <div class="small text-muted">Chụp đủ mặt trước + mặt sau để đối chiếu với hồ sơ KYC đã duyệt. Hai ảnh được lưu trong vùng tài liệu bảo mật, không nằm trong thư mục ảnh xe công khai.</div>
+                    <div class="fw-semibold">CCCD người đang ${stage} xe tại quầy *</div>
+                    <div class="small text-muted">Chụp lại đủ mặt trước + mặt sau để đối chiếu với hồ sơ KYC đã duyệt. Hai ảnh được lưu trong vùng tài liệu bảo mật, không nằm trong thư mục ảnh xe công khai.</div>
                 </div>
                 <span class="badge text-bg-secondary" data-counter-citizen-status>Đang kiểm tra...</span>
             </div>
             <div class="row g-3 mt-1">
                 <div class="col-md-6">
                     <label class="form-label fw-semibold" for="counter-citizen-front">CCCD mặt trước</label>
-                    <input id="counter-citizen-front" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-file-draft-key="handover-${bookingId}-citizen-front" />
+                    <input id="counter-citizen-front" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-file-draft-key="${stage}-${bookingId}-citizen-front" />
                     <div class="form-text">Ảnh phải thấy đầy đủ bốn góc giấy tờ; không crop mất thông tin.</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold" for="counter-citizen-back">CCCD mặt sau</label>
-                    <input id="counter-citizen-back" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-file-draft-key="handover-${bookingId}-citizen-back" />
+                    <input id="counter-citizen-back" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-file-draft-key="${stage}-${bookingId}-citizen-back" />
                     <div class="form-text">Không được dùng lại ảnh mặt trước cho mặt sau.</div>
                 </div>
             </div>
@@ -168,6 +175,11 @@
 
         const upload = async () => {
             if (uploading) return false;
+            if (isReturn && (!(observedId instanceof HTMLInputElement) || !observedId.checkValidity())) {
+                observedId?.reportValidity();
+                setState('error', 'Nhập số CCCD đọc trực tiếp từ giấy tờ người đang trả trước khi lưu hai mặt.');
+                return false;
+            }
             const frontFile = front.files?.[0] || null;
             const backFile = back.files?.[0] || null;
 
@@ -193,9 +205,10 @@
                 payload.append('bookingId', String(bookingId));
                 payload.append('citizenFront', frontFile, frontFile.name);
                 payload.append('citizenBack', backFile, backFile.name);
+                if (isReturn) payload.append('observedCitizenId', observedId.value.trim());
                 if (token) payload.append('__RequestVerificationToken', token);
 
-                const response = await fetch('/StaffCounterIdentityEvidence/UploadHandover', {
+                const response = await fetch(`/StaffCounterIdentityEvidence/${evidenceAction}`, {
                     method: 'POST',
                     body: payload,
                     credentials: 'same-origin',
@@ -209,7 +222,7 @@
                 }
 
                 saved = true;
-                setState('success', 'Đã lưu đủ CCCD mặt trước + mặt sau. Có thể tiếp tục lập biên bản giao xe.');
+                setState('success', `Đã lưu đủ CCCD mặt trước + mặt sau. Có thể tiếp tục lập biên bản ${stage} xe.`);
                 return true;
             } catch {
                 saved = false;
@@ -228,10 +241,11 @@
         };
         front.addEventListener('change', markDirty);
         back.addEventListener('change', markDirty);
+        observedId?.addEventListener('input', markDirty);
         saveButton.addEventListener('click', upload);
 
         try {
-            const response = await fetch(`/StaffCounterIdentityEvidence/HandoverStatus?bookingId=${bookingId}`, {
+            const response = await fetch(`/StaffCounterIdentityEvidence/${statusAction}?bookingId=${bookingId}`, {
                 headers: { 'Accept': 'application/json' },
                 credentials: 'same-origin'
             });
@@ -241,7 +255,7 @@
                 if (saved) {
                     setState('success', 'Bộ CCCD tại quầy đã được lưu trước đó và vẫn còn hiệu lực. Chỉ chọn ảnh mới nếu cần thay bộ chứng cứ.');
                 } else {
-                    setState('idle', 'Chưa lưu đủ CCCD mặt trước + mặt sau cho lần bàn giao này.');
+                    setState('idle', `Chưa lưu đủ CCCD mặt trước + mặt sau cho lần ${stage} xe này.`);
                 }
             } else {
                 setState('idle', 'Chưa xác định được trạng thái CCCD tại quầy. Hãy chọn và lưu đủ hai mặt.');
