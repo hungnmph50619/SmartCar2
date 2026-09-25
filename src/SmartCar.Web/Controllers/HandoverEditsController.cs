@@ -19,6 +19,10 @@ public sealed class HandoverEditsController : Controller
     private const int MinimumImages = 7;
     private const int MaximumImages = 25;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
+    private static readonly string[] RequiredEvidencePrefixes =
+    {
+        "front-", "rear-", "left-", "right-", "interior-", "odometer-", "fuel-"
+    };
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
@@ -138,6 +142,13 @@ public sealed class HandoverEditsController : Controller
             ModelState.AddModelError(nameof(model.ImagesToDelete), "Danh sách ảnh cần xóa không hợp lệ.");
         }
 
+        if (deleteSet.Any(IsRequiredEvidence))
+        {
+            ModelState.AddModelError(
+                nameof(model.ImagesToDelete),
+                "7 ảnh đối chiếu bắt buộc (trước, sau, trái, phải, nội thất, công-tơ-mét, nhiên liệu) không được xóa ở bước chỉnh sửa.");
+        }
+
         var newImages = (model.NewImages ?? new List<IFormFile>())
             .Where(file => file.Length > 0)
             .ToList();
@@ -250,6 +261,13 @@ public sealed class HandoverEditsController : Controller
         SplitPaths(imagePaths)
             .Where(path => !path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
+    private static bool IsRequiredEvidence(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return RequiredEvidencePrefixes.Any(prefix =>
+            fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static bool TryParseFuel(string? value, out int percent)
     {
