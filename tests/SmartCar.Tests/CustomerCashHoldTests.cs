@@ -87,6 +87,28 @@ public sealed class CustomerCashHoldTests
             payment => Assert.Equal(PaymentMethods.NotSelected, payment.Method));
     }
 
+    [Fact]
+    public async Task CounterBooking_UsesStaffPaymentActionsInsteadOfCustomerUpfrontActions()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await CreateBookingAsync(connection);
+        var booking = await db.Bookings.SingleAsync();
+        booking.Source = BookingSource.StaffCounter;
+        await db.SaveChangesAsync();
+        var controller = CreateController(db, "customer-1");
+
+        await controller.ChooseUpfrontMethod(1, "qr", default);
+        await controller.SubmitQr(1, PaymentType.Rental, null, default);
+
+        Assert.All((await db.Bookings.Include(item => item.Payments).SingleAsync()).Payments,
+            payment =>
+            {
+                Assert.Equal(PaymentMethods.NotSelected, payment.Method);
+                Assert.Equal(PaymentStatus.Pending, payment.Status);
+            });
+    }
+
     private static async Task<ApplicationDbContext> CreateBookingAsync(SqliteConnection connection)
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()

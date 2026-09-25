@@ -39,7 +39,8 @@
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
     var hasPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
-        (payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
+        ((payment.Type == PaymentType.Rental && Model.Source == BookingSource.CustomerWeb) ||
+         payment.Type is PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
          payment.Type == PaymentType.AdditionalCharge &&
          AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
@@ -523,7 +524,11 @@
                         SmartCar đang đối chiếu biên bản giao - trả và chốt phụ phí. Khoản tạm tính chưa mở thanh toán; vui lòng chờ số tiền cuối cùng.
                     </div>
                 }
-                @if (rentalPayment?.Status == PaymentStatus.Pending && Model.Status == BookingStatus.PendingPayment)
+                @if (Model.Source == BookingSource.StaffCounter && Model.Status == BookingStatus.PendingPayment)
+                {
+                    <div class="alert alert-info small py-2">Đơn này được lập tại quầy. Vui lòng thanh toán tiền thuê và cọc trực tiếp với nhân viên bằng tiền mặt hoặc quét QR tại quầy; Admin sẽ đối soát chuyển khoản.</div>
+                }
+                @if (Model.Source == BookingSource.CustomerWeb && rentalPayment?.Status == PaymentStatus.Pending && Model.Status == BookingStatus.PendingPayment)
                 {
                     <fieldset class="border rounded p-3 mb-3" id="upfront-payment-methods">
                         <legend class="float-none w-auto fs-6 fw-semibold px-1">Chọn cách thanh toán tiền thuê và cọc</legend>
@@ -596,7 +601,7 @@
                                 <div><strong>Tiền thuê@(Model.DeliveryFee > 0 ? " + giao" : "") + cọc</strong><div class="fs-5">@bundledAmount.ToString("N0") đ</div></div>
                                 <span class="badge @upfrontBadgeClass">@upfrontStatus.ToVietnamese()</span>
                             </div>
-                            @if (rentalPayment.Status == PaymentStatus.Pending)
+                            @if (Model.Source == BookingSource.CustomerWeb && rentalPayment.Status == PaymentStatus.Pending)
                             {
                                 <form asp-controller="Payments" asp-action="SubmitQr" method="post" class="mt-2" id="upfront-qr-submit">
                                     <input type="hidden" name="bookingId" value="@Model.BookingId" />

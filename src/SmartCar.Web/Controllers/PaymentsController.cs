@@ -48,6 +48,12 @@ public sealed class PaymentsController : Controller
                 item.CustomerId == customerId, cancellationToken);
         if (booking is null) return NotFound();
 
+        if (booking.Source == BookingSource.StaffCounter)
+        {
+            TempData["ErrorMessage"] = "Đơn lập tại quầy được thanh toán với nhân viên tại quầy.";
+            return RedirectToAction("Details", "Bookings", new { id = bookingId });
+        }
+
         var rental = booking.Payments.FirstOrDefault(item =>
             item.Type == PaymentType.Rental && item.Status == PaymentStatus.Pending);
         if (booking.Status != BookingStatus.PendingPayment || rental is null ||
@@ -105,6 +111,15 @@ public sealed class PaymentsController : Controller
         if (string.IsNullOrWhiteSpace(customerId))
         {
             return Challenge();
+        }
+
+        if (type == PaymentType.Rental && await _dbContext.Bookings.AsNoTracking()
+                .AnyAsync(booking => booking.BookingId == bookingId &&
+                    booking.CustomerId == customerId &&
+                    booking.Source == BookingSource.StaffCounter, cancellationToken))
+        {
+            TempData["ErrorMessage"] = "Đơn lập tại quầy được thanh toán với nhân viên tại quầy.";
+            return RedirectToAction("Details", "Bookings", new { id = bookingId });
         }
 
         if (type == PaymentType.AdditionalCharge)
