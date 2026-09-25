@@ -264,10 +264,27 @@ public sealed class ReturnsController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        var refundPayment = booking.Payments
+        var refundPayments = booking.Payments
             .Where(payment => payment.Type == PaymentType.Refund)
-            .OrderByDescending(payment => payment.PaymentId)
-            .FirstOrDefault();
+            .ToList();
+
+        var refundAwaitingApprovalAmount = refundPayments
+            .Where(payment => payment.Status == PaymentStatus.AwaitingRefund)
+            .Sum(payment => payment.Amount);
+        var refundApprovedAmount = refundPayments
+            .Where(payment => payment.Status == PaymentStatus.RefundApproved)
+            .Sum(payment => payment.Amount);
+        var refundTransferredAmount = refundPayments
+            .Where(payment => payment.Status == PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var openRefundAmount = refundAwaitingApprovalAmount + refundApprovedAmount;
+        var aggregateRefundStatus = refundAwaitingApprovalAmount > 0m
+            ? PaymentStatus.AwaitingRefund
+            : refundApprovedAmount > 0m
+                ? PaymentStatus.RefundApproved
+                : refundTransferredAmount > 0m
+                    ? PaymentStatus.Refunded
+                    : (PaymentStatus?)null;
 
         var overdueRows = await _dbContext.Payments
             .AsNoTracking()
@@ -338,8 +355,11 @@ public sealed class ReturnsController : Controller
                 payment.Type == PaymentType.OverdueCompensationDebt &&
                 payment.Amount > 0m &&
                 payment.Status == PaymentStatus.AwaitingConfirmation),
-            RefundStatus = refundPayment?.Status,
-            RefundAmount = refundPayment?.Amount ?? 0m,
+            RefundStatus = aggregateRefundStatus,
+            RefundAmount = openRefundAmount > 0m ? openRefundAmount : refundTransferredAmount,
+            RefundAwaitingApprovalAmount = refundAwaitingApprovalAmount,
+            RefundApprovedAmount = refundApprovedAmount,
+            RefundTransferredAmount = refundTransferredAmount,
             AdditionalCharges = booking.AdditionalCharges,
             OverdueImpacts = overdueImpacts,
             HandoverIdentityVerified = records.Handover.CustomerIdentityVerified,
