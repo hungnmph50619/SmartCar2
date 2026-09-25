@@ -20,6 +20,15 @@ namespace SmartCar.Tests;
 public sealed class CounterRentalWorkflowTests
 {
     [Fact]
+    public void DefaultImmediateRental_DoesNotAccidentallyQuoteTwoDays()
+    {
+        var model = new StaffCounterRentalViewModel();
+
+        Assert.True(model.IsImmediatePickup);
+        Assert.InRange((model.ReturnDate - DateTime.Now).TotalHours, 23.9, 24);
+    }
+
+    [Fact]
     public async Task CounterRental_RejectsActiveCustomerWithoutDefaultRefundAccount()
     {
         await using var db = CreateDbContext();

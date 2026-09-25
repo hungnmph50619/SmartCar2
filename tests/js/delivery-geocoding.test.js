@@ -57,3 +57,12 @@ test('invalid input from the server does not trigger a direct request', async ()
     await assert.rejects(geocoding.search('a'), /Địa chỉ quá ngắn/);
     assert.equal(calls, 1);
 });
+
+test('both network paths failing reports which connections failed', async () => {
+    const geocoding = client(async url => url.startsWith('/api/')
+        ? { ok: false, status: 502, json: async () => ({ message: 'Máy chủ không kết nối được Nominatim.' }) }
+        : { ok: false, status: 503, json: async () => ({}) });
+
+    await assert.rejects(geocoding.search('Hà Nội'),
+        /Máy chủ không kết nối được Nominatim.*Trình duyệt cũng không kết nối/);
+});

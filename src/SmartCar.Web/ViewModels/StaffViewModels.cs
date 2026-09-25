@@ -43,7 +43,7 @@ public sealed class StaffCounterRentalViewModel
     public string? SelectedCustomerDetail { get; set; }
     public string? SelectedVehicleName { get; set; }
     public string? SelectedVehicleDetail { get; set; }
-    public bool IsImmediatePickup { get; set; }
+    public bool IsImmediatePickup { get; set; } = true;
 
     [Required(ErrorMessage = "Vui lòng chọn khách hàng.")]
     public string CustomerId { get; set; } = string.Empty;
@@ -55,7 +55,7 @@ public sealed class StaffCounterRentalViewModel
     public DateTime PickupDate { get; set; } = DateTime.Now.AddMinutes(10);
 
     [Required(ErrorMessage = "Vui lòng chọn thời gian trả xe.")]
-    public DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(1).AddMinutes(10);
+    public DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(1);
     public string? PolicyVersion { get; set; }
 }
 
