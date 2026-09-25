@@ -648,8 +648,7 @@ public sealed class StaffController : Controller
         }
 
         var staffId = CurrentUserId();
-        var actualHandoverAt = DateTime.Now;
-        booking.Handover.HandoverAt = actualHandoverAt;
+        var tripConfirmedAt = DateTime.Now;
         booking.Handover.SignedDocumentVerified = true;
         booking.Handover.SignedDocumentVerifiedByStaffId = staffId;
         booking.Handover.SignedDocumentVerifiedAt = DateTime.UtcNow;
@@ -661,7 +660,7 @@ public sealed class StaffController : Controller
         {
             UserId = booking.CustomerId,
             Title = "Đã bàn giao xe",
-            Message = $"Đơn #{booking.BookingId} bắt đầu chuyến lúc {actualHandoverAt:dd/MM/yyyy HH:mm} sau khi nhân viên xác minh đúng người và bản ký."
+            Message = $"Đơn #{booking.BookingId} đã được xác nhận bắt đầu chuyến lúc {tripConfirmedAt:dd/MM/yyyy HH:mm} sau khi nhân viên xác minh đúng người và bản ký. Biên bản giao ghi thời điểm {booking.Handover.HandoverAt:dd/MM/yyyy HH:mm}."
         });
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -670,7 +669,7 @@ public sealed class StaffController : Controller
             "StaffVerifySignedHandover",
             nameof(VehicleHandover),
             bookingId,
-            $"Nhân viên xác minh bản ký và bắt đầu chuyến #{bookingId} lúc {actualHandoverAt:dd/MM/yyyy HH:mm}.",
+            $"Nhân viên xác minh bản ký và xác nhận bắt đầu chuyến #{bookingId} lúc {tripConfirmedAt:dd/MM/yyyy HH:mm}; giữ nguyên thời gian giao trên biên bản {booking.Handover.HandoverAt:dd/MM/yyyy HH:mm}.",
             cancellationToken);
 
         TempData["SuccessMessage"] = "Đã xác minh bản ký. Thời điểm bàn giao thực tế đã được chốt và chuyến thuê bắt đầu.";
