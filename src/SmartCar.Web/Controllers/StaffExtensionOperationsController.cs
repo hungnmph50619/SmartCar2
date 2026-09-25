@@ -137,35 +137,10 @@ public sealed class StaffExtensionOperationsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        var conflictPreparation = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(
-                conflict.PickupMethod));
-        var conflictPickupBoundary =
-            conflict.PickupDate - conflictPreparation;
-        var conflictReturnWithStorePreparation =
-            conflict.ReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.StorePickup));
-        var conflictReturnWithDeliveryPreparation =
-            conflict.ReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.Delivery));
-
-        var replacementHasConflict = await _dbContext.Bookings
-            .AsNoTracking()
-            .AnyAsync(item =>
-                item.VehicleId == replacement.VehicleId &&
-                item.BookingId != conflict.BookingId &&
-                BlockingStatuses.Contains(item.Status) &&
-                conflictPickupBoundary < item.ReturnDate &&
-                (
-                    item.PickupMethod == VehiclePickupMethod.Delivery
-                        ? conflictReturnWithDeliveryPreparation >
-                          item.PickupDate
-                        : conflictReturnWithStorePreparation >
-                          item.PickupDate
-                ),
-                cancellationToken);
+        var replacementHasConflict = await HasScheduleConflictAsync(
+            replacement.VehicleId,
+            conflict,
+            cancellationToken);
 
         if (replacementHasConflict)
         {
@@ -480,20 +455,6 @@ public sealed class StaffExtensionOperationsController : Controller
             Booking conflict,
             CancellationToken cancellationToken)
     {
-        var conflictPreparation = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(
-                conflict.PickupMethod));
-        var conflictPickupBoundary =
-            conflict.PickupDate - conflictPreparation;
-        var conflictReturnWithStorePreparation =
-            conflict.ReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.StorePickup));
-        var conflictReturnWithDeliveryPreparation =
-            conflict.ReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.Delivery));
-
         var candidates = await _dbContext.Vehicles
             .AsNoTracking()
             .Where(vehicle =>
@@ -501,19 +462,6 @@ public sealed class StaffExtensionOperationsController : Controller
                 vehicle.Status != VehicleStatus.Maintenance &&
                 vehicle.Status != VehicleStatus.Inspection &&
                 vehicle.Status != VehicleStatus.Inactive &&
-                !_dbContext.Bookings.Any(booking =>
-                    booking.VehicleId == vehicle.VehicleId &&
-                    booking.BookingId != conflict.BookingId &&
-                    BlockingStatuses.Contains(booking.Status) &&
-                    conflictPickupBoundary < booking.ReturnDate &&
-                    (
-                        booking.PickupMethod ==
-                        VehiclePickupMethod.Delivery
-                            ? conflictReturnWithDeliveryPreparation >
-                              booking.PickupDate
-                            : conflictReturnWithStorePreparation >
-                              booking.PickupDate
-                    )) &&
                 !_dbContext.VehicleIncidents.Any(incident =>
                     incident.VehicleId == vehicle.VehicleId &&
                     incident.Status != IncidentStatus.Resolved &&
@@ -557,41 +505,103 @@ public sealed class StaffExtensionOperationsController : Controller
                 })
             .ToListAsync(cancellationToken);
 
-        return candidates
+        var scheduleSafeCandidates = new List<ExtensionAlternativeVehicleViewModel>();
+        foreach (var candidate in candidates)
+        {
+            if (!await HasScheduleConflictAsync(
+                    candidate.VehicleId,
+                    conflict,
+                    cancellationToken))
+            {
+                scheduleSafeCandidates.Add(candidate);
+            }
+        }
+
+        return scheduleSafeCandidates
             .OrderBy(item => Math.Abs(item.PriceDifference))
             .ThenBy(item => item.DailyPrice)
             .ToList();
+    }
+
+    private async Task<bool> HasScheduleConflictAsync(
+        int vehicleId,
+        Booking targetBooking,
+        CancellationToken cancellationToken)
+    {
+        var targetPolicy = targetBooking.Policy;
+        var targetPreparationMinutes =
+            targetPolicy.GetOperationalPreparationMinutes(
+                targetBooking.PickupMethod);
+
+        var otherBookings = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(other =>
+                other.VehicleId == vehicleId &&
+                other.BookingId != targetBooking.BookingId &&
+                BlockingStatuses.Contains(other.Status))
+            .Select(other => new
+            {
+                other.PickupDate,
+                other.ReturnDate,
+                other.PickupMethod,
+                other.PolicyJson
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var other in otherBookings)
+        {
+            var otherPolicy = RentalPolicySnapshot.FromJson(other.PolicyJson);
+            var otherPreparationMinutes =
+                otherPolicy.GetOperationalPreparationMinutes(
+                    other.PickupMethod);
+
+            var overlaps =
+                targetBooking.PickupDate <
+                    other.ReturnDate.AddMinutes(targetPreparationMinutes) &&
+                targetBooking.ReturnDate.AddMinutes(otherPreparationMinutes) >
+                    other.PickupDate;
+
+            if (overlaps)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task<Booking?> FindConflictingBookingAsync(
         BookingExtension extension,
         CancellationToken cancellationToken)
     {
-        var storeBoundary =
-            extension.RequestedReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.StorePickup));
-        var deliveryBoundary =
-            extension.RequestedReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.Delivery));
-
-        return await _dbContext.Bookings
+        var candidates = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
             .Where(other =>
                 other.VehicleId == extension.Booking.VehicleId &&
                 other.BookingId != extension.BookingId &&
                 BlockingStatuses.Contains(other.Status) &&
-                other.ReturnDate > extension.OriginalReturnDate &&
-                (
-                    other.PickupMethod ==
-                    VehiclePickupMethod.Delivery
-                        ? other.PickupDate < deliveryBoundary
-                        : other.PickupDate < storeBoundary
-                ))
+                other.ReturnDate > extension.OriginalReturnDate)
             .OrderBy(other => other.PickupDate)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ThenBy(other => other.BookingId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var other in candidates)
+        {
+            var otherPolicy = other.Policy;
+            var preparationMinutes =
+                otherPolicy.GetOperationalPreparationMinutes(
+                    other.PickupMethod);
+            var requiredBoundary =
+                extension.RequestedReturnDate.AddMinutes(preparationMinutes);
+
+            if (other.PickupDate < requiredBoundary)
+            {
+                return other;
+            }
+        }
+
+        return null;
     }
 
     private async Task<bool> HasRequiredVehicleDocumentsAsync(
