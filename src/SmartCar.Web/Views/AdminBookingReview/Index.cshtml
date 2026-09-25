@@ -240,7 +240,7 @@
     <script>
         (() => {
             const mapElement = document.getElementById('admin-delivery-map');
-            if (!mapElement || typeof L === 'undefined') {
+            if (!mapElement) {
                 return;
             }
 
@@ -248,6 +248,23 @@
             const longitude = Number(mapElement.dataset.longitude);
 
             if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                mapElement.textContent = 'Không đọc được tọa độ điểm giao xe.';
+                return;
+            }
+
+            if (typeof L === 'undefined') {
+                mapElement.replaceChildren();
+                const fallbackFrame = document.createElement('iframe');
+                fallbackFrame.title = 'Bản đồ điểm giao xe';
+                fallbackFrame.src =
+                    `https://www.google.com/maps?q=${encodeURIComponent(latitude + ',' + longitude)}&z=16&output=embed`;
+                fallbackFrame.loading = 'lazy';
+                fallbackFrame.referrerPolicy = 'no-referrer-when-downgrade';
+                fallbackFrame.style.width = '100%';
+                fallbackFrame.style.height = '100%';
+                fallbackFrame.style.border = '0';
+                fallbackFrame.style.borderRadius = 'inherit';
+                mapElement.appendChild(fallbackFrame);
                 return;
             }
 
