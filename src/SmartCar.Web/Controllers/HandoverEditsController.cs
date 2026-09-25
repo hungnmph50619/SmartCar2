@@ -19,6 +19,10 @@ public sealed class HandoverEditsController : Controller
     private const int MinimumImages = 7;
     private const int MaximumImages = 25;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
+    private static readonly string[] RequiredEvidencePrefixes =
+    {
+        "front-", "rear-", "left-", "right-", "interior-", "odometer-", "fuel-"
+    };
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
@@ -98,6 +102,9 @@ public sealed class HandoverEditsController : Controller
         ModelState.Remove(nameof(HandoverViewModel.TrafficFineTerms));
         ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
         ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
+        // Thời điểm giao là dữ liệu nghiệp vụ do server ghi khi lập biên bản.
+        // Màn sửa không được nhận timestamp mới từ trình duyệt.
+        ModelState.Remove(nameof(HandoverViewModel.HandoverAt));
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -125,6 +132,13 @@ public sealed class HandoverEditsController : Controller
         if (deleteSet.Any(path => !vehiclePhotos.Contains(path, StringComparer.OrdinalIgnoreCase)))
         {
             ModelState.AddModelError(nameof(model.ImagesToDelete), "Danh sách ảnh cần xóa không hợp lệ.");
+        }
+
+        if (deleteSet.Any(IsRequiredEvidence))
+        {
+            ModelState.AddModelError(
+                nameof(model.ImagesToDelete),
+                "Không được xóa 7 ảnh đối chiếu bắt buộc (trước, sau, trái, phải, nội thất, công-tơ-mét, nhiên liệu).");
         }
 
         var newImages = (model.NewImages ?? new List<IFormFile>())
@@ -159,15 +173,7 @@ public sealed class HandoverEditsController : Controller
             }
         }
 
-        if (model.HandoverAt > DateTime.Now.AddMinutes(5))
-        {
-            ModelState.AddModelError(nameof(model.HandoverAt), "Thời gian giao xe không được ở tương lai.");
-        }
-
-        if (model.HandoverAt < booking.PickupDate || model.HandoverAt >= booking.ReturnDate)
-        {
-            ModelState.AddModelError(nameof(model.HandoverAt), "Thời gian giao phải nằm trong khoảng thuê đã đặt.");
-        }
+        model.HandoverAt = booking.Handover.HandoverAt;
 
         if (!model.Mileage.HasValue || model.Mileage.Value < booking.Vehicle.CurrentMileage)
         {
@@ -200,7 +206,6 @@ public sealed class HandoverEditsController : Controller
                 .Concat(addedPaths)
                 .ToList();
 
-            booking.Handover.HandoverAt = model.HandoverAt;
             booking.Handover.Mileage = model.Mileage!.Value;
             booking.Handover.FuelLevel = $"{fuelPercent}%";
             booking.Handover.Accessories = Normalize(model.Accessories);
@@ -244,6 +249,13 @@ public sealed class HandoverEditsController : Controller
         SplitPaths(imagePaths)
             .Where(path => !path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
+    private static bool IsRequiredEvidence(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return RequiredEvidencePrefixes.Any(prefix =>
+            fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static bool TryParseFuel(string? value, out int percent)
     {
