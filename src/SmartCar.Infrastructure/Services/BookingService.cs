@@ -630,7 +630,32 @@ internal sealed class BookingService : IBookingService
                 $"{vehicleStateMessage} Chỉ được xác nhận sẵn sàng khi trạng thái xe là Có sẵn.");
         }
 
-        if (DateTime.Now.Date != booking.PickupDate.Date)
+        var latestPreviousReturn = await _dbContext.VehicleReturns
+            .AsNoTracking()
+            .Where(vehicleReturn =>
+                vehicleReturn.Booking.VehicleId == booking.VehicleId &&
+                vehicleReturn.BookingId != booking.BookingId &&
+                vehicleReturn.Booking.PickupDate < booking.PickupDate)
+            .OrderByDescending(vehicleReturn => vehicleReturn.ReturnedAt)
+            .Select(vehicleReturn => (DateTime?)vehicleReturn.ReturnedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var now = DateTime.Now;
+        if (latestPreviousReturn.HasValue &&
+            !BookingWorkflowRules.HasActualTurnaroundElapsed(
+                now,
+                latestPreviousReturn.Value,
+                booking.Policy,
+                booking.PickupMethod))
+        {
+            var readyAt = latestPreviousReturn.Value.AddMinutes(
+                booking.Policy.GetOperationalPreparationMinutes(booking.PickupMethod));
+            return OperationResult.Failure(
+                $"Xe vừa được trả thực tế lúc {latestPreviousReturn.Value:dd/MM/yyyy HH:mm}. " +
+                $"Cần đủ thời gian kiểm tra/chuẩn bị trước lượt này; sớm nhất có thể xác nhận sẵn sàng lúc {readyAt:dd/MM/yyyy HH:mm}.");
+        }
+
+        if (now.Date != booking.PickupDate.Date)
         {
             return OperationResult.Failure(
                 $"Chỉ xác nhận xe sẵn sàng trong ngày nhận xe ({booking.PickupDate:dd/MM/yyyy}).");
