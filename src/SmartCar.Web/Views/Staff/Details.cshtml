@@ -22,6 +22,8 @@
     var canMarkNoShow = b.Status == BookingStatus.ReadyForPickup
         && !b.HasHandover
         && DateTime.Now >= b.PickupDate.AddMinutes(b.Policy.NoShowGraceMinutes);
+    var actualTurnaroundBlocked = Model.ActualTurnaroundReadyAt.HasValue
+        && DateTime.Now < Model.ActualTurnaroundReadyAt.Value;
     var rentalAwaitingConfirmation = b.Payments.Any(payment =>
         payment.Type == PaymentType.Rental &&
         payment.Status == PaymentStatus.AwaitingConfirmation);
@@ -283,7 +285,16 @@
                     else
                     {
                         <p class="text-muted">Kiểm tra xe thực tế trước khi xác nhận sẵn sàng bàn giao.</p>
-                        @if (DateTime.Now.Date == b.PickupDate.Date)
+                        @if (actualTurnaroundBlocked)
+                        {
+                            <div class="alert alert-warning mb-0">
+                                <strong>Xe vừa hoàn tất lượt thuê trước.</strong>
+                                Cần đủ thời gian kiểm tra, vệ sinh và chuẩn bị cho lượt này.
+                                Sớm nhất có thể xác nhận sẵn sàng lúc
+                                <strong>@Model.ActualTurnaroundReadyAt!.Value.ToString("dd/MM/yyyy HH:mm")</strong>.
+                            </div>
+                        }
+                        else if (DateTime.Now.Date == b.PickupDate.Date)
                         {
                             <form asp-action="MarkReady" method="post" data-confirm="Xác nhận xe đã được kiểm tra thực tế và sẵn sàng để giao cho khách?">
                                 <input type="hidden" name="bookingId" value="@b.BookingId" />
