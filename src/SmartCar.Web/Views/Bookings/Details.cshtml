@@ -37,9 +37,11 @@
     var awaitingTrafficFines = trafficFines.Where(payment => payment.Status == PaymentStatus.AwaitingConfirmation).Sum(payment => payment.Amount);
     var outstandingTrafficFines = unpaidTrafficFines + awaitingTrafficFines;
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
-    var hasPayablePending = Model.Payments.Any(payment =>
+    var hasQrPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
-        ((payment.Type == PaymentType.Rental && Model.Source == BookingSource.CustomerWeb) ||
+        ((payment.Type == PaymentType.Rental &&
+          Model.Source == BookingSource.CustomerWeb &&
+          payment.Method != PaymentMethods.Cash) ||
          payment.Type is PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
          payment.Type == PaymentType.AdditionalCharge &&
          AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
@@ -550,7 +552,7 @@
                         </form>
                     </fieldset>
                 }
-                else if (hasPayablePending || hasAwaitingConfirmation)
+                else if (hasQrPayablePending || hasAwaitingConfirmation)
                 {
                     <div class="alert alert-info small py-2">Chuyển đúng số tiền hiển thị, sau đó bấm xác nhận đã chuyển. Nếu đã báo chuyển, vui lòng chờ Admin đối soát.</div>
                 }
@@ -568,7 +570,7 @@
                     </div>
                 </div>
 
-                @if (hasPayablePending || hasAwaitingConfirmation)
+                @if (hasQrPayablePending || hasAwaitingConfirmation)
                 {
                     <div id="upfront-qr-details">
                     <div class="text-center mb-3">
@@ -601,7 +603,9 @@
                                 <div><strong>Tiền thuê@(Model.DeliveryFee > 0 ? " + giao" : "") + cọc</strong><div class="fs-5">@bundledAmount.ToString("N0") đ</div></div>
                                 <span class="badge @upfrontBadgeClass">@upfrontStatus.ToVietnamese()</span>
                             </div>
-                            @if (Model.Source == BookingSource.CustomerWeb && rentalPayment.Status == PaymentStatus.Pending)
+                            @if (Model.Source == BookingSource.CustomerWeb &&
+                                rentalPayment.Status == PaymentStatus.Pending &&
+                                rentalPayment.Method != PaymentMethods.Cash)
                             {
                                 <form asp-controller="Payments" asp-action="SubmitQr" method="post" class="mt-2" id="upfront-qr-submit">
                                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
