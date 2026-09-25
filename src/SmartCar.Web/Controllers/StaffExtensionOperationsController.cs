@@ -204,7 +204,7 @@ public sealed class StaffExtensionOperationsController : Controller
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] =
-                "Đơn kế tiếp đang có giao dịch trước giao xe chờ Staff đối soát. Cần xử lý giao dịch trước khi đổi xe.";
+                "Đơn kế tiếp đang có giao dịch trước giao xe chờ Admin đối soát. Cần xử lý giao dịch trước khi đổi xe.";
             return RedirectToAction(nameof(Index));
         }
 
