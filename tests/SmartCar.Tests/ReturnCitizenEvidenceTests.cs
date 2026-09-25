@@ -40,7 +40,10 @@ public sealed class ReturnCitizenEvidenceTests
         await connection.OpenAsync();
         await using var db = await CreateDbAsync(connection);
         var faceId = AddEvidence(db, true, true, "staff-1");
-        db.CustomerDocuments.RemoveRange(db.CustomerDocuments);
+        await db.SaveChangesAsync();
+
+        var verifiedDocuments = await db.CustomerDocuments.ToListAsync();
+        db.CustomerDocuments.RemoveRange(verifiedDocuments);
         await db.SaveChangesAsync();
 
         var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId));
