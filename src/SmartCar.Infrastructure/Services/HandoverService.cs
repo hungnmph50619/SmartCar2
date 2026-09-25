@@ -68,6 +68,7 @@ internal sealed class HandoverService : IHandoverService
             faceSession.Purpose != IdentityCapturePurposes.Handover ||
             faceSession.BookingId != booking.BookingId ||
             faceSession.TargetCustomerId != booking.CustomerId ||
+            faceSession.CreatedByUserId != request.IdentityVerifiedByStaffId ||
             !faceSession.CanConsume(DateTime.UtcNow) ||
             !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
         {
