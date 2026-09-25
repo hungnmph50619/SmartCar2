@@ -108,7 +108,6 @@
         const firstSection = form.querySelector('section');
         if (!firstSection) return;
 
-        const observedId = isReturn ? form.querySelector('input[name="ObservedCitizenId"]') : null;
         const evidenceAction = isReturn ? 'UploadReturn' : 'UploadHandover';
         const statusAction = isReturn ? 'ReturnStatus' : 'HandoverStatus';
         const stage = isReturn ? 'trả' : 'giao';
@@ -127,11 +126,13 @@
                 <div class="col-md-6">
                     <label class="form-label fw-semibold" for="counter-citizen-front">CCCD mặt trước</label>
                     <input id="counter-citizen-front" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-file-draft-key="${stage}-${bookingId}-citizen-front" />
+                    <img data-counter-citizen-front-preview class="img-fluid rounded-3 border bg-white mt-2 d-none" alt="Xem CCCD mặt trước đã chọn" style="width:100%;max-height:240px;object-fit:contain" />
                     <div class="form-text">Ảnh phải thấy đầy đủ bốn góc giấy tờ; không crop mất thông tin.</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold" for="counter-citizen-back">CCCD mặt sau</label>
                     <input id="counter-citizen-back" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-file-draft-key="${stage}-${bookingId}-citizen-back" />
+                    <img data-counter-citizen-back-preview class="img-fluid rounded-3 border bg-white mt-2 d-none" alt="Xem CCCD mặt sau đã chọn" style="width:100%;max-height:240px;object-fit:contain" />
                     <div class="form-text">Không được dùng lại ảnh mặt trước cho mặt sau.</div>
                 </div>
             </div>
@@ -157,6 +158,44 @@
         attachImageValidation(front);
         attachImageValidation(back);
 
+        const previews = [
+            block.querySelector('[data-counter-citizen-front-preview]'),
+            block.querySelector('[data-counter-citizen-back-preview]')
+        ];
+        const objectUrls = [null, null];
+        const showPreview = (index, url) => {
+            const preview = previews[index];
+            if (!preview) return;
+            preview.classList.toggle('d-none', !url);
+            if (url) preview.src = url;
+            else preview.removeAttribute('src');
+        };
+        [front, back].forEach((input, index) => {
+            input.addEventListener('change', () => {
+                if (objectUrls[index]) URL.revokeObjectURL(objectUrls[index]);
+                objectUrls[index] = null;
+                const file = input.files?.[0];
+                if (!file || !input.checkValidity()) {
+                    showPreview(index, null);
+                    return;
+                }
+                objectUrls[index] = URL.createObjectURL(file);
+                showPreview(index, objectUrls[index]);
+            });
+        });
+        window.addEventListener('pagehide', () => objectUrls.forEach(url => {
+            if (url) URL.revokeObjectURL(url);
+        }), { once: true });
+
+        const showSavedPreviews = data => {
+            [data.frontUrl, data.backUrl].forEach((url, index) => {
+                if (!url) return;
+                if (objectUrls[index]) URL.revokeObjectURL(objectUrls[index]);
+                objectUrls[index] = null;
+                showPreview(index, `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`);
+            });
+        };
+
         let saved = false;
         let uploading = false;
 
@@ -175,11 +214,6 @@
 
         const upload = async () => {
             if (uploading) return false;
-            if (isReturn && (!(observedId instanceof HTMLInputElement) || !observedId.checkValidity())) {
-                observedId?.reportValidity();
-                setState('error', 'Nhập số CCCD đọc trực tiếp từ giấy tờ người đang trả trước khi lưu hai mặt.');
-                return false;
-            }
             const frontFile = front.files?.[0] || null;
             const backFile = back.files?.[0] || null;
 
@@ -205,7 +239,6 @@
                 payload.append('bookingId', String(bookingId));
                 payload.append('citizenFront', frontFile, frontFile.name);
                 payload.append('citizenBack', backFile, backFile.name);
-                if (isReturn) payload.append('observedCitizenId', observedId.value.trim());
                 if (token) payload.append('__RequestVerificationToken', token);
 
                 const response = await fetch(`/StaffCounterIdentityEvidence/${evidenceAction}`, {
@@ -222,6 +255,7 @@
                 }
 
                 saved = true;
+                showSavedPreviews(data);
                 setState('success', `Đã lưu đủ CCCD mặt trước + mặt sau. Có thể tiếp tục lập biên bản ${stage} xe.`);
                 return true;
             } catch {
@@ -241,7 +275,6 @@
         };
         front.addEventListener('change', markDirty);
         back.addEventListener('change', markDirty);
-        observedId?.addEventListener('input', markDirty);
         saveButton.addEventListener('click', upload);
 
         try {
@@ -253,6 +286,7 @@
                 const data = await response.json();
                 saved = data.ready === true;
                 if (saved) {
+                    showSavedPreviews(data);
                     setState('success', 'Bộ CCCD tại quầy đã được lưu trước đó và vẫn còn hiệu lực. Chỉ chọn ảnh mới nếu cần thay bộ chứng cứ.');
                 } else {
                     setState('idle', `Chưa lưu đủ CCCD mặt trước + mặt sau cho lần ${stage} xe này.`);

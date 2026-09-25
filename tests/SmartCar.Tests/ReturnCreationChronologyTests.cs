@@ -128,8 +128,7 @@ public sealed class ReturnCreationChronologyTests
                     }),
                 Notes: null,
                 IdentityVerifiedByStaffId: "staff-1",
-                IdentityFaceSessionId: faceSessionId,
-                ObservedCitizenId: "012345678901"),
+                IdentityFaceSessionId: faceSessionId),
             default);
 
         Assert.False(result.Succeeded);

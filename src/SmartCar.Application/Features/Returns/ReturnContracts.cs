@@ -15,8 +15,7 @@ public sealed record CreateReturnRequest(
     string? ImagePaths,
     string? Notes,
     string IdentityVerifiedByStaffId,
-    Guid IdentityFaceSessionId,
-    string ObservedCitizenId);
+    Guid IdentityFaceSessionId);
 
 public sealed record AddChargeRequest(
     int BookingId,

@@ -80,13 +80,6 @@
         <div class="alert alert-warning small mb-3">
             Nếu người trả xuất trình CCCD khác hoặc không phải khách đứng tên đơn, dừng xác minh trả xe thông thường và báo quản lý. Ghi nhận thời điểm xe thực tế được đưa tới để xử lý riêng.
         </div>
-        <div class="mb-3">
-            <label asp-for="ObservedCitizenId" class="form-label fw-semibold">Số CCCD đọc từ bản gốc người đang trả xe *</label>
-            <input asp-for="ObservedCitizenId" class="form-control" inputmode="numeric" pattern="[0-9]{12}" maxlength="12" autocomplete="off" required />
-            <div class="form-text">Nhập từ thẻ đang cầm, hệ thống sẽ so với hồ sơ đã duyệt. Không chép số hiển thị phía trên.</div>
-            <span asp-validation-for="ObservedCitizenId" class="text-danger small"></span>
-        </div>
-
         <partial name="_IdentityCaptureWidget" model="@(new IdentityCaptureWidgetViewModel
         {
             Purpose = IdentityCapturePurposes.Return,

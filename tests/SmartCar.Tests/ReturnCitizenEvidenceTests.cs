@@ -26,7 +26,7 @@ public sealed class ReturnCitizenEvidenceTests
         var faceId = AddEvidence(db, includeFront, includeBack, evidenceStaffId);
         await db.SaveChangesAsync();
 
-        var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId, "012345678901"));
+        var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId));
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Errors, error => error.Contains("CCCD mặt trước + mặt sau", StringComparison.Ordinal));
@@ -34,18 +34,19 @@ public sealed class ReturnCitizenEvidenceTests
     }
 
     [Fact]
-    public async Task CreateAsync_RejectsDifferentCitizenNumberEvenWithBothImages()
+    public async Task CreateAsync_RejectsMissingVerifiedCitizenDocumentEvenWithBothImages()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         await using var db = await CreateDbAsync(connection);
         var faceId = AddEvidence(db, true, true, "staff-1");
+        db.CustomerDocuments.RemoveRange(db.CustomerDocuments);
         await db.SaveChangesAsync();
 
-        var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId, "999999999999"));
+        var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId));
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Errors, error => error.Contains("khác CCCD", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, error => error.Contains("Không có CCCD", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(BookingStatus.Rented, (await db.Bookings.SingleAsync()).Status);
     }
 
@@ -58,7 +59,7 @@ public sealed class ReturnCitizenEvidenceTests
         var faceId = AddEvidence(db, true, true, "staff-1");
         await db.SaveChangesAsync();
 
-        var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId, "012345678901"));
+        var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId));
 
         Assert.True(result.Succeeded, string.Join("; ", result.Errors));
         Assert.Equal(BookingStatus.PendingInspection, (await db.Bookings.SingleAsync()).Status);
@@ -137,13 +138,13 @@ public sealed class ReturnCitizenEvidenceTests
                 ? IdentityCaptureMethods.Camera : IdentityCaptureMethods.StaffCounterDocument
         };
 
-    private static CreateReturnRequest ReturnRequest(Guid faceId, string observedCitizenId) =>
+    private static CreateReturnRequest ReturnRequest(Guid faceId) =>
         new(701, DateTime.Now, 1_010, "80", "Tốt", "Tốt", "Đủ", false,
             string.Join(';', new[]
             {
                 "front-test.png", "rear-test.png", "left-test.png", "right-test.png",
                 "interior-test.png", "odometer-test.png", "fuel-test.png"
-            }), null, "staff-1", faceId, observedCitizenId);
+            }), null, "staff-1", faceId);
 
     private static IReturnService CreateReturnService(ApplicationDbContext db)
     {

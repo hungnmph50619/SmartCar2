@@ -235,10 +235,6 @@ public sealed class ReturnViewModel
     public string VerifiedCustomerName { get; set; } = string.Empty;
     public string VerifiedCitizenId { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Vui lòng đọc số CCCD trên giấy tờ người đang trả xe.")]
-    [RegularExpression(@"^\d{12}$", ErrorMessage = "Số CCCD phải có đúng 12 chữ số.")]
-    public string ObservedCitizenId { get; set; } = string.Empty;
-
     [Required(ErrorMessage = "Vui lòng chụp ảnh khuôn mặt người trả xe trực tiếp.")]
     public Guid? IdentityFaceSessionId { get; set; }
 

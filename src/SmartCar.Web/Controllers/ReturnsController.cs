@@ -138,15 +138,6 @@ public sealed class ReturnsController : Controller
             identityFailures.Add("chưa kiểm tra CCCD bản gốc");
         }
 
-        if (!string.IsNullOrWhiteSpace(model.VerifiedCitizenId) &&
-            !string.Equals(model.ObservedCitizenId?.Trim(), model.VerifiedCitizenId, StringComparison.Ordinal))
-        {
-            ModelState.AddModelError(
-                nameof(ReturnViewModel.ObservedCitizenId),
-                "Số CCCD người trả khác CCCD khách đứng tên đơn. Dừng xác minh thông thường và báo quản lý.");
-            identityFailures.Add("CCCD người trả khác hồ sơ khách đứng tên đơn");
-        }
-
         if (!model.ReturnerIdentityCheckedInPerson)
         {
             identityFailures.Add("chưa xác nhận đúng người đang trực tiếp trả xe");
@@ -216,8 +207,7 @@ public sealed class ReturnsController : Controller
                 string.Join(';', imagePaths),
                 model.Notes,
                 staffId,
-                model.IdentityFaceSessionId!.Value,
-                model.ObservedCitizenId),
+                model.IdentityFaceSessionId!.Value),
             cancellationToken);
 
         if (!result.Succeeded)

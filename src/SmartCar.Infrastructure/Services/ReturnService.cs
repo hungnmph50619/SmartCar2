@@ -159,12 +159,10 @@ internal sealed class ReturnService : IReturnService
             .Select(document => document.DocumentNumber)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(verifiedCitizenId) ||
-            !string.Equals(request.ObservedCitizenId?.Trim(), verifiedCitizenId, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(verifiedCitizenId))
         {
             return OperationResult.Failure(
-                "Số CCCD người đang trả khác CCCD đã được Admin xác minh của khách đứng tên đơn. " +
-                "Dừng xác minh trả xe thông thường và báo quản lý xử lý trường hợp khác người.");
+                "Không có CCCD đã được Admin xác minh của khách đứng tên đơn. Dừng nhận xe trả và báo quản lý.");
         }
 
         var returnCitizenSessions = await _dbContext.Set<IdentityCaptureSession>()

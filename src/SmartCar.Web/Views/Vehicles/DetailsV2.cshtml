@@ -4,6 +4,7 @@
 @using SmartCar.Domain.Enums
 @using System.Globalization
 @inject SmartCar.Infrastructure.Persistence.ApplicationDbContext PolicyDb
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     var policy = await SmartCar.Infrastructure.Services.BusinessPolicyStore.ReadAsync(PolicyDb, Context.RequestAborted);
     ViewData["Title"] = Model.VehicleName;
@@ -44,11 +45,9 @@
     var licenseExpiryDate = ViewBag.LicenseExpiryDate is DateTime licenseExpiry ? licenseExpiry : (DateTime?)null;
     var allDocumentsApproved = citizenApproved && licenseApproved;
     var hasBankAccount = ViewBag.HasBankAccount is bool hasBank && hasBank;
+    var googleMapsApiKey = Configuration["GoogleMaps:BrowserApiKey"];
 }
-<link rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin="" />
+<link rel="stylesheet" href="~/lib/leaflet/leaflet.css" asp-append-version="true" />
 
 <style>
     #delivery-map {
@@ -398,9 +397,11 @@
     }
 </div>
 @section Scripts {
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-            crossorigin=""></script>
+    @if (!string.IsNullOrWhiteSpace(googleMapsApiKey))
+    {
+        <script src="https://maps.googleapis.com/maps/api/js?key=@Uri.EscapeDataString(googleMapsApiKey)"></script>
+    }
+    <script src="~/lib/leaflet/leaflet.js" asp-append-version="true"></script>
     <script src="~/js/delivery-geocoding.js" asp-append-version="true"></script>
 
     <script>
@@ -438,6 +439,7 @@
             let map = null;
             let marker = null;
             let storeMarker = null;
+            let googleMap = false;
             let currentDeliveryFee = 0;
 
             const toRadians = degrees => degrees * Math.PI / 180;
@@ -509,13 +511,15 @@
             };
             const reverseGeocode = async (lat, lng) => {
                 try {
-                    const result = await window.SmartCarDeliveryGeocoding.reverse(lat, lng);
-                    if (result && result.display_name) {
-                        address.value = result.display_name;
+                    const place = googleMap
+                        ? (await new google.maps.Geocoder().geocode({ location: { lat, lng } })).results?.[0]?.formatted_address
+                        : (await window.SmartCarDeliveryGeocoding.reverse(lat, lng))?.display_name;
+                    if (place) {
+                        address.value = place;
                         error.classList.add('d-none');
                         return true;
                     }
-                    throw new Error(result?.error || 'Không có tên địa chỉ tại điểm này.');
+                    throw new Error('Không có tên địa chỉ tại điểm này.');
                 } catch (ex) {
                     reverseFailureMessage = ex instanceof TypeError
                         ? 'Không kết nối được máy chủ tìm địa chỉ.'
@@ -552,7 +556,24 @@
 
                 updatePriceByPoint(normalizedLat, normalizedLng);
 
-                if (!map || typeof L === 'undefined') return;
+                if (!map) return;
+
+                if (googleMap) {
+                    if (marker) marker.setPosition({ lat: normalizedLat, lng: normalizedLng });
+                    else {
+                        marker = new google.maps.Marker({
+                            map, position: { lat: normalizedLat, lng: normalizedLng }, draggable: true
+                        });
+                        marker.addListener('dragend', async event => {
+                            const point = event.latLng;
+                            setPoint(point.lat(), point.lng(), map.getZoom());
+                            if (!await reverseGeocode(point.lat(), point.lng())) showReverseFailure();
+                        });
+                    }
+                    map.setCenter({ lat: normalizedLat, lng: normalizedLng });
+                    map.setZoom(zoom);
+                    return;
+                }
 
                 if (marker) {
                     marker.setLatLng([normalizedLat, normalizedLng]);
@@ -582,6 +603,21 @@
             };
 
             const initMap = () => {
+                if (window.google?.maps?.Map) {
+                    googleMap = true;
+                    map = new google.maps.Map(document.getElementById('delivery-map'), {
+                        center: { lat: storeLat, lng: storeLng }, zoom: 13
+                    });
+                    storeMarker = new google.maps.Marker({
+                        map, position: { lat: storeLat, lng: storeLng }, title: 'Điểm xuất phát SmartCar'
+                    });
+                    map.addListener('click', async event => {
+                        const point = event.latLng;
+                        setPoint(point.lat(), point.lng());
+                        if (!await reverseGeocode(point.lat(), point.lng())) showReverseFailure();
+                    });
+                    return;
+                }
                 if (typeof L === 'undefined') {
                     document.getElementById('delivery-map')
                         .classList.add('d-none');
@@ -593,11 +629,25 @@
                 map = L.map('delivery-map')
                     .setView([storeLat, storeLng], 13);
 
+                let tileLoaded = false;
+                let tileErrors = 0;
+                const mapElement = document.getElementById('delivery-map');
                 L.tileLayer(
                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     {
                         maxZoom: 19,
                         attribution: '&copy; OpenStreetMap contributors'
+                    })
+                    .on('tileload', () => {
+                        tileLoaded = true;
+                        mapElement.classList.remove('d-none');
+                        mapHelp.textContent = 'Bấm trên bản đồ để chọn điểm giao hoặc dùng GPS.';
+                    })
+                    .on('tileerror', () => {
+                        if (++tileErrors >= 2 && !tileLoaded) {
+                            mapElement.classList.add('d-none');
+                            mapHelp.textContent = 'Nền bản đồ không kết nối được. Có thể dùng GPS để lấy tọa độ tính phí và nhập địa chỉ giao xe; cấu hình Google Maps để dùng nguồn bản đồ khác.';
+                        }
                     })
                     .addTo(map);
 
@@ -631,7 +681,7 @@
                     upfrontAmount.textContent = money(baseAmount);
                 }
 
-                if (isDelivery && map) {
+                if (isDelivery && map && !googleMap) {
                     setTimeout(() => map.invalidateSize(), 80);
                 }
             };
@@ -737,7 +787,13 @@
                 findAddressButton.textContent = 'Đang tìm...';
 
                 try {
-                    const results = await window.SmartCarDeliveryGeocoding.search(query);
+                    const results = googleMap
+                        ? (await new google.maps.Geocoder().geocode({ address: query, componentRestrictions: { country: 'VN' } })).results.map(item => ({
+                            lat: item.geometry.location.lat(),
+                            lon: item.geometry.location.lng(),
+                            display_name: item.formatted_address
+                        }))
+                        : await window.SmartCarDeliveryGeocoding.search(query);
                     if (!Array.isArray(results)) throw new Error('Dữ liệu địa chỉ chưa hợp lệ.');
 
                     if (!results.length) {

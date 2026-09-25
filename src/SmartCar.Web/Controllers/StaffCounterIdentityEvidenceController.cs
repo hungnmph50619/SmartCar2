@@ -393,7 +393,6 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
     [RequestSizeLimit(12 * 1024 * 1024)]
     public async Task<IActionResult> UploadReturn(
         int bookingId,
-        string? observedCitizenId,
         IFormFile? citizenFront,
         IFormFile? citizenBack,
         CancellationToken cancellationToken)
@@ -417,18 +416,9 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
             .Select(document => document.DocumentNumber)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(verifiedNumber) ||
-            !string.Equals(observedCitizenId?.Trim(), verifiedNumber, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(verifiedNumber))
         {
-            await _auditService.WriteAsync(
-                staffId,
-                "ReturnCitizenIdMismatch",
-                nameof(Booking),
-                bookingId.ToString(),
-                "Số CCCD nhân viên đọc từ giấy tờ người mang xe trả không khớp hồ sơ KYC; dừng luồng xác minh thông thường.",
-                ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
-                cancellationToken: cancellationToken);
-            return BadRequest(new { error = "CCCD người trả khác CCCD khách đứng tên đơn. Dừng xác minh thông thường và báo quản lý." });
+            return BadRequest(new { error = "Không có CCCD đã xác minh của khách đứng tên đơn. Dừng nhận xe trả và báo quản lý." });
         }
 
         if (citizenFront is null || citizenFront.Length <= 0 ||
@@ -480,7 +470,7 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
                 "CaptureReturnCitizenIdEvidence",
                 nameof(Booking),
                 bookingId.ToString(),
-                "Nhân viên lưu hai mặt CCCD người trả và đối chiếu số với hồ sơ KYC trước khi lập biên bản trả xe.",
+                "Nhân viên lưu hai mặt CCCD người trả để đối chiếu trực quan với hồ sơ KYC trước khi lập biên bản trả xe.",
                 ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken: cancellationToken);
 
