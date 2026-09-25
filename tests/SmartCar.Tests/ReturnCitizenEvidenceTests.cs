@@ -74,7 +74,7 @@ public sealed class ReturnCitizenEvidenceTests
         var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId));
 
         Assert.False(result.Succeeded);
-        Assert.Contains(result.Errors, error => error.Contains("Không có CCCD", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, error => error.Contains("CCCD mặt trước + mặt sau", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(BookingStatus.Rented, (await db.Bookings.SingleAsync()).Status);
     }
 
