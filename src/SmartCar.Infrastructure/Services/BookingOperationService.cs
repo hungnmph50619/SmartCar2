@@ -83,8 +83,8 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (booking.Status != BookingStatus.ReadyForPickup)
             return OperationResult.Failure("Chỉ được ghi nhận khách không đến sau khi SmartCar đã xác nhận xe thực sự sẵn sàng giao. Đơn đang chờ xe hoặc mới thanh toán không được tính không đến nhận xe.");
 
-        if (booking.Handover is not null)
-            return OperationResult.Failure("Đơn đã có biên bản giao xe điện tử nên không thể ghi nhận khách không đến nhận.");
+        if (booking.Handover?.SignedDocumentVerified == true)
+            return OperationResult.Failure("Chuyến thuê đã bắt đầu sau khi bản ký bàn giao được xác minh nên không thể ghi nhận khách không đến nhận.");
 
         var bookingPolicy = booking.Policy;
         if (DateTime.Now < booking.PickupDate.AddMinutes(bookingPolicy.NoShowGraceMinutes))
@@ -221,9 +221,11 @@ internal sealed class BookingOperationService : IBookingOperationService
             payment.Type != PaymentType.Refund &&
             payment.Status == PaymentStatus.AwaitingConfirmation);
 
+        var handoverStarted = booking.Handover?.SignedDocumentVerified == true;
+
         if (!BookingWorkflowRules.CanCancelBeforeHandover(
                 booking.Status,
-                booking.Handover is not null,
+                handoverStarted,
                 hasPaymentAwaitingConfirmation))
         {
             if (hasPaymentAwaitingConfirmation)
@@ -233,8 +235,8 @@ internal sealed class BookingOperationService : IBookingOperationService
             }
 
             return RefundResult.Failure(
-                booking.Handover is not null
-                    ? "Đơn đã lập biên bản giao xe nên không thể hủy. Nếu giao xe chưa hoàn tất, hãy xử lý hồ sơ bàn giao thay vì hủy đơn."
+                handoverStarted
+                    ? "Chuyến thuê đã bắt đầu sau khi bản ký bàn giao được xác minh nên không thể hủy bằng luồng trước giao xe."
                     : "Trạng thái hiện tại không cho phép hủy đơn.");
         }
 
