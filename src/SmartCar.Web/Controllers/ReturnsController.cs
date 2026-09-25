@@ -229,6 +229,11 @@ public sealed class ReturnsController : Controller
 
         TempData["SuccessMessage"] =
             "Đã lưu biên bản trả xe, ảnh mặt trực tiếp và kết quả xác minh người trả. Hãy in, ký và tải bản ký trước khi quyết toán.";
+        TempData["ClearFileDraftKeys"] =
+            $"return-{model.BookingId}-front|return-{model.BookingId}-rear|return-{model.BookingId}-left|" +
+            $"return-{model.BookingId}-right|return-{model.BookingId}-interior|return-{model.BookingId}-odometer|" +
+            $"return-{model.BookingId}-fuel|return-{model.BookingId}-damage|return-{model.BookingId}-other|" +
+            $"trả-{model.BookingId}-citizen-front|trả-{model.BookingId}-citizen-back";
 
         return RedirectToAction("Details", "Staff", new { id = model.BookingId });
     }
