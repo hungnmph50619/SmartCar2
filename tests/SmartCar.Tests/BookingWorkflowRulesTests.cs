@@ -70,7 +70,7 @@ public sealed class BookingWorkflowRulesTests
     [InlineData(BookingStatus.ReadyForPickup)]
     public void CanCancelBeforeHandover_AllowsPreHandoverStatuses(BookingStatus status)
     {
-        Assert.True(BookingWorkflowRules.CanCancelBeforeHandover(status, hasHandover: false));
+        Assert.True(BookingWorkflowRules.CanCancelBeforeHandover(status, handoverStarted: false));
     }
 
     [Theory]
@@ -78,9 +78,19 @@ public sealed class BookingWorkflowRulesTests
     [InlineData(BookingStatus.PendingPayment)]
     [InlineData(BookingStatus.Paid)]
     [InlineData(BookingStatus.ReadyForPickup)]
-    public void CanCancelBeforeHandover_RejectsOnceHandoverRecordExists(BookingStatus status)
+    public void CanCancelBeforeHandover_RejectsOnceTripActuallyStarted(BookingStatus status)
     {
-        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(status, hasHandover: true));
+        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(status, handoverStarted: true));
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.PendingConfirmation)]
+    [InlineData(BookingStatus.PendingPayment)]
+    [InlineData(BookingStatus.Paid)]
+    [InlineData(BookingStatus.ReadyForPickup)]
+    public void CanCancelBeforeHandover_AllowsUnsignedDraftHandover(BookingStatus status)
+    {
+        Assert.True(BookingWorkflowRules.CanCancelBeforeHandover(status, handoverStarted: false));
     }
 
     [Theory]
@@ -91,7 +101,7 @@ public sealed class BookingWorkflowRulesTests
     {
         Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(
             status,
-            hasHandover: false,
+            handoverStarted: false,
             hasPaymentAwaitingConfirmation: true));
     }
 
@@ -105,7 +115,7 @@ public sealed class BookingWorkflowRulesTests
     [InlineData(BookingStatus.Expired)]
     public void CanCancelBeforeHandover_RejectsTerminalOrStartedStatuses(BookingStatus status)
     {
-        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(status, hasHandover: false));
+        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(status, handoverStarted: false));
     }
 
     [Theory]
