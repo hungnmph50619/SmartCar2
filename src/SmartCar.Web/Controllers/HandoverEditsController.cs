@@ -98,6 +98,12 @@ public sealed class HandoverEditsController : Controller
         ModelState.Remove(nameof(HandoverViewModel.TrafficFineTerms));
         ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
         ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
+        // Edit không xác minh lại danh tính. Các cờ này thuộc bước tạo biên bản ban đầu
+        // và không có input tương ứng trên form chỉnh sửa.
+        ModelState.Remove(nameof(HandoverViewModel.IdentityFaceSessionId));
+        ModelState.Remove(nameof(HandoverViewModel.OriginalCitizenIdChecked));
+        ModelState.Remove(nameof(HandoverViewModel.OriginalDrivingLicenseChecked));
+        ModelState.Remove(nameof(HandoverViewModel.ReceiverIdentityCheckedInPerson));
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
