@@ -785,7 +785,7 @@ public sealed class ReturnsController : Controller
     {
         var customer = await _dbContext.Users
             .AsNoTracking()
-            .Where(user => user.Id == booking.CustomerId && user.IsActive)
+            .Where(user => user.Id == booking.CustomerId)
             .Select(user => new { user.Id, user.FullName })
             .FirstOrDefaultAsync(cancellationToken);
         if (customer is null)
@@ -793,21 +793,32 @@ public sealed class ReturnsController : Controller
             return false;
         }
 
-        var citizen = await _dbContext.CustomerDocuments
+        var citizenDocuments = await _dbContext.CustomerDocuments
             .AsNoTracking()
-            .FirstOrDefaultAsync(document =>
+            .Where(document =>
                 document.CustomerId == booking.CustomerId &&
-                document.DocumentType == DocumentTypes.CitizenId &&
-                document.Status == DocumentStatus.Verified,
-                cancellationToken);
-        if (citizen is null)
+                document.Status == DocumentStatus.Verified &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.CitizenIdBack))
+            .ToListAsync(cancellationToken);
+
+        var citizenFront = citizenDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = citizenDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenIdBack);
+
+        if (citizenFront is null || citizenBack is null ||
+            !string.Equals(
+                citizenFront.DocumentNumber,
+                citizenBack.DocumentNumber,
+                StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         model.CustomerId = customer.Id;
         model.VerifiedCustomerName = customer.FullName;
-        model.VerifiedCitizenId = citizen.DocumentNumber;
+        model.VerifiedCitizenId = citizenFront.DocumentNumber;
         return true;
     }
 
