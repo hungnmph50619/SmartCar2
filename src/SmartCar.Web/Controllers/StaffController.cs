@@ -349,7 +349,7 @@ public sealed class StaffController : Controller
         if (settlementPayments.Any(item => item.Status == PaymentStatus.AwaitingConfirmation))
         {
             await transaction.RollbackAsync(cancellationToken);
-            TempData["ErrorMessage"] = "Đơn đang có chuyển khoản chờ Staff đối soát. Không được đồng thời ghi nhận tiền mặt.";
+            TempData["ErrorMessage"] = "Đơn đang có chuyển khoản chờ Admin đối soát. Không được đồng thời ghi nhận tiền mặt.";
             return RedirectToAction(nameof(Details), new { id = bookingId });
         }
 
