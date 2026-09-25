@@ -570,7 +570,8 @@
 
                 @if (hasPayablePending || hasAwaitingConfirmation)
                 {
-                    <div id="upfront-qr-details">
+                    <div id="upfront-qr-details"
+                         class="@(Model.Status == BookingStatus.PendingPayment && rentalPayment?.Method == PaymentMethods.Cash ? "d-none" : string.Empty)">
                     <div class="text-center mb-3">
                         <img src="@qrImagePath" alt="QR thanh toán SmartCar" class="img-fluid border rounded" style="max-height:260px" />
                     </div>
@@ -603,7 +604,9 @@
                             </div>
                             @if (Model.Source == BookingSource.CustomerWeb && rentalPayment.Status == PaymentStatus.Pending)
                             {
-                                <form asp-controller="Payments" asp-action="SubmitQr" method="post" class="mt-2" id="upfront-qr-submit">
+                                <form asp-controller="Payments" asp-action="SubmitQr" method="post"
+                                      class="mt-2 @(rentalPayment.Method == PaymentMethods.Cash ? "d-none" : string.Empty)"
+                                      id="upfront-qr-submit">
                                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                                     <input type="hidden" name="type" value="@PaymentType.Rental" />
                                     <input type="hidden" name="paymentId" value="@rentalPayment.PaymentId" />
