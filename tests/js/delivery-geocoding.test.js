@@ -58,11 +58,42 @@ test('invalid input from the server does not trigger a direct request', async ()
     assert.equal(calls, 1);
 });
 
-test('both network paths failing reports which connections failed', async () => {
+test('Photon is used when both server and direct Nominatim fail', async () => {
+    const calls = [];
+    const geocoding = client(async url => {
+        calls.push(url);
+        if (url.startsWith('/api/')) {
+            return { ok: false, status: 502, json: async () => ({ message: 'Máy chủ không kết nối được Nominatim.' }) };
+        }
+        if (url.startsWith('https://nominatim.')) {
+            return { ok: false, status: 503, json: async () => ({}) };
+        }
+        return {
+            ok: true,
+            json: async () => ({
+                features: [{
+                    geometry: { coordinates: [105.742, 21.038] },
+                    properties: { name: 'FPT Polytechnic', city: 'Hà Nội', country: 'Việt Nam' }
+                }]
+            })
+        };
+    });
+
+    const results = await geocoding.search('FPT Polytechnic Hà Nội');
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].lat, 21.038);
+    assert.equal(results[0].lon, 105.742);
+    assert.match(results[0].display_name, /FPT Polytechnic/);
+    assert.equal(calls.length, 3);
+    assert.match(calls[2], /photon\.komoot\.io\/api/);
+});
+
+test('all address providers failing reports the fallback failure', async () => {
     const geocoding = client(async url => url.startsWith('/api/')
         ? { ok: false, status: 502, json: async () => ({ message: 'Máy chủ không kết nối được Nominatim.' }) }
         : { ok: false, status: 503, json: async () => ({}) });
 
     await assert.rejects(geocoding.search('Hà Nội'),
-        /Máy chủ không kết nối được Nominatim.*Trình duyệt cũng không kết nối/);
+        /Máy chủ không kết nối được Nominatim.*hai nguồn địa chỉ dự phòng/);
 });
