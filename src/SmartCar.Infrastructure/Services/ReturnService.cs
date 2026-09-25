@@ -150,21 +150,37 @@ internal sealed class ReturnService : IReturnService
                 "Thời gian trả xe không được trước thời gian giao xe.");
         }
 
-        var verifiedCitizenId = await _dbContext.CustomerDocuments
+        var verifiedCitizenDocuments = await _dbContext.CustomerDocuments
             .AsNoTracking()
             .Where(document =>
                 document.CustomerId == booking.CustomerId &&
-                document.DocumentType == DocumentTypes.CitizenId &&
-                document.Status == DocumentStatus.Verified)
-            .OrderByDescending(document => document.VerifiedAt)
-            .Select(document => document.DocumentNumber)
-            .FirstOrDefaultAsync(cancellationToken);
+                document.Status == DocumentStatus.Verified &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.CitizenIdBack))
+            .ToListAsync(cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(verifiedCitizenId))
+        var verifiedCitizenFront = verifiedCitizenDocuments
+            .Where(document => document.DocumentType == DocumentTypes.CitizenId)
+            .OrderByDescending(document => document.VerifiedAt)
+            .FirstOrDefault();
+        var verifiedCitizenBack = verifiedCitizenDocuments
+            .Where(document => document.DocumentType == DocumentTypes.CitizenIdBack)
+            .OrderByDescending(document => document.VerifiedAt)
+            .FirstOrDefault();
+
+        if (verifiedCitizenFront is null ||
+            verifiedCitizenBack is null ||
+            string.IsNullOrWhiteSpace(verifiedCitizenFront.DocumentNumber) ||
+            !string.Equals(
+                verifiedCitizenFront.DocumentNumber,
+                verifiedCitizenBack.DocumentNumber,
+                StringComparison.OrdinalIgnoreCase))
         {
             return OperationResult.Failure(
-                "Không có CCCD đã được Admin xác minh của khách đứng tên đơn. Dừng nhận xe trả và báo quản lý.");
+                "Không có đủ CCCD mặt trước + mặt sau đã được Admin xác minh của khách đứng tên đơn. Dừng nhận xe trả và báo quản lý.");
         }
+
+        var verifiedCitizenId = verifiedCitizenFront.DocumentNumber;
 
         var returnCitizenSessions = await _dbContext.Set<IdentityCaptureSession>()
             .Where(session =>
