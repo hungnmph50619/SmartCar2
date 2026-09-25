@@ -422,7 +422,22 @@
 
                 @if (Model.HandoverSignedPaths.Count == 0)
                 {
-                    <div class="alert alert-warning mt-3 mb-0">In biên bản, cho đúng khách ký rồi tải ảnh/scan bản ký. Việc tải file <strong>không tự bắt đầu chuyến</strong>.</div>
+                    <div class="alert alert-warning mt-3">
+                        In biên bản, cho đúng khách ký rồi tải ảnh/scan bản ký. Việc tải file <strong>không tự bắt đầu chuyến</strong>.
+                    </div>
+                    <details class="border rounded-3 p-3">
+                        <summary class="text-danger fw-semibold">Lập nhầm biên bản / cần chọn lại xe</summary>
+                        <p class="small text-muted mt-2 mb-2">
+                            Chỉ dùng khi chưa có bản ký. Hệ thống sẽ xóa biên bản giao nháp và ảnh tình trạng xe của draft cũ; sau đó phải lập lại biên bản từ đầu.
+                        </p>
+                        <form asp-controller="HandoverEdits"
+                              asp-action="DiscardDraft"
+                              method="post"
+                              data-confirm="Hủy biên bản giao nháp chưa ký? Ảnh tình trạng xe trong draft này sẽ bị loại khỏi hồ sơ.">
+                            <input type="hidden" name="bookingId" value="@b.BookingId" />
+                            <button class="btn btn-sm btn-outline-danger" type="submit">Hủy biên bản giao nháp</button>
+                        </form>
+                    </details>
                 }
                 else if (!Model.HandoverSignedDocumentVerified)
                 {
