@@ -298,6 +298,22 @@ public sealed class StaffExtensionOperationsController : Controller
             deliveryFee +
             conflict.AdditionalAmount;
 
+        if (conflict.Status == BookingStatus.PendingConfirmation &&
+            conflict.StaffReviewedAt.HasValue)
+        {
+            conflict.StaffReviewedAt = null;
+            conflict.StaffReviewedByStaffId = null;
+
+            var staleAdminReviewTitle = $"Đơn thuê chờ xử lý|{conflict.BookingId}";
+            var staleAdminReviewNotifications = await _dbContext.Notifications
+                .Where(item => item.Title == staleAdminReviewTitle)
+                .ToListAsync(cancellationToken);
+            if (staleAdminReviewNotifications.Count > 0)
+            {
+                _dbContext.Notifications.RemoveRange(staleAdminReviewNotifications);
+            }
+        }
+
         var amountToCollect =
             Math.Max(0m, rentalPaidDifference) +
             Math.Max(0m, depositPaidDifference);
@@ -384,7 +400,11 @@ public sealed class StaffExtensionOperationsController : Controller
             "StaffResolveExtensionConflictByVehicleSwap",
             nameof(Booking),
             conflict.BookingId.ToString(),
-            $"Nhân viên đổi xe đơn #{conflict.BookingId} từ xe #{oldVehicleId} sang xe #{replacement.VehicleId}. Thu thêm: {amountToCollect:N0}; hoàn chờ duyệt: {totalRefund:N0} đồng.",
+            $"Nhân viên đổi xe đơn #{conflict.BookingId} từ xe #{oldVehicleId} sang xe #{replacement.VehicleId}. " +
+            $"Thu thêm: {amountToCollect:N0}; hoàn chờ duyệt: {totalRefund:N0} đồng. " +
+            (conflict.Status == BookingStatus.PendingConfirmation
+                ? "Nếu đơn đã được Staff review trước khi đổi xe, review cũ đã bị xóa và phải kiểm tra lại xe mới trước khi gửi Admin duyệt."
+                : string.Empty),
             ipAddress:
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
