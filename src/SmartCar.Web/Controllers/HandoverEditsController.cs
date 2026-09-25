@@ -187,6 +187,9 @@ public sealed class HandoverEditsController : Controller
 
         if (!ModelState.IsValid)
         {
+            // POST không gửi lại danh sách ảnh cũ (chỉ gửi các path đánh dấu xóa).
+            // Phải nạp lại từ DB để validation lỗi không làm giao diện trông như mất toàn bộ ảnh.
+            model.ExistingImagePaths = vehiclePhotos;
             PopulatePolicyFields(model, booking.Handover);
             model.IncludedKilometersPerDay = booking.Policy.IncludedKilometersPerDay;
             model.LateReturnGraceMinutes = booking.Policy.LateReturnGraceMinutes;
