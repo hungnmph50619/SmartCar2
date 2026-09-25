@@ -33,6 +33,51 @@ public sealed class ImmediateCounterApprovalTests
     }
 
     [Fact]
+    public async Task ApproveAfterPickup_RejectsVehicleStillInsideActualTurnaroundBuffer()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await CreateDbAsync(connection);
+
+        var current = await db.Bookings.SingleAsync(item => item.BookingId == 101);
+        var previousPickup = DateTime.Now.AddHours(-2);
+        db.Bookings.Add(new Booking
+        {
+            BookingId = 99,
+            CustomerId = "customer-1",
+            VehicleId = 1,
+            PickupDate = previousPickup,
+            ReturnDate = DateTime.Now.AddHours(-1),
+            DailyPrice = 500_000m,
+            NumberOfDays = 1,
+            RentalAmount = 500_000m,
+            DepositAmount = 1_500_000m,
+            TotalAmount = 500_000m,
+            Status = BookingStatus.Completed,
+            RowVersion = new byte[] { 9 }
+        });
+        db.VehicleReturns.Add(new VehicleReturn
+        {
+            BookingId = 99,
+            ReturnedAt = DateTime.Now.AddMinutes(-30),
+            Mileage = 10_000,
+            FuelLevel = "80%",
+            AccessoryStatus = "Đủ"
+        });
+        await db.SaveChangesAsync();
+
+        var result = await ConfirmAsync(db, current.BookingId);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("cần chuẩn bị đến", StringComparison.OrdinalIgnoreCase));
+        await db.Entry(current).ReloadAsync();
+        Assert.Equal(BookingStatus.PendingConfirmation, current.Status);
+        Assert.Empty(await db.Payments.Where(item => item.BookingId == 101).ToListAsync());
+    }
+
+    [Fact]
     public async Task ApproveAfterPickup_RejectsNewConflictBeforeCollectingMoney()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
