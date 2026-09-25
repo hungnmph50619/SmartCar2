@@ -134,8 +134,16 @@
                 <label class="form-label fw-semibold">Phụ kiện</label>
                 <input asp-for="AccessoryStatus" type="hidden" data-accessory-value />
                 <select class="form-select" data-accessory-mode>
-                    <option value="Đủ" selected="@(!accessoryMissing)">Đủ như lúc giao</option>
-                    <option value="missing" selected="@accessoryMissing">Thiếu / mất</option>
+                    @if (accessoryMissing)
+                    {
+                        <option value="Đủ">Đủ như lúc giao</option>
+                        <option value="missing" selected>Thiếu / mất</option>
+                    }
+                    else
+                    {
+                        <option value="Đủ" selected>Đủ như lúc giao</option>
+                        <option value="missing">Thiếu / mất</option>
+                    }
                 </select>
                 <input type="text" class="form-control mt-2 @(accessoryMissing ? "" : "d-none")" maxlength="980" data-accessory-missing placeholder="Ghi rõ đồ thiếu/mất" value="@(accessoryMissing ? Model.AccessoryStatus["Thiếu/mất:".Length..].Trim() : string.Empty)" />
                 <div class="form-text">Lúc giao: @(string.IsNullOrWhiteSpace(handoverAccessories) ? "Không ghi" : handoverAccessories)</div>
