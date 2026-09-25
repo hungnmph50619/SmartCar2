@@ -12,7 +12,8 @@
         !Model.AdditionalChargePaid &&
         !Model.AdditionalChargeAwaitingConfirmation &&
         !Model.AdditionalChargeFinalized;
-    var canComplete = Model.Status == BookingStatus.PendingInspection;
+    var canComplete = Model.Status == BookingStatus.PendingInspection &&
+        Model.AllStaffChecksCompleted;
     var hasUnpaidCharge = Model.AdditionalAmount > 0 && !Model.AdditionalChargePaid;
     var hasOpenOverdueDebt = Model.HasOpenOverdueCompensationDebt;
     var awaitingRefund = Model.Status == BookingStatus.AwaitingRefund || Model.RefundStatus == PaymentStatus.AwaitingRefund;
@@ -774,6 +775,33 @@ else
                 <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">@(Model.DepositAmount > 0 ? "Xác nhận & quyết toán cọc" : "Xác nhận → Hoàn tất")</button>
             </form>
         }
+    </div>
+}
+else if (Model.Status == BookingStatus.PendingInspection)
+{
+    <div class="card card-body shadow-sm border-warning">
+        <h2 class="h5">Chưa thể quyết toán</h2>
+        <p class="text-muted mb-2">Đơn vẫn ở bước kiểm tra nhưng còn thiếu xác minh nghiệp vụ. Hoàn tất các mục dưới đây tại hồ sơ Staff rồi quay lại.</p>
+        <ul class="mb-3">
+            <li class="@(Model.HandoverIdentityVerified ? "text-success" : "text-danger")">
+                @(Model.HandoverIdentityVerified ? "✓" : "✗") Danh tính người nhận xe
+            </li>
+            <li class="@(Model.HandoverSignedDocumentVerified ? "text-success" : "text-danger")">
+                @(Model.HandoverSignedDocumentVerified ? "✓" : "✗") Bản ký giao xe đã được Staff xác minh
+            </li>
+            <li class="@(Model.ReturnIdentityVerified ? "text-success" : "text-danger")">
+                @(Model.ReturnIdentityVerified ? "✓" : "✗") Danh tính người trả xe
+            </li>
+            <li class="@(Model.ReturnSignedDocumentVerified ? "text-success" : "text-danger")">
+                @(Model.ReturnSignedDocumentVerified ? "✓" : "✗") Bản ký trả xe đã được Staff xác minh
+            </li>
+        </ul>
+        <a class="btn btn-outline-primary align-self-start"
+           asp-controller="Staff"
+           asp-action="Details"
+           asp-route-id="@Model.BookingId">
+            Mở hồ sơ Staff để hoàn tất xác minh
+        </a>
     </div>
 }
 else if (Model.Status == BookingStatus.Completed)
