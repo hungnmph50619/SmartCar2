@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.EntityFrameworkCore;
@@ -206,6 +208,16 @@ public sealed class ReturnEditDamageEvidenceTests
             db,
             new AuditServiceStub(),
             new TestWebHostEnvironment());
+        controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(
+                    new ClaimsIdentity(
+                        new[] { new Claim(ClaimTypes.NameIdentifier, "staff-1") },
+                        "test"))
+            }
+        };
 
         var result = await controller.Edit(
             new ReturnEditViewModel
