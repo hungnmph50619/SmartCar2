@@ -87,6 +87,9 @@ public sealed class StaffCustomersController : Controller
                 Email = user.Email ?? string.Empty,
                 PhoneNumber = user.PhoneNumber,
                 IsActive = user.IsActive,
+                HasIdentityFace = user.IdentityFaceImagePath != null &&
+                    user.IdentityFaceImagePath != "" &&
+                    user.IdentityFaceCapturedAt.HasValue,
                 CreatedAt = user.CreatedAt
             })
             .ToListAsync(cancellationToken);
@@ -316,8 +319,8 @@ public sealed class StaffCustomersController : Controller
                 UserId = customer.Id,
                 Title = "Hồ sơ giấy tờ đã được tiếp nhận",
                 Message =
-                    "Nhân viên đã hỗ trợ tiếp nhận CCCD và GPLX tại quầy. " +
-                    "Hồ sơ đang chờ quản trị viên kiểm tra và duyệt trước khi được dùng để lập đơn thuê xe."
+                    "Nhân viên đã hỗ trợ tiếp nhận CCCD/GPLX và tài khoản nhận hoàn tại quầy. " +
+                    "Cần hoàn tất ảnh khuôn mặt trực tiếp tại quầy trước khi hồ sơ được chuyển sang hàng chờ quản trị viên duyệt."
             });
 
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -346,9 +349,9 @@ public sealed class StaffCustomersController : Controller
             }
 
             TempData["SuccessMessage"] =
-                "Đã tạo khách, lưu tài khoản nhận hoàn và tiếp nhận CCCD/GPLX. Hồ sơ đang chờ quản trị viên duyệt; sau khi KYC được xác minh có thể lập đơn tại quầy.";
+                "Đã tạo tài khoản, lưu tài khoản nhận hoàn và tiếp nhận CCCD/GPLX. Bước tiếp theo: chụp khuôn mặt khách trực tiếp tại quầy.";
 
-            return RedirectToAction(nameof(Index), new { query = normalizedEmail });
+            return RedirectToAction(nameof(FaceCapture), new { customerId = customer.Id });
         }
         catch (Exception exception)
         {
@@ -363,6 +366,207 @@ public sealed class StaffCustomersController : Controller
                 "Không thể hoàn tất hồ sơ khách tại quầy. Tài khoản tạm tạo đã được thu hồi; vui lòng kiểm tra dữ liệu và thử lại.");
             return View(model);
         }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> FaceCapture(
+        string customerId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(customerId))
+        {
+            return BadRequest();
+        }
+
+        var customer = await _dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == customerId && user.IsActive)
+            .Select(user => new
+            {
+                user.Id,
+                user.FullName,
+                user.Email,
+                HasFace = user.IdentityFaceImagePath != null &&
+                          user.IdentityFaceImagePath != "" &&
+                          user.IdentityFaceCapturedAt.HasValue
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (customer is null ||
+            !await _userManager.IsInRoleAsync(
+                await _userManager.FindByIdAsync(customerId)
+                    ?? throw new InvalidOperationException("Không tìm thấy khách hàng."),
+                RoleNames.Customer))
+        {
+            return NotFound();
+        }
+
+        var requiredTypes = new[]
+        {
+            DocumentTypes.CitizenId,
+            DocumentTypes.CitizenIdBack,
+            DocumentTypes.DrivingLicense,
+            DocumentTypes.DrivingLicenseBack
+        };
+        var pendingTypes = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == customerId &&
+                document.Status == DocumentStatus.Pending &&
+                requiredTypes.Contains(document.DocumentType))
+            .Select(document => document.DocumentType)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        if (pendingTypes.Count != requiredTypes.Length)
+        {
+            TempData["ErrorMessage"] =
+                "Khách chưa có đủ 4 giấy tờ KYC đang chờ xử lý. Hãy hoàn tất hồ sơ CCCD/GPLX trước.";
+            return RedirectToAction(nameof(Index), new { query = customer.Email });
+        }
+
+        if (customer.HasFace)
+        {
+            TempData["SuccessMessage"] =
+                "Khách đã có ảnh mặt KYC trực tiếp. Hồ sơ đã sẵn sàng để Admin duyệt.";
+            return RedirectToAction(nameof(Index), new { query = customer.Email });
+        }
+
+        ViewBag.CustomerName = customer.FullName;
+        ViewBag.CustomerEmail = customer.Email;
+        return View(new IdentityCaptureWidgetViewModel
+        {
+            Purpose = IdentityCapturePurposes.Kyc,
+            HiddenFieldName = "FaceCaptureSessionId",
+            CustomerId = customer.Id,
+            Title = "Ảnh khuôn mặt khách tại quầy",
+            HelpText = "Chụp trực tiếp bằng camera máy quầy hoặc QR sang điện thoại. Ảnh này là bằng chứng KYC và không được chọn từ thư viện trong luồng bình thường.",
+            AllowStaffFallback = true
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CompleteFaceCapture(
+        string customerId,
+        Guid? faceCaptureSessionId,
+        CancellationToken cancellationToken)
+    {
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(staffId))
+        {
+            return Challenge();
+        }
+
+        if (string.IsNullOrWhiteSpace(customerId) || !faceCaptureSessionId.HasValue)
+        {
+            TempData["ErrorMessage"] = "Chưa có ảnh mặt KYC hợp lệ.";
+            return RedirectToAction(nameof(FaceCapture), new { customerId });
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var customer = await _dbContext.Users
+            .FirstOrDefaultAsync(user => user.Id == customerId && user.IsActive, cancellationToken);
+        var session = await _dbContext.Set<IdentityCaptureSession>()
+            .FirstOrDefaultAsync(item =>
+                item.IdentityCaptureSessionId == faceCaptureSessionId.Value &&
+                item.Purpose == IdentityCapturePurposes.Kyc &&
+                item.TargetCustomerId == customerId &&
+                item.CreatedByUserId == staffId,
+                cancellationToken);
+
+        var now = DateTime.UtcNow;
+        var validSession = customer is not null &&
+                           session is not null &&
+                           session.CompletedAt.HasValue &&
+                           !session.ConsumedAt.HasValue &&
+                           session.ExpiresAt > now &&
+                           !string.IsNullOrWhiteSpace(session.ImagePath) &&
+                           IdentityCaptureMethods.All.Contains(
+                               session.CaptureMethod ?? string.Empty,
+                               StringComparer.Ordinal);
+
+        if (!validSession)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Phiên ảnh mặt không hợp lệ, đã hết hạn, đã dùng hoặc không thuộc đúng khách/nhân viên. Vui lòng chụp lại.";
+            return RedirectToAction(nameof(FaceCapture), new { customerId });
+        }
+
+        var oldPath = customer!.IdentityFaceImagePath;
+        customer.IdentityFaceImagePath = session!.ImagePath;
+        customer.IdentityFaceCapturedAt = session.CompletedAt;
+        customer.IdentityFaceCaptureMethod = session.CaptureMethod;
+        session.ConsumedAt = now;
+
+        _dbContext.Notifications.Add(new Notification
+        {
+            UserId = customer.Id,
+            Title = "Hồ sơ KYC đã đủ dữ liệu để duyệt",
+            Message =
+                "Đã hoàn tất ảnh khuôn mặt trực tiếp cùng CCCD/GPLX tại quầy. Hồ sơ đang chờ Quản trị viên kiểm tra và duyệt."
+        });
+
+        var adminRoleId = await _dbContext.Roles
+            .Where(role => role.Name == RoleNames.Admin)
+            .Select(role => role.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(adminRoleId))
+        {
+            var adminIds = await _dbContext.UserRoles
+                .Where(item => item.RoleId == adminRoleId)
+                .Select(item => item.UserId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            var title = $"Hồ sơ KYC chờ duyệt|{customer.Id}";
+            var stale = await _dbContext.Notifications
+                .Where(item =>
+                    adminIds.Contains(item.UserId) &&
+                    !item.IsRead &&
+                    item.Title == title)
+                .ToListAsync(cancellationToken);
+            if (stale.Count > 0)
+            {
+                _dbContext.Notifications.RemoveRange(stale);
+            }
+
+            foreach (var adminId in adminIds)
+            {
+                _dbContext.Notifications.Add(new Notification
+                {
+                    UserId = adminId,
+                    Title = title,
+                    Message =
+                        $"{customer.FullName} đã hoàn tất CCCD, GPLX và ảnh mặt trực tiếp tại quầy. Hãy mở hồ sơ để đối chiếu và ra quyết định xác minh."
+                });
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(oldPath) &&
+            !string.Equals(oldPath, customer.IdentityFaceImagePath, StringComparison.OrdinalIgnoreCase))
+        {
+            _secureDocumentStorage.Delete(oldPath);
+        }
+
+        await _auditService.WriteAsync(
+            staffId,
+            "StaffCompleteWalkInKycFace",
+            nameof(IdentityCaptureSession),
+            session.IdentityCaptureSessionId.ToString(),
+            $"Hoàn tất ảnh mặt KYC trực tiếp tại quầy cho khách {customer.FullName} ({customer.Id}); phương thức {session.CaptureMethod}.",
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
+
+        TempData["SuccessMessage"] =
+            "Đã hoàn tất ảnh mặt KYC. Hồ sơ hiện đã đủ dữ liệu để Admin mở và duyệt.";
+        return RedirectToAction(nameof(Index), new { query = customer.Email });
     }
 
     private async Task ValidateDuplicateDocumentsAsync(
