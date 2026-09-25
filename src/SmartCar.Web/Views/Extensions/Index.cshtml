@@ -221,7 +221,7 @@ else
                         </div>
                     }
 
-                    @if (item.Status == BookingExtensionStatus.NeedsEvidence)
+                    @if (item.Status == BookingExtensionStatus.NeedsEvidence && item.IsForceMajeure)
                     {
                         <form asp-action="SupplementEvidence" method="post" enctype="multipart/form-data" class="border rounded p-3 mt-3 bg-light">
                             <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
@@ -253,6 +253,13 @@ else
                                 </div>
                             </div>
                         </form>
+                    }
+                    else if (item.Status == BookingExtensionStatus.NeedsEvidence)
+                    {
+                        <div class="alert alert-warning mt-3 mb-0">
+                            Yêu cầu này là dữ liệu gia hạn thông thường cũ nhưng đang ở trạng thái cần minh chứng.
+                            Không gửi ảnh/GPS bất khả kháng; vui lòng liên hệ SmartCar để Admin duyệt hoặc từ chối lại yêu cầu.
+                        </div>
                     }
                     else if (item.Status == BookingExtensionStatus.Approved)
                     {
