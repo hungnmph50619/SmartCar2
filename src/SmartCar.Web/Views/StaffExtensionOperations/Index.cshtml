@@ -1,6 +1,7 @@
 @model IReadOnlyList<SmartCar.Application.Features.Extensions.ExtensionDto>
 @using SmartCar.Domain.Constants
 @using SmartCar.Web.ViewModels
+@using System.Globalization
 
 @{
     ViewData["Title"] = "Xử lý xung đột gia hạn";
@@ -8,6 +9,72 @@
         ViewBag.ConflictResolutions as
             IReadOnlyDictionary<int, ExtensionConflictResolutionViewModel>
         ?? new Dictionary<int, ExtensionConflictResolutionViewModel>();
+
+    decimal? ParseCoordinate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        return decimal.TryParse(
+            value.Trim().Replace(',', '.'),
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out var parsed)
+            ? parsed
+            : null;
+    }
+
+    (string Text, IReadOnlyList<string> ImagePaths, decimal? Latitude, decimal? Longitude, string? PlaceName) ParseEvidence(string? value)
+    {
+        const string imageMarker = "Ảnh minh chứng: ";
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (string.Empty, Array.Empty<string>(), null, null, null);
+        }
+
+        var rawText = value.Trim();
+        var imagePaths = Array.Empty<string>();
+        var imageIndex = rawText.IndexOf(imageMarker, StringComparison.OrdinalIgnoreCase);
+        if (imageIndex >= 0)
+        {
+            var imageText = rawText[(imageIndex + imageMarker.Length)..].Trim();
+            imagePaths = imageText
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .ToArray();
+            rawText = rawText[..imageIndex].Trim().TrimEnd('|').Trim();
+        }
+
+        decimal? latitude = null;
+        decimal? longitude = null;
+        string? placeName = null;
+        var textParts = new List<string>();
+
+        foreach (var part in rawText.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var locationMatch = System.Text.RegularExpressions.Regex.Match(
+                part,
+                @"Vị trí trực tiếp:\s*(-?\d+(?:[\.,]\d+)?)\s*,\s*(-?\d+(?:[\.,]\d+)?)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (locationMatch.Success)
+            {
+                latitude = ParseCoordinate(locationMatch.Groups[1].Value);
+                longitude = ParseCoordinate(locationMatch.Groups[2].Value);
+                continue;
+            }
+
+            if (part.StartsWith("Địa điểm:", StringComparison.OrdinalIgnoreCase))
+            {
+                placeName = part["Địa điểm:".Length..].Trim();
+                continue;
+            }
+
+            if (!part.StartsWith("Ảnh minh chứng:", StringComparison.OrdinalIgnoreCase))
+            {
+                textParts.Add(part.Trim());
+            }
+        }
+
+        return (string.Join(" | ", textParts), imagePaths, latitude, longitude, placeName);
+    }
 }
 
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
@@ -41,6 +108,7 @@ else
             conflictResolutions.TryGetValue(
                 extension.BookingExtensionId,
                 out var conflict);
+            var evidence = ParseEvidence(extension.EvidenceNote);
 
             <div class="col-xl-6">
                 <div class="card shadow-sm h-100 border-0 rounded-4">
@@ -84,6 +152,52 @@ else
                                     @(conflict is null ? "Đang tải lại dữ liệu" : $"#{conflict.BookingId}")
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="border rounded-3 p-3 mb-3">
+                            <div class="small text-muted">Lý do khách yêu cầu gia hạn</div>
+                            <div class="fw-semibold mb-2">@extension.CustomerNote</div>
+                            <div class="small text-muted">Minh chứng bất khả kháng</div>
+                            <div>@(string.IsNullOrWhiteSpace(evidence.Text) ? "Chưa có mô tả minh chứng." : evidence.Text)</div>
+
+                            @if (evidence.ImagePaths.Count > 0)
+                            {
+                                <div class="row g-2 mt-2">
+                                    @for (var imageIndex = 0; imageIndex < evidence.ImagePaths.Count; imageIndex++)
+                                    {
+                                        var evidenceUrl = Url.Action(
+                                            "Image",
+                                            "ExtensionEvidenceFiles",
+                                            new { extensionId = extension.BookingExtensionId, index = imageIndex });
+                                        <div class="col-6 col-md-4">
+                                            <a href="@evidenceUrl" target="_blank" rel="noopener" class="d-block text-decoration-none">
+                                                <img src="@evidenceUrl"
+                                                     alt="Ảnh minh chứng @(imageIndex + 1)"
+                                                     class="img-thumbnail w-100"
+                                                     style="height:130px;object-fit:contain;background:#f8f9fa" />
+                                                <div class="small text-muted mt-1">Ảnh @(imageIndex + 1)</div>
+                                            </a>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (evidence.Latitude.HasValue && evidence.Longitude.HasValue)
+                            {
+                                var latitudeText = evidence.Latitude.Value.ToString(CultureInfo.InvariantCulture);
+                                var longitudeText = evidence.Longitude.Value.ToString(CultureInfo.InvariantCulture);
+                                var mapsUrl = $"https://www.google.com/maps/search/?api=1&query={latitudeText},{longitudeText}";
+                                <div class="alert alert-light border py-2 mt-3 mb-0 small">
+                                    <strong>Vị trí khách tự gửi:</strong>
+                                    @evidence.Latitude.Value.ToString("0.000000", CultureInfo.InvariantCulture),
+                                    @evidence.Longitude.Value.ToString("0.000000", CultureInfo.InvariantCulture)
+                                    @if (!string.IsNullOrWhiteSpace(evidence.PlaceName))
+                                    {
+                                        <div><strong>Địa điểm:</strong> @evidence.PlaceName</div>
+                                    }
+                                    <a href="@mapsUrl" target="_blank" rel="noopener">Mở tọa độ trên bản đồ →</a>
+                                </div>
+                            }
                         </div>
 
                         @if (conflict is null)
