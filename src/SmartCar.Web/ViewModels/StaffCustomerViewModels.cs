@@ -48,6 +48,10 @@ public sealed class StaffCreateCustomerViewModel
 
     public KycDrivingLicenseInputViewModel DrivingLicenseVerification { get; set; } = new();
 
+    // Dùng đúng model tài khoản ngân hàng của Customer để Staff có thể hoàn tất
+    // hồ sơ walk-in tại quầy mà không bắt khách đăng nhập web chỉ để thêm tài khoản nhận hoàn.
+    public BankAccountViewModel BankAccount { get; set; } = new();
+
     // Giống KycPackageSubmitViewModel của Customer: rule này được KycPackageValidator xử lý.
     [Display(Name = "CCCD và GPLX thuộc cùng một người")]
     public bool ConfirmSamePerson { get; set; }
