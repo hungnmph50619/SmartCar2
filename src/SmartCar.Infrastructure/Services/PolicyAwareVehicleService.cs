@@ -37,13 +37,13 @@ internal sealed class PolicyAwareVehicleService : IVehicleService
 
         foreach (var vehicle in candidates)
         {
-            // Màn tìm xe chỉ cần áp dụng một khoảng xoay vòng chung.
-            // Phương thức nhận xe (tại cửa hàng/giao tận nơi) không làm thay đổi lịch khả dụng.
+            // Khoảng chuẩn bị của lượt đang tìm phải theo đúng phương thức nhận xe.
+            // Giao tận nơi cần thêm delivery lead, không được hạ về StorePickup.
             var bufferedConflict = await _policy.HasBufferedConflictAsync(
                 vehicle.VehicleId,
                 request.PickupDate,
                 request.ReturnDate,
-                VehiclePickupMethod.StorePickup,
+                request.PickupMethod,
                 null,
                 cancellationToken);
 
@@ -55,7 +55,7 @@ internal sealed class PolicyAwareVehicleService : IVehicleService
             var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
                 vehicle.VehicleId,
                 request.PickupDate,
-                VehiclePickupMethod.StorePickup,
+                request.PickupMethod,
                 null,
                 cancellationToken);
 
