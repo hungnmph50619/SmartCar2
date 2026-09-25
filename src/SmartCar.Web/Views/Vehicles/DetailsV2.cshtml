@@ -619,10 +619,25 @@
                     return;
                 }
                 if (typeof L === 'undefined') {
-                    document.getElementById('delivery-map')
-                        .classList.add('d-none');
+                    const mapElement = document.getElementById('delivery-map');
+                    mapElement.classList.remove('d-none');
+                    mapElement.replaceChildren();
+
+                    const fallbackFrame = document.createElement('iframe');
+                    fallbackFrame.title = 'Bản đồ dự phòng SmartCar';
+                    fallbackFrame.src =
+                        `https://www.google.com/maps?q=${encodeURIComponent(storeLat + ',' + storeLng)}&z=13&output=embed`;
+                    fallbackFrame.loading = 'lazy';
+                    fallbackFrame.referrerPolicy = 'no-referrer-when-downgrade';
+                    fallbackFrame.style.width = '100%';
+                    fallbackFrame.style.height = '100%';
+                    fallbackFrame.style.minHeight = '320px';
+                    fallbackFrame.style.border = '0';
+                    fallbackFrame.style.borderRadius = 'inherit';
+                    mapElement.appendChild(fallbackFrame);
+
                     mapHelp.textContent =
-                        'Bản đồ không tải được. Bạn có thể tìm địa chỉ hoặc dùng GPS để chọn điểm giao và tính phí.';
+                        'Đang dùng bản đồ dự phòng. Có thể dùng GPS để lấy tọa độ chính xác và tính phí giao xe.';
                     return;
                 }
 
