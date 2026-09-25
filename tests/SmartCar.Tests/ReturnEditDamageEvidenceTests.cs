@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.EntityFrameworkCore;
@@ -208,16 +209,20 @@ public sealed class ReturnEditDamageEvidenceTests
             db,
             new AuditServiceStub(),
             new TestWebHostEnvironment());
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(
+                new ClaimsIdentity(
+                    new[] { new Claim(ClaimTypes.NameIdentifier, "staff-1") },
+                    "test"))
+        };
         controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
-            HttpContext = new DefaultHttpContext
-            {
-                User = new ClaimsPrincipal(
-                    new ClaimsIdentity(
-                        new[] { new Claim(ClaimTypes.NameIdentifier, "staff-1") },
-                        "test"))
-            }
+            HttpContext = httpContext
         };
+        controller.TempData = new TempDataDictionary(
+            httpContext,
+            new TempDataProviderStub());
 
         var result = await controller.Edit(
             new ReturnEditViewModel
@@ -265,6 +270,18 @@ public sealed class ReturnEditDamageEvidenceTests
         public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
         public string ContentRootPath { get; set; } = Path.GetTempPath();
         public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+
+    private sealed class TempDataProviderStub : ITempDataProvider
+    {
+        public IDictionary<string, object> LoadTempData(HttpContext context) =>
+            new Dictionary<string, object>();
+
+        public void SaveTempData(
+            HttpContext context,
+            IDictionary<string, object> values)
+        {
+        }
     }
 
     private sealed class AuditServiceStub : IAuditService
