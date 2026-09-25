@@ -285,6 +285,8 @@ public sealed class ReturnEditsController : Controller
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = "Đã cập nhật biên bản trả xe và đồng bộ lại phụ phí. Hãy kiểm tra lại trước khi in và ký.";
+        TempData["ClearFileDraftKeys"] =
+            $"return-edit-{model.BookingId}-damage-images|return-edit-{model.BookingId}-new-images";
         return RedirectToAction("Inspect", "Returns", new { bookingId = model.BookingId });
     }
 
