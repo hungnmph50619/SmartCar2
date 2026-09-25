@@ -93,6 +93,28 @@
                     <dt class="col-sm-4">Xe</dt><dd class="col-sm-8">@b.VehicleName · @b.LicensePlate</dd>
                     <dt class="col-sm-4">Nhận dự kiến</dt><dd class="col-sm-8">@b.PickupDate.ToString("dd/MM/yyyy HH:mm")</dd>
                     <dt class="col-sm-4">Trả dự kiến</dt><dd class="col-sm-8">@b.ReturnDate.ToString("dd/MM/yyyy HH:mm")</dd>
+                    <dt class="col-sm-4">Cách nhận xe</dt>
+                    <dd class="col-sm-8">@(b.PickupMethod == VehiclePickupMethod.Delivery ? "Giao tận nơi" : "Nhận tại cửa hàng")</dd>
+                    @if (b.PickupMethod == VehiclePickupMethod.Delivery)
+                    {
+                        var deliveryDistance = b.DeliveryLatitude.HasValue && b.DeliveryLongitude.HasValue
+                            ? RentalPolicy.CalculateDeliveryDistanceKm(b.DeliveryLatitude.Value, b.DeliveryLongitude.Value)
+                            : (double?)null;
+                        <dt class="col-sm-4">Địa chỉ giao</dt>
+                        <dd class="col-sm-8">
+                            <div>@(string.IsNullOrWhiteSpace(b.DeliveryAddress) ? "Chưa có địa chỉ" : b.DeliveryAddress)</div>
+                            @if (deliveryDistance.HasValue)
+                            {
+                                <div class="small text-muted">
+                                    Tọa độ @b.DeliveryLatitude, @b.DeliveryLongitude · khoảng @deliveryDistance.Value.ToString("0.0") km · phí giao @b.DeliveryFee.ToString("N0") đ
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="small text-danger">Thiếu tọa độ giao xe; chưa đủ dữ liệu để Staff review.</div>
+                            }
+                        </dd>
+                    }
                     @if (b.IsImmediateCounterRental && b.Status == BookingStatus.PendingConfirmation)
                     {
                         <dt class="col-sm-4">Nhận ngay</dt><dd class="col-sm-8">Giờ nhận và trả sẽ được cập nhật khi Admin duyệt, giữ nguyên thời lượng thuê.</dd>
