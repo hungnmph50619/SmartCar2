@@ -1,0 +1,50 @@
+@model SmartCar.Web.ViewModels.IdentityCaptureWidgetViewModel
+@{
+    ViewData["Title"] = "Chụp mặt KYC tại quầy";
+    var customerName = ViewBag.CustomerName as string ?? "Khách hàng";
+    var customerEmail = ViewBag.CustomerEmail as string ?? string.Empty;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/staff-operations.css" asp-append-version="true" />
+}
+
+<div class="staff-op-page">
+    <section class="staff-hero p-4 p-lg-5 mb-4">
+        <div class="position-relative" style="z-index:1">
+            <span class="staff-eyebrow mb-3"><span class="staff-pulse-dot"></span> KYC tại quầy</span>
+            <h1 class="display-6 fw-bold mb-2">Chụp khuôn mặt khách trực tiếp</h1>
+            <p class="text-muted mb-0">
+                <strong>@customerName</strong>
+                @if (!string.IsNullOrWhiteSpace(customerEmail))
+                {
+                    <span>· @customerEmail</span>
+                }
+            </p>
+        </div>
+    </section>
+
+    <div class="alert alert-info">
+        Đây là bước bắt buộc sau khi Staff tạo khách tại quầy. Hồ sơ chỉ chuyển sang hàng chờ Admin duyệt
+        khi đã có CCCD, GPLX, tài khoản nhận hoàn và ảnh khuôn mặt chụp trực tiếp.
+    </div>
+
+    <form asp-action="CompleteFaceCapture" method="post" class="card staff-form-card" data-loading-form>
+        <div class="card-body p-4 p-lg-5">
+            <input type="hidden" name="customerId" value="@Model.CustomerId" />
+
+            <partial name="_IdentityCaptureWidget" model="Model" />
+
+            <div class="alert alert-warning small mt-4 mb-0">
+                Staff phải đối chiếu người đang đứng trước quầy với CCCD bản gốc. Upload dự phòng chỉ dùng khi camera/QR thực sự không hoạt động và bắt buộc ghi lý do audit.
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap mt-4">
+                <button class="btn btn-primary px-4" type="submit" data-loading-text="Đang hoàn tất KYC...">
+                    Hoàn tất ảnh mặt & chuyển Admin duyệt
+                </button>
+                <a class="btn btn-outline-secondary px-4" asp-action="Index">Quay lại danh sách khách</a>
+            </div>
+        </div>
+    </form>
+</div>
