@@ -128,9 +128,7 @@ public sealed class StaffExtensionOperationsController : Controller
 
         if (replacement is null ||
             replacement.VehicleId == conflict.VehicleId ||
-            replacement.Status is VehicleStatus.Maintenance
-                or VehicleStatus.Inspection
-                or VehicleStatus.Inactive)
+            replacement.Status != VehicleStatus.Available)
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Xe thay thế không còn khả dụng.";
@@ -459,9 +457,7 @@ public sealed class StaffExtensionOperationsController : Controller
             .AsNoTracking()
             .Where(vehicle =>
                 vehicle.VehicleId != conflict.VehicleId &&
-                vehicle.Status != VehicleStatus.Maintenance &&
-                vehicle.Status != VehicleStatus.Inspection &&
-                vehicle.Status != VehicleStatus.Inactive &&
+                vehicle.Status == VehicleStatus.Available &&
                 !_dbContext.VehicleIncidents.Any(incident =>
                     incident.VehicleId == vehicle.VehicleId &&
                     incident.Status != IncidentStatus.Resolved &&
