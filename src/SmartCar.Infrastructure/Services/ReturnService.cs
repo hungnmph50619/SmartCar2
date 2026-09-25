@@ -127,6 +127,7 @@ internal sealed class ReturnService : IReturnService
             faceSession.Purpose != IdentityCapturePurposes.Return ||
             faceSession.BookingId != booking.BookingId ||
             faceSession.TargetCustomerId != booking.CustomerId ||
+            faceSession.CreatedByUserId != request.IdentityVerifiedByStaffId ||
             !faceSession.CanConsume(DateTime.UtcNow) ||
             !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
         {
