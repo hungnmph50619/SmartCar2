@@ -131,16 +131,27 @@
     <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
         <span>
             <strong>Đã kiểm tra xong.</strong>
-            @if (Model.RefundStatus == PaymentStatus.RefundApproved)
+            @if (Model.HasRefundAwaitingApproval)
             {
-                <text>Admin đã duyệt khoản hoàn <strong>@Model.RefundAmount.ToString("N0") đ</strong>. Nhân viên có thể thực hiện chuyển tiền.</text>
+                <text>
+                    Tổng khoản hoàn đang mở <strong>@Model.RefundAmount.ToString("N0") đ</strong>.
+                    Còn <strong>@Model.RefundAwaitingApprovalAmount.ToString("N0") đ</strong> chờ Admin duyệt
+                    @if (Model.HasRefundApproved)
+                    {
+                        <text>; <strong>@Model.RefundApprovedAmount.ToString("N0") đ</strong> đã được duyệt nhưng Staff phải chờ toàn bộ batch được duyệt trước khi chuyển.</text>
+                    }
+                    else
+                    {
+                        <text>.</text>
+                    }
+                </text>
             }
-            else
+            else if (Model.HasRefundApproved)
             {
-                <text>Khoản hoàn <strong>@Model.RefundAmount.ToString("N0") đ</strong> đang chờ Admin duyệt.</text>
+                <text>Admin đã duyệt toàn bộ khoản hoàn đang mở <strong>@Model.RefundApprovedAmount.ToString("N0") đ</strong>. Nhân viên có thể thực hiện chuyển tiền.</text>
             }
         </span>
-        @if (Model.RefundStatus == PaymentStatus.RefundApproved)
+        @if (!Model.HasRefundAwaitingApproval && Model.HasRefundApproved)
         {
             <a class="btn btn-sm btn-warning" asp-controller="Staff" asp-action="Refunds">Thực hiện hoàn tiền</a>
         }
