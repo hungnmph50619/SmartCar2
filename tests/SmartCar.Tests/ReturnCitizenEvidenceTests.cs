@@ -39,8 +39,9 @@ public sealed class ReturnCitizenEvidenceTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         await using var db = await CreateDbAsync(connection);
+        await db.SaveChangesAsync();
         var faceId = AddEvidence(db, true, true, "staff-1");
-        db.CustomerDocuments.RemoveRange(db.CustomerDocuments);
+        db.CustomerDocuments.RemoveRange(await db.CustomerDocuments.ToListAsync());
         await db.SaveChangesAsync();
 
         var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId));
