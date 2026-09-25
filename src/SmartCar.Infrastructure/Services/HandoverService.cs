@@ -59,6 +59,37 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Đơn đã có biên bản giao xe.");
         }
 
+        var verifiedDocuments = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == booking.CustomerId &&
+                document.Status == DocumentStatus.Verified &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.CitizenIdBack ||
+                 document.DocumentType == DocumentTypes.DrivingLicense ||
+                 document.DocumentType == DocumentTypes.DrivingLicenseBack))
+            .ToListAsync(cancellationToken);
+
+        var citizenFront = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenIdBack);
+        var licenseFront = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.DrivingLicense);
+        var licenseBack = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.DrivingLicenseBack);
+
+        if (citizenFront is null || citizenBack is null ||
+            licenseFront is null || licenseBack is null ||
+            !string.Equals(citizenFront.DocumentNumber, citizenBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(licenseFront.DocumentNumber, licenseBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !citizenFront.ExpiryDate.HasValue || citizenFront.ExpiryDate.Value.Date < booking.ReturnDate.Date ||
+            !licenseFront.ExpiryDate.HasValue || licenseFront.ExpiryDate.Value.Date < booking.ReturnDate.Date)
+        {
+            return OperationResult.Failure(
+                "CCCD/GPLX đã xác minh không còn đủ cả hai mặt hoặc không còn hiệu lực đến ngày trả. Dừng bàn giao và kiểm tra lại KYC.");
+        }
+
         var faceSession = await _dbContext.Set<IdentityCaptureSession>()
             .FirstOrDefaultAsync(item =>
                 item.IdentityCaptureSessionId == request.IdentityFaceSessionId,
