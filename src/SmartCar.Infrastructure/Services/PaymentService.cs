@@ -117,6 +117,15 @@ internal sealed class PaymentService : IPaymentService
             return OperationResult.Failure("Không tìm thấy đơn thuê của bạn.");
         }
 
+        if (booking.Status == BookingStatus.PendingPayment &&
+            paymentType is PaymentType.Rental or PaymentType.VehicleSwapAdjustment &&
+            booking.ReservationExpiresAt.HasValue &&
+            booking.ReservationExpiresAt.Value <= DateTime.UtcNow)
+        {
+            return OperationResult.Failure(
+                "Đã quá hạn giữ xe/thanh toán của đơn. Không thể báo chuyển khoản mới; hãy tải lại trạng thái đơn.");
+        }
+
         var stateError = ValidateCustomerPaymentState(booking, paymentType);
         if (stateError is not null)
         {
