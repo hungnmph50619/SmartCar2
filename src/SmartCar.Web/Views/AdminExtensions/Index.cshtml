@@ -258,8 +258,29 @@ else
                             }
 
                             <div class="row g-2">
-                                <div class="col-md-6"><details class="border rounded p-2 h-100"><summary class="fw-semibold text-warning">Yêu cầu khách bổ sung minh chứng</summary><form asp-controller="AdminExtensions" asp-action="RequestEvidence" method="post" class="mt-2"><input type="hidden" name="extensionId" value="@item.BookingExtensionId" /><textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Khách cần bổ sung gì?"></textarea><button class="btn btn-sm btn-warning w-100" type="submit">Gửi yêu cầu bổ sung</button></form></details></div>
-                                <div class="col-md-6"><details class="border rounded p-2 h-100"><summary class="fw-semibold text-danger">Không duyệt</summary><form asp-controller="AdminExtensions" asp-action="Reject" method="post" class="mt-2"><input type="hidden" name="ExtensionId" value="@item.BookingExtensionId" /><textarea name="Reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Lý do từ chối"></textarea><button class="btn btn-sm btn-outline-danger w-100" type="submit">Từ chối & báo khách</button></form></details></div>
+                                @if (item.IsForceMajeure)
+                                {
+                                    <div class="col-md-6">
+                                        <details class="border rounded p-2 h-100">
+                                            <summary class="fw-semibold text-warning">Yêu cầu khách bổ sung minh chứng</summary>
+                                            <form asp-controller="AdminExtensions" asp-action="RequestEvidence" method="post" class="mt-2">
+                                                <input type="hidden" name="extensionId" value="@item.BookingExtensionId" />
+                                                <textarea name="reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Khách cần bổ sung gì?"></textarea>
+                                                <button class="btn btn-sm btn-warning w-100" type="submit">Gửi yêu cầu bổ sung</button>
+                                            </form>
+                                        </details>
+                                    </div>
+                                }
+                                <div class="@(item.IsForceMajeure ? "col-md-6" : "col-12")">
+                                    <details class="border rounded p-2 h-100">
+                                        <summary class="fw-semibold text-danger">Không duyệt</summary>
+                                        <form asp-controller="AdminExtensions" asp-action="Reject" method="post" class="mt-2">
+                                            <input type="hidden" name="ExtensionId" value="@item.BookingExtensionId" />
+                                            <textarea name="Reason" class="form-control form-control-sm mb-2" maxlength="500" rows="2" required placeholder="Lý do từ chối"></textarea>
+                                            <button class="btn btn-sm btn-outline-danger w-100" type="submit">Từ chối & báo khách</button>
+                                        </form>
+                                    </details>
+                                </div>
                             </div>
                         }
                     </div>
