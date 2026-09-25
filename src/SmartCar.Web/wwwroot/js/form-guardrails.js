@@ -166,6 +166,13 @@
 
         const registerInput = async (input) => {
             if (!(input instanceof HTMLInputElement) || input.type !== 'file' || !input.dataset.fileDraftKey) return;
+
+            // Evidence slots have their own draft store + preview lifecycle in
+            // evidence-image-slots.js. Registering the same input here as well
+            // creates two independent IndexedDB restores that can race and
+            // overwrite each other's FileList after a validation failure/reload.
+            if (input.matches('[data-evidence-input], [data-evidence-multiple-input]')) return;
+
             if (input.dataset.fileDraftInitialized === 'true') return;
             input.dataset.fileDraftInitialized = 'true';
             input.addEventListener('change', () => saveInputDraft(db, input));
