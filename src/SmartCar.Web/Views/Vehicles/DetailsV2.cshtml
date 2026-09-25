@@ -52,7 +52,10 @@
 <style>
     #delivery-map {
         height: 300px;
+        min-height: 300px;
         border-radius: 12px;
+        background: #eef2f5;
+        overflow: hidden;
     }
 
     .pickup-method-card {
@@ -618,38 +621,79 @@
                     });
                     return;
                 }
+                const mapElement = document.getElementById('delivery-map');
                 if (typeof L === 'undefined') {
-                    document.getElementById('delivery-map')
-                        .classList.add('d-none');
+                    mapElement.innerHTML =
+                        '<div class="h-100 d-flex align-items-center justify-content-center text-center p-3 text-muted">' +
+                        'Không khởi tạo được thư viện bản đồ. Vẫn có thể nhập địa chỉ và dùng GPS để tính phí.' +
+                        '</div>';
                     mapHelp.textContent =
-                        'Bản đồ không tải được. Bạn có thể tìm địa chỉ hoặc dùng GPS để chọn điểm giao và tính phí.';
+                        'Không khởi tạo được thư viện bản đồ. Hãy thử tải lại trang; GPS và nhập địa chỉ vẫn có thể dùng.';
                     return;
                 }
 
                 map = L.map('delivery-map')
                     .setView([storeLat, storeLng], 13);
 
-                let tileLoaded = false;
-                let tileErrors = 0;
-                const mapElement = document.getElementById('delivery-map');
-                L.tileLayer(
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                const tileSources = [
                     {
-                        maxZoom: 19,
-                        attribution: '&copy; OpenStreetMap contributors'
-                    })
-                    .on('tileload', () => {
-                        tileLoaded = true;
-                        mapElement.classList.remove('d-none');
-                        mapHelp.textContent = 'Bấm trên bản đồ để chọn điểm giao hoặc dùng GPS.';
-                    })
-                    .on('tileerror', () => {
-                        if (++tileErrors >= 2 && !tileLoaded) {
-                            mapElement.classList.add('d-none');
-                            mapHelp.textContent = 'Nền bản đồ không kết nối được. Có thể dùng GPS để lấy tọa độ tính phí và nhập địa chỉ giao xe; cấu hình Google Maps để dùng nguồn bản đồ khác.';
-                        }
-                    })
-                    .addTo(map);
+                        url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        options: {
+                            maxZoom: 19,
+                            attribution: '&copy; OpenStreetMap contributors'
+                        },
+                        name: 'OpenStreetMap'
+                    },
+                    {
+                        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                        options: {
+                            maxZoom: 19,
+                            attribution: 'Tiles &copy; Esri'
+                        },
+                        name: 'Esri'
+                    }
+                ];
+
+                let activeTileLayer = null;
+                const loadTileSource = index => {
+                    if (activeTileLayer) {
+                        map.removeLayer(activeTileLayer);
+                        activeTileLayer = null;
+                    }
+
+                    if (index >= tileSources.length) {
+                        mapHelp.textContent =
+                            'Không tải được nền bản đồ từ các nguồn dự phòng. Bản đồ vẫn giữ để hiển thị ghim; dùng GPS hoặc tìm địa chỉ để chọn tọa độ.';
+                        error.textContent =
+                            'Không tải được nền bản đồ. Tọa độ vẫn có thể chọn bằng GPS/tìm địa chỉ và vẫn được dùng để tính phí.';
+                        error.classList.remove('d-none');
+                        return;
+                    }
+
+                    const source = tileSources[index];
+                    let loaded = false;
+                    let errors = 0;
+                    let switched = false;
+
+                    activeTileLayer = L.tileLayer(source.url, source.options)
+                        .on('tileload', () => {
+                            loaded = true;
+                            mapHelp.textContent =
+                                `Bấm trên bản đồ để chọn điểm giao hoặc dùng GPS. Nền bản đồ: ${source.name}.`;
+                        })
+                        .on('tileerror', () => {
+                            errors += 1;
+                            if (!loaded && !switched && errors >= 4) {
+                                switched = true;
+                                mapHelp.textContent =
+                                    `Không kết nối được ${source.name}, đang thử nguồn bản đồ dự phòng...`;
+                                loadTileSource(index + 1);
+                            }
+                        })
+                        .addTo(map);
+                };
+
+                loadTileSource(0);
 
                 storeMarker = L.marker([storeLat, storeLng])
                     .addTo(map)
