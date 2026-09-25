@@ -24,8 +24,13 @@ public sealed class IdentityCaptureSession
     public bool CanCapture(DateTime utcNow) =>
         !IsExpired(utcNow) && !CompletedAt.HasValue && string.IsNullOrWhiteSpace(ImagePath);
 
-    // Sau khi đã chụp, ảnh vẫn được phép gắn vào form đích một lần dù QR đã hết hạn.
-    // Việc consume luôn phải kiểm tra đúng Customer/Booking/Purpose ở server.
+    // Ảnh đã chụp được phép gắn vào form đích một lần trong một cửa sổ ngắn
+    // tính từ lúc chụp. Không cho dùng ảnh mặt cũ hàng giờ/ngày sau cho nghiệp vụ
+    // "đúng người đang đứng trước quầy".
     public bool CanConsume(DateTime utcNow) =>
-        CompletedAt.HasValue && !ConsumedAt.HasValue && !string.IsNullOrWhiteSpace(ImagePath);
+        CompletedAt.HasValue &&
+        CompletedAt.Value <= utcNow &&
+        utcNow < CompletedAt.Value.AddMinutes(IdentityCapturePolicy.SessionLifetimeMinutes) &&
+        !ConsumedAt.HasValue &&
+        !string.IsNullOrWhiteSpace(ImagePath);
 }
