@@ -79,5 +79,6 @@ public sealed class StaffCustomerListItemViewModel
     public string Email { get; init; } = string.Empty;
     public string? PhoneNumber { get; init; }
     public bool IsActive { get; init; }
+    public bool HasIdentityFace { get; init; }
     public DateTime CreatedAt { get; init; }
 }
