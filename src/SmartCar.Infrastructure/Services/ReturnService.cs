@@ -1018,10 +1018,11 @@ internal sealed class ReturnService : IReturnService
             0m,
             booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
 
-        booking.AdditionalAmount = await _dbContext.AdditionalCharges
+        var chargeAmounts = await _dbContext.AdditionalCharges
             .Where(charge => charge.VehicleReturn.BookingId == booking.BookingId)
-            .SumAsync(charge => (decimal?)charge.Amount, cancellationToken)
-            ?? 0;
+            .Select(charge => charge.Amount)
+            .ToListAsync(cancellationToken);
+        booking.AdditionalAmount = chargeAmounts.Sum();
 
         booking.TotalAmount = Math.Max(
             0,
@@ -1139,4 +1140,3 @@ internal sealed class ReturnService : IReturnService
             ? addition
             : $"{current.Trim()} {addition}";
 }
-
