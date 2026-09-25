@@ -203,6 +203,7 @@ public sealed class AdminRentalDocumentsController : Controller
 
         TempData["SuccessMessage"] =
             $"Đã lưu {newPaths.Count} trang bản ký. Hãy mở kiểm tra và xác nhận hợp lệ trước khi bắt đầu chuyến.";
+        TempData["ClearFileDraftKeys"] = $"handover-{bookingId}-signed";
 
         return RedirectToBookingDetails(bookingId);
     }
@@ -290,6 +291,7 @@ public sealed class AdminRentalDocumentsController : Controller
 
         TempData["SuccessMessage"] =
             $"Đã lưu {newPaths.Count} trang bản trả xe. Nhân viên cần xác minh chữ ký trước khi quyết toán.";
+        TempData["ClearFileDraftKeys"] = $"return-{bookingId}-signed";
         return RedirectToBookingDetails(bookingId);
     }
 
