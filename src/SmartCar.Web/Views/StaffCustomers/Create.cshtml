@@ -1,4 +1,6 @@
 @model SmartCar.Web.ViewModels.StaffCreateCustomerViewModel
+@using SmartCar.Web.Services
+@inject IUserBankAccountService BankAccountService
 @{
     ViewData["Title"] = "Tạo khách tại quầy";
     var latestDateOfBirth = DateTime.Today.AddYears(-18).ToString("yyyy-MM-dd");
@@ -22,7 +24,7 @@
     </section>
 
     <div class="alert alert-info">
-        <strong>Luồng đúng:</strong> Tạo tài khoản → tiếp nhận 4 ảnh giấy tờ → quản trị viên duyệt → khách đủ điều kiện tạo đơn.
+        <strong>Luồng đúng:</strong> Tạo tài khoản → tiếp nhận 4 ảnh giấy tờ + tài khoản nhận hoàn → quản trị viên duyệt KYC → Staff lập đơn tại quầy.
         Việc nhân viên đánh dấu đã xem bản gốc không đồng nghĩa hồ sơ đã được duyệt.
     </div>
 
@@ -142,7 +144,49 @@
             </div>
 
             <hr />
-            <h2 class="h5 mb-3">4. Xác nhận tiếp nhận</h2>
+            <h2 class="h5 mb-3">4. Tài khoản nhận hoàn tiền</h2>
+            <div class="alert alert-light border small mb-3">
+                Dùng để hoàn cọc, hoàn tiền hoặc chuyển trả khoản phát sinh. SmartCar không dùng thông tin này để tự động trừ tiền.
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-md-5">
+                    <label asp-for="BankAccount.BankCode" class="form-label fw-semibold"></label>
+                    <select asp-for="BankAccount.BankCode" class="form-select" required>
+                        <option value="">-- Chọn ngân hàng --</option>
+                        @foreach (var bank in BankAccountService.Banks)
+                        {
+                            <option value="@bank.Code">@bank.Name</option>
+                        }
+                    </select>
+                    <span asp-validation-for="BankAccount.BankCode" class="text-danger small"></span>
+                </div>
+                <div class="col-md-7">
+                    <label asp-for="BankAccount.AccountNumber" class="form-label fw-semibold"></label>
+                    <input asp-for="BankAccount.AccountNumber"
+                           class="form-control"
+                           inputmode="numeric"
+                           autocomplete="off"
+                           minlength="6"
+                           maxlength="20"
+                           pattern="[0-9]{6,20}"
+                           required />
+                    <span asp-validation-for="BankAccount.AccountNumber" class="text-danger small"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="BankAccount.AccountHolderName" class="form-label fw-semibold"></label>
+                    <input asp-for="BankAccount.AccountHolderName"
+                           class="form-control text-uppercase"
+                           maxlength="150"
+                           autocomplete="name"
+                           pattern="[\p{L}]+(?:[ ]+[\p{L}]+)*"
+                           required />
+                    <div class="form-text">Nhập đúng tên chủ tài khoản nhận tiền; có thể dùng chữ có dấu hoặc không dấu.</div>
+                    <span asp-validation-for="BankAccount.AccountHolderName" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <hr />
+            <h2 class="h5 mb-3">5. Xác nhận tiếp nhận</h2>
             <div class="form-check mb-3">
                 <input asp-for="ConfirmSamePerson" class="form-check-input" required />
                 <label asp-for="ConfirmSamePerson" class="form-check-label fw-semibold"></label>
@@ -161,7 +205,7 @@
             </div>
 
             <div class="alert alert-warning">
-                Sau khi gửi, khách <strong>chưa thể lập đơn ngay</strong>. Quản trị viên phải duyệt CCCD và GPLX; BookingService vẫn kiểm tra giấy tờ còn hiệu lực đến ngày trả xe.
+                Sau khi gửi, khách <strong>chưa thể lập đơn ngay</strong>. Quản trị viên phải duyệt CCCD và GPLX; tài khoản nhận hoàn đã được lưu sẵn để sau khi KYC đạt, Staff có thể lập đơn ngay tại quầy.
             </div>
 
             <div class="d-flex gap-2 flex-wrap">
