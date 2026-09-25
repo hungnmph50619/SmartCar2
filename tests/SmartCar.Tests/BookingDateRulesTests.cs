@@ -6,6 +6,14 @@ namespace SmartCar.Tests;
 public sealed class BookingDateRulesTests
 {
     [Fact]
+    public void ImmediateCounterRange_AllowsCurrentPickupButRejectsStalePickup()
+    {
+        var now = DateTime.Now;
+        Assert.True(BookingDateRules.IsValidImmediateCounterRange(now, now.AddDays(1)));
+        Assert.False(BookingDateRules.IsValidImmediateCounterRange(now.AddMinutes(-3), now.AddDays(1)));
+    }
+
+    [Fact]
     public void IsValidRange_RejectsPastPickup()
     {
         var pickup = DateTime.Now.AddHours(-1);

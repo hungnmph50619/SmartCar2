@@ -1,11 +1,27 @@
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using Xunit;
+using SmartCar.Infrastructure.Services;
 
 namespace SmartCar.Tests;
 
 public sealed class CancellationRefundPolicyTests
 {
+    [Fact]
+    public void NewBooking_NearPickupRefundsDepositSeparatelyAndOnlyTwentyPercentRental()
+    {
+        var cancelledAt = new DateTime(2026, 9, 25, 12, 0, 0);
+        var policy = BusinessPolicyStore.PrepareForNewBooking(
+            new SmartCar.Domain.Constants.RentalPolicySnapshot
+            {
+                FreeCancellationRequiresMinimumLead = false
+            });
+
+        var rate = CancellationRefundPolicy.GetRentalRefundRate(
+            cancelledAt, cancelledAt.AddHours(22), cancelledAt.AddMinutes(-5), policy);
+
+        Assert.Equal(0.20m, rate);
+    }
     [Fact]
     public void GetRentalRefundRate_RefundsAllWithinFirstHourWhenTripIsAtLeast24HoursAway()
     {

@@ -69,6 +69,26 @@ public sealed class CounterRentalWorkflowTests
         Assert.Equal(1, bookings.CreateCalls);
     }
 
+    [Fact]
+    public async Task CounterRental_ImmediatePickup_UsesCurrentTimeInsteadOfScheduledTime()
+    {
+        await using var db = CreateDbContext();
+        await SeedActiveCustomerAsync(db);
+        var bookings = new BookingServiceStub();
+        var bank = new UserBankAccountDto(1, "customer-1", "VCB", "Vietcombank",
+            "0123456789", "NGUYEN VAN A", true, true, DateTime.UtcNow, DateTime.UtcNow);
+        var controller = CreateController(db, bookings, new BankAccountServiceStub(bank));
+        var before = DateTime.Now;
+        var model = ValidModel();
+        model.IsImmediatePickup = true;
+
+        await controller.CounterRental(model, default);
+
+        Assert.NotNull(bookings.LastRequest);
+        Assert.True(bookings.LastRequest.IsImmediateCounterRental);
+        Assert.InRange(bookings.LastRequest.PickupDate, before, DateTime.Now);
+    }
+
     private static StaffCounterRentalViewModel ValidModel() => new()
     {
         CustomerId = "customer-1",
@@ -127,6 +147,7 @@ public sealed class CounterRentalWorkflowTests
     private sealed class BookingServiceStub : IBookingService
     {
         public int CreateCalls { get; private set; }
+        public CreateBookingRequest? LastRequest { get; private set; }
 
         public Task<BookingMutationResult> CreateAsync(
             string customerId,
@@ -134,6 +155,7 @@ public sealed class CounterRentalWorkflowTests
             CancellationToken cancellationToken = default)
         {
             CreateCalls++;
+            LastRequest = request;
             return Task.FromResult(BookingMutationResult.Success(777));
         }
 
