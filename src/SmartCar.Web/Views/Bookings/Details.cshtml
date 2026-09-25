@@ -347,7 +347,7 @@
             </div>
         }
 
-        @if (handoverRecord is not null)
+        @if (handoverRecord?.SignedDocumentVerified == true)
         {
             var handoverSignedPaths = SignedPaths(handoverRecord.ImagePaths, "signed-handover-");
             var handoverEvidence = EvidencePaths(handoverRecord.ImagePaths, "signed-handover-");
