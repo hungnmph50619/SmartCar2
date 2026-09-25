@@ -72,6 +72,11 @@
                 {
                     <div class="alert alert-danger alert-dismissible fade show">@errorMessage<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
                 }
+                @if (TempData["ClearFileDraftKeys"] is string clearFileDraftKeys &&
+                     !string.IsNullOrWhiteSpace(clearFileDraftKeys))
+                {
+                    <span class="d-none" data-clear-file-draft-keys="@clearFileDraftKeys"></span>
+                }
                 @RenderBody()
             </main>
             <footer class="admin-footer">&copy; 2026 SmartCar — Khu vực nhân viên</footer>
