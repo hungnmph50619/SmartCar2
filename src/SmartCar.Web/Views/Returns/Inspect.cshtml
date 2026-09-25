@@ -362,12 +362,7 @@ else
                 <strong>Còn @Model.OverdueCompensationDebtAmount.ToString("N0") đ phải thu thêm sau khi đã khấu trừ cọc.</strong>
                 @if (Model.OverdueCompensationDebtAwaitingConfirmation)
                 {
-                    <div>Khách đã báo chuyển khoản. Staff phải đối soát giao dịch trước khi quyết toán cọc.</div>
-                    <a class="btn btn-sm btn-warning mt-2"
-                       asp-controller="StaffPayments"
-                       asp-action="Reconciliation">
-                        Đi tới đối soát thanh toán
-                    </a>
+                    <div>Khách đã báo chuyển khoản. Giao dịch đang chờ Admin đối soát; Staff chưa được thu tiền mặt hoặc quyết toán cọc trong lúc chờ.</div>
                 }
                 else
                 {
