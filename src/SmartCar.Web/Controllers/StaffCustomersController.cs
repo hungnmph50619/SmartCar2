@@ -23,6 +23,7 @@ public sealed class StaffCustomersController : Controller
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
     private readonly ISecureDocumentStorage _secureDocumentStorage;
+    private readonly IUserBankAccountService _bankAccountService;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<StaffCustomersController> _logger;
 
@@ -31,6 +32,7 @@ public sealed class StaffCustomersController : Controller
         ApplicationDbContext dbContext,
         IAuditService auditService,
         ISecureDocumentStorage secureDocumentStorage,
+        IUserBankAccountService bankAccountService,
         UserManager<ApplicationUser> userManager,
         ILogger<StaffCustomersController> logger)
     {
@@ -38,6 +40,7 @@ public sealed class StaffCustomersController : Controller
         _dbContext = dbContext;
         _auditService = auditService;
         _secureDocumentStorage = secureDocumentStorage;
+        _bankAccountService = bankAccountService;
         _userManager = userManager;
         _logger = logger;
     }
@@ -266,6 +269,15 @@ public sealed class StaffCustomersController : Controller
                 licenseBack);
             await _dbContext.SaveChangesAsync(cancellationToken);
 
+            // Walk-in phải hoàn tất luôn tài khoản nhận hoàn tại quầy; nếu bước này lỗi,
+            // transaction KYC bị rollback và tài khoản tạm sẽ được thu hồi trong catch.
+            await _bankAccountService.SaveDefaultAsync(
+                customer.Id,
+                model.BankAccount.BankCode,
+                model.BankAccount.AccountNumber,
+                model.BankAccount.AccountHolderName,
+                cancellationToken);
+
             // Metadata dùng cùng cấu trúc với luồng khách tự gửi KYC.
             foreach (var document in new[] { citizenFront, citizenBack })
             {
@@ -320,6 +332,7 @@ public sealed class StaffCustomersController : Controller
                     "CustomerKycPackage",
                     customer.Id,
                     $"Tạo tài khoản khách tại quầy cho {customer.FullName} ({normalizedEmail}); " +
+                    $"đã lưu tài khoản nhận hoàn tại ngân hàng {model.BankAccount.BankCode}; " +
                     "nhân viên đã đối chiếu bản gốc và gửi 4 giấy tờ ở trạng thái Chờ xử lý để quản trị viên duyệt.",
                     ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
                     cancellationToken: cancellationToken);
@@ -333,7 +346,7 @@ public sealed class StaffCustomersController : Controller
             }
 
             TempData["SuccessMessage"] =
-                "Đã tạo khách và tiếp nhận CCCD/GPLX. Hồ sơ đang chờ quản trị viên duyệt; chỉ có thể lập đơn sau khi KYC được xác minh.";
+                "Đã tạo khách, lưu tài khoản nhận hoàn và tiếp nhận CCCD/GPLX. Hồ sơ đang chờ quản trị viên duyệt; sau khi KYC được xác minh có thể lập đơn tại quầy.";
 
             return RedirectToAction(nameof(Index), new { query = normalizedEmail });
         }
