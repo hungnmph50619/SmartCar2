@@ -18,6 +18,7 @@ public sealed class StaffBookingDetailsViewModel
 {
     public BookingDetailsDto Booking { get; init; } = null!;
     public DateTime? StaffReviewedAt { get; init; }
+    public DateTime? ActualTurnaroundReadyAt { get; init; }
     public bool HandoverIdentityVerified { get; init; }
     public string? HandoverIdentityVerifiedBy { get; init; }
     public DateTime? HandoverIdentityVerifiedAt { get; init; }
