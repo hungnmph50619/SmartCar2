@@ -98,6 +98,7 @@ public sealed class HandoverEditsController : Controller
         ModelState.Remove(nameof(HandoverViewModel.TrafficFineTerms));
         ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
         ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
+        ModelState.Remove(nameof(HandoverViewModel.HandoverAt));
         // Edit không xác minh lại danh tính. Các cờ này thuộc bước tạo biên bản ban đầu
         // và không có input tương ứng trên form chỉnh sửa.
         ModelState.Remove(nameof(HandoverViewModel.IdentityFaceSessionId));
@@ -120,6 +121,10 @@ public sealed class HandoverEditsController : Controller
             TempData["ErrorMessage"] = "Biên bản đã được ký hoặc chuyến đã bắt đầu nên không thể chỉnh sửa.";
             return RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId = model.BookingId });
         }
+
+        // Thời gian giao là timestamp nghiệp vụ do server chốt khi lập biên bản.
+        // Không nhận lại giá trị từ trình duyệt ở màn chỉnh sửa.
+        model.HandoverAt = booking.Handover.HandoverAt;
 
         var currentPaths = SplitPaths(booking.Handover.ImagePaths).ToList();
         var vehiclePhotos = VehiclePhotos(booking.Handover.ImagePaths).ToList();
@@ -165,16 +170,6 @@ public sealed class HandoverEditsController : Controller
             }
         }
 
-        if (model.HandoverAt > DateTime.Now.AddMinutes(5))
-        {
-            ModelState.AddModelError(nameof(model.HandoverAt), "Thời gian giao xe không được ở tương lai.");
-        }
-
-        if (model.HandoverAt < booking.PickupDate || model.HandoverAt >= booking.ReturnDate)
-        {
-            ModelState.AddModelError(nameof(model.HandoverAt), "Thời gian giao phải nằm trong khoảng thuê đã đặt.");
-        }
-
         if (!model.Mileage.HasValue || model.Mileage.Value < booking.Vehicle.CurrentMileage)
         {
             ModelState.AddModelError(nameof(model.Mileage), $"Số km không được nhỏ hơn số km hiện tại ({booking.Vehicle.CurrentMileage:N0} km).");
@@ -209,7 +204,6 @@ public sealed class HandoverEditsController : Controller
                 .Concat(addedPaths)
                 .ToList();
 
-            booking.Handover.HandoverAt = model.HandoverAt;
             booking.Handover.Mileage = model.Mileage!.Value;
             booking.Handover.FuelLevel = $"{fuelPercent}%";
             booking.Handover.Accessories = Normalize(model.Accessories);
