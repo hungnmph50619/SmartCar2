@@ -163,6 +163,16 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
 
+        if (!await HasRequiredVehicleDocumentsAsync(
+                booking.VehicleId,
+                booking.PickupDate,
+                booking.ReturnDate,
+                cancellationToken))
+        {
+            return OperationResult.Failure(
+                "Giấy tờ xe không còn đủ hiệu lực cho toàn bộ chuyến thuê. Dừng bàn giao và kiểm tra lại Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ.");
+        }
+
         var preparedAt = DateTime.Now;
         if (!BookingWorkflowRules.CanPrepareHandover(
                 preparedAt, booking.PickupDate, booking.ReturnDate))
@@ -228,6 +238,58 @@ internal sealed class HandoverService : IHandoverService
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
+
+    private async Task<bool> HasRequiredVehicleDocumentsAsync(
+        int vehicleId,
+        DateTime pickupDate,
+        DateTime returnDate,
+        CancellationToken cancellationToken)
+    {
+        return await HasValidVehicleDocumentAsync(
+                   vehicleId,
+                   VehicleDocumentType.Registration,
+                   pickupDate,
+                   returnDate,
+                   allowNoExpiry: true,
+                   cancellationToken) &&
+               await HasValidVehicleDocumentAsync(
+                   vehicleId,
+                   VehicleDocumentType.Inspection,
+                   pickupDate,
+                   returnDate,
+                   allowNoExpiry: false,
+                   cancellationToken) &&
+               await HasValidVehicleDocumentAsync(
+                   vehicleId,
+                   VehicleDocumentType.Insurance,
+                   pickupDate,
+                   returnDate,
+                   allowNoExpiry: false,
+                   cancellationToken) &&
+               await HasValidVehicleDocumentAsync(
+                   vehicleId,
+                   VehicleDocumentType.RoadFee,
+                   pickupDate,
+                   returnDate,
+                   allowNoExpiry: false,
+                   cancellationToken);
+    }
+
+    private Task<bool> HasValidVehicleDocumentAsync(
+        int vehicleId,
+        VehicleDocumentType documentType,
+        DateTime requiredFrom,
+        DateTime requiredUntil,
+        bool allowNoExpiry,
+        CancellationToken cancellationToken) =>
+        _dbContext.VehicleDocuments.AnyAsync(document =>
+            document.VehicleId == vehicleId &&
+            document.DocumentType == documentType &&
+            document.IssuedDate.Date <= requiredFrom.Date &&
+            ((allowNoExpiry && !document.ExpiryDate.HasValue) ||
+             (document.ExpiryDate.HasValue &&
+              document.ExpiryDate.Value.Date >= requiredUntil.Date)),
+            cancellationToken);
 
     private static bool TryParseFuelPercent(string? value, out int percent)
     {
