@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Payments;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Application.Features.Audits;
-using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -418,6 +417,18 @@ public sealed class StaffPaymentsController : Controller
             ? RedirectToAction("Inspect", "Returns", new { bookingId })
             : RedirectToStaffDetails(bookingId);
     }
+
+    [NonAction]
+    public Task<IActionResult> SubmitCounterQr(
+        int bookingId,
+        bool transferConfirmed,
+        CancellationToken cancellationToken) =>
+        SubmitCounterQr(
+            bookingId,
+            transferConfirmed,
+            PaymentType.Rental,
+            null,
+            cancellationToken);
 
     [HttpPost]
     [ValidateAntiForgeryToken]
