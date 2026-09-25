@@ -34,6 +34,31 @@ public sealed class ReturnCitizenEvidenceTests
     }
 
     [Fact]
+    public async Task CreateAsync_RejectsFaceSessionCreatedByDifferentStaff()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await CreateDbAsync(connection);
+
+        var faceId = Guid.NewGuid();
+        db.IdentityCaptureSessions.Add(
+            NewSession(IdentityCapturePurposes.Return, "staff-2", faceId));
+        db.IdentityCaptureSessions.Add(
+            NewSession(IdentityCapturePurposes.ReturnCitizenFront, "staff-1"));
+        db.IdentityCaptureSessions.Add(
+            NewSession(IdentityCapturePurposes.ReturnCitizenBack, "staff-1"));
+        await db.SaveChangesAsync();
+
+        var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("Ảnh mặt người trả không hợp lệ", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(BookingStatus.Rented, (await db.Bookings.SingleAsync()).Status);
+    }
+
+    [Fact]
     public async Task CreateAsync_RejectsMissingVerifiedCitizenDocumentEvenWithBothImages()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
