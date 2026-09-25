@@ -168,7 +168,7 @@ public sealed class AdminRentalDocumentsController : Controller
         if (error is not null)
         {
             TempData["ErrorMessage"] = error;
-            return RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId });
+            return RedirectToBookingDetails(bookingId);
         }
 
         var newPaths = await SaveSignedDocumentsAsync(
