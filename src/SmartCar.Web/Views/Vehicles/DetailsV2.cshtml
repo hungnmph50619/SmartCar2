@@ -631,23 +631,46 @@
 
                 let tileLoaded = false;
                 let tileErrors = 0;
+                let fallbackStarted = false;
                 const mapElement = document.getElementById('delivery-map');
+
+                const markMapReady = () => {
+                    tileLoaded = true;
+                    mapElement.classList.remove('d-none');
+                    mapHelp.textContent = 'Bấm trên bản đồ để chọn điểm giao hoặc dùng GPS.';
+                };
+
+                const startFallbackTiles = () => {
+                    if (fallbackStarted || tileLoaded) return;
+                    fallbackStarted = true;
+                    mapHelp.textContent = 'OpenStreetMap không phản hồi, đang chuyển sang nền bản đồ dự phòng...';
+
+                    L.tileLayer(
+                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                        {
+                            maxZoom: 19,
+                            attribution: 'Tiles &copy; Esri'
+                        })
+                        .on('tileload', markMapReady)
+                        .on('tileerror', () => {
+                            // Không ẩn khung bản đồ: marker/tọa độ vẫn phải dùng được
+                            // và người dùng vẫn có thể dùng GPS để tính phí.
+                            mapElement.classList.remove('d-none');
+                            mapHelp.textContent =
+                                'Không tải được ảnh nền bản đồ. Vẫn có thể dùng GPS/chọn tọa độ đã có để tính phí và nhập địa chỉ thủ công.';
+                        })
+                        .addTo(map);
+                };
+
                 L.tileLayer(
                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     {
                         maxZoom: 19,
                         attribution: '&copy; OpenStreetMap contributors'
                     })
-                    .on('tileload', () => {
-                        tileLoaded = true;
-                        mapElement.classList.remove('d-none');
-                        mapHelp.textContent = 'Bấm trên bản đồ để chọn điểm giao hoặc dùng GPS.';
-                    })
+                    .on('tileload', markMapReady)
                     .on('tileerror', () => {
-                        if (++tileErrors >= 2 && !tileLoaded) {
-                            mapElement.classList.add('d-none');
-                            mapHelp.textContent = 'Nền bản đồ không kết nối được. Có thể dùng GPS để lấy tọa độ tính phí và nhập địa chỉ giao xe; cấu hình Google Maps để dùng nguồn bản đồ khác.';
-                        }
+                        if (++tileErrors >= 2 && !tileLoaded) startFallbackTiles();
                     })
                     .addTo(map);
 
