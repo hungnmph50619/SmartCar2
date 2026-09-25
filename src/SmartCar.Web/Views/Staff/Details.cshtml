@@ -31,9 +31,13 @@
     var hasUnsettledPreHandoverPayment = b.Payments.Any(payment =>
         payment.Type is PaymentType.Rental or PaymentType.Deposit or PaymentType.VehicleSwapAdjustment &&
         payment.Status is PaymentStatus.Pending or PaymentStatus.AwaitingConfirmation);
-    var hasPendingSwapAdjustment = b.Payments.Any(payment =>
-        payment.Type == PaymentType.VehicleSwapAdjustment &&
-        payment.Status == PaymentStatus.Pending);
+    var pendingSwapPayment = b.Payments
+        .Where(payment =>
+            payment.Type == PaymentType.VehicleSwapAdjustment &&
+            payment.Status == PaymentStatus.Pending)
+        .OrderBy(payment => payment.PaymentId)
+        .FirstOrDefault();
+    var hasPendingSwapAdjustment = pendingSwapPayment is not null;
     var hasOpenExtension = b.Extensions.Any(extension =>
         extension.Status is BookingExtensionStatus.Pending
             or BookingExtensionStatus.NeedsEvidence
@@ -244,6 +248,7 @@
                             </div>
                             <form asp-controller="StaffPayments" asp-action="SubmitCounterQr" method="post" class="mt-3" data-confirm="Xác nhận khách đã thực hiện chuyển khoản/QR? Thao tác này CHƯA coi là đã thanh toán; giao dịch sẽ chờ Admin đối soát.">
                                 <input type="hidden" name="bookingId" value="@b.BookingId" />
+                                <input type="hidden" name="type" value="@PaymentType.Rental" />
                                 <div class="form-check mb-2">
                                     <input class="form-check-input" type="checkbox" name="transferConfirmed" value="true" id="counter-transfer-confirmed" required />
                                     <label class="form-check-label small" for="counter-transfer-confirmed">Tôi đã thấy khách hoàn tất thao tác chuyển tiền đúng đơn này.</label>
@@ -271,15 +276,37 @@
                             Đơn còn khoản tiền trước giao xe chưa hoàn tất hoặc đang chờ đối soát.
                             Không được chuyển sang sẵn sàng bàn giao cho đến khi khoản này được xử lý xong.
                         </div>
-                        @if (hasPendingSwapAdjustment && !hasPaymentAwaitingConfirmation)
+                        @if (hasPendingSwapAdjustment && !hasPaymentAwaitingConfirmation && pendingSwapPayment is not null)
                         {
-                            <form asp-action="ReceiveCash"
-                                  method="post"
-                                  class="mt-2"
-                                  data-confirm="Xác nhận đã thực nhận đủ phần chênh lệch đổi xe còn thiếu bằng tiền mặt?">
-                                <input type="hidden" name="bookingId" value="@b.BookingId" />
-                                <button class="btn btn-success">Thu chênh lệch đổi xe bằng tiền mặt</button>
-                            </form>
+                            <div class="row g-2 mt-2">
+                                <div class="col-lg-6">
+                                    <form asp-action="ReceiveCash"
+                                          method="post"
+                                          data-confirm="Xác nhận đã thực nhận đủ phần chênh lệch đổi xe còn thiếu bằng tiền mặt?">
+                                        <input type="hidden" name="bookingId" value="@b.BookingId" />
+                                        <button class="btn btn-success w-100">
+                                            Thu @pendingSwapPayment.Amount.ToString("N0") đ tiền mặt
+                                        </button>
+                                    </form>
+                                </div>
+                                @if (b.Source == BookingSource.StaffCounter)
+                                {
+                                    <div class="col-lg-6">
+                                        <form asp-controller="StaffPayments"
+                                              asp-action="SubmitCounterQr"
+                                              method="post"
+                                              data-confirm="Xác nhận khách đã chuyển đúng phần chênh lệch đổi xe bằng QR/chuyển khoản? Giao dịch sẽ chờ Admin đối soát.">
+                                            <input type="hidden" name="bookingId" value="@b.BookingId" />
+                                            <input type="hidden" name="type" value="@PaymentType.VehicleSwapAdjustment" />
+                                            <input type="hidden" name="paymentId" value="@pendingSwapPayment.PaymentId" />
+                                            <input type="hidden" name="transferConfirmed" value="true" />
+                                            <button class="btn btn-outline-primary w-100">
+                                                Báo đã chuyển QR @pendingSwapPayment.Amount.ToString("N0") đ
+                                            </button>
+                                        </form>
+                                    </div>
+                                }
+                            </div>
                         }
                     }
                     else
