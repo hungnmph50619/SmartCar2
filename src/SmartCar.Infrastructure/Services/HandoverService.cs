@@ -54,6 +54,18 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Đơn chưa ở trạng thái sẵn sàng giao xe.");
         }
 
+        var activeCustomer = await _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(user =>
+                user.Id == booking.CustomerId &&
+                user.IsActive,
+                cancellationToken);
+        if (!activeCustomer)
+        {
+            return OperationResult.Failure(
+                "Tài khoản khách đang bị khóa hoặc không còn hoạt động. Dừng bàn giao và báo quản lý.");
+        }
+
         if (booking.Handover is not null)
         {
             return OperationResult.Failure("Đơn đã có biên bản giao xe.");
