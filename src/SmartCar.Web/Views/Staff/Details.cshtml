@@ -13,14 +13,14 @@
         && Model.ReturnSignedDocumentVerified;
     var hasPaymentAwaitingConfirmation = b.Payments.Any(payment =>
         payment.Status == PaymentStatus.AwaitingConfirmation);
-    var canCancelBeforeHandover = !b.HasHandover
+    var canCancelBeforeHandover = !Model.HandoverSignedDocumentVerified
         && !hasPaymentAwaitingConfirmation
         && b.Status is BookingStatus.PendingConfirmation
             or BookingStatus.PendingPayment
             or BookingStatus.Paid
             or BookingStatus.ReadyForPickup;
     var canMarkNoShow = b.Status == BookingStatus.ReadyForPickup
-        && !b.HasHandover
+        && !Model.HandoverSignedDocumentVerified
         && DateTime.Now >= b.PickupDate.AddMinutes(b.Policy.NoShowGraceMinutes);
     var actualTurnaroundBlocked = Model.ActualTurnaroundReadyAt.HasValue
         && DateTime.Now < Model.ActualTurnaroundReadyAt.Value;
