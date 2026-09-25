@@ -261,6 +261,7 @@ public sealed class ReturnEditsController : Controller
             booking.VehicleReturn.ImagePaths = string.Join(';', updatedPaths);
             booking.Vehicle.CurrentMileage = model.Mileage.Value;
 
+            RemoveUnsupportedManualCharges(booking);
             RecalculateAutomaticCharges(booking);
             SynchronizePendingAdditionalChargePayment(booking);
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -481,6 +482,57 @@ public sealed class ReturnEditsController : Controller
         await image.CopyToAsync(stream, cancellationToken);
         return $"/{relativeFolder}/{fileName}";
     }
+
+    private static void RemoveUnsupportedManualCharges(Booking booking)
+    {
+        if (booking.VehicleReturn is null || booking.Handover is null)
+        {
+            return;
+        }
+
+        var vehicleReturn = booking.VehicleReturn;
+        var returnPhotos = ReturnPhotos(vehicleReturn.ImagePaths);
+        var hasDamageEvidence = returnPhotos.Any(IsDamageEvidencePath);
+
+        if (!vehicleReturn.HasDamage || !hasDamageEvidence)
+        {
+            foreach (var charge in vehicleReturn.AdditionalCharges
+                         .Where(charge => charge.ChargeType == AdditionalChargeType.Damage)
+                         .ToList())
+            {
+                vehicleReturn.AdditionalCharges.Remove(charge);
+            }
+        }
+
+        if (!HasMissingAccessories(vehicleReturn.AccessoryStatus))
+        {
+            foreach (var charge in vehicleReturn.AdditionalCharges
+                         .Where(charge => charge.ChargeType == AdditionalChargeType.MissingAccessory)
+                         .ToList())
+            {
+                vehicleReturn.AdditionalCharges.Remove(charge);
+            }
+        }
+
+        var fuelChargeStillSupported =
+            TryParseFuel(booking.Handover.FuelLevel, out var handoverFuel) &&
+            TryParseFuel(vehicleReturn.FuelLevel, out var returnFuel) &&
+            returnFuel < handoverFuel;
+
+        if (!fuelChargeStillSupported)
+        {
+            foreach (var charge in vehicleReturn.AdditionalCharges
+                         .Where(charge => charge.ChargeType == AdditionalChargeType.Fuel)
+                         .ToList())
+            {
+                vehicleReturn.AdditionalCharges.Remove(charge);
+            }
+        }
+    }
+
+    private static bool HasMissingAccessories(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase);
 
     private static void RecalculateAutomaticCharges(Booking booking)
     {
