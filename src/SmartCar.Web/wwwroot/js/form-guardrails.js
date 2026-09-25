@@ -162,6 +162,7 @@
 
         const db = await openDraftDb();
         await purgeExpiredDrafts(db);
+        await clearServerConfirmedDrafts(db);
 
         const registerInput = async (input) => {
             if (!(input instanceof HTMLInputElement) || input.type !== 'file' || !input.dataset.fileDraftKey) return;
@@ -261,6 +262,15 @@
 
         input.files = transfer.files;
         input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    async function clearServerConfirmedDrafts(db) {
+        const marker = document.querySelector('[data-clear-file-draft-keys]');
+        const raw = marker?.getAttribute('data-clear-file-draft-keys') || '';
+        const keys = raw.split('|').map((value) => value.trim()).filter(Boolean);
+        for (const key of new Set(keys)) {
+            await transactionRequest(db, 'readwrite', (store) => store.delete(key));
+        }
     }
 
     async function purgeExpiredDrafts(db) {
