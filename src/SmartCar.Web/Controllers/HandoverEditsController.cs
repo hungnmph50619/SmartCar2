@@ -237,6 +237,7 @@ public sealed class HandoverEditsController : Controller
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = "Đã cập nhật biên bản giao xe. Hãy kiểm tra lại trước khi in và ký.";
+        TempData["ClearFileDraftKeys"] = $"handover-edit-{model.BookingId}-new-images";
         return RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId = model.BookingId });
     }
 
