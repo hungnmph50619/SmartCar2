@@ -86,12 +86,11 @@ internal sealed class BookingOperationService : IBookingOperationService
         if (booking.Handover is not null)
             return OperationResult.Failure("Đơn đã có biên bản giao xe điện tử nên không thể ghi nhận khách không đến nhận.");
 
-        VoidPendingCollections(booking);
-
         var bookingPolicy = booking.Policy;
         if (DateTime.Now < booking.PickupDate.AddMinutes(bookingPolicy.NoShowGraceMinutes))
             return OperationResult.Failure($"Chỉ được ghi nhận không đến sau giờ nhận ít nhất {bookingPolicy.NoShowGraceMinutes} phút.");
 
+        // Chỉ thay đổi ledger sau khi toàn bộ điều kiện No-show đã hợp lệ.
         VoidPendingCollections(booking);
 
         var grossRevenuePaid = booking.Payments
