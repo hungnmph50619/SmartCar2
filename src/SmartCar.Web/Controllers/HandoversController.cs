@@ -274,22 +274,30 @@ public sealed class HandoversController : Controller
                 document.CustomerId == booking.CustomerId &&
                 document.Status == DocumentStatus.Verified &&
                 (document.DocumentType == DocumentTypes.CitizenId ||
-                 document.DocumentType == DocumentTypes.DrivingLicense))
+                 document.DocumentType == DocumentTypes.CitizenIdBack ||
+                 document.DocumentType == DocumentTypes.DrivingLicense ||
+                 document.DocumentType == DocumentTypes.DrivingLicenseBack))
             .ToListAsync(cancellationToken);
 
-        var citizen = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.CitizenId);
-        var license = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.DrivingLicense);
-        if (citizen is null || license is null ||
-            !citizen.ExpiryDate.HasValue || citizen.ExpiryDate.Value.Date < booking.ReturnDate.Date ||
-            !license.ExpiryDate.HasValue || license.ExpiryDate.Value.Date < booking.ReturnDate.Date)
+        var citizenFront = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.CitizenIdBack);
+        var licenseFront = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.DrivingLicense);
+        var licenseBack = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.DrivingLicenseBack);
+
+        if (citizenFront is null || citizenBack is null ||
+            licenseFront is null || licenseBack is null ||
+            !string.Equals(citizenFront.DocumentNumber, citizenBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(licenseFront.DocumentNumber, licenseBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !citizenFront.ExpiryDate.HasValue || citizenFront.ExpiryDate.Value.Date < booking.ReturnDate.Date ||
+            !licenseFront.ExpiryDate.HasValue || licenseFront.ExpiryDate.Value.Date < booking.ReturnDate.Date)
         {
             return false;
         }
 
         model.CustomerId = customer.Id;
         model.VerifiedCustomerName = customer.FullName;
-        model.VerifiedCitizenId = citizen.DocumentNumber;
-        model.VerifiedDrivingLicenseNumber = license.DocumentNumber;
+        model.VerifiedCitizenId = citizenFront.DocumentNumber;
+        model.VerifiedDrivingLicenseNumber = licenseFront.DocumentNumber;
         return true;
     }
 
