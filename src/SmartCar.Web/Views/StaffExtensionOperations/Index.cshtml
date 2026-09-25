@@ -132,10 +132,6 @@ else
                                     <input type="hidden"
                                            name="extensionId"
                                            value="@extension.BookingExtensionId" />
-                                    <input type="hidden"
-                                           name="customerAccepted"
-                                           value="true" />
-
                                     <div class="col-12">
                                         <label class="form-label">
                                             Xe thay thế khách đã đồng ý
@@ -176,6 +172,8 @@ else
                                             <input class="form-check-input"
                                                    type="checkbox"
                                                    id="accepted-@extension.BookingExtensionId"
+                                                   name="customerAccepted"
+                                                   value="true"
                                                    required />
                                             <label class="form-check-label"
                                                    for="accepted-@extension.BookingExtensionId">
