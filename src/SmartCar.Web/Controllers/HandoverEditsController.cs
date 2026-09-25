@@ -308,6 +308,10 @@ public sealed class HandoverEditsController : Controller
 
         TempData["SuccessMessage"] =
             "Đã hủy biên bản giao nháp chưa ký. Có thể lập lại biên bản hoặc tiếp tục xử lý đổi xe.";
+        TempData["ClearFileDraftKeys"] =
+            $"handover-{bookingId}-front|handover-{bookingId}-rear|handover-{bookingId}-left|" +
+            $"handover-{bookingId}-right|handover-{bookingId}-interior|handover-{bookingId}-odometer|" +
+            $"handover-{bookingId}-fuel|handover-{bookingId}-extra|giao-{bookingId}-citizen-front|giao-{bookingId}-citizen-back";
         return RedirectAfterDiscard(bookingId, returnTo);
     }
 
