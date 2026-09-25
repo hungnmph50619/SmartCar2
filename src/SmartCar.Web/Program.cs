@@ -241,9 +241,10 @@ try
 }
 catch (Exception ex)
 {
-    app.Logger.LogWarning(
+    app.Logger.LogCritical(
         ex,
-        "Chưa thể cập nhật hoặc seed database. Kiểm tra kết nối SQL Server và migration của SmartCar.");
+        "Không thể cập nhật/seed database. SmartCar dừng khởi động để tránh chạy với schema SQL sai hoặc thiếu migration.");
+    throw;
 }
 
 app.Run();
