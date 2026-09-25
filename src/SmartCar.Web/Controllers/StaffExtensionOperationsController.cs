@@ -117,7 +117,15 @@ public sealed class StaffExtensionOperationsController : Controller
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] =
-                "Đơn kế tiếp không còn xung đột. Hãy tải lại danh sách trước khi thao tác.";
+                "Đơn kế tiếp không còn xung đột hoặc đã bắt đầu lập hồ sơ bàn giao nên không được đổi xe bằng luồng này. Hãy tải lại trạng thái và xử lý thủ công nếu cần.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (conflict.Handover is not null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Đơn kế tiếp đã có biên bản giao xe. Không được đổi VehicleId vì sẽ làm biên bản/ảnh giao thuộc xe cũ nhưng booking trỏ sang xe mới.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -431,13 +439,14 @@ public sealed class StaffExtensionOperationsController : Controller
         var conflict = await _dbContext.Bookings
             .AsNoTracking()
             .Include(item => item.Vehicle)
+            .Include(item => item.Handover)
             .FirstOrDefaultAsync(
                 item =>
                     item.BookingId ==
                     extension.ConflictingBookingId.Value,
                 cancellationToken);
 
-        if (conflict is null)
+        if (conflict is null || conflict.Handover is not null)
         {
             return null;
         }
@@ -593,6 +602,7 @@ public sealed class StaffExtensionOperationsController : Controller
         var candidates = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
+            .Include(item => item.Handover)
             .Where(other =>
                 other.VehicleId == extension.Booking.VehicleId &&
                 other.BookingId != extension.BookingId &&
@@ -604,6 +614,11 @@ public sealed class StaffExtensionOperationsController : Controller
 
         foreach (var other in candidates)
         {
+            if (other.Handover is not null)
+            {
+                continue;
+            }
+
             var otherPolicy = other.Policy;
             var preparationMinutes =
                 otherPolicy.GetOperationalPreparationMinutes(
