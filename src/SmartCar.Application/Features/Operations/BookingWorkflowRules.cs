@@ -1,3 +1,4 @@
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Application.Features.Operations;
@@ -138,6 +139,14 @@ public static class BookingWorkflowRules
         DateTime pickupDate,
         DateTime returnDate) =>
         now >= pickupDate && now < returnDate;
+
+    public static bool HasActualTurnaroundElapsed(
+        DateTime now,
+        DateTime previousReturnedAt,
+        RentalPolicySnapshot nextBookingPolicy,
+        VehiclePickupMethod nextPickupMethod) =>
+        now >= previousReturnedAt.AddMinutes(
+            nextBookingPolicy.GetOperationalPreparationMinutes(nextPickupMethod));
 
     public static bool CanRecordReturn(
         DateTime returnedAt,
