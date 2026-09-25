@@ -248,10 +248,36 @@
                 scrollWheelZoom: false
             }).setView([latitude, longitude], 16);
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
+            const sources = [
+                {
+                    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    options: { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }
+                },
+                {
+                    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                    options: { maxZoom: 19, attribution: 'Tiles &copy; Esri' }
+                }
+            ];
+
+            let activeLayer = null;
+            const loadSource = index => {
+                if (activeLayer) map.removeLayer(activeLayer);
+                if (index >= sources.length) return;
+
+                let loaded = false;
+                let errors = 0;
+                let switched = false;
+                activeLayer = L.tileLayer(sources[index].url, sources[index].options)
+                    .on('tileload', () => { loaded = true; })
+                    .on('tileerror', () => {
+                        if (!loaded && !switched && ++errors >= 4) {
+                            switched = true;
+                            loadSource(index + 1);
+                        }
+                    })
+                    .addTo(map);
+            };
+            loadSource(0);
 
             L.marker([latitude, longitude])
                 .addTo(map)
