@@ -8,6 +8,7 @@ using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
+using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
 using SmartCar.Web.ViewModels;
 
@@ -37,6 +38,7 @@ public sealed class StaffBookingOperationsController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ReviewForApproval(
         int bookingId,
+        bool deliveryLocationConfirmed,
         CancellationToken cancellationToken)
     {
         var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -68,6 +70,25 @@ public sealed class StaffBookingOperationsController : Controller
             TempData["ErrorMessage"] =
                 "Đơn không còn ở trạng thái Chờ xác nhận nên không thể gửi duyệt lại.";
             return RedirectToAction("Details", "Staff", new { id = bookingId });
+        }
+
+        if (booking.PickupMethod == VehiclePickupMethod.Delivery)
+        {
+            if (string.IsNullOrWhiteSpace(booking.DeliveryAddress) ||
+                !booking.DeliveryLatitude.HasValue ||
+                !booking.DeliveryLongitude.HasValue)
+            {
+                TempData["ErrorMessage"] =
+                    "Đơn giao tận nơi đang thiếu địa chỉ hoặc tọa độ. Không được gửi Admin duyệt.";
+                return RedirectToAction("Details", "Staff", new { id = bookingId });
+            }
+
+            if (!deliveryLocationConfirmed)
+            {
+                TempData["ErrorMessage"] =
+                    "Với đơn giao tận nơi, Staff phải đối chiếu địa chỉ với tọa độ trước khi gửi Admin duyệt.";
+                return RedirectToAction("Details", "Staff", new { id = bookingId });
+            }
         }
 
         var result = await _bookingReviewService.ValidateForStaffReviewAsync(
@@ -133,7 +154,9 @@ public sealed class StaffBookingOperationsController : Controller
             "StaffReviewedBooking",
             nameof(Booking),
             bookingId.ToString(),
-            $"Nhân viên đã kiểm tra đơn #{bookingId}: tài khoản khách hoạt động, KYC hợp lệ đến ngày trả, xe hoạt động và lịch xe không xung đột theo buffer hiện hành. Đơn được gửi quản trị viên duyệt.",
+            booking.PickupMethod == VehiclePickupMethod.Delivery
+                ? $"Nhân viên đã kiểm tra đơn #{bookingId}: tài khoản khách hoạt động, KYC hợp lệ đến ngày trả, xe hoạt động, lịch xe không xung đột và đã đối chiếu địa chỉ giao với tọa độ. Đơn được gửi quản trị viên duyệt."
+                : $"Nhân viên đã kiểm tra đơn #{bookingId}: tài khoản khách hoạt động, KYC hợp lệ đến ngày trả, xe hoạt động và lịch xe không xung đột theo buffer hiện hành. Đơn được gửi quản trị viên duyệt.",
             ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
 
