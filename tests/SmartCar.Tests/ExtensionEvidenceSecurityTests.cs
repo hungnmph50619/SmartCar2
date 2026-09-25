@@ -42,7 +42,7 @@ public sealed class ExtensionEvidenceSecurityTests
     }
 
     [Fact]
-    public void EvidenceFileController_IsRestrictedToAdminAndCustomer()
+    public void EvidenceFileController_AllowsReadOnlyAccessForAdminStaffAndCustomer()
     {
         var authorize = typeof(ExtensionEvidenceFilesController)
             .GetCustomAttributes(
@@ -62,7 +62,7 @@ public sealed class ExtensionEvidenceSecurityTests
             .ToHashSet(StringComparer.Ordinal);
 
         Assert.Contains(RoleNames.Admin, roles);
+        Assert.Contains(RoleNames.Staff, roles);
         Assert.Contains(RoleNames.Customer, roles);
-        Assert.DoesNotContain(RoleNames.Staff, roles);
     }
 }
