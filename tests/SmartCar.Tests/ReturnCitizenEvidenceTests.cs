@@ -109,12 +109,19 @@ public sealed class ReturnCitizenEvidenceTests
             Id = "customer-1", UserName = "customer-1", NormalizedUserName = "CUSTOMER-1",
             FullName = "Khách thuê"
         });
-        db.CustomerDocuments.Add(new CustomerDocument
-        {
-            CustomerId = "customer-1", DocumentType = DocumentTypes.CitizenId,
-            DocumentNumber = "012345678901", ImagePath = "secure/kyc-front.jpg",
-            Status = DocumentStatus.Verified, VerifiedAt = DateTime.UtcNow.AddDays(-1)
-        });
+        db.CustomerDocuments.AddRange(
+            new CustomerDocument
+            {
+                CustomerId = "customer-1", DocumentType = DocumentTypes.CitizenId,
+                DocumentNumber = "012345678901", ImagePath = "secure/kyc-front.jpg",
+                Status = DocumentStatus.Verified, VerifiedAt = DateTime.UtcNow.AddDays(-1)
+            },
+            new CustomerDocument
+            {
+                CustomerId = "customer-1", DocumentType = DocumentTypes.CitizenIdBack,
+                DocumentNumber = "012345678901", ImagePath = "secure/kyc-back.jpg",
+                Status = DocumentStatus.Verified, VerifiedAt = DateTime.UtcNow.AddDays(-1)
+            });
         db.Brands.Add(new Brand { BrandId = 1, BrandName = "Test Brand" });
         db.Vehicles.Add(new Vehicle
         {
