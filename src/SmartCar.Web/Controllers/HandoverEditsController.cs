@@ -110,6 +110,10 @@ public sealed class HandoverEditsController : Controller
         ModelState.Remove(nameof(HandoverViewModel.OriginalDrivingLicenseChecked));
         ModelState.Remove(nameof(HandoverViewModel.ReceiverIdentityCheckedInPerson));
 
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable,
+            cancellationToken);
+
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Handover)
@@ -224,6 +228,7 @@ public sealed class HandoverEditsController : Controller
             booking.Handover.ImagePaths = string.Join(';', updatedPaths);
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
