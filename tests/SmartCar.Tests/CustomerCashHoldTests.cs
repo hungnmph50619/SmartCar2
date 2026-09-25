@@ -140,6 +140,49 @@ public sealed class CustomerCashHoldTests
     }
 
     [Fact]
+    public async Task QrSubmission_AfterReservationDeadline_IsRejectedWithoutRefreshingHold()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await CreateBookingAsync(connection);
+
+        var booking = await db.Bookings.SingleAsync();
+        var expiredAt = DateTime.UtcNow.AddMinutes(-1);
+        booking.ReservationExpiresAt = expiredAt;
+        await db.SaveChangesAsync();
+
+        var serviceType = typeof(ApplicationDbContext).Assembly.GetType(
+            "SmartCar.Infrastructure.Services.PaymentService",
+            throwOnError: true)!;
+        var service = (SmartCar.Application.Features.Payments.IPaymentService)
+            Activator.CreateInstance(
+                serviceType,
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic,
+                binder: null,
+                args: new object[] { db, new NoopAuditService() },
+                culture: null)!;
+
+        var result = await service.SubmitQrPaymentAsync(
+            1,
+            "customer-1",
+            PaymentType.Rental,
+            "customer-1");
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(
+            result.Errors,
+            error => error.Contains("quá hạn", StringComparison.OrdinalIgnoreCase));
+
+        booking = await db.Bookings.Include(item => item.Payments).SingleAsync();
+        Assert.Equal(expiredAt, booking.ReservationExpiresAt);
+        Assert.DoesNotContain(
+            booking.Payments,
+            payment => payment.Status == PaymentStatus.AwaitingConfirmation);
+    }
+
+    [Fact]
     public async Task CounterBooking_UsesStaffPaymentActionsInsteadOfCustomerUpfrontActions()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
