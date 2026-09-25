@@ -365,8 +365,15 @@ internal sealed class PaymentService : IPaymentService
         if (booking.Status == BookingStatus.PendingPayment &&
             paymentType is PaymentType.Rental or PaymentType.VehicleSwapAdjustment)
         {
-            booking.ReservationExpiresAt = DateTime.UtcNow
+            var reconciliationDeadline = DateTime.UtcNow
                 .AddMinutes(booking.Policy.BookingTransferReconciliationHoldMinutes);
+            var operationalCutoff = CounterRentalSchedule.CashHoldExpiresAtUtc(
+                booking.PickupDate,
+                booking.Policy);
+
+            booking.ReservationExpiresAt = reconciliationDeadline <= operationalCutoff
+                ? reconciliationDeadline
+                : operationalCutoff;
         }
 
         await NotifyAdminAsync(
