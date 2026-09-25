@@ -408,17 +408,17 @@ internal sealed class BookingReservationPolicy
         int? excludedBookingId = null,
         CancellationToken cancellationToken = default)
     {
-        var vehicleStatus = await _dbContext.Vehicles
+        var vehicleExists = await _dbContext.Vehicles
             .AsNoTracking()
-            .Where(vehicle => vehicle.VehicleId == vehicleId)
-            .Select(vehicle => (VehicleStatus?)vehicle.Status)
-            .FirstOrDefaultAsync(cancellationToken);
+            .AnyAsync(vehicle => vehicle.VehicleId == vehicleId, cancellationToken);
 
-        if (vehicleStatus != VehicleStatus.Inspection)
+        if (!vehicleExists)
         {
             return null;
         }
 
+        // Không phụ thuộc Vehicle.Status. Sau quyết toán xe có thể đã về Available,
+        // nhưng khoảng kiểm tra/vệ sinh tính từ ReturnedAt thực tế vẫn phải được giữ.
         var latestReturnedAt = await _dbContext.VehicleReturns
             .AsNoTracking()
             .Where(vehicleReturn =>
