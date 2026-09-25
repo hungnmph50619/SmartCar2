@@ -282,6 +282,12 @@ internal sealed class ExtensionService : IExtensionService
             return OperationResult.Failure("Yêu cầu gia hạn không tồn tại hoặc không còn hợp lệ để yêu cầu bổ sung.");
         }
 
+        if (!IsForceMajeure(extension.CustomerNote))
+        {
+            return OperationResult.Failure(
+                "Gia hạn thông thường không có bước bổ sung minh chứng bất khả kháng. Hãy duyệt hoặc từ chối theo lịch xe hiện tại.");
+        }
+
         extension.Status = BookingExtensionStatus.NeedsEvidence;
         extension.AdminNote = reason.Trim();
         extension.DecidedAt = DateTime.UtcNow;
@@ -342,8 +348,9 @@ internal sealed class ExtensionService : IExtensionService
             return OperationResult.Failure("Vui lòng nêu rõ lý do cần gia hạn.");
         }
 
+        var isForceMajeure = IsForceMajeure(extension.CustomerNote);
         extension.CustomerNote = BuildStoredCustomerNote(
-            true,
+            isForceMajeure,
             resolvedCustomerNote,
             evidenceNote);
         extension.Status = BookingExtensionStatus.Pending;
