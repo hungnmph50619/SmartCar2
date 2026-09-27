@@ -17,7 +17,7 @@
                 <a class="btn btn-outline-secondary" asp-action="Index">← Danh sách</a>
             </div>
 
-            <form asp-action="Create" method="post" class="row g-3" id="incident-form">
+            <form asp-action="Create" method="post" class="row g-3" id="incident-form" novalidate>
                 <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
                 <input asp-for="OccurredAt" type="hidden" id="occurred-at-value" />
 
@@ -27,8 +27,9 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Đơn liên quan</label>
-                    <input asp-for="BookingId" type="number" min="1" class="form-control" id="incident-booking-id" placeholder="#" />
+                    <input asp-for="BookingId" type="number" min="1" step="1" class="form-control" id="incident-booking-id" placeholder="#" />
                     <div class="form-text">Bắt buộc với phạt nguội.</div>
+                    <span asp-validation-for="BookingId" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">Loại</label>
@@ -47,6 +48,7 @@
                         <div class="col-5"><input type="text" id="occurred-time" class="form-control" value="@occurredTime" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" required /></div>
                     </div>
                     <div class="form-text">Giờ 24h.</div>
+                    <div class="text-danger small mt-1" id="occurred-at-error"></div>
                 </div>
                 <div class="col-md-8">
                     <label class="form-label fw-semibold">Địa điểm</label>
@@ -58,7 +60,7 @@
                         <div class="fw-bold mb-1">Phạt nguội không giữ cọc suốt 1 tháng</div>
                         <div class="small">
                             Khi có thông báo chính thức, hệ thống kiểm tra thời điểm vi phạm có nằm trong
-                            <strong>HandoverAt → ReturnedAt</strong> của đơn hay không, lưu bằng chứng rồi tạo khoản phải thu riêng.
+                            <strong>thời điểm giao xe → thời điểm trả xe thực tế</strong> của đơn hay không, lưu bằng chứng rồi tạo khoản phải thu riêng.
                             Nếu khách chưa thanh toán, tài khoản sẽ bị chặn tạo chuyến thuê mới.
                         </div>
                     </div>
@@ -72,16 +74,17 @@
 
                 <div class="col-md-4" id="estimated-cost-group">
                     <label class="form-label fw-semibold">Chi phí ước tính</label>
-                    <input asp-for="EstimatedCost" type="number" min="0" class="form-control" />
+                    <input asp-for="EstimatedCost" type="number" min="0" step="1" class="form-control" id="incident-estimated-cost" inputmode="numeric" />
+                    <span asp-validation-for="EstimatedCost" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4" id="fine-amount-group">
                     <label class="form-label fw-semibold">Tiền phạt chính thức</label>
-                    <input asp-for="FineAmount" type="number" min="0" class="form-control" id="incident-fine-amount" />
+                    <input asp-for="FineAmount" type="number" min="0" step="1" class="form-control" id="incident-fine-amount" inputmode="numeric" />
                     <span asp-validation-for="FineAmount" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4" id="liability-group">
                     <label class="form-label fw-semibold">Khách chịu</label>
-                    <input asp-for="CustomerLiabilityAmount" type="number" min="0" class="form-control" id="incident-liability-amount" />
+                    <input asp-for="CustomerLiabilityAmount" type="number" min="0" step="1" class="form-control" id="incident-liability-amount" inputmode="numeric" />
                     <span asp-validation-for="CustomerLiabilityAmount" class="text-danger small"></span>
                     <div class="form-text d-none" id="liability-help">Không được lớn hơn tiền phạt chính thức.</div>
                 </div>
@@ -117,7 +120,7 @@
             const fineGroup = document.getElementById('fine-amount-group');
             const liabilityGroup = document.getElementById('liability-group');
             const liabilityHelp = document.getElementById('liability-help');
-            const estimated = document.getElementById('EstimatedCost');
+            const estimated = document.getElementById('incident-estimated-cost');
             const fine = document.getElementById('incident-fine-amount');
             const liability = document.getElementById('incident-liability-amount');
             const evidence = document.getElementById('incident-evidence');
@@ -125,9 +128,178 @@
             const date = document.getElementById('occurred-date');
             const time = document.getElementById('occurred-time');
             const pattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+            const occurredError = document.getElementById('occurred-at-error');
+            const moneyInputs = [
+                { input: estimated, field: 'EstimatedCost', label: 'Chi phí ước tính' },
+                { input: fine, field: 'FineAmount', label: 'Tiền phạt chính thức' },
+                { input: liability, field: 'CustomerLiabilityAmount', label: 'Số tiền khách chịu' }
+            ];
 
             function isTrafficFine() {
                 return type?.value === 'TrafficFine';
+            }
+
+            function setFieldMessage(fieldName, message) {
+                const target = form?.querySelector('[data-valmsg-for="' + fieldName + '"]');
+                if (!target) return;
+                target.textContent = message || '';
+                target.classList.toggle('field-validation-error', !!message);
+                target.classList.toggle('field-validation-valid', !message);
+            }
+
+            function setOccurredMessage(message) {
+                if (occurredError) occurredError.textContent = message || '';
+            }
+
+            function validateNonNegativeInteger(input, fieldName, label) {
+                if (!input) return true;
+                const raw = (input.value || '').trim();
+
+                if (!raw) {
+                    input.setCustomValidity('');
+                    setFieldMessage(fieldName, '');
+                    return true;
+                }
+
+                if (!/^\d+$/.test(raw)) {
+                    const message = label + ' chỉ được nhập số nguyên từ 0 trở lên.';
+                    input.setCustomValidity(message);
+                    setFieldMessage(fieldName, message);
+                    return false;
+                }
+
+                const value = Number(raw);
+                if (!Number.isSafeInteger(value) || value < 0) {
+                    const message = label + ' không được âm và phải là số nguyên hợp lệ.';
+                    input.setCustomValidity(message);
+                    setFieldMessage(fieldName, message);
+                    return false;
+                }
+
+                input.setCustomValidity('');
+                setFieldMessage(fieldName, '');
+                return true;
+            }
+
+            function validateAllMoney() {
+                return moneyInputs
+                    .map(item => validateNonNegativeInteger(item.input, item.field, item.label))
+                    .every(Boolean);
+            }
+
+            function blockInvalidNumberKeys(event) {
+                if (['-', '+', 'e', 'E', '.', ','].includes(event.key)) {
+                    event.preventDefault();
+                }
+            }
+
+            function blockInvalidPaste(event, label) {
+                const pasted = event.clipboardData?.getData('text')?.trim() || '';
+                if (pasted && !/^\d+$/.test(pasted)) {
+                    event.preventDefault();
+                    const message = label + ' chỉ được nhập số nguyên từ 0 trở lên.';
+                    event.currentTarget.setCustomValidity(message);
+                }
+            }
+
+            function validateBooking() {
+                if (!booking) return true;
+                const raw = (booking.value || '').trim();
+
+                if (isTrafficFine() && !raw) {
+                    const message = 'Vui lòng nhập mã đơn liên quan cho phạt nguội.';
+                    booking.setCustomValidity(message);
+                    setFieldMessage('BookingId', message);
+                    return false;
+                }
+
+                if (raw && (!/^\d+$/.test(raw) || Number(raw) <= 0)) {
+                    const message = 'Mã đơn liên quan phải là số nguyên lớn hơn 0.';
+                    booking.setCustomValidity(message);
+                    setFieldMessage('BookingId', message);
+                    return false;
+                }
+
+                booking.setCustomValidity('');
+                setFieldMessage('BookingId', '');
+                return true;
+            }
+
+            function localDateValue(value) {
+                const year = value.getFullYear();
+                const month = String(value.getMonth() + 1).padStart(2, '0');
+                const day = String(value.getDate()).padStart(2, '0');
+                return year + '-' + month + '-' + day;
+            }
+
+            function localTimeValue(value) {
+                const hours = String(value.getHours()).padStart(2, '0');
+                const minutes = String(value.getMinutes()).padStart(2, '0');
+                return hours + ':' + minutes;
+            }
+
+            function preventFutureOccurredAt() {
+                if (!date || !time) return;
+
+                const now = new Date();
+                const today = localDateValue(now);
+                const currentTime = localTimeValue(now);
+
+                date.max = today;
+
+                if (date.value && date.value > today) {
+                    date.value = today;
+                    time.value = currentTime;
+                }
+
+                if (date.value === today &&
+                    pattern.test(time.value || '') &&
+                    time.value > currentTime) {
+                    time.value = currentTime;
+                }
+
+                date.setCustomValidity('');
+                time.setCustomValidity('');
+                setOccurredMessage('');
+            }
+
+            function validateOccurredAt() {
+                preventFutureOccurredAt();
+
+                if (!date?.value) {
+                    const message = 'Vui lòng chọn ngày xảy ra.';
+                    date?.setCustomValidity(message);
+                    setOccurredMessage(message);
+                    return false;
+                }
+
+                if (!pattern.test(time?.value || '')) {
+                    const message = 'Vui lòng nhập giờ 24h theo dạng HH:mm.';
+                    time?.setCustomValidity(message);
+                    setOccurredMessage(message);
+                    return false;
+                }
+
+                const occurred = new Date(date.value + 'T' + time.value + ':00');
+
+                if (Number.isNaN(occurred.getTime())) {
+                    const message = 'Thời điểm xảy ra không hợp lệ.';
+                    time?.setCustomValidity(message);
+                    setOccurredMessage(message);
+                    return false;
+                }
+
+                if (occurred > new Date()) {
+                    const now = new Date();
+                    date.value = localDateValue(now);
+                    time.value = localTimeValue(now);
+                }
+
+                date.setCustomValidity('');
+                time.setCustomValidity('');
+                setOccurredMessage('');
+                hidden.value = date.value + 'T' + time.value;
+                return true;
             }
 
             function validateTrafficAmounts() {
@@ -138,8 +310,8 @@
                     return true;
                 }
 
-                const fineValue = Number(fine?.value || 0);
-                const liabilityValue = Number(liability?.value || 0);
+                const fineValue = /^\d+$/.test(fine?.value || '') ? Number(fine.value) : 0;
+                const liabilityValue = /^\d+$/.test(liability?.value || '') ? Number(liability.value) : 0;
                 fine?.setCustomValidity(fineValue > 0 ? '' : 'Tiền phạt phải lớn hơn 0.');
                 liability?.setCustomValidity(
                     liabilityValue <= 0
@@ -156,18 +328,30 @@
                 trafficNote?.classList.toggle('d-none', !traffic);
                 estimatedGroup?.classList.toggle('d-none', traffic);
                 liabilityHelp?.classList.toggle('d-none', !traffic);
-                if (booking) booking.required = traffic;
                 if (traffic && estimated) estimated.value = '0';
+                validateBooking();
+                validateAllMoney();
                 validateTrafficAmounts();
             }
 
             function syncDateTime() {
-                if (!date?.value || !pattern.test(time?.value || '')) return false;
-                hidden.value = `${date.value}T${time.value}`;
-                return true;
+                return validateOccurredAt();
             }
 
             type?.addEventListener('change', updateType);
+
+            booking?.addEventListener('keydown', blockInvalidNumberKeys);
+            booking?.addEventListener('paste', event => blockInvalidPaste(event, 'Mã đơn liên quan'));
+            booking?.addEventListener('input', validateBooking);
+
+            moneyInputs.forEach(item => {
+                item.input?.addEventListener('keydown', blockInvalidNumberKeys);
+                item.input?.addEventListener('paste', event => blockInvalidPaste(event, item.label));
+                item.input?.addEventListener('input', () => {
+                    validateNonNegativeInteger(item.input, item.field, item.label);
+                });
+            });
+
             fine?.addEventListener('input', () => {
                 if (isTrafficFine() && Number(liability?.value || 0) === 0 && Number(fine.value || 0) > 0) {
                     liability.value = fine.value;
@@ -176,23 +360,30 @@
             });
             liability?.addEventListener('input', validateTrafficAmounts);
             evidence?.addEventListener('input', validateTrafficAmounts);
-            date?.addEventListener('change', syncDateTime);
-            time?.addEventListener('input', syncDateTime);
+            date?.addEventListener('change', () => {
+                preventFutureOccurredAt();
+                validateOccurredAt();
+            });
+            date?.addEventListener('input', preventFutureOccurredAt);
+            time?.addEventListener('input', () => {
+                preventFutureOccurredAt();
+                validateOccurredAt();
+            });
+            time?.addEventListener('blur', validateOccurredAt);
 
             form?.addEventListener('submit', event => {
-                const timeOk = syncDateTime();
+                const bookingOk = validateBooking();
+                const timeOk = validateOccurredAt();
+                const moneyOk = validateAllMoney();
                 const trafficOk = validateTrafficAmounts();
-                if (!timeOk) {
-                    time?.setCustomValidity('Nhập giờ 24h theo dạng HH:mm.');
-                } else {
-                    time?.setCustomValidity('');
-                }
-                if (!timeOk || !trafficOk) {
+
+                if (!bookingOk || !timeOk || !moneyOk || !trafficOk) {
                     event.preventDefault();
                     form.reportValidity();
                 }
             });
 
+            preventFutureOccurredAt();
             updateType();
             syncDateTime();
         })();

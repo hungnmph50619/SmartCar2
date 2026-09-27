@@ -126,23 +126,30 @@
 
 @if (trafficFines.Count > 0)
 {
-    <div class="alert @(outstandingTrafficFines > 0 ? "alert-warning" : "alert-info") mb-4">
-        <strong>Phạt / vi phạm của đơn #@Model.BookingId</strong>
-        @if (unpaidTrafficFines > 0)
-        {
-            <div>Còn cần thanh toán: <strong>@unpaidTrafficFines.ToString("N0") đ</strong>.</div>
-        }
-        @if (awaitingTrafficFines > 0)
-        {
-            <div>Đang chờ xác nhận thanh toán: <strong>@awaitingTrafficFines.ToString("N0") đ</strong>. Không chuyển lại khoản đang chờ xác nhận.</div>
-        }
-        @if (outstandingTrafficFines <= 0)
-        {
-            <div>Hiện không còn khoản phạt chưa xử lý trong đơn này.</div>
-        }
-        <div class="small mt-1">Khoản phạt được theo dõi riêng, không tự trừ vào tiền cọc. Trạng thái xử lý hồ sơ vi phạm không thay thế trạng thái thanh toán.</div>
-        <a class="btn btn-sm btn-outline-primary mt-2" asp-controller="TrafficFines" asp-action="Index" asp-route-bookingId="@Model.BookingId">Xem bằng chứng và thanh toán phạt</a>
-    </div>
+    if (outstandingTrafficFines > 0)
+    {
+        <div class="alert alert-warning mb-4">
+            <strong>Phạt / vi phạm của đơn #@Model.BookingId</strong>
+            @if (unpaidTrafficFines > 0)
+            {
+                <div>Còn cần thanh toán: <strong>@unpaidTrafficFines.ToString("N0") đ</strong>.</div>
+            }
+            @if (awaitingTrafficFines > 0)
+            {
+                <div>Đang chờ xác nhận thanh toán: <strong>@awaitingTrafficFines.ToString("N0") đ</strong>. Không chuyển lại khoản đang chờ xác nhận.</div>
+            }
+            <div class="small mt-1">Khoản phạt được theo dõi riêng, không tự trừ vào tiền cọc. Khoản chưa xử lý có thể ảnh hưởng việc tạo chuyến thuê mới và duyệt hoàn cọc.</div>
+            <a class="btn btn-sm btn-outline-primary mt-2" asp-controller="TrafficFines" asp-action="Index" asp-route-bookingId="@Model.BookingId">Xem bằng chứng và thanh toán phạt</a>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-success mb-4">
+            <strong>✓ Khoản phạt của đơn #@Model.BookingId đã được thanh toán đầy đủ</strong>
+            <div class="small mt-1">Lịch sử vi phạm, bằng chứng và thông tin giao dịch vẫn được lưu để bạn tra cứu khi cần.</div>
+            <a class="btn btn-sm btn-outline-success mt-2" asp-controller="TrafficFines" asp-action="Index" asp-route-bookingId="@Model.BookingId">Xem chi tiết khoản phạt</a>
+        </div>
+    }
 }
 
 <div class="row g-4">
