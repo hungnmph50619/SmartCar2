@@ -7,19 +7,40 @@
         string.IsNullOrWhiteSpace(value)
             ? Array.Empty<string>()
             : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    var openItems = Model.Items
+        .Where(item => item.Status is PaymentStatus.Pending or PaymentStatus.Failed or PaymentStatus.AwaitingConfirmation)
+        .ToList();
+
+    var payableItems = openItems
+        .Where(item => item.Status is PaymentStatus.Pending or PaymentStatus.Failed)
+        .ToList();
+
+    var awaitingItems = openItems
+        .Where(item => item.Status == PaymentStatus.AwaitingConfirmation)
+        .ToList();
+
+    var paidItems = Model.Items
+        .Where(item => item.Status == PaymentStatus.Paid)
+        .ToList();
 }
 
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
     <div>
         <h1 class="h3 mb-1">Phạt / vi phạm giao thông</h1>
-        <p class="text-muted mb-0">Các khoản được SmartCar ghi nhận từ thông báo có bằng chứng và gắn với đúng chuyến thuê.</p>
+        <p class="text-muted mb-0">Theo dõi khoản cần xử lý và lịch sử các khoản phạt đã thanh toán của từng chuyến thuê.</p>
     </div>
+
     @if (Model.OutstandingAmount > 0)
     {
         <div class="text-end">
             <div class="small text-muted">Còn cần xử lý</div>
             <div class="h4 text-danger mb-0">@Model.OutstandingAmount.ToString("N0") đ</div>
         </div>
+    }
+    else if (Model.Items.Count > 0)
+    {
+        <span class="badge bg-success fs-6">✓ Đã thanh toán đầy đủ</span>
     }
 </div>
 
@@ -31,12 +52,6 @@
         <a class="ms-3" asp-action="Index">Xem tất cả khoản phạt</a>
     </div>
 }
-<div class="alert alert-light border small">
-    Khoản phạt được thanh toán riêng, không tự khấu trừ vào cọc. Nếu cọc chưa được duyệt hoàn,
-    cần đủ thời gian giữ cọc của đơn và xử lý xong khoản phạt trước khi được duyệt.
-    Khoản còn nợ cũng tạm chặn việc tạo chuyến thuê mới.
-    Hồ sơ vi phạm “Đã xử lý” không đồng nghĩa khoản phạt đã được thanh toán; hãy xem trạng thái thanh toán của từng khoản bên dưới.
-</div>
 
 @if (Model.Items.Count == 0)
 {
@@ -47,98 +62,219 @@
 }
 else
 {
-    <div class="row g-4">
-        <div class="col-lg-7">
-            <div class="vstack gap-3">
-                @foreach (var item in Model.Items)
+    @if (openItems.Count > 0)
+    {
+        <div class="alert alert-light border small mb-4">
+            Khoản phạt được thanh toán riêng, không tự khấu trừ vào cọc.
+            Khoản chưa xử lý có thể tạm chặn việc tạo chuyến thuê mới và việc duyệt hoàn cọc.
+            Khoản đang chờ xác nhận không cần chuyển lại; SmartCar sẽ đối soát giao dịch trước khi cập nhật trạng thái.
+        </div>
+
+        <section class="mb-5">
+            <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap mb-3">
+                <div>
+                    <h2 class="h5 mb-1">Cần xử lý</h2>
+                    <div class="text-muted small">Chỉ các khoản chưa thanh toán hoặc đang chờ đối soát mới xuất hiện ở khu vực này.</div>
+                </div>
+                <span class="badge bg-warning text-dark">@openItems.Count khoản</span>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-7">
+                    <div class="vstack gap-3">
+                        @foreach (var item in openItems)
+                        {
+                            var evidence = EvidencePaths(item.EvidencePaths);
+                            var badgeClass = item.Status switch
+                            {
+                                PaymentStatus.AwaitingConfirmation => "bg-warning text-dark",
+                                PaymentStatus.Failed => "bg-danger",
+                                _ => "bg-secondary"
+                            };
+                            var heading = item.Status == PaymentStatus.AwaitingConfirmation
+                                ? "Khoản phạt đang chờ xác nhận"
+                                : "Khoản phạt cần thanh toán";
+
+                            <div class="card shadow-sm border-0 rounded-4">
+                                <div class="card-body p-4">
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                        <div>
+                                            <div class="small text-muted">Đơn #@item.BookingId · @item.VehicleName · @item.LicensePlate</div>
+                                            <h3 class="h5 mb-1 mt-1">@heading</h3>
+                                            @if (item.OccurredAt.HasValue)
+                                            {
+                                                <div class="small text-muted">Vi phạm lúc @item.OccurredAt.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                                            }
+                                        </div>
+                                        <span class="badge @badgeClass">@item.Status.ToVietnamese()</span>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                    {
+                                        <p class="mt-3 mb-2">@item.Description</p>
+                                    }
+
+                                    <div class="row g-2 small mb-3">
+                                        <div class="col-sm-6">
+                                            <div class="border rounded-3 p-2">
+                                                Mức phạt: <strong>@item.OfficialFineAmount.ToString("N0") đ</strong>
+                                            </div>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <div class="border rounded-3 p-2">
+                                                @(item.Status == PaymentStatus.AwaitingConfirmation ? "Đã báo chuyển" : "Cần thanh toán"):
+                                                <strong>@item.Amount.ToString("N0") đ</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (evidence.Count > 0)
+                                    {
+                                        <div class="d-flex flex-wrap gap-2 mb-3">
+                                            @for (var index = 0; index < evidence.Count; index++)
+                                            {
+                                                <a href="@evidence[index]" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Xem bằng chứng @(index + 1)</a>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (item.Status is PaymentStatus.Pending or PaymentStatus.Failed)
+                                    {
+                                        <form asp-controller="Payments" asp-action="SubmitQr" method="post">
+                                            <input type="hidden" name="bookingId" value="@item.BookingId" />
+                                            <input type="hidden" name="type" value="@PaymentType.TrafficFine" />
+                                            <button class="btn btn-primary" type="submit">Tôi đã chuyển @item.Amount.ToString("N0") đ</button>
+                                        </form>
+                                    }
+                                    else if (item.Status == PaymentStatus.AwaitingConfirmation)
+                                    {
+                                        <div class="alert alert-warning py-2 mb-0 small">
+                                            Bạn đã báo chuyển khoản. SmartCar đang đối soát; vui lòng không chuyển lại khoản này.
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="col-lg-5">
+                    @if (payableItems.Count > 0)
+                    {
+                        <div class="card shadow-sm border-0 rounded-4 position-sticky" style="top:1rem">
+                            <div class="card-body p-4">
+                                <h2 class="h5">Thông tin chuyển khoản</h2>
+                                <div class="text-center my-3">
+                                    <img src="@Model.QrImagePath" alt="QR thanh toán SmartCar" class="img-fluid border rounded-3" style="max-height:260px" />
+                                </div>
+                                <dl class="row small mb-0">
+                                    <dt class="col-5">Ngân hàng</dt><dd class="col-7">@Model.BankName</dd>
+                                    <dt class="col-5">Số tài khoản</dt><dd class="col-7 fw-semibold">@Model.AccountNumber</dd>
+                                    <dt class="col-5">Chủ tài khoản</dt><dd class="col-7">@Model.AccountHolder</dd>
+                                    <dt class="col-5">Nội dung</dt><dd class="col-7"><code>SMARTCAR [Mã đơn]</code></dd>
+                                </dl>
+                                <hr />
+                                <div class="small text-muted">Chỉ bấm “Tôi đã chuyển” sau khi chuyển đúng số tiền. SmartCar sẽ đối soát trước khi khoản được ghi nhận đã thanh toán.</div>
+                            </div>
+                        </div>
+                    }
+                    else if (awaitingItems.Count > 0)
+                    {
+                        <div class="card shadow-sm border-warning rounded-4">
+                            <div class="card-body p-4">
+                                <div class="text-warning fs-3 mb-2">⏳</div>
+                                <h2 class="h5">Đang chờ SmartCar xác nhận</h2>
+                                <p class="mb-2">Bạn đã báo chuyển khoản cho các khoản đang hiển thị.</p>
+                                <div class="small text-muted">Không cần quét QR hoặc chuyển lại. Khi đối soát xong, khoản phạt sẽ tự chuyển xuống phần “Lịch sử đã thanh toán”.</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+    else
+    {
+        <div class="alert alert-success mb-4">
+            <strong>✓ Các khoản phạt trong phạm vi đang xem đã được thanh toán đầy đủ.</strong>
+            <div class="small mt-1">Bạn không cần thực hiện thêm thao tác thanh toán. Lịch sử và bằng chứng vẫn được lưu bên dưới để tra cứu.</div>
+        </div>
+    }
+
+    @if (paidItems.Count > 0)
+    {
+        <section>
+            <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap mb-3">
+                <div>
+                    <h2 class="h5 mb-1">Lịch sử đã thanh toán</h2>
+                    <div class="text-muted small">Các khoản đã hoàn tất vẫn được giữ lại để đối chiếu đơn thuê, bằng chứng và giao dịch.</div>
+                </div>
+                <span class="badge bg-success">@paidItems.Count khoản</span>
+            </div>
+
+            <div class="row g-3">
+                @foreach (var item in paidItems)
                 {
                     var evidence = EvidencePaths(item.EvidencePaths);
-                    var badgeClass = item.Status switch
-                    {
-                        PaymentStatus.Paid => "bg-success",
-                        PaymentStatus.AwaitingConfirmation => "bg-warning text-dark",
-                        PaymentStatus.Failed => "bg-danger",
-                        _ => "bg-secondary"
-                    };
 
-                    <div class="card shadow-sm border-0 rounded-4">
-                        <div class="card-body p-4">
-                            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                                <div>
-                                    <div class="small text-muted">Đơn #@item.BookingId · @item.VehicleName · @item.LicensePlate</div>
-                                    <h2 class="h5 mb-1 mt-1">Khoản phải thu @item.Amount.ToString("N0") đ</h2>
-                                    @if (item.OccurredAt.HasValue)
+                    <div class="col-xl-6">
+                        <div class="card h-100 shadow-sm border-success rounded-4">
+                            <div class="card-body p-4">
+                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                    <div>
+                                        <div class="small text-muted">Đơn #@item.BookingId · @item.VehicleName · @item.LicensePlate</div>
+                                        <h3 class="h5 text-success mb-1 mt-1">✓ Khoản phạt đã thanh toán</h3>
+                                        @if (item.OccurredAt.HasValue)
+                                        {
+                                            <div class="small text-muted">Vi phạm lúc @item.OccurredAt.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                                        }
+                                    </div>
+                                    <span class="badge bg-success">Đã thanh toán</span>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(item.Description))
+                                {
+                                    <p class="mt-3 mb-2">@item.Description</p>
+                                }
+
+                                <div class="row g-2 small mb-3">
+                                    <div class="col-sm-6">
+                                        <div class="border rounded-3 p-2">
+                                            Mức phạt: <strong>@item.OfficialFineAmount.ToString("N0") đ</strong>
+                                        </div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <div class="border rounded-3 p-2">
+                                            Đã thanh toán: <strong>@item.Amount.ToString("N0") đ</strong>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-3 bg-success bg-opacity-10 p-3 small mb-3">
+                                    @if (item.PaidAt.HasValue)
                                     {
-                                        <div class="small text-muted">Vi phạm lúc @item.OccurredAt.Value.ToString("dd/MM/yyyy HH:mm")</div>
+                                        <div><strong>Thời gian thanh toán:</strong> @item.PaidAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(item.TransactionCode))
+                                    {
+                                        <div class="mt-1"><strong>Mã giao dịch:</strong> @item.TransactionCode</div>
                                     }
                                 </div>
-                                <span class="badge @badgeClass">@item.Status.ToVietnamese()</span>
+
+                                @if (evidence.Count > 0)
+                                {
+                                    <div class="d-flex flex-wrap gap-2">
+                                        @for (var index = 0; index < evidence.Count; index++)
+                                        {
+                                            <a href="@evidence[index]" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">Xem bằng chứng @(index + 1)</a>
+                                        }
+                                    </div>
+                                }
                             </div>
-
-                            @if (!string.IsNullOrWhiteSpace(item.Description))
-                            {
-                                <p class="mt-3 mb-2">@item.Description</p>
-                            }
-
-                            <div class="row g-2 small mb-3">
-                                <div class="col-sm-6"><div class="border rounded-3 p-2">Mức phạt thông báo: <strong>@item.OfficialFineAmount.ToString("N0") đ</strong></div></div>
-                                <div class="col-sm-6"><div class="border rounded-3 p-2">Khoản cần thanh toán: <strong>@item.Amount.ToString("N0") đ</strong></div></div>
-                            </div>
-
-                            @if (evidence.Count > 0)
-                            {
-                                <div class="d-flex flex-wrap gap-2 mb-3">
-                                    @for (var index = 0; index < evidence.Count; index++)
-                                    {
-                                        <a href="@evidence[index]" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Xem bằng chứng @(index + 1)</a>
-                                    }
-                                </div>
-                            }
-
-                            @if (item.Status == PaymentStatus.Pending || item.Status == PaymentStatus.Failed)
-                            {
-                                <form asp-controller="Payments" asp-action="SubmitQr" method="post">
-                                    <input type="hidden" name="bookingId" value="@item.BookingId" />
-                                    <input type="hidden" name="type" value="@PaymentType.TrafficFine" />
-                                    <button class="btn btn-primary" type="submit">Tôi đã chuyển @item.Amount.ToString("N0") đ</button>
-                                </form>
-                            }
-                            else if (item.Status == PaymentStatus.AwaitingConfirmation)
-                            {
-                                <div class="alert alert-warning py-2 mb-0 small">Bạn đã báo chuyển khoản. SmartCar đang đối soát giao dịch.</div>
-                            }
-                            else if (item.Status == PaymentStatus.Paid)
-                            {
-                                <div class="alert alert-success py-2 mb-0 small">
-                                    Đã thanh toán
-                                    @if (item.PaidAt.HasValue) { <span> lúc @item.PaidAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span> }
-                                    @if (!string.IsNullOrWhiteSpace(item.TransactionCode)) { <span> · Mã: @item.TransactionCode</span> }
-                                </div>
-                            }
                         </div>
                     </div>
                 }
             </div>
-        </div>
-
-        <div class="col-lg-5">
-            <div class="card shadow-sm border-0 rounded-4 position-sticky" style="top:1rem">
-                <div class="card-body p-4">
-                    <h2 class="h5">Thông tin chuyển khoản</h2>
-                    <div class="text-center my-3">
-                        <img src="@Model.QrImagePath" alt="QR thanh toán SmartCar" class="img-fluid border rounded-3" style="max-height:260px" />
-                    </div>
-                    <dl class="row small mb-0">
-                        <dt class="col-5">Ngân hàng</dt><dd class="col-7">@Model.BankName</dd>
-                        <dt class="col-5">Số tài khoản</dt><dd class="col-7 fw-semibold">@Model.AccountNumber</dd>
-                        <dt class="col-5">Chủ tài khoản</dt><dd class="col-7">@Model.AccountHolder</dd>
-                        <dt class="col-5">Nội dung</dt><dd class="col-7"><code>SMARTCAR [Mã đơn]</code></dd>
-                    </dl>
-                    <hr />
-                    <div class="small text-muted">Chỉ bấm “Tôi đã chuyển” sau khi thực hiện chuyển khoản đúng số tiền. Admin sẽ đối soát trước khi khoản được đánh dấu Paid.</div>
-                </div>
-            </div>
-        </div>
-    </div>
+        </section>
+    }
 }
-
