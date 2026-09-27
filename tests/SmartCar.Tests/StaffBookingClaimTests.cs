@@ -25,7 +25,7 @@ public sealed class StaffBookingClaimTests
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseSqlite(connection).Options;
-        await using var db = new ApplicationDbContext(options);
+        await using var db = new ClaimTestDbContext(options);
         await db.Database.EnsureCreatedAsync();
 
         db.Users.Add(new ApplicationUser
@@ -78,7 +78,7 @@ public sealed class StaffBookingClaimTests
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseSqlite(connection).Options;
-        await using var db = new ApplicationDbContext(options);
+        await using var db = new ClaimTestDbContext(options);
         await db.Database.EnsureCreatedAsync();
 
         db.Users.Add(new ApplicationUser
@@ -146,5 +146,17 @@ public sealed class StaffBookingClaimTests
                 new List<IFilterMetadata>(), new object()));
         });
         Assert.True(reachedAction);
+    }
+
+    private sealed class ClaimTestDbContext : ApplicationDbContext
+    {
+        public ClaimTestDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            builder.Entity<Vehicle>().Property(item => item.RowVersion).ValueGeneratedNever();
+            builder.Entity<Booking>().Property(item => item.RowVersion).ValueGeneratedNever();
+        }
     }
 }
