@@ -959,7 +959,8 @@ internal sealed class ReturnService : IReturnService
             booking.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
                 _dbContext,
                 booking.Vehicle,
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken,
+                excludedBookingId: booking.BookingId);
         }
 
         if (requiresMaintenance)
