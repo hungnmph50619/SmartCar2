@@ -225,14 +225,53 @@
                 return true;
             }
 
+            function localDateValue(value) {
+                const year = value.getFullYear();
+                const month = String(value.getMonth() + 1).padStart(2, '0');
+                const day = String(value.getDate()).padStart(2, '0');
+                return year + '-' + month + '-' + day;
+            }
+
+            function localTimeValue(value) {
+                const hours = String(value.getHours()).padStart(2, '0');
+                const minutes = String(value.getMinutes()).padStart(2, '0');
+                return hours + ':' + minutes;
+            }
+
+            function preventFutureOccurredAt() {
+                if (!date || !time) return;
+
+                const now = new Date();
+                const today = localDateValue(now);
+                const currentTime = localTimeValue(now);
+
+                date.max = today;
+
+                if (date.value && date.value > today) {
+                    date.value = today;
+                    time.value = currentTime;
+                }
+
+                if (date.value === today &&
+                    pattern.test(time.value || '') &&
+                    time.value > currentTime) {
+                    time.value = currentTime;
+                }
+
+                date.setCustomValidity('');
+                time.setCustomValidity('');
+                setOccurredMessage('');
+            }
+
             function validateOccurredAt() {
+                preventFutureOccurredAt();
+
                 if (!date?.value) {
                     const message = 'Vui lòng chọn ngày xảy ra.';
                     date?.setCustomValidity(message);
                     setOccurredMessage(message);
                     return false;
                 }
-                date?.setCustomValidity('');
 
                 if (!pattern.test(time?.value || '')) {
                     const message = 'Vui lòng nhập giờ 24h theo dạng HH:mm.';
@@ -242,7 +281,6 @@
                 }
 
                 const occurred = new Date(date.value + 'T' + time.value + ':00');
-                const maxAllowed = new Date(Date.now() + 5 * 60 * 1000);
 
                 if (Number.isNaN(occurred.getTime())) {
                     const message = 'Thời điểm xảy ra không hợp lệ.';
@@ -251,14 +289,14 @@
                     return false;
                 }
 
-                if (occurred > maxAllowed) {
-                    const message = 'Thời điểm xảy ra không được ở tương lai.';
-                    time?.setCustomValidity(message);
-                    setOccurredMessage(message);
-                    return false;
+                if (occurred > new Date()) {
+                    const now = new Date();
+                    date.value = localDateValue(now);
+                    time.value = localTimeValue(now);
                 }
 
-                time?.setCustomValidity('');
+                date.setCustomValidity('');
+                time.setCustomValidity('');
                 setOccurredMessage('');
                 hidden.value = date.value + 'T' + time.value;
                 return true;
@@ -322,8 +360,16 @@
             });
             liability?.addEventListener('input', validateTrafficAmounts);
             evidence?.addEventListener('input', validateTrafficAmounts);
-            date?.addEventListener('change', validateOccurredAt);
-            time?.addEventListener('input', validateOccurredAt);
+            date?.addEventListener('change', () => {
+                preventFutureOccurredAt();
+                validateOccurredAt();
+            });
+            date?.addEventListener('input', preventFutureOccurredAt);
+            time?.addEventListener('input', () => {
+                preventFutureOccurredAt();
+                validateOccurredAt();
+            });
+            time?.addEventListener('blur', validateOccurredAt);
 
             form?.addEventListener('submit', event => {
                 const bookingOk = validateBooking();
@@ -337,6 +383,7 @@
                 }
             });
 
+            preventFutureOccurredAt();
             updateType();
             syncDateTime();
         })();
