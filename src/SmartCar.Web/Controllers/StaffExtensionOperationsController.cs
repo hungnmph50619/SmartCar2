@@ -414,9 +414,6 @@ public sealed class StaffExtensionOperationsController : Controller
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        var staffId =
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            string.Empty;
         await _auditService.WriteAsync(
             staffId,
             "StaffResolveExtensionConflictByVehicleSwap",
