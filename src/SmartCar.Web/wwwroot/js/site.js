@@ -30,22 +30,47 @@ function initializeForms() {
             }
 
             const submitter = event.submitter ?? form.querySelector('button[type="submit"], input[type="submit"]');
-            if (!submitter || submitter.disabled) {
+            if (!submitter || submitter.disabled || submitter.dataset.submitPending === "true") {
                 return;
             }
 
-            submitter.disabled = true;
-            submitter.setAttribute("aria-busy", "true");
+            // Let every synchronous submit handler run before committing to a loading state.
+            submitter.dataset.submitPending = "true";
+            window.setTimeout(() => {
+                if (event.defaultPrevented || !form.isConnected || submitter.disabled) {
+                    delete submitter.dataset.submitPending;
+                    return;
+                }
 
-            if (submitter instanceof HTMLButtonElement) {
-                const loadingText = submitter.dataset.loadingText ?? "Đang xử lý...";
-                submitter.dataset.originalHtml = submitter.innerHTML;
-                submitter.innerHTML = `
-                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
-                    <span>${escapeHtml(loadingText)}</span>`;
-            } else {
-                submitter.dataset.originalValue = submitter.value;
-                submitter.value = submitter.dataset.loadingText ?? "Đang xử lý...";
+                submitter.disabled = true;
+                submitter.setAttribute("aria-busy", "true");
+
+                if (submitter instanceof HTMLButtonElement) {
+                    const loadingText = submitter.dataset.loadingText ?? "Đang xử lý...";
+                    submitter.dataset.originalHtml = submitter.innerHTML;
+                    submitter.innerHTML = `
+                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                        <span>${escapeHtml(loadingText)}</span>`;
+                } else if (submitter instanceof HTMLInputElement) {
+                    submitter.dataset.originalValue = submitter.value;
+                    submitter.value = submitter.dataset.loadingText ?? "Đang xử lý...";
+                }
+            }, 0);
+        });
+    });
+
+    window.addEventListener("pageshow", () => {
+        document.querySelectorAll('form[data-loading-form] [aria-busy="true"]').forEach((submitter) => {
+            submitter.disabled = false;
+            submitter.removeAttribute("aria-busy");
+            delete submitter.dataset.submitPending;
+
+            if (submitter instanceof HTMLButtonElement && submitter.dataset.originalHtml !== undefined) {
+                submitter.innerHTML = submitter.dataset.originalHtml;
+                delete submitter.dataset.originalHtml;
+            } else if (submitter instanceof HTMLInputElement && submitter.dataset.originalValue !== undefined) {
+                submitter.value = submitter.dataset.originalValue;
+                delete submitter.dataset.originalValue;
             }
         });
     });
