@@ -53,7 +53,8 @@ public sealed class GeocodingController : ControllerBase
         [FromQuery] double lon,
         CancellationToken cancellationToken)
     {
-        if (lat is < -90 or > 90 || lon is < -180 or > 180)
+        if (!double.IsFinite(lat) || !double.IsFinite(lon) ||
+            lat is < -90 or > 90 || lon is < -180 or > 180)
         {
             return BadRequest(new { message = "Tọa độ không hợp lệ." });
         }
