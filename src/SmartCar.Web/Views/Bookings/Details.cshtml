@@ -461,6 +461,19 @@
                         <div class="col-md-4"><span class="text-muted">Km lúc trả</span><div class="fw-semibold">@returnRecord.Mileage.ToString("N0") km</div></div>
                         <div class="col-md-4"><span class="text-muted">Nhiên liệu</span><div class="fw-semibold">@returnRecord.FuelLevel</div></div>
                     </div>
+                    @if (!additionalChargeFinalized && Model.AdditionalCharges.Count > 0)
+                    {
+                        <div class="alert alert-info small">
+                            <strong>Phụ phí trả xe tạm tính: @Model.AdditionalAmount.ToString("N0") đ</strong>
+                            <ul class="mb-1 mt-2">
+                                @foreach (var charge in Model.AdditionalCharges)
+                                {
+                                    <li>@charge.Description — @charge.Amount.ToString("N0") đ</li>
+                                }
+                            </ul>
+                            Nhân viên sẽ đối chiếu và chốt khoản phải thanh toán. Khoản tạm tính chưa cộng vào tổng hóa đơn.
+                        </div>
+                    }
                     <div class="small mb-3">
                         <strong>Hư hỏng mới:</strong> <span class="@(returnRecord.HasDamage ? "text-danger" : "text-success")">@(returnRecord.HasDamage ? "Có" : "Không")</span>
                         @if (!string.IsNullOrWhiteSpace(returnRecord.ExteriorCondition)) { <div><strong>Ngoại thất:</strong> @returnRecord.ExteriorCondition</div> }

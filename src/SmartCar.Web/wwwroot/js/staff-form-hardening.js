@@ -122,17 +122,35 @@
                 </div>
                 <span class="badge text-bg-secondary" data-counter-citizen-status>Đang kiểm tra...</span>
             </div>
+            <div class="row g-2 mt-2" aria-label="Ảnh CCCD người đang ${stage} xe">
+                <div class="col-sm-6">
+                    <div class="staff-secure-doc-frame border rounded-3 p-2 h-100">
+                        <div class="small fw-semibold mb-1">CCCD mặt trước tại quầy</div>
+                        <div class="staff-citizen-photo-frame rounded-2">
+                            <img data-counter-citizen-front-preview class="d-none" alt="CCCD mặt trước người đang ${stage} xe" />
+                            <span data-counter-citizen-front-empty class="small text-muted">Chưa chọn ảnh mặt trước</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-6">
+                    <div class="staff-secure-doc-frame border rounded-3 p-2 h-100">
+                        <div class="small fw-semibold mb-1">CCCD mặt sau tại quầy</div>
+                        <div class="staff-citizen-photo-frame rounded-2">
+                            <img data-counter-citizen-back-preview class="d-none" alt="CCCD mặt sau người đang ${stage} xe" />
+                            <span data-counter-citizen-back-empty class="small text-muted">Chưa chọn ảnh mặt sau</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="row g-3 mt-1">
                 <div class="col-md-6">
                     <label class="form-label fw-semibold" for="counter-citizen-front">CCCD mặt trước</label>
                     <input id="counter-citizen-front" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-file-draft-key="${stage}-${bookingId}-citizen-front" />
-                    <img data-counter-citizen-front-preview class="img-fluid rounded-3 border bg-white mt-2 d-none" alt="Xem CCCD mặt trước đã chọn" style="width:100%;max-height:240px;object-fit:contain" />
                     <div class="form-text">Ảnh phải thấy đầy đủ bốn góc giấy tờ; không crop mất thông tin.</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold" for="counter-citizen-back">CCCD mặt sau</label>
                     <input id="counter-citizen-back" type="file" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-file-draft-key="${stage}-${bookingId}-citizen-back" />
-                    <img data-counter-citizen-back-preview class="img-fluid rounded-3 border bg-white mt-2 d-none" alt="Xem CCCD mặt sau đã chọn" style="width:100%;max-height:240px;object-fit:contain" />
                     <div class="form-text">Không được dùng lại ảnh mặt trước cho mặt sau.</div>
                 </div>
             </div>
@@ -162,16 +180,26 @@
             block.querySelector('[data-counter-citizen-front-preview]'),
             block.querySelector('[data-counter-citizen-back-preview]')
         ];
+        const placeholders = [
+            block.querySelector('[data-counter-citizen-front-empty]'),
+            block.querySelector('[data-counter-citizen-back-empty]')
+        ];
         const objectUrls = [null, null];
+        let selectionChanged = false;
+        let savedDuringPage = false;
+        let saved = false;
+        let uploading = false;
         const showPreview = (index, url) => {
             const preview = previews[index];
             if (!preview) return;
             preview.classList.toggle('d-none', !url);
+            placeholders[index]?.classList.toggle('d-none', !!url);
             if (url) preview.src = url;
             else preview.removeAttribute('src');
         };
         [front, back].forEach((input, index) => {
             input.addEventListener('change', () => {
+                selectionChanged = true;
                 if (objectUrls[index]) URL.revokeObjectURL(objectUrls[index]);
                 objectUrls[index] = null;
                 const file = input.files?.[0];
@@ -195,9 +223,6 @@
                 showPreview(index, `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`);
             });
         };
-
-        let saved = false;
-        let uploading = false;
 
         const setState = (kind, text) => {
             if (status) {
@@ -255,6 +280,8 @@
                 }
 
                 saved = true;
+                savedDuringPage = true;
+                selectionChanged = false;
                 showSavedPreviews(data);
                 setState('success', `Đã lưu đủ CCCD mặt trước + mặt sau. Có thể tiếp tục lập biên bản ${stage} xe.`);
                 return true;
@@ -284,6 +311,7 @@
             });
             if (response.ok) {
                 const data = await response.json();
+                if (selectionChanged || savedDuringPage) return;
                 saved = data.ready === true;
                 if (saved) {
                     showSavedPreviews(data);

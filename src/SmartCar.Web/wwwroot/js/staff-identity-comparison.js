@@ -14,20 +14,17 @@
         const currentInputsRow = block.querySelector('.row.g-3.mt-1');
         if (!(currentInputsRow instanceof HTMLElement)) return;
 
-        const reference = document.createElement('div');
+        const reference = document.createElement('details');
         reference.className = 'staff-citizen-comparison mt-3';
         reference.dataset.kycCitizenReference = 'true';
         reference.innerHTML = `
-            <div class="small fw-semibold mb-2">CCCD KYC đã duyệt để đối chiếu</div>
+            <summary class="small fw-semibold mb-2">Mở ảnh CCCD KYC đã duyệt để đối chiếu</summary>
             <div class="row g-2">
                 ${referenceCard('front', 'Mặt trước', bookingId)}
                 ${referenceCard('back', 'Mặt sau', bookingId)}
-            </div>
-            <div class="form-text mt-2">
-                Ảnh KYC chỉ là tham chiếu. Bộ ảnh CCCD người đang có mặt tại quầy được preview đúng một lần ngay dưới ô chọn ảnh.
             </div>`;
 
-        currentInputsRow.before(reference);
+        currentInputsRow.after(reference);
     });
 
     function referenceCard(side, label, bookingId) {
@@ -43,19 +40,11 @@
         </div>`;
     }
 
-    document.addEventListener('error', async event => {
+    document.addEventListener('error', event => {
         const img = event.target;
         if (!(img instanceof HTMLImageElement) || !img.closest('[data-kyc-citizen-reference]')) return;
         img.classList.add('d-none');
         const message = img.nextElementSibling;
         message?.classList.remove('d-none');
-        try {
-            const response = await fetch(`/StaffCounterIdentityEvidence/KycCitizenStatus?bookingId=${bookingIdFromImage(img)}&side=${img.dataset.side}`);
-            if (response.ok && message) message.textContent = (await response.json()).reason;
-        } catch { /* Giữ thông báo chung nếu không thể kiểm tra trạng thái. */ }
     }, true);
-
-    function bookingIdFromImage(img) {
-        return new URL(img.src).searchParams.get('bookingId');
-    }
 })();

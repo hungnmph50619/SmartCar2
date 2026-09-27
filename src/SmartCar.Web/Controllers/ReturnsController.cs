@@ -74,7 +74,10 @@ public sealed class ReturnsController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        SetHandoverBaseline(handover);
+        SetHandoverBaseline(handover, Math.Max(
+            handover.IncludedKilometers,
+            Math.Max(1, (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d)) *
+            booking.Policy.IncludedKilometersPerDay));
         var model = new ReturnViewModel
         {
             BookingId = bookingId,
@@ -892,22 +895,28 @@ public sealed class ReturnsController : Controller
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var handover = await _dbContext.VehicleHandovers
+        var booking = await _dbContext.Bookings
             .AsNoTracking()
+            .Include(item => item.Handover)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
-        if (handover is not null)
+        if (booking?.Handover is { } handover)
         {
-            SetHandoverBaseline(handover);
+            var paidRentalDays = Math.Max(1,
+                (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
+            SetHandoverBaseline(handover, Math.Max(
+                handover.IncludedKilometers,
+                paidRentalDays * booking.Policy.IncludedKilometersPerDay));
         }
     }
 
-    private void SetHandoverBaseline(VehicleHandover handover)
+    private void SetHandoverBaseline(VehicleHandover handover, int effectiveIncludedKilometers)
     {
         ViewBag.HandoverMileage = handover.Mileage;
         ViewBag.HandoverFuelLevel = handover.FuelLevel;
         ViewBag.HandoverAt = handover.HandoverAt;
         ViewBag.HandoverIncludedKilometers = handover.IncludedKilometers;
+        ViewBag.EffectiveIncludedKilometers = effectiveIncludedKilometers;
         ViewBag.HandoverExcessKmFeePerKm = handover.ExcessKmFeePerKm;
         ViewBag.HandoverExteriorCondition = handover.ExteriorCondition;
         ViewBag.HandoverInteriorCondition = handover.InteriorCondition;

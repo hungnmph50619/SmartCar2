@@ -97,6 +97,35 @@ public sealed class ReturnCitizenEvidenceTests
             session.ConsumedAt.HasValue));
     }
 
+    [Fact]
+    public async Task CreateAsync_SameDayRentalChargesExcessMileageBeforeFinalization()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await CreateDbAsync(connection);
+        var booking = await db.Bookings.SingleAsync();
+        booking.PickupDate = DateTime.Now.AddHours(-2);
+        booking.ReturnDate = DateTime.Now.AddHours(4);
+        booking.NumberOfDays = 1;
+        booking.RentalAmount = 700_000m;
+        booking.TotalAmount = 700_000m;
+
+        var handover = await db.VehicleHandovers.SingleAsync();
+        handover.IncludedKilometers = 300;
+        var faceId = AddEvidence(db, true, true, "staff-1");
+        await db.SaveChangesAsync();
+
+        var result = await CreateReturnService(db).CreateAsync(ReturnRequest(faceId) with { Mileage = 1_350 });
+
+        Assert.True(result.Succeeded, string.Join("; ", result.Errors));
+        var savedBooking = await db.Bookings.AsNoTracking().SingleAsync();
+        Assert.Equal(250_000m, savedBooking.AdditionalAmount);
+        Assert.Equal(950_000m, savedBooking.TotalAmount);
+        var charge = await db.AdditionalCharges.AsNoTracking().SingleAsync();
+        Assert.Equal(AdditionalChargeType.ExcessMileage, charge.ChargeType);
+        Assert.Equal(250_000m, charge.Amount);
+    }
+
     private static async Task<TestDbContext> CreateDbAsync(SqliteConnection connection)
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()

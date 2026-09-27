@@ -5,6 +5,8 @@
     ViewData["Title"] = "Biên bản trả xe";
     const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
     var handoverMileage = ViewBag.HandoverMileage is int mileage ? mileage : 0;
+    var includedKilometers = ViewBag.EffectiveIncludedKilometers is int allowance ? allowance : 0;
+    var excessKmFeePerKm = ViewBag.HandoverExcessKmFeePerKm is decimal rate ? rate : 0m;
     var handoverFuelLevel = ViewBag.HandoverFuelLevel as string ?? "-";
     var handoverAt = ViewBag.HandoverAt is DateTime at ? at : (DateTime?)null;
     var handoverExterior = ViewBag.HandoverExteriorCondition as string;
@@ -120,8 +122,9 @@
         <div class="row g-3 mt-1">
             <div class="col-md-4">
                 <label asp-for="Mileage" class="form-label fw-semibold">Số km khi trả</label>
-                <input asp-for="Mileage" type="number" min="@handoverMileage" step="1" data-integer="true" class="form-control" required />
-                <div class="form-text">Lúc giao: @handoverMileage.ToString("N0") km</div>
+                <input asp-for="Mileage" type="number" min="@handoverMileage" step="1" data-integer="true" class="form-control" required
+                       data-return-mileage data-handover-mileage="@handoverMileage" data-included-kilometers="@includedKilometers" data-excess-km-rate="@excessKmFeePerKm.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                <div class="form-text">Lúc giao: @handoverMileage.ToString("N0") km · Định mức: @includedKilometers.ToString("N0") km · Vượt: @excessKmFeePerKm.ToString("N0") đ/km</div>
                 <span asp-validation-for="Mileage" class="text-danger small"></span>
             </div>
             <div class="col-md-4">
@@ -161,6 +164,10 @@
                 <div class="form-text">Lúc giao: @(string.IsNullOrWhiteSpace(handoverInterior) ? "Không ghi" : handoverInterior)</div>
                 <span asp-validation-for="InteriorCondition" class="text-danger small"></span>
             </div>
+        </div>
+
+        <div class="alert alert-info small mt-3 mb-0" role="status" aria-live="polite" data-return-mileage-estimate>
+            Nhập số km lúc trả để xem phụ phí vượt km tạm tính.
         </div>
 
         <div class="form-check border rounded-3 p-3 ps-5 mt-3">
@@ -222,6 +229,7 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script src="~/js/evidence-image-slots.js" asp-append-version="true"></script>
+    <script src="~/js/return-mileage-estimate.js" asp-append-version="true"></script>
     <script>
         (() => {
             const mode = document.querySelector('[data-accessory-mode]');

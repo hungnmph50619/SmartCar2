@@ -705,6 +705,20 @@
                 </div>
             </div>
 
+            @if (b.AdditionalCharges.Count > 0)
+            {
+                <div class="alert alert-info mt-3 mb-0">
+                    <strong>Phụ phí tạm tính khi nhận xe trả: @b.AdditionalAmount.ToString("N0") đ</strong>
+                    <ul class="mb-1 mt-2">
+                        @foreach (var charge in b.AdditionalCharges)
+                        {
+                            <li>@charge.Description — @charge.Amount.ToString("N0") đ</li>
+                        }
+                    </ul>
+                    <div class="small">Đối chiếu và chốt phụ phí sau khi xác minh đầy đủ biên bản giao, trả.</div>
+                </div>
+            }
+
             <div class="row g-3">
                 <div class="col-md-6">
                     <div class="border rounded-4 p-3 h-100">

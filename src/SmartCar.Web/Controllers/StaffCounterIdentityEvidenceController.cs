@@ -138,39 +138,6 @@ public sealed class StaffCounterIdentityEvidenceController : Controller
         return SecureImage(storedPath);
     }
 
-    [HttpGet("KycCitizenStatus")]
-    public async Task<IActionResult> KycCitizenStatus(int bookingId, string side, CancellationToken cancellationToken)
-    {
-        var customerId = await _dbContext.Bookings.AsNoTracking()
-            .Where(item => item.BookingId == bookingId)
-            .Select(item => item.CustomerId)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (customerId is null) return NotFound();
-
-        var type = side?.ToLowerInvariant() switch
-        {
-            "front" => DocumentTypes.CitizenId,
-            "back" => DocumentTypes.CitizenIdBack,
-            _ => null
-        };
-        if (type is null) return BadRequest();
-
-        var path = await _dbContext.CustomerDocuments.AsNoTracking()
-            .Where(item => item.CustomerId == customerId &&
-                item.DocumentType == type && item.Status == DocumentStatus.Verified)
-            .OrderByDescending(item => item.VerifiedAt)
-            .Select(item => item.ImagePath)
-            .FirstOrDefaultAsync(cancellationToken);
-        return Json(new
-        {
-            reason = string.IsNullOrWhiteSpace(path)
-                ? "Khách chưa có ảnh CCCD đã duyệt cho mặt này."
-                : _secureStorage.TryResolve(path, out _, out _)
-                    ? "Không tải được ảnh KYC. Hãy thử mở lại trang."
-                    : "Tệp CCCD đã duyệt không còn trong bộ lưu trữ trên máy chủ. Cần khôi phục tệp gốc hoặc gửi lại KYC để Admin duyệt."
-        });
-    }
-
     [HttpGet("CurrentHandoverCitizen")]
     public async Task<IActionResult> CurrentHandoverCitizen(
         int bookingId,
