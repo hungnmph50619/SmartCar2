@@ -508,12 +508,7 @@ function setLocationFields(form, latitude, longitude, placeName) {
 
 async function reverseGeocodePlace(latitude, longitude) {
     const local = await tryFetchJson(`/api/geocoding/reverse?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`);
-    const localName = extractPlaceName(local);
-    if (localName) return localName;
-
-    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}&zoom=18&addressdetails=1`;
-    const nominatim = await tryFetchJson(nominatimUrl);
-    return extractPlaceName(nominatim);
+    return extractPlaceName(local);
 }
 
 async function tryFetchJson(url) {
