@@ -42,6 +42,10 @@ public class Booking
     public DateTime? StaffReviewedAt { get; set; }
     public string? StaffReviewedByStaffId { get; set; }
 
+    // The active counter operator. A stale lease may be claimed by another Staff member.
+    public string? HandlingStaffId { get; set; }
+    public DateTime? HandlingLeaseExpiresAt { get; set; }
+
     public string? CancelReason { get; set; }
     public string? CancelledBy { get; set; }
     public DateTime? CancelledAt { get; set; }

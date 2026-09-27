@@ -10,6 +10,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -119,6 +120,16 @@ public sealed class StaffExtensionOperationsController : Controller
             TempData["ErrorMessage"] =
                 "Đơn kế tiếp không còn xung đột hoặc đã bắt đầu lập hồ sơ bàn giao nên không được đổi xe bằng luồng này. Hãy tải lại trạng thái và xử lý thủ công nếu cần.";
             return RedirectToAction(nameof(Index));
+        }
+
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        if (!await new StaffBookingClaimService(_dbContext)
+                .IsOwnedAsync(conflict.BookingId, staffId, cancellationToken))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                $"Hãy nhận xử lý đơn #{conflict.BookingId} trước khi đổi xe cho khách này.";
+            return RedirectToAction("Details", "Staff", new { id = conflict.BookingId });
         }
 
         if (conflict.Handover is not null)
@@ -771,4 +782,3 @@ public sealed class StaffExtensionOperationsController : Controller
             ? addition
             : $"{current.Trim()} {addition}";
 }
-

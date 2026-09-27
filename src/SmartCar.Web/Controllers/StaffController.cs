@@ -21,6 +21,9 @@ public sealed class StaffController : Controller
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
 
+    private string CurrentStaffId() =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
     private readonly ApplicationDbContext _dbContext;
     private readonly IBookingService _bookingService;
     private readonly IAuditService _auditService;
@@ -182,6 +185,9 @@ public sealed class StaffController : Controller
         return View(new StaffBookingDetailsViewModel
         {
             Booking = booking,
+            HandlingClaim = await new StaffBookingClaimService(_dbContext)
+                .GetStateAsync(id, cancellationToken),
+            CurrentStaffId = CurrentStaffId(),
             StaffReviewedAt = records.StaffReviewedAt,
             ActualTurnaroundReadyAt = actualTurnaroundReadyAt,
             HandoverIdentityVerified = records.Handover?.CustomerIdentityVerified == true,
@@ -204,6 +210,57 @@ public sealed class StaffController : Controller
                 .Where(item => item.Status is PaymentStatus.AwaitingRefund or PaymentStatus.RefundApproved)
                 .Sum(item => item.Amount)
         });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ClaimBooking(int bookingId, CancellationToken cancellationToken)
+    {
+        var staffId = CurrentStaffId();
+        if (string.IsNullOrWhiteSpace(staffId)) return Challenge();
+
+        var booking = await _dbContext.Bookings.AsNoTracking()
+            .Where(item => item.BookingId == bookingId)
+            .Select(item => new { item.Status })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (booking is null) return NotFound();
+
+        var hasOpenRefund = await _dbContext.Payments.AsNoTracking().AnyAsync(
+            payment => payment.BookingId == bookingId && payment.Type == PaymentType.Refund &&
+                (payment.Status == PaymentStatus.AwaitingRefund ||
+                 payment.Status == PaymentStatus.RefundApproved), cancellationToken);
+        if (!BookingWorkflowRules.IsStaffWorkItem(booking.Status, hasOpenRefund))
+        {
+            TempData["ErrorMessage"] = "Đơn không còn công việc để nhân viên nhận xử lý.";
+            return RedirectToAction(nameof(Bookings));
+        }
+
+        var claimed = await new StaffBookingClaimService(_dbContext)
+            .TryClaimAsync(bookingId, staffId, cancellationToken);
+        if (claimed)
+        {
+            await WriteAuditAsync("StaffClaimBooking", nameof(Booking), bookingId,
+                $"Nhân viên nhận xử lý đơn #{bookingId} trong 30 phút.", cancellationToken);
+        }
+        TempData[claimed ? "SuccessMessage" : "ErrorMessage"] = claimed
+            ? "Bạn đang phụ trách đơn này. Lượt nhận được gia hạn khi bạn lưu thao tác."
+            : "Đơn đang được nhân viên khác xử lý. Hãy tải lại để xem người phụ trách.";
+        return RedirectToAction(nameof(Details), new { id = bookingId });
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReleaseBooking(int bookingId, CancellationToken cancellationToken)
+    {
+        var released = await new StaffBookingClaimService(_dbContext)
+            .TryReleaseAsync(bookingId, CurrentStaffId(), cancellationToken);
+        if (released)
+        {
+            await WriteAuditAsync("StaffReleaseBooking", nameof(Booking), bookingId,
+                $"Nhân viên bàn giao quyền xử lý đơn #{bookingId}.", cancellationToken);
+        }
+        TempData[released ? "SuccessMessage" : "ErrorMessage"] = released
+            ? "Đã bàn giao đơn. Nhân viên khác có thể nhận xử lý."
+            : "Bạn không còn phụ trách đơn này.";
+        return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
     [HttpPost, ValidateAntiForgeryToken]

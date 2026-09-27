@@ -169,6 +169,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.RefundReason).HasMaxLength(500);
             entity.Property(booking => booking.ReservationExpiresAt).HasColumnType("datetime2");
             entity.Property(booking => booking.StaffReviewedByStaffId).HasMaxLength(450);
+            entity.Property(booking => booking.HandlingStaffId).HasMaxLength(450);
+            entity.Property(booking => booking.HandlingLeaseExpiresAt).HasColumnType("datetime2");
             entity.Property(booking => booking.RowVersion).IsRowVersion();
             entity.HasIndex(booking => new
             {
