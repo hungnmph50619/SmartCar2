@@ -79,7 +79,7 @@ internal sealed class PolicyAwareIncidentService : IIncidentService
                 "Phải lưu đường dẫn ảnh/thông báo chính thức làm bằng chứng trước khi tạo khoản phải thu.");
         }
 
-        if (request.OccurredAt > DateTime.Now.AddMinutes(5))
+        if (request.OccurredAt > DateTime.Now)
         {
             return OperationResult.Failure(
                 "Thời điểm vi phạm không được ở tương lai.");
