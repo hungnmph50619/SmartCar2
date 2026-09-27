@@ -248,39 +248,39 @@
     }
 
     .notification-tone-policy .notification-icon {
-        color: #8a5200;
-        background: #fff0c2;
+        color: #b42318;
+        background: #fee4e2;
         border-radius: 12px;
-        box-shadow: inset 0 0 0 1px #f2cf78;
+        box-shadow: inset 0 0 0 1px #fda29b;
     }
 
     .notification-card-policy {
-        border-color: #f0c766;
-        border-left: 5px solid #e5a000;
+        border-color: #fda29b;
+        border-left: 5px solid #d92d20;
         background:
-            linear-gradient(135deg, #fffaf0 0%, #fffdf8 72%, #ffffff 100%);
-        box-shadow: 0 7px 22px rgba(168, 103, 0, .09);
+            linear-gradient(135deg, #fff5f4 0%, #fffafa 72%, #ffffff 100%);
+        box-shadow: 0 7px 22px rgba(185, 28, 28, .08);
     }
 
     .notification-card-policy.notification-card-unread {
-        border-color: #e7b844;
-        border-left-color: #d99000;
+        border-color: #f97066;
+        border-left-color: #d92d20;
         background:
-            linear-gradient(135deg, #fff7df 0%, #fffaf0 72%, #ffffff 100%);
-        box-shadow: 0 9px 26px rgba(168, 103, 0, .13);
+            linear-gradient(135deg, #ffeceb 0%, #fff6f5 72%, #ffffff 100%);
+        box-shadow: 0 9px 26px rgba(185, 28, 28, .12);
     }
 
     .notification-card-policy .notification-title {
-        color: #6f4500;
+        color: #9f1c12;
     }
 
     .notification-policy-summary {
         margin-top: .55rem;
         padding: .7rem .85rem;
-        border: 1px solid #f1d99d;
+        border: 1px solid #f9b4ae;
         border-radius: 11px;
-        background: rgba(255, 255, 255, .72);
-        color: #3f3a2f;
+        background: rgba(255, 255, 255, .8);
+        color: #40211f;
         font-weight: 750;
         line-height: 1.5;
     }
@@ -303,8 +303,8 @@
     }
 
     .notification-policy-effective {
-        color: #805000;
-        background: #fff0c9;
+        color: #b42318;
+        background: #fee4e2;
     }
 
     .notification-policy-protected {
@@ -403,9 +403,15 @@
     }
 
     .notification-status-policy {
-        color: #7a4a00;
-        background: #ffe7ad;
-        box-shadow: inset 0 0 0 1px #f1ca69;
+        color: #b42318;
+        background: #fee4e2;
+        box-shadow: inset 0 0 0 1px #fda29b;
+    }
+
+    .notification-status-critical {
+        color: #fff;
+        background: #d92d20;
+        box-shadow: inset 0 0 0 1px #b42318;
     }
 
     .notifications-empty {
@@ -788,6 +794,10 @@
 
                         @if (isPolicyUpdate)
                         {
+                            <span class="notification-status notification-status-critical">
+                                Quan trọng
+                            </span>
+
                             <span class="notification-status notification-status-policy">
                                 Chính sách mới
                             </span>
