@@ -12,7 +12,8 @@ internal static class VehicleStatusResolver
         Vehicle vehicle,
         int? excludedMaintenanceId = null,
         int? excludedIncidentId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        int? excludedBookingId = null)
     {
         if (vehicle.Status == VehicleStatus.Inactive)
         {
@@ -21,11 +22,22 @@ internal static class VehicleStatusResolver
 
         var hasActiveRental = await dbContext.Bookings.AnyAsync(booking =>
             booking.VehicleId == vehicle.VehicleId &&
+            (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
             booking.Status == BookingStatus.Rented,
             cancellationToken);
         if (hasActiveRental)
         {
             return VehicleStatus.Rented;
+        }
+
+        var hasPendingInspection = await dbContext.Bookings.AnyAsync(booking =>
+            booking.VehicleId == vehicle.VehicleId &&
+            (!excludedBookingId.HasValue || booking.BookingId != excludedBookingId.Value) &&
+            booking.Status == BookingStatus.PendingInspection,
+            cancellationToken);
+        if (hasPendingInspection)
+        {
+            return VehicleStatus.Inspection;
         }
 
         var hasOpenMaintenance = await dbContext.MaintenanceRecords.AnyAsync(record =>
