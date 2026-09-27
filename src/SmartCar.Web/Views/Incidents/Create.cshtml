@@ -27,7 +27,7 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Đơn liên quan</label>
-                    <input asp-for="BookingId" type="number" class="form-control" id="incident-booking-id" placeholder="#" />
+                    <input asp-for="BookingId" type="number" min="1" step="1" class="form-control" id="incident-booking-id" placeholder="#" />
                     <div class="form-text">Bắt buộc với phạt nguội.</div>
                     <span asp-validation-for="BookingId" class="text-danger small"></span>
                 </div>
@@ -74,17 +74,17 @@
 
                 <div class="col-md-4" id="estimated-cost-group">
                     <label class="form-label fw-semibold">Chi phí ước tính</label>
-                    <input asp-for="EstimatedCost" type="number" class="form-control" id="incident-estimated-cost" inputmode="numeric" />
+                    <input asp-for="EstimatedCost" type="number" min="0" step="1" class="form-control" id="incident-estimated-cost" inputmode="numeric" />
                     <span asp-validation-for="EstimatedCost" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4" id="fine-amount-group">
                     <label class="form-label fw-semibold">Tiền phạt chính thức</label>
-                    <input asp-for="FineAmount" type="number" class="form-control" id="incident-fine-amount" inputmode="numeric" />
+                    <input asp-for="FineAmount" type="number" min="0" step="1" class="form-control" id="incident-fine-amount" inputmode="numeric" />
                     <span asp-validation-for="FineAmount" class="text-danger small"></span>
                 </div>
                 <div class="col-md-4" id="liability-group">
                     <label class="form-label fw-semibold">Khách chịu</label>
-                    <input asp-for="CustomerLiabilityAmount" type="number" class="form-control" id="incident-liability-amount" inputmode="numeric" />
+                    <input asp-for="CustomerLiabilityAmount" type="number" min="0" step="1" class="form-control" id="incident-liability-amount" inputmode="numeric" />
                     <span asp-validation-for="CustomerLiabilityAmount" class="text-danger small"></span>
                     <div class="form-text d-none" id="liability-help">Không được lớn hơn tiền phạt chính thức.</div>
                 </div>
@@ -314,7 +314,6 @@
                 });
             });
 
-            type?.addEventListener('change', updateType);
             fine?.addEventListener('input', () => {
                 if (isTrafficFine() && Number(liability?.value || 0) === 0 && Number(fine.value || 0) > 0) {
                     liability.value = fine.value;
