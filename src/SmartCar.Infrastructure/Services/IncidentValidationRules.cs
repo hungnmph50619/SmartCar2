@@ -1,3 +1,4 @@
+using System.IO;
 using SmartCar.Application.Features.Incidents;
 using SmartCar.Domain.Enums;
 
@@ -155,7 +156,7 @@ internal static class IncidentValidationRules
             var looksLikeRelativePath =
                 normalized.StartsWith("/", StringComparison.Ordinal) ||
                 normalized.StartsWith("~/", StringComparison.Ordinal) ||
-                normalized.Contains('/', StringComparison.Ordinal) ||
+                normalized.Contains("/", StringComparison.Ordinal) ||
                 !string.IsNullOrWhiteSpace(Path.GetExtension(normalized));
 
             if (!looksLikeRelativePath)
