@@ -82,6 +82,99 @@
                 "xác minh giấy tờ",
                 StringComparison.Ordinal);
 
+    string FriendlyPolicyTitle(string title) =>
+        title switch
+        {
+            "Cập nhật chính sách Tiền cọc" =>
+                "Thay đổi quy định tiền cọc",
+            "Cập nhật chính sách Quãng đường" =>
+                "Thay đổi quy định quãng đường",
+            "Cập nhật chính sách Trả muộn" =>
+                "Thay đổi quy định trả xe muộn",
+            "Cập nhật chính sách Đặt xe & thanh toán" =>
+                "Thay đổi quy định đặt xe và thanh toán",
+            "Cập nhật chính sách Giao xe tận nơi" =>
+                "Thay đổi quy định giao xe tận nơi",
+            "Cập nhật chính sách Hủy đơn & hoàn tiền" =>
+                "Thay đổi quy định hủy đơn và hoàn tiền",
+            "Cập nhật chính sách Không đến nhận xe" =>
+                "Thay đổi quy định khi khách không đến nhận xe",
+            "Cập nhật chính sách Điều khoản biên bản" =>
+                "Thay đổi quy định trong biên bản",
+            _ => title.Replace(
+                "Cập nhật chính sách",
+                "Thay đổi quy định",
+                StringComparison.Ordinal)
+        };
+
+    string FriendlyPolicyLabel(string label) =>
+        label switch
+        {
+            "Tỷ lệ cọc" =>
+                "Tiền cọc tính theo tiền thuê",
+            "Giữ cọc" =>
+                "Thời gian giữ cọc sau khi trả xe",
+            "Định mức quãng đường" =>
+                "Số km được sử dụng mỗi ngày",
+            "Phí vượt km" =>
+                "Phí khi vượt số km quy định",
+            "Hệ số trả muộn" =>
+                "Mức phí trả xe muộn",
+            "Miễn phí trả muộn" =>
+                "Thời gian được miễn phí khi trả xe muộn",
+            "Km trong phí giao" =>
+                "Số km đã bao gồm trong phí giao xe",
+            "Phí giao cơ bản" =>
+                "Phí giao xe cơ bản",
+            "Phí mỗi km giao thêm" =>
+                "Phí cho mỗi km giao thêm",
+            "Phạm vi giao tối đa" =>
+                "Khoảng cách giao xe tối đa",
+            "Chờ duyệt đơn" =>
+                "Thời gian SmartCar chờ để xác nhận đơn",
+            "Chờ khách thanh toán" =>
+                "Thời gian khách được chờ để thanh toán",
+            "Kiểm tra chuyển khoản" =>
+                "Thời gian chờ SmartCar kiểm tra chuyển khoản",
+            "Đặt trước giờ nhận" =>
+                "Thời gian phải đặt xe trước giờ nhận",
+            "Xoay vòng giữa hai lượt thuê" =>
+                "Thời gian chuẩn bị xe giữa hai lượt thuê",
+            "Chờ khách đến nhận" =>
+                "Thời gian SmartCar chờ khách sau giờ nhận xe",
+            "Tỷ lệ giữ tiền thuê khi No-show" =>
+                "Phần tiền thuê bị giữ nếu khách không đến nhận xe",
+            "Cửa sổ hủy miễn phí" =>
+                "Thời gian được hủy miễn phí sau khi thanh toán",
+            "Còn tối thiểu để hoàn 100%" =>
+                "Thời gian tối thiểu còn lại để được hoàn 100%",
+            "Xử lý hoàn tiền sau hủy" =>
+                "Thời gian dự kiến xử lý hoàn tiền sau khi hủy",
+            "Mốc hủy 1" =>
+                "Mốc thời gian hủy 1",
+            "Hoàn ở mốc 1" =>
+                "Tỷ lệ hoàn tiền ở mốc 1",
+            "Mốc hủy 2" =>
+                "Mốc thời gian hủy 2",
+            "Hoàn ở mốc 2" =>
+                "Tỷ lệ hoàn tiền ở mốc 2",
+            "Mốc hủy 3" =>
+                "Mốc thời gian hủy 3",
+            "Hoàn ở mốc 3" =>
+                "Tỷ lệ hoàn tiền ở mốc 3",
+            "Mốc hủy 4" =>
+                "Mốc thời gian hủy 4",
+            "Hoàn ở mốc 4" =>
+                "Tỷ lệ hoàn tiền ở mốc 4",
+            "Hoàn dưới mốc cuối" =>
+                "Tỷ lệ hoàn tiền khi hủy sát giờ nhận",
+            "Điều khoản phạt nguội" =>
+                "Quy định về vi phạm giao thông / phạt nguội",
+            "Điều khoản hư hỏng / bồi thường" =>
+                "Quy định về hư hỏng / bồi thường",
+            _ => label
+        };
+
     var requestedAdminFilter =
         ViewBag.ActiveTab as string;
 
@@ -274,15 +367,72 @@
         color: #9f1c12;
     }
 
-    .notification-policy-summary {
+    .notification-policy-change-list {
+        display: grid;
+        gap: .65rem;
         margin-top: .55rem;
-        padding: .7rem .85rem;
+    }
+
+    .notification-policy-change {
+        padding: .75rem .85rem;
         border: 1px solid #f9b4ae;
         border-radius: 11px;
-        background: rgba(255, 255, 255, .8);
+        background: rgba(255, 255, 255, .82);
+    }
+
+    .notification-policy-change-label {
+        margin-bottom: .5rem;
         color: #40211f;
-        font-weight: 750;
-        line-height: 1.5;
+        font-weight: 800;
+        line-height: 1.4;
+    }
+
+    .notification-policy-value-row {
+        display: flex;
+        align-items: stretch;
+        gap: .55rem;
+    }
+
+    .notification-policy-value {
+        flex: 1 1 0;
+        display: grid;
+        gap: .12rem;
+        padding: .55rem .7rem;
+        border-radius: 9px;
+    }
+
+    .notification-policy-value span {
+        font-size: .76rem;
+        font-weight: 700;
+    }
+
+    .notification-policy-value strong {
+        font-size: .98rem;
+        line-height: 1.35;
+    }
+
+    .notification-policy-value-current {
+        color: #596579;
+        background: #f3f5f8;
+    }
+
+    .notification-policy-value-new {
+        color: #b42318;
+        background: #fee4e2;
+    }
+
+    .notification-policy-arrow {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 24px;
+        color: #b42318;
+        font-weight: 900;
+    }
+
+    .notification-policy-change-note {
+        color: #b42318;
+        font-weight: 700;
     }
 
     .notification-policy-details {
@@ -437,6 +587,15 @@
             flex-basis: 36px;
             width: 36px;
             height: 36px;
+        }
+
+        .notification-policy-value-row {
+            flex-direction: column;
+        }
+
+        .notification-policy-arrow {
+            min-height: 18px;
+            transform: rotate(90deg);
         }
     }
 </style>
@@ -594,11 +753,15 @@
                     "Cập nhật chính sách ",
                     StringComparison.OrdinalIgnoreCase);
 
-            string? policyChangeSummary = null;
+            var policyChanges =
+                new List<(string Label, string? CurrentValue, string? NewValue)>();
             string? policyAppliedAt = null;
 
             if (isPolicyUpdate)
             {
+                displayTitle =
+                    FriendlyPolicyTitle(rawDisplayTitle);
+
                 const string applyMarker =
                     ". Áp dụng cho đơn tạo từ ";
                 const string oldBookingMarker =
@@ -609,13 +772,15 @@
                         applyMarker,
                         StringComparison.Ordinal);
 
+                var changeSummary =
+                    applyIndex >= 0
+                        ? displayMessage[..applyIndex]
+                            .Trim()
+                            .TrimEnd('.')
+                        : displayMessage.Trim();
+
                 if (applyIndex >= 0)
                 {
-                    policyChangeSummary =
-                        displayMessage[..applyIndex]
-                            .Trim()
-                            .TrimEnd('.');
-
                     var afterApply =
                         displayMessage[
                             (applyIndex + applyMarker.Length)..];
@@ -632,10 +797,52 @@
                         .Trim()
                         .TrimEnd('.');
                 }
-                else
+
+                foreach (var changePart in changeSummary.Split(
+                             " · ",
+                             StringSplitOptions.RemoveEmptyEntries |
+                             StringSplitOptions.TrimEntries))
                 {
-                    policyChangeSummary =
-                        displayMessage;
+                    var colonIndex =
+                        changePart.IndexOf(
+                            ": ",
+                            StringComparison.Ordinal);
+                    var arrowIndex =
+                        changePart.IndexOf(
+                            " → ",
+                            StringComparison.Ordinal);
+
+                    if (colonIndex > 0 &&
+                        arrowIndex > colonIndex)
+                    {
+                        var rawLabel =
+                            changePart[..colonIndex].Trim();
+                        var currentValue =
+                            changePart[
+                                (colonIndex + 2)..arrowIndex]
+                            .Trim();
+                        var newValue =
+                            changePart[
+                                (arrowIndex + 3)..]
+                            .Trim();
+
+                        policyChanges.Add((
+                            FriendlyPolicyLabel(rawLabel),
+                            currentValue,
+                            newValue));
+                    }
+                    else
+                    {
+                        var rawLabel =
+                            colonIndex > 0
+                                ? changePart[..colonIndex].Trim()
+                                : changePart.Trim();
+
+                        policyChanges.Add((
+                            FriendlyPolicyLabel(rawLabel),
+                            null,
+                            null));
+                    }
                 }
             }
 
@@ -799,7 +1006,7 @@
                             </span>
 
                             <span class="notification-status notification-status-policy">
-                                Chính sách mới
+                                Quy định mới
                             </span>
                         }
 
@@ -839,20 +1046,52 @@
 
                     @if (isPolicyUpdate)
                     {
-                        <div class="notification-policy-summary">
-                            @(policyChangeSummary ?? displayMessage)
+                        <div class="notification-policy-change-list">
+                            @foreach (var change in policyChanges)
+                            {
+                                <div class="notification-policy-change">
+                                    <div class="notification-policy-change-label">
+                                        @change.Label
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(change.CurrentValue) &&
+                                         !string.IsNullOrWhiteSpace(change.NewValue))
+                                    {
+                                        <div class="notification-policy-value-row">
+                                            <div class="notification-policy-value notification-policy-value-current">
+                                                <span>Hiện tại</span>
+                                                <strong>@change.CurrentValue</strong>
+                                            </div>
+
+                                            <span class="notification-policy-arrow"
+                                                  aria-hidden="true">→</span>
+
+                                            <div class="notification-policy-value notification-policy-value-new">
+                                                <span>Thay đổi thành</span>
+                                                <strong>@change.NewValue</strong>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="notification-policy-change-note">
+                                            Nội dung quy định đã được cập nhật.
+                                        </div>
+                                    }
+                                </div>
+                            }
                         </div>
 
                         <div class="notification-policy-details">
                             @if (!string.IsNullOrWhiteSpace(policyAppliedAt))
                             {
                                 <span class="notification-policy-chip notification-policy-effective">
-                                    Áp dụng từ: @policyAppliedAt
+                                    Bắt đầu áp dụng: @policyAppliedAt
                                 </span>
                             }
 
                             <span class="notification-policy-chip notification-policy-protected">
-                                ✓ Đơn cũ giữ nguyên
+                                ✓ Đơn đã đặt trước thời điểm này không thay đổi
                             </span>
                         </div>
                     }
