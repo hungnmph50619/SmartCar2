@@ -552,7 +552,7 @@
                 latInput.value = normalizedLat.toFixed(7);
                 lngInput.value = normalizedLng.toFixed(7);
 
-                coordinateText.textContent = 'Đã chọn điểm giao trên bản đồ. Có thể kéo ghim để chỉnh vị trí.';
+                coordinateText.textContent = `Điểm giao: ${normalizedLat.toFixed(6)}, ${normalizedLng.toFixed(6)}. Có thể kéo ghim để chỉnh vị trí.`;
 
                 updatePriceByPoint(normalizedLat, normalizedLng);
 
@@ -761,9 +761,24 @@
                     async position => {
                         const lat = position.coords.latitude;
                         const lng = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
+
+                        // Geolocation trên máy tính thường suy ra từ Wi-Fi/IP và có thể
+                        // lệch hàng trăm mét. Không ghi điểm giao khi sai số quá lớn.
+                        if (!Number.isFinite(accuracy) || accuracy > 100) {
+                            if (map && !googleMap) map.setView([lat, lng], 15);
+                            if (map && googleMap) map.setCenter({ lat, lng });
+                            error.textContent = `Thiết bị chỉ ước lượng vị trí với sai số khoảng ${Math.round(accuracy) || 'không rõ'} m. ` +
+                                'Chưa chọn điểm giao; hãy bấm hoặc kéo ghim đến đúng địa chỉ trên bản đồ.';
+                            error.classList.remove('d-none');
+                            locationButton.disabled = false;
+                            locationButton.textContent = oldLocationText;
+                            return;
+                        }
 
                         // setPoint vừa đặt marker, vừa ghi hidden Latitude/Longitude.
                         setPoint(lat, lng);
+                        coordinateText.textContent += ` GPS báo sai số khoảng ${Math.round(accuracy)} m; hãy kiểm tra ghim trước khi đặt.`;
 
                         locationButton.textContent = 'Đang tìm địa chỉ...';
                         const filled = await reverseGeocode(lat, lng);

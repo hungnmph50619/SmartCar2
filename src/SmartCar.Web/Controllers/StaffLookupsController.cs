@@ -95,12 +95,11 @@ public sealed class StaffLookupsController : Controller
             });
         }
 
-        var vehicles = await _vehicleService.SearchAvailableAsync(
-            new VehicleSearchRequest(
-                pickupDate,
-                pickupDate.AddMinutes(1),
-                PickupMethod: VehiclePickupMethod.StorePickup),
-            cancellationToken);
+        // Tập ứng viên không được lọc theo phút nhận: xe đang ở chuyến trước
+        // sẽ biến mất thay vì hiện là không thể chọn cho khoảng thuê này.
+        IReadOnlyList<VehicleDto> vehicles = (await _vehicleService.GetAllAsync(cancellationToken))
+            .Where(vehicle => vehicle.Status is VehicleStatus.Available or VehicleStatus.Rented)
+            .ToList();
 
         var availableForRequestedRange = await _vehicleService.SearchAvailableAsync(
             new VehicleSearchRequest(
@@ -160,9 +159,6 @@ public sealed class StaffLookupsController : Controller
                     nextPickup = next?.PickupDate
                 };
             })
-            .Where(item => item.canBook ||
-                (item.latestReturn.HasValue && item.latestReturn.Value > pickupDate &&
-                 item.latestReturn.Value < returnDate))
             .OrderByDescending(item => item.canBook)
             .Take(MaximumVehicleResults)
             .Select(item => new
@@ -174,8 +170,10 @@ public sealed class StaffLookupsController : Controller
                       (item.latestReturn.HasValue
                           ? $" · Có đơn sau: nhận {item.nextPickup:dd/MM HH:mm}, trả muộn nhất {item.latestReturn:dd/MM HH:mm}"
                           : string.Empty)
-                    : $"{item.vehicle.LicensePlate} · Giờ trả muộn nhất {item.latestReturn:dd/MM HH:mm} " +
-                      $"để chuẩn bị cho đơn nhận {item.nextPickup:dd/MM HH:mm}",
+                    : item.latestReturn.HasValue
+                        ? $"{item.vehicle.LicensePlate} · Xe chưa trống trong khoảng này. " +
+                          $"Giờ trả muộn nhất {item.latestReturn:dd/MM HH:mm} để chuẩn bị cho đơn nhận {item.nextPickup:dd/MM HH:mm}"
+                        : $"{item.vehicle.LicensePlate} · Xe đang có lịch thuê hoặc chưa đủ điều kiện trong khoảng này",
                 image = item.vehicle.PrimaryImagePath,
                 canBook = item.canBook,
                 latestReturn = item.latestReturn?.ToString("yyyy-MM-ddTHH:mm")

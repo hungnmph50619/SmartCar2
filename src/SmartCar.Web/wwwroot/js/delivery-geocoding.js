@@ -20,7 +20,27 @@
         return result;
     };
 
-    const lookup = async (endpoint, directPath) => {
+    const photonLookup = async (path, reverse) => {
+        const response = await fetch(`https://photon.komoot.io/${path}`, {
+            headers: { 'Accept': 'application/json' },
+            referrerPolicy: 'origin'
+        });
+        if (!response.ok) throw new Error('Dịch vụ địa chỉ dự phòng không phản hồi.');
+        const data = await response.json();
+        const matches = (data.features || []).map(feature => {
+            const [lon, lat] = feature.geometry?.coordinates || [];
+            const properties = feature.properties || {};
+            const display_name = [properties.name, properties.street, properties.district,
+                properties.city, properties.state, properties.country]
+                .filter((part, index, parts) => part && parts.indexOf(part) === index)
+                .join(', ');
+            return { lat: String(lat), lon: String(lon), display_name };
+        }).filter(result => Number.isFinite(Number(result.lat)) &&
+            Number.isFinite(Number(result.lon)) && result.display_name);
+        return reverse ? (matches[0] || null) : matches;
+    };
+
+    const lookup = async (endpoint, directPath, photonPath, reverse = false) => {
         let serverError;
         try {
             const response = await fetch(`/api/geocoding/${endpoint}`, {
@@ -38,16 +58,23 @@
         try {
             return await directLookup(directPath);
         } catch {
-            throw new Error(`${serverError} Trình duyệt cũng không kết nối được dịch vụ địa chỉ.`);
+            try {
+                return await photonLookup(photonPath, reverse);
+            } catch {
+                throw new Error(`${serverError} Trình duyệt cũng không kết nối được dịch vụ địa chỉ.`);
+            }
         }
     };
 
     window.SmartCarDeliveryGeocoding = {
         search: query => lookup(
             `search?q=${encodeURIComponent(query)}`,
-            `search?format=jsonv2&limit=1&countrycodes=vn&q=${encodeURIComponent(query)}`),
+            `search?format=jsonv2&limit=1&countrycodes=vn&q=${encodeURIComponent(query)}`,
+            `api?limit=1&lang=vi&countrycode=VN&q=${encodeURIComponent(query)}`),
         reverse: (lat, lon) => lookup(
             `reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
-            `reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=vi&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`)
+            `reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=vi&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
+            `reverse?limit=1&lang=vi&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
+            true)
     };
 })();

@@ -35,7 +35,7 @@
         return `<div class="col-sm-6">
             <div class="staff-secure-doc-frame border rounded-3 bg-body p-2 h-100">
                 <div class="small text-muted mb-1">${label}</div>
-                <img src="${src}" alt="CCCD KYC ${label}" loading="lazy"
+                <img src="${src}" data-side="${side}" alt="CCCD KYC ${label}" loading="lazy"
                      class="img-fluid rounded-2 border bg-white w-100"
                      style="height:150px;object-fit:contain" />
                 <span class="small text-muted staff-secure-doc-empty d-none">Chưa có ảnh KYC khả dụng</span>
@@ -43,10 +43,19 @@
         </div>`;
     }
 
-    document.addEventListener('error', event => {
+    document.addEventListener('error', async event => {
         const img = event.target;
         if (!(img instanceof HTMLImageElement) || !img.closest('[data-kyc-citizen-reference]')) return;
         img.classList.add('d-none');
-        img.nextElementSibling?.classList.remove('d-none');
+        const message = img.nextElementSibling;
+        message?.classList.remove('d-none');
+        try {
+            const response = await fetch(`/StaffCounterIdentityEvidence/KycCitizenStatus?bookingId=${bookingIdFromImage(img)}&side=${img.dataset.side}`);
+            if (response.ok && message) message.textContent = (await response.json()).reason;
+        } catch { /* Giữ thông báo chung nếu không thể kiểm tra trạng thái. */ }
     }, true);
+
+    function bookingIdFromImage(img) {
+        return new URL(img.src).searchParams.get('bookingId');
+    }
 })();

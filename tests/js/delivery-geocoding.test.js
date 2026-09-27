@@ -66,3 +66,23 @@ test('both network paths failing reports which connections failed', async () => 
     await assert.rejects(geocoding.search('Hà Nội'),
         /Máy chủ không kết nối được Nominatim.*Trình duyệt cũng không kết nối/);
 });
+
+test('search uses an independent geocoder if Nominatim is unreachable from server and browser', async () => {
+    const geocoding = client(async url => {
+        if (url.startsWith('/api/')) return {
+            ok: false, status: 502,
+            json: async () => ({ message: 'Không thể kết nối dịch vụ bản đồ.' })
+        };
+        if (url.startsWith('https://nominatim.')) throw new TypeError('Network error');
+        if (url.startsWith('https://photon.komoot.io/api')) return {
+            ok: true,
+            json: async () => ({ features: [{ geometry: { coordinates: [105.8, 21.03] }, properties: { name: 'Hà Nội', countrycode: 'VN' } }] })
+        };
+        throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const results = await geocoding.search('Hà Nội');
+    assert.equal(results[0].lat, '21.03');
+    assert.equal(results[0].lon, '105.8');
+    assert.match(results[0].display_name, /Hà Nội/);
+});

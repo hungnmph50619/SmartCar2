@@ -44,7 +44,7 @@ jobs:
         run: dotnet test tests/SmartCar.Tests/SmartCar.Tests.csproj --configuration Release --no-build
 
       - name: Verify address lookup fallback
-        run: node --test tests/js/delivery-geocoding.test.js
+        run: node --test tests/js/*.test.js
 
       - name: Wait for SQL Server
         shell: bash

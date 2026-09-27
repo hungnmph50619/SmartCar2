@@ -154,7 +154,7 @@
                     <span class="staff-step-number">3</span>
                     <div>
                         <h3 class="h5 mb-0">Xe khả dụng</h3>
-                        <div class="small text-muted">Xe còn trống tự hiện theo khoảng thuê; nhập tên hoặc biển số để lọc.</div>
+                        <div class="small text-muted">Xe còn trống có thể chọn; xe đang bận vẫn hiển thị nhưng bị khóa. Nhập tên hoặc biển số để lọc.</div>
                     </div>
                 </div>
 
@@ -171,7 +171,7 @@
                            aria-controls="counter-vehicle-results" />
                     <div id="counter-vehicle-results" class="staff-vehicle-list d-none mt-3" role="listbox" aria-label="Xe theo lịch thuê"></div>
                     <div id="counter-vehicle-selected" class="staff-selected-result d-none mt-2"></div>
-                    <div id="counter-vehicle-status" class="form-text">Hệ thống sẽ kiểm tra lịch và chỉ trả xe còn nhận được đơn này.</div>
+                    <div id="counter-vehicle-status" class="form-text">Hệ thống kiểm tra lịch và đánh dấu xe chưa thể nhận đơn này.</div>
                     <span asp-validation-for="VehicleId" class="text-danger small"></span>
                 </div>
             </section>
@@ -271,7 +271,7 @@
                     button.className = 'staff-vehicle-card';
                     button.setAttribute('role', 'option');
                     button.setAttribute('aria-selected', String(String(item.value) === vehicleId.value));
-                    button.innerHTML = `<span class="fw-semibold">${escapeHtml(item.label)}</span><span class="small text-muted">${escapeHtml(item.detail)}</span><span class="badge ${item.canBook ? 'text-bg-success' : 'text-bg-secondary'}">${item.canBook ? 'Chọn xe này' : 'Cần đổi giờ trả'}</span>`;
+                    button.innerHTML = `<span class="fw-semibold">${escapeHtml(item.label)}</span><span class="small text-muted">${escapeHtml(item.detail)}</span><span class="badge ${item.canBook ? 'text-bg-success' : 'text-bg-secondary'}">${item.canBook ? 'Chọn xe này' : 'Chưa thể chọn'}</span>`;
                     if (!item.canBook) {
                         button.disabled = true;
                     } else {
