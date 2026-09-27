@@ -58,14 +58,11 @@ internal sealed class IncidentService : IIncidentService
         string adminId,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.Description))
+        var validationError =
+            IncidentValidationRules.ValidateCreate(request);
+        if (validationError is not null)
         {
-            return OperationResult.Failure("Vui lòng nhập mô tả sự cố.");
-        }
-
-        if (request.EstimatedCost < 0 || request.FineAmount < 0 || request.CustomerLiabilityAmount < 0)
-        {
-            return OperationResult.Failure("Các khoản tiền không được âm.");
+            return OperationResult.Failure(validationError);
         }
 
         if (request.IncidentType == IncidentType.TrafficFine && !request.BookingId.HasValue)
@@ -85,6 +82,8 @@ internal sealed class IncidentService : IIncidentService
         if (request.BookingId.HasValue)
         {
             relatedBooking = await _dbContext.Bookings
+                .Include(item => item.Handover)
+                .Include(item => item.VehicleReturn)
                 .FirstOrDefaultAsync(item =>
                     item.BookingId == request.BookingId.Value &&
                     item.VehicleId == request.VehicleId,
@@ -95,12 +94,45 @@ internal sealed class IncidentService : IIncidentService
                 return OperationResult.Failure("Đơn thuê không thuộc xe đã chọn.");
             }
 
-            if (request.IncidentType == IncidentType.TrafficFine &&
-                (request.OccurredAt < relatedBooking.PickupDate || request.OccurredAt > relatedBooking.ReturnDate))
+            if (relatedBooking.Handover is null)
             {
                 return OperationResult.Failure(
-                    "Thời điểm vi phạm không nằm trong thời gian của đơn thuê đã chọn. Hãy kiểm tra lại đơn hoặc thời điểm vi phạm.");
+                    "Đơn liên quan chưa có thời gian giao xe thực tế. Không thể gắn sự cố vào đơn này.");
             }
+
+            var actualStart = relatedBooking.Handover.HandoverAt;
+            var actualEnd = relatedBooking.VehicleReturn?.ReturnedAt ?? DateTime.Now.AddMinutes(5);
+
+            if (actualEnd < actualStart)
+            {
+                return OperationResult.Failure(
+                    "Dữ liệu giao/trả thực tế của đơn không hợp lệ. Vui lòng kiểm tra biên bản trước khi ghi nhận sự cố.");
+            }
+
+            if (request.OccurredAt < actualStart || request.OccurredAt > actualEnd)
+            {
+                return OperationResult.Failure(
+                    $"Thời điểm xảy ra {request.OccurredAt:dd/MM/yyyy HH:mm} không nằm trong khoảng khách thực tế giữ xe " +
+                    $"({actualStart:dd/MM/yyyy HH:mm} - {(relatedBooking.VehicleReturn is null ? "hiện tại" : actualEnd.ToString("dd/MM/yyyy HH:mm"))}).");
+            }
+        }
+
+        var normalizedDescription = request.Description.Trim();
+        var isDuplicate = await _dbContext.VehicleIncidents
+            .AsNoTracking()
+            .AnyAsync(item =>
+                item.VehicleId == request.VehicleId &&
+                item.BookingId == request.BookingId &&
+                item.IncidentType == request.IncidentType &&
+                item.OccurredAt == request.OccurredAt &&
+                item.Description == normalizedDescription &&
+                item.Status != IncidentStatus.Cancelled,
+                cancellationToken);
+
+        if (isDuplicate)
+        {
+            return OperationResult.Failure(
+                "Sự cố/vi phạm này đã được ghi nhận trước đó. Vui lòng kiểm tra danh sách để tránh tạo trùng.");
         }
 
         var customerHandlesTrafficFine = request.IncidentType == IncidentType.TrafficFine;
@@ -112,7 +144,7 @@ internal sealed class IncidentService : IIncidentService
             Status = IncidentStatus.Open,
             OccurredAt = request.OccurredAt,
             Location = Normalize(request.Location),
-            Description = request.Description.Trim(),
+            Description = normalizedDescription,
             EstimatedCost = customerHandlesTrafficFine ? 0m : request.EstimatedCost,
             FineAmount = customerHandlesTrafficFine ? 0m : request.FineAmount,
             CustomerLiabilityAmount = customerHandlesTrafficFine ? 0m : request.CustomerLiabilityAmount,
@@ -208,9 +240,11 @@ internal sealed class IncidentService : IIncidentService
         string adminId,
         CancellationToken cancellationToken = default)
     {
-        if (request.ActualCost < 0 || request.FineAmount < 0 || request.CustomerLiabilityAmount < 0)
+        var validationError =
+            IncidentValidationRules.ValidateResolve(request);
+        if (validationError is not null)
         {
-            return OperationResult.Failure("Các khoản tiền không được âm.");
+            return OperationResult.Failure(validationError);
         }
 
         var incident = await _dbContext.VehicleIncidents

@@ -48,15 +48,17 @@ internal sealed class PolicyAwareIncidentService : IIncidentService
             return await _inner.CreateAsync(request, adminId, cancellationToken);
         }
 
+        var validationError =
+            IncidentValidationRules.ValidateCreate(request);
+        if (validationError is not null)
+        {
+            return OperationResult.Failure(validationError);
+        }
+
         if (!request.BookingId.HasValue)
         {
             return OperationResult.Failure(
                 "Phạt nguội phải gắn với đúng đơn thuê để xác định người điều khiển.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Description))
-        {
-            return OperationResult.Failure("Vui lòng nhập nội dung thông báo vi phạm.");
         }
 
         if (request.FineAmount <= 0 || request.CustomerLiabilityAmount <= 0)
@@ -124,6 +126,24 @@ internal sealed class PolicyAwareIncidentService : IIncidentService
                 $"({actualStart:dd/MM/yyyy HH:mm} - {actualEnd:dd/MM/yyyy HH:mm}).");
         }
 
+        var normalizedDescription = request.Description.Trim();
+        var isDuplicate = await _dbContext.VehicleIncidents
+            .AsNoTracking()
+            .AnyAsync(item =>
+                item.VehicleId == request.VehicleId &&
+                item.BookingId == booking.BookingId &&
+                item.IncidentType == IncidentType.TrafficFine &&
+                item.OccurredAt == request.OccurredAt &&
+                item.Description == normalizedDescription &&
+                item.Status != IncidentStatus.Cancelled,
+                cancellationToken);
+
+        if (isDuplicate)
+        {
+            return OperationResult.Failure(
+                "Khoản phạt/vi phạm này đã được ghi nhận trước đó. Vui lòng kiểm tra danh sách để tránh tạo trùng khoản phải thu.");
+        }
+
         var incident = new VehicleIncident
         {
             VehicleId = request.VehicleId,
@@ -132,7 +152,7 @@ internal sealed class PolicyAwareIncidentService : IIncidentService
             Status = IncidentStatus.Open,
             OccurredAt = request.OccurredAt,
             Location = Normalize(request.Location),
-            Description = request.Description.Trim(),
+            Description = normalizedDescription,
             EstimatedCost = 0m,
             ActualCost = 0m,
             FineAmount = request.FineAmount,
@@ -206,6 +226,13 @@ internal sealed class PolicyAwareIncidentService : IIncidentService
         if (incidentType != IncidentType.TrafficFine)
         {
             return await _inner.ResolveAsync(request, adminId, cancellationToken);
+        }
+
+        var validationError =
+            IncidentValidationRules.ValidateResolve(request);
+        if (validationError is not null)
+        {
+            return OperationResult.Failure(validationError);
         }
 
         if (request.FineAmount <= 0 || request.CustomerLiabilityAmount <= 0)
