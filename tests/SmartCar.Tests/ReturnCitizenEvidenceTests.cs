@@ -103,6 +103,8 @@ public sealed class ReturnCitizenEvidenceTests
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         await using var db = await CreateDbAsync(connection);
+        await db.SaveChangesAsync();
+
         var booking = await db.Bookings.SingleAsync();
         booking.PickupDate = DateTime.Now.AddHours(-2);
         booking.ReturnDate = DateTime.Now.AddHours(4);
