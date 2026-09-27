@@ -33,7 +33,7 @@ internal static class IncidentValidationRules
             return "Vui lòng nhập thời điểm xảy ra.";
         }
 
-        if (request.OccurredAt > DateTime.Now.AddMinutes(5))
+        if (request.OccurredAt > DateTime.Now)
         {
             return "Thời điểm xảy ra không được ở tương lai.";
         }
