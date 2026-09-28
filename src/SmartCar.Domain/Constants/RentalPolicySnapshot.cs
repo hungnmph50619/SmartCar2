@@ -49,13 +49,6 @@ public sealed class RentalPolicySnapshot : IValidatableObject
     [Range(0, 1440, ErrorMessage = "Cửa sổ hủy miễn phí phải từ 0 đến 1.440 phút.")]
     public int FreeCancellationWindowMinutes { get; set; } = 60;
 
-    [Range(0, 336, ErrorMessage = "Điều kiện thời gian còn lại phải từ 0 đến 336 giờ.")]
-    public int MinimumHoursForFreeCancellation { get; set; } = 24;
-
-    // Tương thích booking cũ: JSON cũ không có field này => true.
-    // Policy hiện hành cho đơn mới được BusinessPolicyStore chuyển thành false.
-    public bool FreeCancellationRequiresMinimumLead { get; set; } = true;
-
     [Range(1, 168, ErrorMessage = "Thời gian xử lý hoàn tiền sau hủy phải từ 1 đến 168 giờ.")]
     public int CancellationRefundProcessingHours { get; set; } = 24;
 
