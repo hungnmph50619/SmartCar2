@@ -593,7 +593,6 @@
                 // Hidden input luôn dùng dấu chấm theo chuẩn JavaScript.
                 // BookingsController sẽ parse bằng InvariantCulture.
                 locationRevision++;
-                clearAccuracyCircle();
                 address.value = '';
                 searchHelp.textContent = '';
                 latInput.value = normalizedLat.toFixed(7);
