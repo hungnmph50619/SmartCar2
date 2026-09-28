@@ -20,6 +20,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ISecureDocumentStorage, SecureDocumentStorage>();
 builder.Services.AddScoped<IUserBankAccountService, UserBankAccountService>();
+builder.Services.AddScoped<StaffBookingClaimService>();
+builder.Services.AddScoped<StaffBookingClaimFilter>();
 builder.Services.AddHostedService<BookingReservationCleanupService>();
 builder.Services.AddScoped<KycAdminNotificationConsolidationFilter>();
 builder.Services.AddScoped<AdminWorkNotificationFilter>();
@@ -31,6 +33,7 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.AddService<KycAdminNotificationConsolidationFilter>();
     options.Filters.AddService<AdminWorkNotificationFilter>();
     options.Filters.AddService<AdminKycFaceDecisionFilter>();
+    options.Filters.AddService<StaffBookingClaimFilter>();
 });
 
 var app = builder.Build();
