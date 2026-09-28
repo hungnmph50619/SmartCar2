@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     polishSignedDocumentUi();
     initializeForceMajeureEvidenceUi();
     normalizeSavedForceMajeureEvidence();
+    initializeExistingLocationMaps();
 });
 
 function localizeSignedFileValidationMessages() {
@@ -550,22 +551,18 @@ function renderLocationPreview(button, latitude, longitude, placeName) {
     preview.classList.remove('d-none');
     preview.innerHTML = '';
 
-    const delta = 0.004;
-    const bbox = [longitude - delta, latitude - delta, longitude + delta, latitude + delta].join(',');
-    const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(`${latitude},${longitude}`)}`;
-
     const info = document.createElement('div');
     info.className = 'small border rounded bg-white p-2 mb-2';
     info.innerHTML = `<strong>Vị trí hiện tại:</strong> ${latitude.toFixed(6)}, ${longitude.toFixed(6)}${placeName ? `<br><strong>Địa điểm:</strong> ${escapeHtml(placeName)}` : ''}`;
 
-    const iframe = document.createElement('iframe');
-    iframe.title = 'Bản đồ vị trí hiện tại';
-    iframe.src = mapUrl;
-    iframe.className = 'w-100 rounded border';
-    iframe.style.height = '150px';
-    iframe.loading = 'lazy';
+    const map = document.createElement('div');
+    map.className = 'smart-location-map w-100 rounded border';
+    map.style.height = '230px';
+    map.setAttribute('role', 'region');
+    map.setAttribute('aria-label', 'Bản đồ vị trí hiện tại');
 
-    preview.append(info, iframe);
+    preview.append(info, map);
+    initializeSmartLocationMap(map, latitude, longitude);
 }
 
 function normalizeSavedForceMajeureEvidence() {
@@ -653,19 +650,103 @@ function buildSavedEvidenceGrid(paths) {
 }
 
 function renderSavedLocationMap(block, latitude, longitude, placeName) {
-    const delta = 0.004;
-    const bbox = [longitude - delta, latitude - delta, longitude + delta, latitude + delta].join(',');
-    const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(`${latitude},${longitude}`)}`;
+    if (block.querySelector('.smart-location-map')) return;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'mt-2';
-    wrapper.innerHTML = `
-        <div class="small border rounded bg-light p-2 mb-2">
-            <strong>Tọa độ:</strong> ${latitude.toFixed(6)}, ${longitude.toFixed(6)}${placeName ? `<br><strong>Địa điểm:</strong> ${escapeHtml(placeName)}` : ''}
-        </div>
-        <iframe title="Bản đồ vị trí minh chứng" class="w-100 rounded border" style="height:150px" loading="lazy" src="${mapUrl}"></iframe>`;
 
+    const info = document.createElement('div');
+    info.className = 'small border rounded bg-light p-2 mb-2';
+    info.innerHTML = `<strong>Tọa độ:</strong> ${latitude.toFixed(6)}, ${longitude.toFixed(6)}${placeName ? `<br><strong>Địa điểm:</strong> ${escapeHtml(placeName)}` : ''}`;
+
+    const map = document.createElement('div');
+    map.className = 'smart-location-map w-100 rounded border';
+    map.style.height = '230px';
+    map.setAttribute('role', 'region');
+    map.setAttribute('aria-label', 'Bản đồ vị trí minh chứng');
+
+    wrapper.append(info, map);
     block.appendChild(wrapper);
+    initializeSmartLocationMap(map, latitude, longitude);
+}
+
+function initializeExistingLocationMaps() {
+    document.querySelectorAll('.smart-location-map[data-lat][data-lng]').forEach(element => {
+        const latitude = Number(element.dataset.lat);
+        const longitude = Number(element.dataset.lng);
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+            initializeSmartLocationMap(element, latitude, longitude);
+        }
+    });
+}
+
+let smartLeafletPromise;
+
+function loadSmartLeaflet() {
+    if (window.L && typeof window.L.map === 'function') return Promise.resolve(window.L);
+    if (smartLeafletPromise) return smartLeafletPromise;
+
+    const cssUrl = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    const scriptUrl = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    if (!document.querySelector('link[data-smart-leaflet]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = cssUrl;
+        link.dataset.smartLeaflet = 'true';
+        document.head.appendChild(link);
+    }
+
+    smartLeafletPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = scriptUrl;
+        script.async = true;
+        script.dataset.smartLeaflet = 'true';
+        script.addEventListener('load', () => {
+            if (window.L && typeof window.L.map === 'function') resolve(window.L);
+            else reject(new Error('Leaflet did not initialize'));
+        }, { once: true });
+        script.addEventListener('error', () => reject(new Error('Leaflet failed to load')), { once: true });
+        document.head.appendChild(script);
+    });
+    return smartLeafletPromise;
+}
+
+function addLocationMapFallback(mapElement, latitude, longitude) {
+    if (!mapElement.isConnected || mapElement.dataset.smartMapFallbackReady === 'true') return;
+    mapElement.dataset.smartMapFallbackReady = 'true';
+
+    const fallback = document.createElement('div');
+    fallback.className = 'small text-muted mt-1';
+    fallback.append('Bản đồ chưa tải được. ');
+    const link = document.createElement('a');
+    link.href = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(latitude)}&mlon=${encodeURIComponent(longitude)}#map=16/${encodeURIComponent(latitude)}/${encodeURIComponent(longitude)}`;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'Mở vị trí trong OpenStreetMap';
+    fallback.appendChild(link);
+    mapElement.insertAdjacentElement('afterend', fallback);
+}
+
+function initializeSmartLocationMap(mapElement, latitude, longitude) {
+    if (!(mapElement instanceof HTMLElement) || mapElement.dataset.smartMapState) return;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    mapElement.dataset.smartMapState = 'loading';
+
+    loadSmartLeaflet().then(L => {
+        if (!mapElement.isConnected) return;
+        const map = L.map(mapElement, { scrollWheelZoom: false }).setView([latitude, longitude], 16);
+        const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+        L.marker([latitude, longitude]).addTo(map);
+        tiles.on('tileerror', () => addLocationMapFallback(mapElement, latitude, longitude));
+        mapElement.dataset.smartMapState = 'ready';
+        window.setTimeout(() => map.invalidateSize(), 100);
+    }).catch(() => {
+        mapElement.dataset.smartMapState = 'failed';
+        addLocationMapFallback(mapElement, latitude, longitude);
+    });
 }
 
 function escapeHtml(value) {
