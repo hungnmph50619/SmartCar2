@@ -59,6 +59,14 @@ public sealed class GeocodingController : ControllerBase
             _logger.LogWarning(exception, "Nominatim address search is unreachable; trying Photon.");
         }
 
+        var arcGisJson = await TryGetArcGisJsonAsync(
+            client,
+            BuildArcGisSearchUrl(query, nearLat, nearLon),
+            reverse: false,
+            cancellationToken);
+        if (arcGisJson is not null)
+            return Content(arcGisJson, "application/json");
+
         var photonJson = await TryGetPhotonJsonAsync(
             client,
             BuildPhotonSearchUrl(query, nearLat, nearLon),
@@ -116,6 +124,14 @@ public sealed class GeocodingController : ControllerBase
             _logger.LogWarning(exception, "Nominatim reverse geocoding is unreachable; trying Photon.");
         }
 
+        var arcGisJson = await TryGetArcGisJsonAsync(
+            client,
+            BuildArcGisReverseUrl(latText, lonText),
+            reverse: true,
+            cancellationToken);
+        if (arcGisJson is not null)
+            return Content(arcGisJson, "application/json");
+
         var photonJson = await TryGetPhotonJsonAsync(
             client,
             BuildPhotonReverseUrl(latText, lonText),
@@ -157,6 +173,28 @@ public sealed class GeocodingController : ControllerBase
         return $"{url}&viewbox={Uri.EscapeDataString(viewbox)}";
     }
 
+    private static string BuildArcGisSearchUrl(string query, double? nearLat, double? nearLon)
+    {
+        var url =
+            "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates" +
+            "?f=json&forStorage=false&outSR=4326&countryCode=VNM&maxLocations=8" +
+            "&outFields=Match_addr%2CLongLabel" +
+            $"&SingleLine={Uri.EscapeDataString(query)}";
+
+        if (IsValidPoint(nearLat, nearLon))
+        {
+            var lat = nearLat!.Value.ToString("0.#####", CultureInfo.InvariantCulture);
+            var lon = nearLon!.Value.ToString("0.#####", CultureInfo.InvariantCulture);
+            url += $"&location={Uri.EscapeDataString($"{lon},{lat}")}&distance=50000";
+        }
+
+        return url;
+    }
+
+    private static string BuildArcGisReverseUrl(string lat, string lon) =>
+        "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode" +
+        $"?f=json&outSR=4326&langCode=vi&location={Uri.EscapeDataString($"{lon},{lat}")}";
+
     private static string BuildPhotonSearchUrl(string query, double? nearLat, double? nearLon)
     {
         var url = "https://photon.komoot.io/api?limit=8&lang=vi&countrycode=VN";
@@ -172,6 +210,136 @@ public sealed class GeocodingController : ControllerBase
 
     private static string BuildPhotonReverseUrl(string lat, string lon) =>
         $"https://photon.komoot.io/reverse?limit=1&radius=0.1&lang=vi&lat={lat}&lon={lon}";
+
+    private async Task<string?> TryGetArcGisJsonAsync(
+        HttpClient client,
+        string url,
+        bool reverse,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await client.GetAsync(url, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "ArcGIS geocoding returned HTTP {StatusCode} for {ReverseLookup} lookup.",
+                    (int)response.StatusCode,
+                    reverse ? "reverse" : "search");
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            return NormalizeArcGisResponse(json, reverse);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(
+                "ArcGIS geocoding timed out for {ReverseLookup} lookup.",
+                reverse ? "reverse" : "search");
+            return null;
+        }
+        catch (HttpRequestException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "ArcGIS geocoding is unreachable for {ReverseLookup} lookup.",
+                reverse ? "reverse" : "search");
+            return null;
+        }
+        catch (JsonException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "ArcGIS returned invalid JSON for {ReverseLookup} lookup.",
+                reverse ? "reverse" : "search");
+            return null;
+        }
+    }
+
+    private static string? NormalizeArcGisResponse(string json, bool reverse)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        if (root.ValueKind != JsonValueKind.Object ||
+            root.TryGetProperty("error", out _))
+            return null;
+
+        if (reverse)
+        {
+            if (!root.TryGetProperty("address", out var address) ||
+                address.ValueKind != JsonValueKind.Object)
+                return null;
+
+            var displayName =
+                ReadString(address, "LongLabel") ??
+                ReadString(address, "Match_addr") ??
+                ReadString(address, "Address");
+            if (string.IsNullOrWhiteSpace(displayName))
+                return null;
+
+            double? lat = null;
+            double? lon = null;
+            if (root.TryGetProperty("location", out var location) &&
+                location.ValueKind == JsonValueKind.Object)
+            {
+                if (location.TryGetProperty("y", out var y) && y.TryGetDouble(out var parsedLat))
+                    lat = parsedLat;
+                if (location.TryGetProperty("x", out var x) && x.TryGetDouble(out var parsedLon))
+                    lon = parsedLon;
+            }
+
+            return JsonSerializer.Serialize(new
+            {
+                lat = lat?.ToString("0.#######", CultureInfo.InvariantCulture),
+                lon = lon?.ToString("0.#######", CultureInfo.InvariantCulture),
+                display_name = displayName,
+                countrycode = "VN"
+            });
+        }
+
+        if (!root.TryGetProperty("candidates", out var candidates) ||
+            candidates.ValueKind != JsonValueKind.Array)
+            return null;
+
+        var places = new List<object>();
+        foreach (var candidate in candidates.EnumerateArray())
+        {
+            if (candidate.ValueKind != JsonValueKind.Object ||
+                !candidate.TryGetProperty("location", out var location) ||
+                location.ValueKind != JsonValueKind.Object ||
+                !location.TryGetProperty("x", out var x) ||
+                !location.TryGetProperty("y", out var y) ||
+                !x.TryGetDouble(out var lon) ||
+                !y.TryGetDouble(out var lat) ||
+                !double.IsFinite(lat) || !double.IsFinite(lon))
+                continue;
+
+            var displayName = ReadString(candidate, "address");
+            if (string.IsNullOrWhiteSpace(displayName) &&
+                candidate.TryGetProperty("attributes", out var attributes) &&
+                attributes.ValueKind == JsonValueKind.Object)
+            {
+                displayName =
+                    ReadString(attributes, "Match_addr") ??
+                    ReadString(attributes, "LongLabel");
+            }
+
+            if (string.IsNullOrWhiteSpace(displayName))
+                continue;
+
+            places.Add(new
+            {
+                lat = lat.ToString("0.#######", CultureInfo.InvariantCulture),
+                lon = lon.ToString("0.#######", CultureInfo.InvariantCulture),
+                display_name = displayName,
+                countrycode = "VN"
+            });
+        }
+
+        return places.Count == 0 ? null : JsonSerializer.Serialize(places);
+    }
 
     private async Task<string?> TryGetPhotonJsonAsync(
         HttpClient client,
