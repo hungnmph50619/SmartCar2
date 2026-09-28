@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Domain.Enums;
+using SmartCar.Web.Services;
 
 namespace SmartCar.Web.ViewModels;
 
@@ -17,6 +18,8 @@ public sealed class StaffDashboardViewModel
 public sealed class StaffBookingDetailsViewModel
 {
     public BookingDetailsDto Booking { get; init; } = null!;
+    public StaffBookingClaimState? HandlingClaim { get; init; }
+    public string CurrentStaffId { get; init; } = string.Empty;
     public DateTime? StaffReviewedAt { get; init; }
     public bool HandoverIdentityVerified { get; init; }
     public string? HandoverIdentityVerifiedBy { get; init; }
