@@ -67,7 +67,7 @@ public sealed class GeocodingControllerTests
 
             if (request.RequestUri!.Host == "nominatim.openstreetmap.org")
                 return Task.FromResult(JsonResponse(
-                    "{"error":"Unable to geocode"}",
+                    """{"error":"Unable to geocode"}""",
                     HttpStatusCode.NotFound));
 
             if (request.RequestUri.Host == "geocode.arcgis.com")
