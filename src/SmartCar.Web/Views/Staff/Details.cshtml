@@ -6,6 +6,10 @@
 @{
     ViewData["Title"] = $"Xử lý đơn #{Model.Booking.BookingId}";
     var b = Model.Booking;
+    var handlingClaim = Model.HandlingClaim;
+    var handlingByMe = handlingClaim?.IsActive == true &&
+        handlingClaim.StaffId == Model.CurrentStaffId;
+    var handlingByOther = handlingClaim?.IsActive == true && !handlingByMe;
     var canInspect = b.Status == BookingStatus.PendingInspection
         && Model.HandoverIdentityVerified
         && Model.HandoverSignedDocumentVerified
@@ -83,6 +87,47 @@
             </div>
         </div>
     </section>
+
+    <div class="alert @(handlingByOther ? "alert-warning" : "alert-info") d-flex align-items-center justify-content-between gap-3 flex-wrap">
+        <div>
+            @if (handlingByOther)
+            {
+                <strong>Đang do @(handlingClaim?.StaffName ?? "nhân viên khác") xử lý.</strong>
+                <span> Bạn có thể xem hồ sơ nhưng chưa được lưu thao tác vào đơn này.</span>
+            }
+            else if (handlingByMe)
+            {
+                <strong>Bạn đang phụ trách đơn.</strong>
+                <span> Quyền xử lý còn khoảng @Math.Max(1, (int)Math.Ceiling((handlingClaim!.ExpiresAt!.Value - DateTime.UtcNow).TotalMinutes)) phút và sẽ tự gia hạn khi bạn lưu thao tác.</span>
+            }
+            else
+            {
+                <strong>Chưa có nhân viên phụ trách.</strong>
+                <span> Hãy nhận xử lý trước khi giao/trả xe, thu tiền hoặc ghi phụ phí.</span>
+            }
+        </div>
+
+        @if (handlingByMe)
+        {
+            <form asp-action="ReleaseBooking"
+                  method="post"
+                  data-confirm="Bàn giao đơn cho nhân viên khác? Chỉ bấm khi bạn đã dừng xử lý.">
+                <input type="hidden" name="bookingId" value="@b.BookingId" />
+                <button class="btn btn-outline-secondary" type="submit">
+                    Bàn giao đơn
+                </button>
+            </form>
+        }
+        else if (!handlingByOther && b.Status != BookingStatus.Completed)
+        {
+            <form asp-action="ClaimBooking" method="post">
+                <input type="hidden" name="bookingId" value="@b.BookingId" />
+                <button class="btn btn-primary" type="submit">
+                    Nhận xử lý
+                </button>
+            </form>
+        }
+    </div>
 
     <div class="row g-3 mb-4">
         <div class="col-lg-7">
