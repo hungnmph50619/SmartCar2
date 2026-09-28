@@ -4,6 +4,7 @@
 @using SmartCar.Domain.Enums
 @using System.Globalization
 @inject SmartCar.Infrastructure.Persistence.ApplicationDbContext PolicyDb
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
     var policy = await SmartCar.Infrastructure.Services.BusinessPolicyStore.ReadAsync(PolicyDb, Context.RequestAborted);
     ViewData["Title"] = Model.VehicleName;
@@ -44,11 +45,9 @@
     var licenseExpiryDate = ViewBag.LicenseExpiryDate is DateTime licenseExpiry ? licenseExpiry : (DateTime?)null;
     var allDocumentsApproved = citizenApproved && licenseApproved;
     var hasBankAccount = ViewBag.HasBankAccount is bool hasBank && hasBank;
+    var googleMapsApiKey = Configuration["GoogleMaps:BrowserApiKey"];
 }
-<link rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin="" />
+<link rel="stylesheet" href="~/lib/leaflet/leaflet.css" asp-append-version="true" />
 
 <style>
     #delivery-map {
@@ -278,6 +277,13 @@
                                             Tìm trên bản đồ
                                         </button>
                                     </div>
+                                    <div id="delivery-search-results"
+                                         class="list-group d-none mb-2"
+                                         role="group"
+                                         aria-label="Chọn địa chỉ tìm thấy"></div>
+                                    <div id="delivery-search-help"
+                                         class="small text-muted mb-2"
+                                         aria-live="polite"></div>
 
                                     <input type="hidden"
                                            id="deliveryLatitude"
@@ -291,7 +297,7 @@
                                         align-items-center gap-2 mb-2 flex-wrap">
 
                                         <small class="text-muted" id="delivery-map-help">
-                                            Tìm địa chỉ hoặc bấm lên bản đồ để chọn chính xác điểm giao. Hệ thống cần tọa độ để tính phí theo khoảng cách.
+                                            Nhập số nhà và tên đường rồi chọn đúng quận/huyện trong kết quả. Vị trí GPS có thể có sai số; hãy kiểm tra ghim trước khi đặt.
                                         </small>
 
                                         <button type="button"
@@ -304,12 +310,12 @@
                                     <div id="delivery-map"
                                          aria-label="Bản đồ chọn vị trí giao xe">
                                     </div>
-
-                                    <div class="small text-muted mt-2" id="delivery-coordinate-text"></div>
+                                    <div class="small text-muted mt-2" id="delivery-coordinate-text" aria-live="polite"></div>
                                     <div class="small text-danger mt-2 d-none"
                                          id="delivery-location-error"></div>
                                 </div>
 
+                                <p class="small text-muted">Thanh toán sau khi Staff kiểm tra và Admin duyệt đơn: khách chuyển khoản/QR hoặc trả tiền mặt tại quầy. Chưa thu tiền ở bước gửi yêu cầu.</p>
                                 <button class="btn btn-primary btn-lg w-100"
                                         type="submit"
                                         data-loading-text="Đang gửi yêu cầu...">
@@ -398,9 +404,12 @@
     }
 </div>
 @section Scripts {
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-            crossorigin=""></script>
+    @if (!string.IsNullOrWhiteSpace(googleMapsApiKey))
+    {
+        <script src="https://maps.googleapis.com/maps/api/js?key=@Uri.EscapeDataString(googleMapsApiKey)"></script>
+    }
+    <script src="~/lib/leaflet/leaflet.js" asp-append-version="true"></script>
+    <script src="~/js/delivery-geocoding.js" asp-append-version="true"></script>
 
     <script>
         (() => {
@@ -416,6 +425,8 @@
             const error = document.getElementById('delivery-location-error');
             const locationButton = document.getElementById('use-current-location');
             const findAddressButton = document.getElementById('find-delivery-address');
+            const searchResults = document.getElementById('delivery-search-results');
+            const searchHelp = document.getElementById('delivery-search-help');
             const coordinateText = document.getElementById('delivery-coordinate-text');
             const mapHelp = document.getElementById('delivery-map-help');
             const deliveryFeeRow = document.getElementById('delivery-fee-row');
@@ -433,11 +444,23 @@
 
             const money = value =>
                 new Intl.NumberFormat('vi-VN').format(value) + ' đ';
+            const formatMeters = value =>
+                new Intl.NumberFormat('vi-VN').format(Math.round(value));
 
             let map = null;
             let marker = null;
+            let accuracyCircle = null;
             let storeMarker = null;
+            let googleMap = false;
             let currentDeliveryFee = 0;
+            let locationRevision = 0;
+            const preciseAddressAccuracyMeters = 25;
+            address.addEventListener('input', () => {
+                locationRevision++;
+                searchResults.replaceChildren();
+                searchResults.classList.add('d-none');
+                searchHelp.textContent = '';
+            });
 
             const toRadians = degrees => degrees * Math.PI / 180;
 
@@ -487,7 +510,7 @@
                         `Điểm giao cách cửa hàng khoảng ${distanceKm.toFixed(1)} km, ` +
                         `vượt phạm vi tối đa ${maxDeliveryKm.toFixed(0)} km.`;
                     error.classList.remove('d-none');
-                    return;
+                    return false;
                 }
 
                 currentDeliveryFee = calculateDeliveryFee(distanceKm);
@@ -498,36 +521,116 @@
                 error.classList.add('d-none');
             };
 
-            // Từ tọa độ GPS/map -> tự điền địa chỉ gần nhất.
-            // Nominatim reverse geocoding trả về một object có display_name.
+            // Reverse geocoding is optional: GPS coordinates still identify the
+            // delivery point when external address services are unreachable.
+            const showReverseFailure = () => {
+                if (address.value.trim()) return;
+
+                const latitude = latInput.value;
+                const longitude = lngInput.value;
+                if (latitude && longitude) {
+                    address.value = `Điểm GPS (${latitude}, ${longitude})`;
+                    error.textContent =
+                        'Đã giữ điểm GPS giao xe. Chưa lấy được tên đường; nhân viên có thể mở đúng vị trí trên bản đồ. ' +
+                        'Nhập thêm số nhà hoặc hướng dẫn giao nếu cần.';
+                } else {
+                    error.textContent =
+                        'Chưa tra được tên địa chỉ. Hãy nhập địa chỉ giao xe hoặc chọn lại vị trí.';
+                }
+                error.classList.remove('d-none');
+            };
             const reverseGeocode = async (lat, lng) => {
+                const revision = locationRevision;
                 try {
-                    const url =
-                        'https://nominatim.openstreetmap.org/reverse' +
-                        '?format=jsonv2&addressdetails=1' +
-                        '&lat=' + encodeURIComponent(lat) +
-                        '&lon=' + encodeURIComponent(lng);
-
-                    const response = await fetch(url, {
-                        headers: {
-                            'Accept': 'application/json'
-                        }
-                    });
-
-                    if (!response.ok) {
-                        throw new Error('reverse-geocode');
-                    }
-
-                    const result = await response.json();
-                    if (result && result.display_name) {
-                        address.value = result.display_name;
+                    const place = googleMap
+                        ? (await new google.maps.Geocoder().geocode({ location: { lat, lng } })).results?.[0]?.formatted_address
+                        : (await window.SmartCarDeliveryGeocoding.reverse(lat, lng))?.display_name;
+                    if (revision !== locationRevision) return true;
+                    if (place) {
+                        address.value = place;
+                        searchHelp.textContent = 'Tên địa chỉ là gợi ý từ bản đồ. Kiểm tra ghim và thêm số nhà nếu cần.';
+                        updatePriceByPoint(lat, lng);
                         return true;
                     }
+                    throw new Error('Không có tên địa chỉ tại điểm này.');
                 } catch (ex) {
+                    if (revision !== locationRevision) return true;
                     console.warn('Không reverse geocode được địa chỉ:', ex);
                 }
 
                 return false;
+            };
+
+            const clearAccuracyCircle = () => {
+                if (!accuracyCircle) return;
+                if (googleMap) accuracyCircle.setMap(null);
+                else accuracyCircle.remove?.();
+                accuracyCircle = null;
+            };
+
+            const clearSelectedPoint = () => {
+                latInput.value = '';
+                lngInput.value = '';
+                currentDeliveryFee = 0;
+                deliveryFeeLabel.textContent = 'Phí giao xe tận nơi';
+                deliveryFeeAmount.textContent = 'Chọn điểm giao';
+                upfrontAmount.textContent = money(baseAmount);
+                coordinateText.textContent = 'Chưa chọn điểm giao.';
+
+                if (marker) {
+                    if (googleMap) marker.setMap(null);
+                    else marker.remove?.();
+                    marker = null;
+                }
+                clearAccuracyCircle();
+            };
+
+            const setApproximatePoint = (lat, lng, accuracy) => {
+                clearSelectedPoint();
+                const zoom = accuracy >= 3000 ? 11 : accuracy >= 1000 ? 12 : 14;
+                const title = `Vị trí gần đúng, sai số khoảng ${formatMeters(accuracy)} m. Kéo ghim để xác nhận điểm giao.`;
+
+                if (googleMap) {
+                    map.setCenter({ lat, lng });
+                    map.setZoom(zoom);
+                    marker = new google.maps.Marker({
+                        map, position: { lat, lng }, draggable: true, title
+                    });
+                    marker.addListener('dragend', async event => {
+                        const point = event.latLng;
+                        setPoint(point.lat(), point.lng(), map.getZoom());
+                        if (!await reverseGeocode(point.lat(), point.lng())) showReverseFailure();
+                    });
+                    accuracyCircle = new google.maps.Circle({
+                        map,
+                        center: { lat, lng },
+                        radius: accuracy,
+                        strokeColor: '#d97706',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 1,
+                        fillColor: '#f59e0b',
+                        fillOpacity: 0.12,
+                        clickable: false
+                    });
+                } else if (map) {
+                    map.setView([lat, lng], zoom);
+                    marker = L.marker([lat, lng], { draggable: true, title }).addTo(map);
+                    marker.on('dragend', async event => {
+                        const point = event.target.getLatLng();
+                        setPoint(point.lat, point.lng, map.getZoom());
+                        if (!await reverseGeocode(point.lat, point.lng)) showReverseFailure();
+                    });
+                    accuracyCircle = L.circle([lat, lng], {
+                        radius: accuracy,
+                        color: '#d97706',
+                        fillColor: '#f59e0b',
+                        fillOpacity: 0.12,
+                        interactive: false
+                    }).addTo(map);
+                }
+
+                coordinateText.textContent =
+                    `Vị trí gần đúng: ${lat.toFixed(6)}, ${lng.toFixed(6)} (sai số khoảng ${formatMeters(accuracy)} m). Kéo ghim để xác nhận.`;
             };
 
             const setPoint = (lat, lng, zoom = 16) => {
@@ -544,20 +647,40 @@
                     error.textContent =
                         'Tọa độ được chọn không hợp lệ. Vui lòng chọn lại điểm giao xe.';
                     error.classList.remove('d-none');
-                    return;
+                    return false;
                 }
 
                 // Hidden input luôn dùng dấu chấm theo chuẩn JavaScript.
                 // BookingsController sẽ parse bằng InvariantCulture.
+                locationRevision++;
+                clearAccuracyCircle();
+                address.value = '';
+                searchHelp.textContent = '';
                 latInput.value = normalizedLat.toFixed(7);
                 lngInput.value = normalizedLng.toFixed(7);
 
-                coordinateText.textContent =
-                    `Điểm giao: ${latInput.value}, ${lngInput.value}`;
+                coordinateText.textContent = `Điểm giao: ${normalizedLat.toFixed(6)}, ${normalizedLng.toFixed(6)}. Có thể kéo ghim để chỉnh vị trí.`;
 
                 updatePriceByPoint(normalizedLat, normalizedLng);
 
-                if (!map || typeof L === 'undefined') return;
+                if (!map) return true;
+
+                if (googleMap) {
+                    if (marker) marker.setPosition({ lat: normalizedLat, lng: normalizedLng });
+                    else {
+                        marker = new google.maps.Marker({
+                            map, position: { lat: normalizedLat, lng: normalizedLng }, draggable: true
+                        });
+                        marker.addListener('dragend', async event => {
+                            const point = event.latLng;
+                            setPoint(point.lat(), point.lng(), map.getZoom());
+                            if (!await reverseGeocode(point.lat(), point.lng())) showReverseFailure();
+                        });
+                    }
+                    map.setCenter({ lat: normalizedLat, lng: normalizedLng });
+                    map.setZoom(zoom);
+                    return true;
+                }
 
                 if (marker) {
                     marker.setLatLng([normalizedLat, normalizedLng]);
@@ -578,33 +701,110 @@
                             point.lng,
                             map.getZoom());
 
-                        await reverseGeocode(
-                            point.lat,
-                            point.lng);
+                        if (!await reverseGeocode(point.lat, point.lng)) showReverseFailure();
                     });
 
                 map.setView(
                     [normalizedLat, normalizedLng],
                     zoom);
+                return true;
+            };
+
+            const clearPointBeforeAddressSearch = () => {
+                clearSelectedPoint();
+
+                if (map && googleMap) {
+                    map.setCenter({ lat: storeLat, lng: storeLng });
+                    map.setZoom(13);
+                } else if (map) {
+                    map.setView([storeLat, storeLng], 13);
+                }
             };
 
             const initMap = () => {
+                if (window.google?.maps?.Map) {
+                    googleMap = true;
+                    map = new google.maps.Map(document.getElementById('delivery-map'), {
+                        center: { lat: storeLat, lng: storeLng }, zoom: 13
+                    });
+                    storeMarker = new google.maps.Marker({
+                        map, position: { lat: storeLat, lng: storeLng }, title: 'Điểm xuất phát SmartCar'
+                    });
+                    map.addListener('click', async event => {
+                        const point = event.latLng;
+                        setPoint(point.lat(), point.lng());
+                        if (!await reverseGeocode(point.lat(), point.lng())) showReverseFailure();
+                    });
+                    return;
+                }
                 if (typeof L === 'undefined') {
-                    document.getElementById('delivery-map')
-                        .classList.add('d-none');
+                    const mapElement = document.getElementById('delivery-map');
+                    mapElement.classList.remove('d-none');
+                    mapElement.replaceChildren();
+
+                    const fallbackFrame = document.createElement('iframe');
+                    fallbackFrame.title = 'Bản đồ dự phòng SmartCar';
+                    fallbackFrame.src =
+                        `https://www.google.com/maps?q=${encodeURIComponent(storeLat + ',' + storeLng)}&z=13&output=embed`;
+                    fallbackFrame.loading = 'lazy';
+                    fallbackFrame.referrerPolicy = 'no-referrer-when-downgrade';
+                    fallbackFrame.style.width = '100%';
+                    fallbackFrame.style.height = '100%';
+                    fallbackFrame.style.minHeight = '320px';
+                    fallbackFrame.style.border = '0';
+                    fallbackFrame.style.borderRadius = 'inherit';
+                    mapElement.appendChild(fallbackFrame);
+
                     mapHelp.textContent =
-                        'Bản đồ không tải được nên chưa thể tính phí giao theo khoảng cách. Hãy tải lại trang và thử lại.';
+                        'Đang dùng bản đồ dự phòng. Có thể dùng GPS để lấy tọa độ chính xác và tính phí giao xe.';
                     return;
                 }
 
                 map = L.map('delivery-map')
                     .setView([storeLat, storeLng], 13);
 
+                let tileLoaded = false;
+                let tileErrors = 0;
+                let fallbackStarted = false;
+                const mapElement = document.getElementById('delivery-map');
+
+                const markMapReady = () => {
+                    tileLoaded = true;
+                    mapElement.classList.remove('d-none');
+                    mapHelp.textContent = 'Bấm trên bản đồ để chọn điểm giao hoặc dùng GPS.';
+                };
+
+                const startFallbackTiles = () => {
+                    if (fallbackStarted || tileLoaded) return;
+                    fallbackStarted = true;
+                    mapHelp.textContent = 'OpenStreetMap không phản hồi, đang chuyển sang nền bản đồ dự phòng...';
+
+                    L.tileLayer(
+                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                        {
+                            maxZoom: 19,
+                            attribution: 'Tiles &copy; Esri'
+                        })
+                        .on('tileload', markMapReady)
+                        .on('tileerror', () => {
+                            // Không ẩn khung bản đồ: marker/tọa độ vẫn phải dùng được
+                            // và người dùng vẫn có thể dùng GPS để tính phí.
+                            mapElement.classList.remove('d-none');
+                            mapHelp.textContent =
+                                'Không tải được ảnh nền bản đồ. Vẫn có thể dùng GPS/chọn tọa độ đã có để tính phí và nhập địa chỉ thủ công.';
+                        })
+                        .addTo(map);
+                };
+
                 L.tileLayer(
                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     {
                         maxZoom: 19,
                         attribution: '&copy; OpenStreetMap contributors'
+                    })
+                    .on('tileload', markMapReady)
+                    .on('tileerror', () => {
+                        if (++tileErrors >= 2 && !tileLoaded) startFallbackTiles();
                     })
                     .addTo(map);
 
@@ -614,7 +814,7 @@
 
                 map.on('click', async event => {
                     setPoint(event.latlng.lat, event.latlng.lng);
-                    await reverseGeocode(event.latlng.lat, event.latlng.lng);
+                    if (!await reverseGeocode(event.latlng.lat, event.latlng.lng)) showReverseFailure();
                 });
             };
 
@@ -638,7 +838,7 @@
                     upfrontAmount.textContent = money(baseAmount);
                 }
 
-                if (isDelivery && map) {
+                if (isDelivery && map && !googleMap) {
                     setTimeout(() => map.invalidateSize(), 80);
                 }
             };
@@ -672,32 +872,69 @@
                     return;
                 }
 
+                const revision = ++locationRevision;
                 locationButton.disabled = true;
                 const oldLocationText = locationButton.textContent;
                 locationButton.textContent = 'Đang lấy vị trí...';
 
                 navigator.geolocation.getCurrentPosition(
                     async position => {
+                        if (revision !== locationRevision) {
+                            locationButton.disabled = false;
+                            locationButton.textContent = oldLocationText;
+                            return;
+                        }
                         const lat = position.coords.latitude;
                         const lng = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
+
+                        // Trình duyệt trên máy tính có thể chỉ suy ra vị trí từ mạng/IP.
+                        // Hiện ghim ước lượng để người dùng chỉnh, nhưng không dùng điểm
+                        // này tính phí cho đến khi ghim được kéo hoặc bản đồ được bấm.
+                        if (!Number.isFinite(accuracy) || accuracy > 100) {
+                            if (Number.isFinite(accuracy) &&
+                                Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+                                Number.isFinite(lng) && lng >= -180 && lng <= 180) {
+                                setApproximatePoint(lat, lng, accuracy);
+                            }
+                            const accuracyLabel = Number.isFinite(accuracy)
+                                ? `${formatMeters(accuracy)} m`
+                                : 'không rõ';
+                            error.textContent = `Thiết bị chỉ ước lượng vị trí với sai số khoảng ${accuracyLabel}. ` +
+                                'Ghim và vùng màu cam chỉ để tham khảo; kéo ghim đến đúng địa chỉ hoặc bấm trực tiếp lên bản đồ. Chưa chọn điểm giao để tính phí.';
+                            error.classList.remove('d-none');
+                            locationButton.disabled = false;
+                            locationButton.textContent = oldLocationText;
+                            return;
+                        }
 
                         // setPoint vừa đặt marker, vừa ghi hidden Latitude/Longitude.
                         setPoint(lat, lng);
+                        coordinateText.textContent += ` GPS báo sai số khoảng ${Math.round(accuracy)} m; hãy kiểm tra ghim trước khi đặt.`;
 
-                        locationButton.textContent = 'Đang tìm địa chỉ...';
-                        const filled = await reverseGeocode(lat, lng);
-
-                        if (!filled) {
-                            error.textContent =
-                                'Đã lấy được tọa độ nhưng chưa tìm được tên địa chỉ. ' +
-                                'Bạn có thể nhập/chỉnh địa chỉ thủ công; tọa độ vẫn được giữ để tính phí.';
-                            error.classList.remove('d-none');
+                        if (accuracy > preciseAddressAccuracyMeters) {
+                            address.value = `Điểm GPS (${latInput.value}, ${lngInput.value})`;
+                            if (calculateDistanceKm(lat, lng) <= maxDeliveryKm) {
+                                error.textContent =
+                                    `Sai số GPS khoảng ${Math.round(accuracy)} m nên tên đường có thể không chính xác. ` +
+                                    'Đã giữ điểm gần đúng; hãy kéo ghim hoặc tìm địa chỉ để chỉnh lại.';
+                                error.classList.remove('d-none');
+                            }
+                        } else {
+                            locationButton.textContent = 'Đang tìm địa chỉ...';
+                            const filled = await reverseGeocode(lat, lng);
+                            if (!filled) showReverseFailure();
                         }
 
                         locationButton.disabled = false;
                         locationButton.textContent = oldLocationText;
                     },
                     geolocationError => {
+                        if (revision !== locationRevision) {
+                            locationButton.disabled = false;
+                            locationButton.textContent = oldLocationText;
+                            return;
+                        }
                         switch (geolocationError.code) {
                             case geolocationError.PERMISSION_DENIED:
                                 error.textContent =
@@ -737,52 +974,79 @@
             findAddressButton.addEventListener('click', async () => {
                 const query = address.value.trim();
 
-                if (!query) {
+                if (query.length < 3) {
                     address.focus();
-                    error.textContent = 'Vui lòng nhập địa chỉ cần tìm.';
+                    error.textContent = 'Nhập ít nhất 3 ký tự địa chỉ cần tìm.';
                     error.classList.remove('d-none');
                     return;
                 }
 
+                const revision = ++locationRevision;
+                const focus = {
+                    lat: Number(latInput.value || storeLat),
+                    lon: Number(lngInput.value || storeLng)
+                };
+                clearPointBeforeAddressSearch();
+                searchResults.replaceChildren();
+                searchResults.classList.add('d-none');
+                searchHelp.textContent = '';
+                error.classList.add('d-none');
                 findAddressButton.disabled = true;
                 const oldText = findAddressButton.textContent;
                 findAddressButton.textContent = 'Đang tìm...';
 
                 try {
-                    const url =
-                        'https://nominatim.openstreetmap.org/search' +
-                        '?format=jsonv2&limit=1&countrycodes=vn&q=' +
-                        encodeURIComponent(query);
+                    const results = googleMap
+                        ? (await new google.maps.Geocoder().geocode({ address: query, componentRestrictions: { country: 'VN' } })).results.map(item => ({
+                            lat: item.geometry.location.lat(),
+                            lon: item.geometry.location.lng(),
+                            display_name: item.formatted_address
+                        }))
+                        : await window.SmartCarDeliveryGeocoding.search(query, focus);
+                    if (revision !== locationRevision) return;
+                    if (!Array.isArray(results)) throw new Error('Dữ liệu địa chỉ chưa hợp lệ.');
 
-                    const response = await fetch(url, {
-                        headers: {
-                            'Accept': 'application/json'
-                        }
-                    });
+                    const candidates = results.filter(item =>
+                        Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon)) &&
+                        Math.abs(Number(item.lat)) <= 90 && Math.abs(Number(item.lon)) <= 180 &&
+                        typeof item.display_name === 'string' && item.display_name.trim())
+                        .slice(0, 8);
 
-                    if (!response.ok) {
-                        throw new Error('geocode');
-                    }
-
-                    const results = await response.json();
-
-                    if (!results.length) {
+                    if (!candidates.length) {
                         error.textContent =
-                            'Không tìm thấy địa chỉ. Hãy nhập rõ số nhà, đường, phường/xã, quận/huyện.';
+                            'Chưa thấy địa chỉ phù hợp. Hãy nhập thêm số nhà, tên đường và quận/huyện, hoặc chọn ghim trên bản đồ.';
                         error.classList.remove('d-none');
                         return;
                     }
 
-                    setPoint(
-                        Number(results[0].lat),
-                        Number(results[0].lon));
+                    const selectCandidate = candidate => {
+                        if (revision !== locationRevision) return;
+                        if (!setPoint(Number(candidate.lat), Number(candidate.lon))) return;
+                        address.value = candidate.display_name;
+                        searchResults.replaceChildren();
+                        searchResults.classList.add('d-none');
+                        searchHelp.textContent = 'Đã chọn vị trí. Kiểm tra ghim và địa chỉ trước khi gửi yêu cầu.';
+                    };
 
-                    if (results[0].display_name) {
-                        address.value = results[0].display_name;
+                    if (candidates.length === 1) {
+                        selectCandidate(candidates[0]);
+                    } else {
+                        candidates.forEach(candidate => {
+                            const choice = document.createElement('button');
+                            choice.type = 'button';
+                            choice.className = 'list-group-item list-group-item-action text-start text-break';
+                            choice.textContent = candidate.display_name;
+                            choice.addEventListener('click', () => selectCandidate(candidate));
+                            searchResults.append(choice);
+                        });
+                        searchResults.classList.remove('d-none');
+                        searchHelp.textContent = 'Có nhiều địa chỉ gần giống. Chọn đúng số nhà và quận/huyện để đặt ghim.';
                     }
-                } catch {
+                } catch (ex) {
+                    if (revision !== locationRevision) return;
                     error.textContent =
-                        'Không thể tìm địa chỉ trên bản đồ lúc này. Hãy thử lại hoặc bấm trực tiếp lên bản đồ.';
+                        (ex instanceof Error ? ex.message : 'Không thể tìm địa chỉ lúc này.') +
+                        ' Bạn có thể bấm trực tiếp lên bản đồ hoặc dùng GPS để chọn điểm giao.';
                     error.classList.remove('d-none');
                 } finally {
                     findAddressButton.disabled = false;
