@@ -2,8 +2,6 @@
 @using SmartCar.Domain.Constants
 @{
     ViewData["Title"] = "Chỉnh sửa thông tin biên bản giao xe";
-    var handoverDate = Model.HandoverAt.ToString("yyyy-MM-dd");
-    var handoverTime = Model.HandoverAt.ToString("HH:mm");
     var currentImages = Model.ExistingImagePaths ?? new List<string>();
     const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 }
@@ -16,11 +14,14 @@
 </div>
 <form asp-controller="HandoverEdits" asp-action="Edit" method="post" enctype="multipart/form-data" class="card card-body shadow-sm" data-loading-form>
     <input asp-for="BookingId" type="hidden" />
-    <input asp-for="HandoverAt" type="hidden" id="handover-at-value" />
     <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
     <h2 class="h5 mb-3">Thông tin giao xe</h2>
     <div class="row g-3">
-        <div class="col-md-6"><label class="form-label fw-semibold">Thời gian giao</label><div class="row g-2"><div class="col-7"><input type="date" id="handover-date" value="@handoverDate" class="form-control" required /></div><div class="col-5"><input type="text" id="handover-time" value="@handoverTime" class="form-control" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" required /></div></div><span asp-validation-for="HandoverAt" class="text-danger small"></span></div>
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Thời gian giao thực tế</label>
+            <div class="form-control bg-light">@Model.HandoverAt.ToString("dd/MM/yyyy HH:mm")</div>
+            <div class="form-text">Do server ghi khi lập biên bản; không được sửa để bảo đảm khớp bản in/ký và lịch sử chuyến.</div>
+        </div>
         <div class="col-md-3"><label asp-for="Mileage" class="form-label fw-semibold">Số km</label><input asp-for="Mileage" type="number" min="0" step="1" class="form-control" required /><span asp-validation-for="Mileage" class="text-danger small"></span></div>
         <div class="col-md-3"><label asp-for="FuelLevel" class="form-label fw-semibold">Nhiên liệu</label><div class="input-group"><input asp-for="FuelLevel" type="text" inputmode="numeric" maxlength="3" pattern="(?:100|[0-9]{1,2})" class="form-control" id="fuel-level" required /><span class="input-group-text">%</span></div><span asp-validation-for="FuelLevel" class="text-danger small"></span></div>
         <div class="col-12"><label asp-for="Accessories" class="form-label fw-semibold">Phụ kiện</label><input asp-for="Accessories" class="form-control" maxlength="1000" /></div>
@@ -75,7 +76,8 @@
             </div>
             <span id="new-handover-image-count" class="badge text-bg-secondary">Chưa chọn ảnh</span>
         </div>
-        <input asp-for="NewImages" id="new-handover-images" type="file" class="form-control" multiple accept="@imageAccept" />
+        <input asp-for="NewImages" id="new-handover-images" type="file" class="form-control" multiple accept="@imageAccept"
+               data-file-draft-key="handover-edit-@Model.BookingId-new-images" />
         <div class="form-text">Chỉ chấp nhận ảnh JPG, PNG hoặc WEBP. Ảnh mới sẽ được thêm vào cuối danh sách ảnh đối chiếu.</div>
         <div id="new-handover-image-preview" class="d-flex flex-wrap gap-2 mt-3"></div>
     </div>
@@ -88,9 +90,6 @@
 <script>
 (() => {
  const form=document.querySelector('form');
- const hidden=document.getElementById('handover-at-value');
- const date=document.getElementById('handover-date');
- const time=document.getElementById('handover-time');
  const fuel=document.getElementById('fuel-level');
  const imageInput=document.getElementById('new-handover-images');
  const imagePreview=document.getElementById('new-handover-image-preview');
@@ -104,7 +103,6 @@
  const allowedImageTypes=['image/jpeg','image/png','image/webp'];
  let previewUrls=[];
  let selectedImageFiles=Array.from(imageInput?.files || []);
- function sync(){ if(!date.value||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time.value)) return false; hidden.value=`${date.value}T${time.value}`; return true; }
  function selectedDeleteCount(){ return document.querySelectorAll('.delete-image-check:checked').length; }
  function updateDeleteSummary(){ const count=selectedDeleteCount(); if(!deleteSummary||!deleteSummaryText) return; if(count>0){ deleteSummary.classList.remove('d-none'); deleteSummaryText.textContent=`Đã chọn xóa ${count} ảnh. Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và xem lại biên bản”.`; return;} deleteSummary.classList.add('d-none'); deleteSummaryText.textContent='Ảnh chỉ bị xóa khỏi biên bản sau khi bấm “Lưu và xem lại biên bản”.'; }
  function setImageValidationMessage(message,showInline){ if(!imageValidation) return; if(showInline&&message){imageValidation.textContent=message; imageValidation.classList.remove('field-validation-valid'); imageValidation.classList.add('field-validation-error'); return;} if(!message){imageValidation.textContent=''; imageValidation.classList.remove('field-validation-error'); imageValidation.classList.add('field-validation-valid');} }
@@ -113,17 +111,14 @@
  function clearPreviewUrls(){ previewUrls.forEach(url=>URL.revokeObjectURL(url)); previewUrls=[]; }
  function syncImageInputFiles(){ if(!imageInput) return; const transfer=new DataTransfer(); selectedImageFiles.forEach(file=>transfer.items.add(file)); imageInput.files=transfer.files; }
  function removeNewImage(index){ selectedImageFiles.splice(index,1); syncImageInputFiles(); renderImagePreview(); validateNewImages(true); }
- function renderImagePreview(){ if(!imageInput||!imagePreview||!imageCount) return; clearPreviewUrls(); imagePreview.innerHTML=''; imageCount.textContent=selectedImageFiles.length>0?`Đã chọn ${selectedImageFiles.length} ảnh mới`:'Chưa chọn ảnh'; imageCount.className=`badge ${selectedImageFiles.length>0?'text-bg-success':'text-bg-secondary'}`; selectedImageFiles.forEach((file,index)=>{ const url=URL.createObjectURL(file); previewUrls.push(url); const wrapper=document.createElement('div'); wrapper.className='border rounded bg-white p-1 position-relative'; wrapper.style.width='116px'; const removeButton=document.createElement('button'); removeButton.type='button'; removeButton.className='btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center'; removeButton.style.width='24px'; removeButton.style.height='24px'; removeButton.style.padding='0'; removeButton.style.top='-7px'; removeButton.style.right='-7px'; removeButton.style.zIndex='2'; removeButton.style.lineHeight='1'; removeButton.innerHTML='&times;'; removeButton.title='Xóa ảnh này'; removeButton.setAttribute('aria-label',`Xóa ảnh mới ${index+1}`); removeButton.addEventListener('click',()=>removeNewImage(index)); const image=document.createElement('img'); image.src=url; image.alt=file.name; image.className='rounded border bg-light'; image.style.width='106px'; image.style.height='82px'; image.style.objectFit='cover'; const caption=document.createElement('div'); caption.className='small text-muted text-truncate mt-1'; caption.title=file.name; caption.textContent=file.name; wrapper.append(removeButton,image,caption); imagePreview.appendChild(wrapper); }); }
+ function renderImagePreview(){ if(!imageInput||!imagePreview||!imageCount) return; clearPreviewUrls(); imagePreview.innerHTML=''; imageCount.textContent=selectedImageFiles.length>0?`Đã chọn ${selectedImageFiles.length} ảnh mới`:'Chưa chọn ảnh'; imageCount.className=`badge ${selectedImageFiles.length>0?'text-bg-success':'text-bg-secondary'}`; selectedImageFiles.forEach((file,index)=>{ const url=URL.createObjectURL(file); previewUrls.push(url); const wrapper=document.createElement('div'); wrapper.className='border rounded bg-white p-1 position-relative'; wrapper.style.width='116px'; const removeButton=document.createElement('button'); removeButton.type='button'; removeButton.className='btn btn-danger btn-sm rounded-circle position-absolute d-flex align-items-center justify-content-center'; removeButton.style.width='24px'; removeButton.style.height='24px'; removeButton.style.padding='0'; removeButton.style.top='-7px'; removeButton.style.right='-7px'; removeButton.style.zIndex='2'; removeButton.style.lineHeight='1'; removeButton.innerHTML='&times;'; removeButton.title='Xóa ảnh này'; removeButton.setAttribute('aria-label',`Xóa ảnh mới ${index+1}`); removeButton.addEventListener('click',()=>removeNewImage(index)); const image=document.createElement('img'); image.src=url; image.alt=file.name; image.className='rounded border bg-light'; image.style.width='106px'; image.style.height='82px'; image.style.objectFit='contain'; const caption=document.createElement('div'); caption.className='small text-muted text-truncate mt-1'; caption.title=file.name; caption.textContent=file.name; wrapper.append(removeButton,image,caption); imagePreview.appendChild(wrapper); }); }
  document.querySelectorAll('.mark-delete-image').forEach(button=>{ button.addEventListener('click',()=>{ const card=button.closest('.existing-image-card'); const box=card?.querySelector('.existing-image-box'); const check=card?.querySelector('.delete-image-check'); const note=card?.querySelector('.delete-image-note'); const img=card?.querySelector('.existing-image-thumb'); const link=card?.querySelector('.existing-image-link'); const title=card?.querySelector('.image-title'); if(check) check.checked=true; if(note) note.classList.remove('d-none'); if(box){ box.classList.remove('bg-light'); box.classList.add('border-danger','bg-danger-subtle','shadow-sm'); } if(img){img.classList.add('opacity-50'); img.style.filter='grayscale(1)';} if(link) link.classList.add('pe-none'); if(title){title.textContent='Đã chọn xóa ảnh này'; title.classList.remove('text-muted'); title.classList.add('text-danger','fw-semibold');} button.classList.add('d-none'); updateDeleteSummary(); validateNewImages(true); }); });
  document.querySelectorAll('.undo-delete-image').forEach(button=>{ button.addEventListener('click',()=>{ const card=button.closest('.existing-image-card'); const box=card?.querySelector('.existing-image-box'); const check=card?.querySelector('.delete-image-check'); const note=card?.querySelector('.delete-image-note'); const img=card?.querySelector('.existing-image-thumb'); const link=card?.querySelector('.existing-image-link'); const title=card?.querySelector('.image-title'); const deleteButton=card?.querySelector('.mark-delete-image'); if(check) check.checked=false; if(note) note.classList.add('d-none'); if(box){ box.classList.add('bg-light'); box.classList.remove('border-danger','bg-danger-subtle','shadow-sm'); } if(img){img.classList.remove('opacity-50'); img.style.filter='';} if(link) link.classList.remove('pe-none'); if(title){ const index=Array.from(document.querySelectorAll('.existing-image-card')).indexOf(card); title.textContent=`Ảnh ${index+1}`; title.classList.add('text-muted'); title.classList.remove('text-danger','fw-semibold');} if(deleteButton) deleteButton.classList.remove('d-none'); updateDeleteSummary(); validateNewImages(true); }); });
  fuel.addEventListener('input',()=>{ fuel.value=fuel.value.replace(/[^0-9]/g,'').slice(0,3); if(Number(fuel.value)>100) fuel.value='100'; });
  imageInput?.addEventListener('change',()=>{ selectedImageFiles=Array.from(imageInput.files || []); renderImagePreview(); validateNewImages(true); });
- form.addEventListener('submit',e=>{ let valid=true; if(!sync()){ time.setCustomValidity('Giờ phải theo định dạng HH:mm, ví dụ 14:30.'); time.reportValidity(); valid=false; } if(!validateNewImages(true)){ imageInput?.reportValidity(); valid=false; } if(!valid) e.preventDefault(); });
- date.addEventListener('change',sync);
- time.addEventListener('input',()=>{time.setCustomValidity('');sync();});
+ form.addEventListener('submit',e=>{ if(!validateNewImages(true)){ imageInput?.reportValidity(); e.preventDefault(); } });
  renderImagePreview();
  updateDeleteSummary();
- sync();
 })();
 </script>
 }

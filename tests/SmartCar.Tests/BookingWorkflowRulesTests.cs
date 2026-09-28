@@ -1,4 +1,5 @@
 using SmartCar.Application.Features.Operations;
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 using Xunit;
 
@@ -69,7 +70,7 @@ public sealed class BookingWorkflowRulesTests
     [InlineData(BookingStatus.ReadyForPickup)]
     public void CanCancelBeforeHandover_AllowsPreHandoverStatuses(BookingStatus status)
     {
-        Assert.True(BookingWorkflowRules.CanCancelBeforeHandover(status, hasHandover: false));
+        Assert.True(BookingWorkflowRules.CanCancelBeforeHandover(status, handoverStarted: false));
     }
 
     [Theory]
@@ -77,9 +78,19 @@ public sealed class BookingWorkflowRulesTests
     [InlineData(BookingStatus.PendingPayment)]
     [InlineData(BookingStatus.Paid)]
     [InlineData(BookingStatus.ReadyForPickup)]
-    public void CanCancelBeforeHandover_RejectsOnceHandoverRecordExists(BookingStatus status)
+    public void CanCancelBeforeHandover_RejectsOnceTripActuallyStarted(BookingStatus status)
     {
-        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(status, hasHandover: true));
+        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(status, handoverStarted: true));
+    }
+
+    [Theory]
+    [InlineData(BookingStatus.PendingConfirmation)]
+    [InlineData(BookingStatus.PendingPayment)]
+    [InlineData(BookingStatus.Paid)]
+    [InlineData(BookingStatus.ReadyForPickup)]
+    public void CanCancelBeforeHandover_AllowsUnsignedDraftHandover(BookingStatus status)
+    {
+        Assert.True(BookingWorkflowRules.CanCancelBeforeHandover(status, handoverStarted: false));
     }
 
     [Theory]
@@ -90,7 +101,7 @@ public sealed class BookingWorkflowRulesTests
     {
         Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(
             status,
-            hasHandover: false,
+            handoverStarted: false,
             hasPaymentAwaitingConfirmation: true));
     }
 
@@ -104,7 +115,7 @@ public sealed class BookingWorkflowRulesTests
     [InlineData(BookingStatus.Expired)]
     public void CanCancelBeforeHandover_RejectsTerminalOrStartedStatuses(BookingStatus status)
     {
-        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(status, hasHandover: false));
+        Assert.False(BookingWorkflowRules.CanCancelBeforeHandover(status, handoverStarted: false));
     }
 
     [Theory]
@@ -162,17 +173,58 @@ public sealed class BookingWorkflowRulesTests
     }
 
     [Fact]
-    public void CanPrepareHandover_AllowsDraftBeforePickupButNotAfterReturn()
+    public void CanPrepareHandover_RequiresBookedPickupWindow()
     {
         var pickup = new DateTime(2026, 9, 20, 10, 0, 0);
         var returnAt = new DateTime(2026, 9, 21, 10, 0, 0);
 
-        Assert.True(BookingWorkflowRules.CanPrepareHandover(
-            pickup.AddHours(-2),
-            returnAt));
-        Assert.False(BookingWorkflowRules.CanPrepareHandover(
-            returnAt,
-            returnAt));
+        Assert.False(BookingWorkflowRules.CanPrepareHandover(pickup.AddSeconds(-1), pickup, returnAt));
+        Assert.True(BookingWorkflowRules.CanPrepareHandover(pickup, pickup, returnAt));
+        Assert.False(BookingWorkflowRules.CanPrepareHandover(returnAt, pickup, returnAt));
+    }
+
+    [Fact]
+    public void HasActualTurnaroundElapsed_UsesNextBookingSnapshotForStorePickup()
+    {
+        var returnedAt = new DateTime(2026, 9, 25, 10, 0, 0);
+        var policy = new RentalPolicySnapshot
+        {
+            VehicleTurnaroundMinutes = 75,
+            DeliveryLeadMinutes = 20
+        };
+
+        Assert.False(BookingWorkflowRules.HasActualTurnaroundElapsed(
+            returnedAt.AddMinutes(74),
+            returnedAt,
+            policy,
+            VehiclePickupMethod.StorePickup));
+        Assert.True(BookingWorkflowRules.HasActualTurnaroundElapsed(
+            returnedAt.AddMinutes(75),
+            returnedAt,
+            policy,
+            VehiclePickupMethod.StorePickup));
+    }
+
+    [Fact]
+    public void HasActualTurnaroundElapsed_AddsDeliveryLeadForDeliveryPickup()
+    {
+        var returnedAt = new DateTime(2026, 9, 25, 10, 0, 0);
+        var policy = new RentalPolicySnapshot
+        {
+            VehicleTurnaroundMinutes = 60,
+            DeliveryLeadMinutes = 30
+        };
+
+        Assert.False(BookingWorkflowRules.HasActualTurnaroundElapsed(
+            returnedAt.AddMinutes(89),
+            returnedAt,
+            policy,
+            VehiclePickupMethod.Delivery));
+        Assert.True(BookingWorkflowRules.HasActualTurnaroundElapsed(
+            returnedAt.AddMinutes(90),
+            returnedAt,
+            policy,
+            VehiclePickupMethod.Delivery));
     }
 
     [Fact]
@@ -344,6 +396,67 @@ public sealed class BookingWorkflowRulesTests
 
 
     [Theory]
+    [InlineData(PaymentType.AdditionalCharge, true)]
+    [InlineData(PaymentType.OverdueCompensationDebt, false)]
+    [InlineData(PaymentType.TrafficFine, false)]
+    [InlineData(PaymentType.Extension, false)]
+    public void IsReturnSurchargePaymentType_SeparatesReturnChargesFromOtherDebts(
+        PaymentType type,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.IsReturnSurchargePaymentType(type));
+    }
+
+
+    [Theory]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Pending, 500000, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.AwaitingConfirmation, 500000, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Failed, 500000, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Failed, 0, false)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Paid, 500000, false)]
+    [InlineData(PaymentType.Rental, PaymentStatus.Pending, 500000, false)]
+    public void IsOutstandingTrafficFine_OnlyBlocksPositiveOpenFineLedger(
+        PaymentType type,
+        PaymentStatus status,
+        decimal amount,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.IsOutstandingTrafficFine(
+                type,
+                status,
+                amount));
+    }
+
+
+    [Theory]
+    [InlineData(PaymentType.Rental, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.Deposit, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.VehicleSwapAdjustment, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.Extension, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.AdditionalCharge, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.TrafficFine, PaymentStatus.Pending, true)]
+    [InlineData(PaymentType.Refund, PaymentStatus.Pending, false)]
+    [InlineData(PaymentType.Rental, PaymentStatus.AwaitingConfirmation, false)]
+    [InlineData(PaymentType.Rental, PaymentStatus.Paid, false)]
+    [InlineData(PaymentType.Rental, PaymentStatus.Failed, false)]
+    public void ShouldVoidPendingCollectionOnTerminalBooking_OnlyClosesUncollectedObligations(
+        PaymentType type,
+        PaymentStatus status,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            BookingWorkflowRules.ShouldVoidPendingCollectionOnTerminalBooking(
+                type,
+                status));
+    }
+
+
+    [Theory]
     [InlineData(PaymentStatus.AwaitingConfirmation, true)]
     [InlineData(PaymentStatus.Pending, false)]
     [InlineData(PaymentStatus.Paid, false)]
@@ -375,3 +488,4 @@ public sealed class BookingWorkflowRulesTests
                 paymentType));
     }
 }
+

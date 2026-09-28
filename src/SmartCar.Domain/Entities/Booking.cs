@@ -27,6 +27,8 @@ public class Booking
     public decimal TotalAmount { get; set; }
     public VehiclePickupMethod PickupMethod { get; set; }
         = VehiclePickupMethod.StorePickup;
+    public BookingSource Source { get; set; } = BookingSource.CustomerWeb;
+    public bool IsImmediateCounterRental { get; set; }
     public string? DeliveryAddress { get; set; }
     public decimal? DeliveryLatitude { get; set; }
     public decimal? DeliveryLongitude { get; set; }
@@ -40,7 +42,7 @@ public class Booking
     public DateTime? StaffReviewedAt { get; set; }
     public string? StaffReviewedByStaffId { get; set; }
 
-    // Nhân viên đang giữ quyền xử lý vận hành của đơn. Hết hạn thì Staff khác có thể nhận.
+    // The active counter operator. A stale lease may be claimed by another Staff member.
     public string? HandlingStaffId { get; set; }
     public DateTime? HandlingLeaseExpiresAt { get; set; }
 
@@ -60,4 +62,3 @@ public class Booking
     public VehicleReturn? VehicleReturn { get; set; }
     public Review? Review { get; set; }
 }
-

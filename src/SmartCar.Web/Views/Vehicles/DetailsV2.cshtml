@@ -444,17 +444,13 @@
 
             const money = value =>
                 new Intl.NumberFormat('vi-VN').format(value) + ' đ';
-            const formatMeters = value =>
-                new Intl.NumberFormat('vi-VN').format(Math.round(value));
 
             let map = null;
             let marker = null;
-            let accuracyCircle = null;
             let storeMarker = null;
             let googleMap = false;
             let currentDeliveryFee = 0;
             let locationRevision = 0;
-            const preciseAddressAccuracyMeters = 25;
             address.addEventListener('input', () => {
                 locationRevision++;
                 searchResults.replaceChildren();
@@ -548,7 +544,7 @@
                     if (revision !== locationRevision) return true;
                     if (place) {
                         address.value = place;
-                        searchHelp.textContent = 'Tên địa chỉ là gợi ý từ bản đồ. Kiểm tra ghim và thêm số nhà nếu cần.';
+                        searchHelp.textContent = 'Đã tự nhận diện địa chỉ từ vị trí hiện tại. Kiểm tra tên địa chỉ trước khi đặt xe.';
                         updatePriceByPoint(lat, lng);
                         return true;
                     }
@@ -559,13 +555,6 @@
                 }
 
                 return false;
-            };
-
-            const clearAccuracyCircle = () => {
-                if (!accuracyCircle) return;
-                if (googleMap) accuracyCircle.setMap(null);
-                else accuracyCircle.remove?.();
-                accuracyCircle = null;
             };
 
             const clearSelectedPoint = () => {
@@ -582,55 +571,6 @@
                     else marker.remove?.();
                     marker = null;
                 }
-                clearAccuracyCircle();
-            };
-
-            const setApproximatePoint = (lat, lng, accuracy) => {
-                clearSelectedPoint();
-                const zoom = accuracy >= 3000 ? 11 : accuracy >= 1000 ? 12 : 14;
-                const title = `Vị trí gần đúng, sai số khoảng ${formatMeters(accuracy)} m. Kéo ghim để xác nhận điểm giao.`;
-
-                if (googleMap) {
-                    map.setCenter({ lat, lng });
-                    map.setZoom(zoom);
-                    marker = new google.maps.Marker({
-                        map, position: { lat, lng }, draggable: true, title
-                    });
-                    marker.addListener('dragend', async event => {
-                        const point = event.latLng;
-                        setPoint(point.lat(), point.lng(), map.getZoom());
-                        if (!await reverseGeocode(point.lat(), point.lng())) showReverseFailure();
-                    });
-                    accuracyCircle = new google.maps.Circle({
-                        map,
-                        center: { lat, lng },
-                        radius: accuracy,
-                        strokeColor: '#d97706',
-                        strokeOpacity: 0.8,
-                        strokeWeight: 1,
-                        fillColor: '#f59e0b',
-                        fillOpacity: 0.12,
-                        clickable: false
-                    });
-                } else if (map) {
-                    map.setView([lat, lng], zoom);
-                    marker = L.marker([lat, lng], { draggable: true, title }).addTo(map);
-                    marker.on('dragend', async event => {
-                        const point = event.target.getLatLng();
-                        setPoint(point.lat, point.lng, map.getZoom());
-                        if (!await reverseGeocode(point.lat, point.lng)) showReverseFailure();
-                    });
-                    accuracyCircle = L.circle([lat, lng], {
-                        radius: accuracy,
-                        color: '#d97706',
-                        fillColor: '#f59e0b',
-                        fillOpacity: 0.12,
-                        interactive: false
-                    }).addTo(map);
-                }
-
-                coordinateText.textContent =
-                    `Vị trí gần đúng: ${lat.toFixed(6)}, ${lng.toFixed(6)} (sai số khoảng ${formatMeters(accuracy)} m). Kéo ghim để xác nhận.`;
             };
 
             const setPoint = (lat, lng, zoom = 16) => {
@@ -653,13 +593,12 @@
                 // Hidden input luôn dùng dấu chấm theo chuẩn JavaScript.
                 // BookingsController sẽ parse bằng InvariantCulture.
                 locationRevision++;
-                clearAccuracyCircle();
                 address.value = '';
                 searchHelp.textContent = '';
                 latInput.value = normalizedLat.toFixed(7);
                 lngInput.value = normalizedLng.toFixed(7);
 
-                coordinateText.textContent = `Điểm giao: ${normalizedLat.toFixed(6)}, ${normalizedLng.toFixed(6)}. Có thể kéo ghim để chỉnh vị trí.`;
+                coordinateText.textContent = `Điểm giao: ${normalizedLat.toFixed(6)}, ${normalizedLng.toFixed(6)}.`;
 
                 updatePriceByPoint(normalizedLat, normalizedLng);
 
@@ -846,6 +785,90 @@
             store.addEventListener('change', toggle);
             delivery.addEventListener('change', toggle);
 
+            const getBestCurrentPosition = () => new Promise((resolve, reject) => {
+                const targetAccuracyMeters = 80;
+                const maxWaitMs = 12000;
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: maxWaitMs,
+                    maximumAge: 0
+                };
+
+                let bestPosition = null;
+                let watchId = null;
+                let timeoutId = null;
+                let finished = false;
+
+                const cleanup = () => {
+                    if (watchId !== null && typeof navigator.geolocation.clearWatch === 'function') {
+                        navigator.geolocation.clearWatch(watchId);
+                    }
+                    if (timeoutId !== null) clearTimeout(timeoutId);
+                };
+
+                const complete = position => {
+                    if (finished) return;
+                    finished = true;
+                    cleanup();
+                    resolve(position);
+                };
+
+                const fail = geolocationError => {
+                    if (finished) return;
+                    finished = true;
+                    cleanup();
+                    reject(geolocationError);
+                };
+
+                const onPosition = position => {
+                    const lat = Number(position?.coords?.latitude);
+                    const lng = Number(position?.coords?.longitude);
+                    const accuracy = Number(position?.coords?.accuracy);
+
+                    if (!Number.isFinite(lat) || lat < -90 || lat > 90 ||
+                        !Number.isFinite(lng) || lng < -180 || lng > 180) {
+                        return;
+                    }
+
+                    if (!bestPosition ||
+                        (Number.isFinite(accuracy) &&
+                         (!Number.isFinite(Number(bestPosition.coords.accuracy)) ||
+                          accuracy < Number(bestPosition.coords.accuracy)))) {
+                        bestPosition = position;
+                    }
+
+                    if (Number.isFinite(accuracy) && accuracy <= targetAccuracyMeters) {
+                        complete(position);
+                    }
+                };
+
+                const onError = geolocationError => {
+                    if (bestPosition) {
+                        complete(bestPosition);
+                        return;
+                    }
+                    fail(geolocationError);
+                };
+
+                if (typeof navigator.geolocation.watchPosition === 'function') {
+                    watchId = navigator.geolocation.watchPosition(
+                        onPosition,
+                        onError,
+                        options);
+
+                    timeoutId = setTimeout(() => {
+                        if (bestPosition) complete(bestPosition);
+                        else fail({ code: 3, TIMEOUT: 3 });
+                    }, maxWaitMs);
+                    return;
+                }
+
+                navigator.geolocation.getCurrentPosition(
+                    complete,
+                    fail,
+                    options);
+            });
+
             locationButton.addEventListener('click', () => {
                 error.classList.add('d-none');
 
@@ -860,14 +883,14 @@
                     !localHosts.includes(window.location.hostname)) {
                     error.textContent =
                         'Trình duyệt chỉ cho phép lấy vị trí hiện tại trên HTTPS hoặc localhost. ' +
-                        'Hãy mở website bằng HTTPS hoặc chọn điểm trực tiếp trên bản đồ.';
+                        'Hãy mở website bằng HTTPS rồi thử lại.';
                     error.classList.remove('d-none');
                     return;
                 }
 
                 if (!navigator.geolocation) {
                     error.textContent =
-                        'Trình duyệt không hỗ trợ lấy vị trí. Hãy tìm địa chỉ hoặc chọn điểm trên bản đồ.';
+                        'Trình duyệt không hỗ trợ lấy vị trí hiện tại. Hãy nhập địa chỉ giao xe.';
                     error.classList.remove('d-none');
                     return;
                 }
@@ -875,99 +898,68 @@
                 const revision = ++locationRevision;
                 locationButton.disabled = true;
                 const oldLocationText = locationButton.textContent;
-                locationButton.textContent = 'Đang lấy vị trí...';
+                locationButton.textContent = 'Đang xác định vị trí...';
 
-                navigator.geolocation.getCurrentPosition(
-                    async position => {
-                        if (revision !== locationRevision) {
-                            locationButton.disabled = false;
-                            locationButton.textContent = oldLocationText;
-                            return;
+                getBestCurrentPosition()
+                    .then(async position => {
+                        if (revision !== locationRevision) return;
+
+                        const lat = Number(position.coords.latitude);
+                        const lng = Number(position.coords.longitude);
+                        const accuracy = Number(position.coords.accuracy);
+
+                        if (!setPoint(lat, lng)) {
+                            throw new Error('Vị trí thiết bị trả về không hợp lệ.');
                         }
-                        const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        const accuracy = position.coords.accuracy;
 
-                        // Trình duyệt trên máy tính có thể chỉ suy ra vị trí từ mạng/IP.
-                        // Hiện ghim ước lượng để người dùng chỉnh, nhưng không dùng điểm
-                        // này tính phí cho đến khi ghim được kéo hoặc bản đồ được bấm.
-                        if (!Number.isFinite(accuracy) || accuracy > 100) {
-                            if (Number.isFinite(accuracy) &&
-                                Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
-                                Number.isFinite(lng) && lng >= -180 && lng <= 180) {
-                                setApproximatePoint(lat, lng, accuracy);
-                            }
-                            const accuracyLabel = Number.isFinite(accuracy)
-                                ? `${formatMeters(accuracy)} m`
-                                : 'không rõ';
-                            error.textContent = `Thiết bị chỉ ước lượng vị trí với sai số khoảng ${accuracyLabel}. ` +
-                                'Ghim và vùng màu cam chỉ để tham khảo; kéo ghim đến đúng địa chỉ hoặc bấm trực tiếp lên bản đồ. Chưa chọn điểm giao để tính phí.';
+                        locationButton.textContent = 'Đang nhận diện địa chỉ...';
+                        const filled = await reverseGeocode(lat, lng);
+                        if (!filled) showReverseFailure();
+
+                        if (Number.isFinite(accuracy) &&
+                            accuracy > 100 &&
+                            calculateDistanceKm(lat, lng) <= maxDeliveryKm) {
+                            error.textContent =
+                                'Đã tự chọn vị trí tốt nhất thiết bị cung cấp. ' +
+                                'Thiết bị hiện có độ chính xác thấp; hãy kiểm tra tên địa chỉ hiển thị trước khi đặt xe.';
                             error.classList.remove('d-none');
-                            locationButton.disabled = false;
-                            locationButton.textContent = oldLocationText;
-                            return;
                         }
+                    })
+                    .catch(geolocationError => {
+                        if (revision !== locationRevision) return;
 
-                        // setPoint vừa đặt marker, vừa ghi hidden Latitude/Longitude.
-                        setPoint(lat, lng);
-                        coordinateText.textContent += ` GPS báo sai số khoảng ${Math.round(accuracy)} m; hãy kiểm tra ghim trước khi đặt.`;
-
-                        if (accuracy > preciseAddressAccuracyMeters) {
-                            address.value = `Điểm GPS (${latInput.value}, ${lngInput.value})`;
-                            if (calculateDistanceKm(lat, lng) <= maxDeliveryKm) {
+                        switch (geolocationError?.code) {
+                            case geolocationError?.PERMISSION_DENIED:
+                            case 1:
                                 error.textContent =
-                                    `Sai số GPS khoảng ${Math.round(accuracy)} m nên tên đường có thể không chính xác. ` +
-                                    'Đã giữ điểm gần đúng; hãy kéo ghim hoặc tìm địa chỉ để chỉnh lại.';
-                                error.classList.remove('d-none');
-                            }
-                        } else {
-                            locationButton.textContent = 'Đang tìm địa chỉ...';
-                            const filled = await reverseGeocode(lat, lng);
-                            if (!filled) showReverseFailure();
-                        }
-
-                        locationButton.disabled = false;
-                        locationButton.textContent = oldLocationText;
-                    },
-                    geolocationError => {
-                        if (revision !== locationRevision) {
-                            locationButton.disabled = false;
-                            locationButton.textContent = oldLocationText;
-                            return;
-                        }
-                        switch (geolocationError.code) {
-                            case geolocationError.PERMISSION_DENIED:
-                                error.textContent =
-                                    'Bạn đã từ chối quyền truy cập vị trí. ' +
-                                    'Hãy cho phép Location cho trang rồi thử lại.';
+                                    'Bạn đã từ chối quyền truy cập vị trí. Hãy cho phép Location cho trang rồi thử lại.';
                                 break;
 
-                            case geolocationError.POSITION_UNAVAILABLE:
+                            case geolocationError?.POSITION_UNAVAILABLE:
+                            case 2:
                                 error.textContent =
-                                    'Thiết bị hiện không xác định được vị trí. ' +
-                                    'Hãy chọn điểm trực tiếp trên bản đồ.';
+                                    'Thiết bị hiện không xác định được vị trí. Hãy nhập địa chỉ giao xe.';
                                 break;
 
-                            case geolocationError.TIMEOUT:
+                            case geolocationError?.TIMEOUT:
+                            case 3:
                                 error.textContent =
-                                    'Lấy vị trí quá lâu. Hãy thử lại hoặc chọn điểm trực tiếp trên bản đồ.';
+                                    'Không lấy được vị trí đủ nhanh. Hãy thử lại hoặc nhập địa chỉ giao xe.';
                                 break;
 
                             default:
                                 error.textContent =
-                                    'Không thể lấy vị trí hiện tại. ' +
-                                    'Hãy nhập địa chỉ rồi bấm “Tìm trên bản đồ”.';
+                                    geolocationError instanceof Error
+                                        ? geolocationError.message
+                                        : 'Không thể lấy vị trí hiện tại. Hãy nhập địa chỉ giao xe.';
                                 break;
                         }
 
                         error.classList.remove('d-none');
+                    })
+                    .finally(() => {
                         locationButton.disabled = false;
                         locationButton.textContent = oldLocationText;
-                    },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 15000,
-                        maximumAge: 0
                     });
             });
 
@@ -983,8 +975,8 @@
 
                 const revision = ++locationRevision;
                 const focus = {
-                    lat: Number(latInput.value || storeLat),
-                    lon: Number(lngInput.value || storeLng)
+                    lat: storeLat,
+                    lon: storeLng
                 };
                 clearPointBeforeAddressSearch();
                 searchResults.replaceChildren();
@@ -1014,7 +1006,7 @@
 
                     if (!candidates.length) {
                         error.textContent =
-                            'Chưa thấy địa chỉ phù hợp. Hãy nhập thêm số nhà, tên đường và quận/huyện, hoặc chọn ghim trên bản đồ.';
+                            'Chưa thấy địa chỉ phù hợp. Hãy nhập thêm số nhà, tên đường và quận/huyện rồi thử lại.';
                         error.classList.remove('d-none');
                         return;
                     }
@@ -1025,7 +1017,7 @@
                         address.value = candidate.display_name;
                         searchResults.replaceChildren();
                         searchResults.classList.add('d-none');
-                        searchHelp.textContent = 'Đã chọn vị trí. Kiểm tra ghim và địa chỉ trước khi gửi yêu cầu.';
+                        searchHelp.textContent = 'Đã chọn địa chỉ và tự đặt vị trí tương ứng.';
                     };
 
                     if (candidates.length === 1) {

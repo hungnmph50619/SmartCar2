@@ -41,7 +41,9 @@ public sealed class BookingOperationsController : Controller
             cancellationToken);
 
         TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
-            ? $"Đã hủy đơn. Số tiền được hoàn: {result.RefundAmount:N0} đồng."
+            ? result.RefundAmount > 0m
+                ? $"Đã hủy đơn. Hệ thống đã ghi nhận {result.RefundAmount:N0} đồng vào quy trình chờ Admin duyệt hoàn; đây chưa phải trạng thái đã chuyển tiền."
+                : "Đã hủy đơn. Không phát sinh khoản hoàn mới."
             : string.Join("; ", result.Errors);
 
         return RedirectToAction("Details", "Bookings", new { id = model.BookingId });

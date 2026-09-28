@@ -30,52 +30,21 @@
     var handoverVerified = Model.Handover.SignedDocumentVerified;
     var returnVerified = Model.Return.SignedDocumentVerified;
 
-    const string overdueCompPrefix = "OVERDUE-COMP-";
-    const string overdueDebtPrefix = "OVERDUE-DEBT-";
-    bool IsOverdueImpactPayment(PaymentSummaryDto payment) =>
-        payment.Type == PaymentType.AdditionalCharge &&
-        !string.IsNullOrWhiteSpace(payment.TransactionCode) &&
-        (payment.TransactionCode.StartsWith(overdueCompPrefix, StringComparison.OrdinalIgnoreCase) ||
-         payment.TransactionCode.StartsWith(overdueDebtPrefix, StringComparison.OrdinalIgnoreCase));
-
-    int? AffectedBookingId(string? transactionCode)
-    {
-        if (string.IsNullOrWhiteSpace(transactionCode)) return null;
-        var prefix = transactionCode.StartsWith(overdueCompPrefix, StringComparison.OrdinalIgnoreCase)
-            ? overdueCompPrefix
-            : transactionCode.StartsWith(overdueDebtPrefix, StringComparison.OrdinalIgnoreCase)
-                ? overdueDebtPrefix
-                : null;
-        if (prefix is null) return null;
-        var parts = transactionCode[prefix.Length..].Split('-', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 2 && int.TryParse(parts[1], out var affectedId) ? affectedId : null;
-    }
-
-    var overdueDeductions = booking.Payments
-        .Where(IsOverdueImpactPayment)
-        .Select(p => new { Payment = p, AffectedBookingId = AffectedBookingId(p.TransactionCode) })
-        .ToList();
-    var recordedOverdueDeduction = overdueDeductions.Sum(x => x.Payment.Amount);
-
     var adjustments = booking.Payments
         .Where(p => p.Type is PaymentType.Extension or PaymentType.AdditionalCharge or PaymentType.VehicleSwapAdjustment)
-        .Where(p => !IsOverdueImpactPayment(p))
         .ToList();
     var refunds = booking.Payments.Where(p => p.Type == PaymentType.Refund).ToList();
-    var totalCollected = booking.Payments.Where(p => p.Status == PaymentStatus.Paid && p.Type != PaymentType.Refund).Sum(p => p.Amount);
-    var totalRefunded = refunds.Where(p => p.Status == PaymentStatus.Refunded).Sum(p => p.Amount);
-    var netPaid = Math.Max(0m, totalCollected - totalRefunded);
-
-    int? affectedBookingId = ViewBag.AffectedBookingId is int affectedId ? affectedId : null;
-    affectedBookingId ??= overdueDeductions.Select(x => x.AffectedBookingId).FirstOrDefault(x => x.HasValue);
-
-    var totalDepositCollected = depositPayments.Where(p => p.Status == PaymentStatus.Paid).Sum(p => p.Amount);
-    var inferredDepositDeduction = affectedBookingId.HasValue
-        ? Math.Max(0m, totalDepositCollected - totalRefunded)
-        : 0m;
-    var totalOverdueDeduction = recordedOverdueDeduction > 0m
-        ? recordedOverdueDeduction
-        : inferredDepositDeduction;
+    var totalCollected = booking.Payments
+        .Where(p => p.Status == PaymentStatus.Paid && p.Type != PaymentType.Refund)
+        .Sum(p => p.Amount);
+    var totalRefunded = refunds
+        .Where(p => p.Status == PaymentStatus.Refunded)
+        .Sum(p => p.Amount);
+    var netCollected = Math.Max(0m, totalCollected - totalRefunded);
+    var totalOverdueDepositDeducted = Model.OverdueSettlements.Sum(item => item.DepositDeductedAmount);
+    var totalOverdueDebt = Model.OverdueSettlements.Sum(item => item.DebtAmount);
+    var totalOverdueDebtPaid = Model.OverdueSettlements.Sum(item => item.DebtPaidAmount);
+    var totalOverdueDebtOpen = Model.OverdueSettlements.Sum(item => item.DebtOpenAmount);
 
     string StatusText(PaymentStatus status) => status switch
     {
@@ -246,31 +215,90 @@
         </div>
     </div>
 
-    @if (totalOverdueDeduction > 0m && affectedBookingId.HasValue)
+    @if (Model.OverdueSettlements.Count > 0)
     {
         <div class="border border-danger rounded p-3 mt-4 bg-danger bg-opacity-10">
-            <div class="text-danger fw-bold mb-3">KHẤU TRỪ TỪ CỌC DO VI PHẠM</div>
-            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                <div>
-                    <div class="fw-bold">Trả xe quá hạn – ảnh hưởng đơn #@affectedBookingId.Value</div>
-                    <div class="small text-muted mt-1">Khoản bồi thường được giữ lại từ tiền cọc của đơn #@booking.BookingId khi quyết toán.</div>
-                    <div class="small text-muted">Căn cứ: đơn kế tiếp đã đến giờ nhận xe nhưng xe chưa được hoàn trả đúng hạn.</div>
+            <div class="text-danger fw-bold mb-3">BỒI THƯỜNG DO GIỮ XE QUÁ HẠN</div>
+
+            @foreach (var settlement in Model.OverdueSettlements)
+            {
+                <div class="border rounded bg-white p-3 mb-2">
+                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                        <div>
+                            <div class="fw-bold">Ảnh hưởng đơn #@settlement.AffectedBookingId</div>
+                            <div class="small text-muted">
+                                Phần lấy từ cọc và phần khách còn phải thanh toán là hai ledger độc lập.
+                            </div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-danger"
+                           asp-controller="AdminBookings"
+                           asp-action="Details"
+                           asp-route-id="@settlement.AffectedBookingId">
+                            Xem đơn #@settlement.AffectedBookingId
+                        </a>
+                    </div>
+
+                    <div class="row g-2 mt-2 small">
+                        <div class="col-md-4">
+                            <span class="text-muted">Đã khấu trừ từ cọc</span><br />
+                            <strong class="text-danger">@settlement.DepositDeductedAmount.ToString("N0") đ</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <span class="text-muted">Phần phải thu thêm</span><br />
+                            <strong>@settlement.DebtAmount.ToString("N0") đ</strong>
+                        </div>
+                        <div class="col-md-4">
+                            <span class="text-muted">Còn chưa thu / chờ đối soát</span><br />
+                            <strong class="@(settlement.DebtOpenAmount > 0 ? "text-warning" : "text-success")">
+                                @settlement.DebtOpenAmount.ToString("N0") đ
+                            </strong>
+                        </div>
+                    </div>
+
+                    @if (settlement.DebtPaidAmount > 0)
+                    {
+                        <div class="small text-success mt-2">
+                            Đã thu thêm: @settlement.DebtPaidAmount.ToString("N0") đ.
+                        </div>
+                    }
                 </div>
-                <strong class="text-danger fs-5">-@totalOverdueDeduction.ToString("N0") đ</strong>
-            </div>
-            <div class="mt-3"><a class="btn btn-sm btn-outline-danger" asp-controller="AdminBookings" asp-action="Details" asp-route-id="@affectedBookingId.Value">Xem đơn #@affectedBookingId.Value</a></div>
+            }
         </div>
     }
 
     <div class="border rounded bg-light p-3 mt-4">
-        <div class="small text-muted fw-semibold mb-2">KẾT QUẢ QUYẾT TOÁN CHUYẾN THUÊ</div>
-        <div class="d-flex justify-content-between py-1"><span>Tổng tiền khách đã chuyển</span><strong class="text-success">@totalCollected.ToString("N0") đ</strong></div>
+        <div class="small text-muted fw-semibold mb-2">KẾT QUẢ DÒNG TIỀN CHUYẾN THUÊ</div>
+        <div class="d-flex justify-content-between py-1"><span>Tổng tiền đã thực thu</span><strong class="text-success">@totalCollected.ToString("N0") đ</strong></div>
         <div class="d-flex justify-content-between py-1"><span>Tổng tiền đã hoàn khách</span><strong>@totalRefunded.ToString("N0") đ</strong></div>
-        @if (totalOverdueDeduction > 0m && affectedBookingId.HasValue)
+        @if (totalOverdueDepositDeducted > 0m)
         {
-            <div class="d-flex justify-content-between py-1"><span>Khấu trừ cọc do trả xe quá hạn – ảnh hưởng đơn #@affectedBookingId.Value</span><strong class="text-danger">-@totalOverdueDeduction.ToString("N0") đ</strong></div>
+            <div class="d-flex justify-content-between py-1">
+                <span>Đã khấu trừ từ cọc do vi phạm quá hạn</span>
+                <strong class="text-danger">@totalOverdueDepositDeducted.ToString("N0") đ</strong>
+            </div>
+        }
+        @if (totalOverdueDebt > 0m)
+        {
+            <div class="d-flex justify-content-between py-1">
+                <span>Phần bồi thường phải thu thêm</span>
+                <strong>@totalOverdueDebt.ToString("N0") đ</strong>
+            </div>
+            <div class="d-flex justify-content-between py-1">
+                <span>Đã thu thêm cho khoản này</span>
+                <strong class="text-success">@totalOverdueDebtPaid.ToString("N0") đ</strong>
+            </div>
+        }
+        @if (totalOverdueDebtOpen > 0m)
+        {
+            <div class="d-flex justify-content-between py-1">
+                <span>Nghĩa vụ còn chưa thu / chờ đối soát</span>
+                <strong class="text-warning">@totalOverdueDebtOpen.ToString("N0") đ</strong>
+            </div>
         }
         <hr class="my-2" />
-        <div class="d-flex justify-content-between align-items-center"><strong>Chi phí khách thực chịu sau quyết toán</strong><strong class="text-primary fs-5">@netPaid.ToString("N0") đ</strong></div>
+        <div class="d-flex justify-content-between align-items-center">
+            <strong>Tiền ròng SmartCar đã thực thu sau hoàn</strong>
+            <strong class="text-primary fs-5">@netCollected.ToString("N0") đ</strong>
+        </div>
     </div>
 </div>

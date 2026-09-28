@@ -7,6 +7,8 @@ public static class IdentityCapturePurposes
     public const string Return = "Return";
     public const string HandoverCitizenFront = "HandoverCitizenFront";
     public const string HandoverCitizenBack = "HandoverCitizenBack";
+    public const string ReturnCitizenFront = "ReturnCitizenFront";
+    public const string ReturnCitizenBack = "ReturnCitizenBack";
 
     public static readonly string[] All =
     {
@@ -14,7 +16,9 @@ public static class IdentityCapturePurposes
         Handover,
         Return,
         HandoverCitizenFront,
-        HandoverCitizenBack
+        HandoverCitizenBack,
+        ReturnCitizenFront,
+        ReturnCitizenBack
     };
 }
 

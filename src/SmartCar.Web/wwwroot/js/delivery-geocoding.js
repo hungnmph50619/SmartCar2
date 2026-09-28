@@ -1,152 +1,184 @@
 (() => {
-    // Explicit lookups only. A browser fallback covers hosts that cannot reach
-    // Nominatim from their server; keep direct requests below one per second.
-    let nextDirectRequestAt = 0;
-    let directQueue = Promise.resolve();
-    const requestTimeoutMs = 8000;
+    // ArcGIS là provider chính vì dự án đã dùng hạ tầng Esri cho map fallback.
+    // Nominatim chỉ là fallback, sau cùng mới gọi backend SmartCar.
+    const arcGisBase =
+        'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer';
 
-    const fetchJson = async (url, options = {}) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
-        try {
-            const response = await fetch(url, { ...options, signal: controller.signal });
-            const result = await response.json().catch(() => null);
-            return { response, result };
-        } finally {
-            clearTimeout(timeoutId);
+    const fetchJson = async url => {
+        const response = await fetch(url, {
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
         }
-    };
 
-    const hasResults = (result, reverse) => reverse
-        ? Boolean(result?.display_name)
-        : Array.isArray(result) && result.length > 0;
+        return response.json();
+    };
 
     const validFocus = focus => {
         const lat = Number(focus?.lat);
         const lon = Number(focus?.lon);
+
         return Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
             Number.isFinite(lon) && lon >= -180 && lon <= 180
             ? { lat, lon }
             : null;
     };
 
-    const appendViewbox = (path, focus) => {
-        if (!focus) return path;
-        const box = [focus.lon - 0.55, focus.lat - 0.45, focus.lon + 0.55, focus.lat + 0.45]
-            .map(value => value.toFixed(5)).join(',');
-        return `${path}&viewbox=${encodeURIComponent(box)}`;
+    const normalizeArcGisCandidates = data => {
+        const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+
+        return candidates
+            .map(candidate => {
+                const lat = Number(candidate?.location?.y);
+                const lon = Number(candidate?.location?.x);
+                const displayName =
+                    candidate?.address ||
+                    candidate?.attributes?.Match_addr ||
+                    candidate?.attributes?.LongLabel;
+
+                return {
+                    lat: String(lat),
+                    lon: String(lon),
+                    display_name: displayName
+                };
+            })
+            .filter(item =>
+                Number.isFinite(Number(item.lat)) &&
+                Number.isFinite(Number(item.lon)) &&
+                typeof item.display_name === 'string' &&
+                item.display_name.trim());
     };
 
-    const focusQuery = focus => focus
-        ? `&nearLat=${encodeURIComponent(focus.lat)}&nearLon=${encodeURIComponent(focus.lon)}`
-        : '';
+    const arcGisSearch = async (query, focus) => {
+        const point = validFocus(focus);
+        let url =
+            `${arcGisBase}/findAddressCandidates` +
+            `?f=json&forStorage=false&outSR=4326&countryCode=VNM&maxLocations=8` +
+            `&outFields=${encodeURIComponent('Match_addr,LongLabel')}` +
+            `&SingleLine=${encodeURIComponent(query)}`;
 
-    const directLookup = path => {
-        const result = directQueue.then(async () => {
-            const delay = Math.max(0, nextDirectRequestAt - Date.now());
-            if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-            nextDirectRequestAt = Date.now() + 1100;
-            const { response, result } = await fetchJson(`https://nominatim.openstreetmap.org/${path}`, {
-                headers: { 'Accept': 'application/json' },
-                referrerPolicy: 'origin'
-            });
-            if (!response.ok) throw new Error('Không thể tra địa chỉ trực tiếp từ trình duyệt.');
-            return result;
+        if (point) {
+            url +=
+                `&location=${encodeURIComponent(point.lon + ',' + point.lat)}` +
+                '&distance=50000';
+        }
+
+        const data = await fetchJson(url);
+        if (data?.error) {
+            throw new Error(data.error.message || 'ArcGIS geocoding error');
+        }
+
+        return normalizeArcGisCandidates(data);
+    };
+
+    const arcGisReverse = async (lat, lon) => {
+        const url =
+            `${arcGisBase}/reverseGeocode` +
+            `?f=json&outSR=4326&langCode=vi` +
+            `&location=${encodeURIComponent(lon + ',' + lat)}`;
+
+        const data = await fetchJson(url);
+        if (data?.error) {
+            throw new Error(data.error.message || 'ArcGIS reverse geocoding error');
+        }
+
+        const displayName =
+            data?.address?.LongLabel ||
+            data?.address?.Match_addr ||
+            data?.address?.Address;
+
+        if (!displayName) return null;
+
+        const resultLat = Number(data?.location?.y ?? lat);
+        const resultLon = Number(data?.location?.x ?? lon);
+
+        return {
+            lat: String(resultLat),
+            lon: String(resultLon),
+            display_name: displayName
+        };
+    };
+
+    const nominatimSearch = async query => {
+        const url =
+            'https://nominatim.openstreetmap.org/search' +
+            '?format=jsonv2&limit=8&countrycodes=vn&q=' +
+            encodeURIComponent(query);
+
+        const data = await fetchJson(url);
+        return Array.isArray(data) ? data : [];
+    };
+
+    const nominatimReverse = async (lat, lon) => {
+        const url =
+            'https://nominatim.openstreetmap.org/reverse' +
+            '?format=jsonv2&addressdetails=1&zoom=18&accept-language=vi' +
+            '&lat=' + encodeURIComponent(lat) +
+            '&lon=' + encodeURIComponent(lon);
+
+        const data = await fetchJson(url);
+        return data?.display_name ? data : null;
+    };
+
+    const serverJson = async endpoint => {
+        const response = await fetch(`/api/geocoding/${endpoint}`, {
+            headers: { 'Accept': 'application/json' }
         });
-        directQueue = result.catch(() => {});
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok) {
+            throw new Error(
+                result?.message ||
+                'Không thể kết nối dịch vụ địa chỉ.');
+        }
+
         return result;
     };
 
-    const photonLookup = async (path, reverse) => {
-        const { response, result: data } = await fetchJson(`https://photon.komoot.io/${path}`, {
-            headers: { 'Accept': 'application/json' },
-            referrerPolicy: 'origin'
-        });
-        if (!response.ok) throw new Error('Dịch vụ địa chỉ dự phòng không phản hồi.');
-        const matches = (data.features || []).map(feature => {
-            const [lon, lat] = feature.geometry?.coordinates || [];
-            const properties = feature.properties || {};
-            const streetAddress = [properties.housenumber, properties.street].filter(Boolean).join(' ');
-            const display_name = [properties.name, streetAddress, properties.district,
-                properties.city, properties.state, properties.country]
-                .filter((part, index, parts) => part && parts.indexOf(part) === index)
-                .join(', ');
-            return { lat: String(lat), lon: String(lon), display_name, countrycode: properties.countrycode };
-        }).filter(result => Number.isFinite(Number(result.lat)) &&
-            Number.isFinite(Number(result.lon)) && result.display_name &&
-            (!result.countrycode || result.countrycode.toLowerCase() === 'vn'));
-        return reverse ? (matches[0] || null) : matches;
-    };
-
-    const lookup = async (endpoint, directPath, photonPath, reverse = false, focus = null) => {
-        const focusPoint = validFocus(focus);
-        let serverError;
-        let serverHadNoMatches = false;
+    const search = async (query, focus) => {
         try {
-            const { response, result } = await fetchJson(`/api/geocoding/${endpoint}${focusQuery(focusPoint)}`, {
-                headers: { 'Accept': 'application/json' }
-            });
-            if (response.ok && hasResults(result, reverse)) return result;
-            if (response.ok) {
-                serverHadNoMatches = true;
-                serverError = 'Không tìm thấy địa chỉ phù hợp.';
-            } else {
-                serverError = result?.message || 'Dịch vụ tìm địa chỉ không phản hồi.';
-                if ([400, 422].includes(response.status)) throw new Error(serverError);
-            }
+            const results = await arcGisSearch(query, focus);
+            if (results.length) return results;
         } catch (error) {
-            if (!(error instanceof TypeError) && error?.name !== 'AbortError') throw error;
-            serverError = error?.name === 'AbortError'
-                ? 'Máy chủ tìm địa chỉ phản hồi quá lâu.'
-                : 'Máy chủ tìm địa chỉ không phản hồi.';
-        }
-
-        let directError;
-        if (!serverHadNoMatches) {
-            try {
-                const result = await directLookup(appendViewbox(directPath, focusPoint));
-                if (hasResults(result, reverse)) return result;
-            } catch (error) {
-                directError = error?.name === 'AbortError'
-                    ? new Error('Tra địa chỉ từ trình duyệt quá thời gian.')
-                    : error?.name === 'TypeError' || /failed to fetch|networkerror/i.test(error?.message || '')
-                        ? new Error('Trình duyệt không kết nối được Nominatim.')
-                        : error;
-            }
+            console.warn('ArcGIS search không phản hồi, thử Nominatim:', error);
         }
 
         try {
-            const result = await photonLookup(photonPath(focusPoint), reverse);
-            if (hasResults(result, reverse)) return result;
-            return reverse ? null : [];
+            const results = await nominatimSearch(query);
+            if (results.length) return results;
         } catch (error) {
-            const reason = [serverError, directError?.message].filter(Boolean).join(' ');
-            const fallbackFailure = error?.name === 'AbortError'
-                ? 'Tra địa chỉ bằng dịch vụ dự phòng quá thời gian.'
-                : error?.name === 'TypeError' || /failed to fetch|networkerror/i.test(error?.message || '')
-                    ? 'Trình duyệt cũng không kết nối được dịch vụ địa chỉ dự phòng.'
-                    : 'Dịch vụ địa chỉ dự phòng không phản hồi.';
-            throw new Error(`${reason || error?.message || 'Không tìm thấy địa chỉ.'} ${fallbackFailure}`);
+            console.warn('Nominatim search không phản hồi, thử SmartCar server:', error);
         }
+
+        const point = validFocus(focus);
+        const focusQuery = point
+            ? `&nearLat=${encodeURIComponent(point.lat)}&nearLon=${encodeURIComponent(point.lon)}`
+            : '';
+
+        return serverJson(
+            `search?q=${encodeURIComponent(query)}${focusQuery}`);
     };
 
-    window.SmartCarDeliveryGeocoding = {
-        search: (query, focus) => {
-            const point = validFocus(focus);
-            const photonBias = point
-                ? `&lat=${encodeURIComponent(point.lat)}&lon=${encodeURIComponent(point.lon)}&zoom=13&location_bias_scale=0.2`
-                : '';
-            return lookup(
-                `search?q=${encodeURIComponent(query)}`,
-                `search?format=jsonv2&limit=8&countrycodes=vn&q=${encodeURIComponent(query)}`,
-                () => `api?limit=5&lang=vi&countrycode=VN${photonBias}&q=${encodeURIComponent(query)}`,
-                false,
-                point);
-        },
-        reverse: (lat, lon) => lookup(
-            `reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
-            `reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=vi&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
-            () => `reverse?limit=1&radius=0.1&lang=vi&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
-            true)
+    const reverse = async (lat, lon) => {
+        try {
+            const result = await arcGisReverse(lat, lon);
+            if (result?.display_name) return result;
+        } catch (error) {
+            console.warn('ArcGIS reverse không phản hồi, thử Nominatim:', error);
+        }
+
+        try {
+            const result = await nominatimReverse(lat, lon);
+            if (result?.display_name) return result;
+        } catch (error) {
+            console.warn('Nominatim reverse không phản hồi, thử SmartCar server:', error);
+        }
+
+        return serverJson(
+            `reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
     };
+
+    window.SmartCarDeliveryGeocoding = { search, reverse };
 })();

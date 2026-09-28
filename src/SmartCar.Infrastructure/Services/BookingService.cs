@@ -48,13 +48,20 @@ internal sealed class BookingService : IBookingService
             return BookingMutationResult.Failure("Không xác định được khách hàng.");
         }
 
-        if (!BookingDateRules.IsValidRange(
+        var validRange = request.IsImmediateCounterRental
+            ? request.IsStaffCounterRental &&
+              request.PickupMethod == VehiclePickupMethod.StorePickup &&
+              BookingDateRules.IsValidImmediateCounterRange(request.PickupDate, request.ReturnDate)
+            : BookingDateRules.IsValidRange(
                 request.PickupDate,
                 request.ReturnDate,
-                policy.MinimumPickupLeadMinutes))
+                policy.MinimumPickupLeadMinutes);
+        if (!validRange)
         {
             return BookingMutationResult.Failure(
-                $"Thời gian nhận xe phải cách hiện tại ít nhất {policy.MinimumPickupLeadMinutes} phút và trước thời gian trả xe.");
+                request.IsImmediateCounterRental
+                    ? "Nhận ngay chỉ áp dụng tại quầy, thời gian trả phải ở tương lai. Vui lòng thử lại nếu thao tác đã quá lâu."
+                    : $"Thời gian nhận xe phải cách hiện tại ít nhất {policy.MinimumPickupLeadMinutes} phút và trước thời gian trả xe.");
         }
 
         if (!Enum.IsDefined(request.PickupMethod))
@@ -240,6 +247,21 @@ internal sealed class BookingService : IBookingService
                 "Xe không còn đủ khoảng trống vận hành giữa các lượt thuê (kiểm tra/vệ sinh và thời gian giao xe nếu có). Vui lòng chọn xe hoặc thời gian khác.");
         }
 
+        var actualTurnaroundReadyAt = await GetActualTurnaroundReadyAtAsync(
+            request.VehicleId,
+            request.PickupDate,
+            request.PickupMethod,
+            policy,
+            excludedBookingId: null,
+            cancellationToken);
+        if (actualTurnaroundReadyAt.HasValue &&
+            actualTurnaroundReadyAt.Value > request.PickupDate)
+        {
+            return BookingMutationResult.Failure(
+                $"Xe vừa hoàn tất lượt thuê trước và cần thời gian kiểm tra/chuẩn bị đến {actualTurnaroundReadyAt.Value:dd/MM/yyyy HH:mm}. " +
+                "Vui lòng chọn giờ nhận hoặc xe khác.");
+        }
+
         var numberOfDays = Math.Max(
             1,
             (int)Math.Ceiling((request.ReturnDate - request.PickupDate).TotalHours / 24d));
@@ -252,6 +274,8 @@ internal sealed class BookingService : IBookingService
 
         var booking = new Booking
         {
+            Source = request.IsStaffCounterRental ? BookingSource.StaffCounter : BookingSource.CustomerWeb,
+            IsImmediateCounterRental = request.IsStaffCounterRental && request.IsImmediateCounterRental,
             PolicyJson = policy.ToJson(),
             DepositHoldDaysApplied = policy.DepositHoldDays,
             CustomerId = customerId,
@@ -340,14 +364,22 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure("Chỉ đơn đang chờ xác nhận mới có thể được duyệt.");
         }
 
-        if (booking.PickupDate <= DateTime.Now)
+        var approvalTime = DateTime.Now;
+        var isImmediateCounter = CounterRentalSchedule.IsImmediate(
+            booking.Source, booking.IsImmediateCounterRental, booking.CreatedAt, booking.PickupDate);
+        var (approvedPickup, approvedReturn) = CounterRentalSchedule.ForApproval(
+            booking.Source, booking.IsImmediateCounterRental, booking.CreatedAt,
+            booking.PickupDate, booking.ReturnDate, approvalTime);
+
+        if ((!isImmediateCounter && booking.PickupDate <= approvalTime) ||
+            approvedReturn <= approvedPickup)
         {
             return OperationResult.Failure("Đã quá thời gian nhận xe, không thể xác nhận đơn.");
         }
 
         var documentsValid = await _documentService.HasValidRentalDocumentsAsync(
             booking.CustomerId,
-            booking.ReturnDate,
+            approvedReturn,
             cancellationToken);
 
         if (!documentsValid)
@@ -355,10 +387,22 @@ internal sealed class BookingService : IBookingService
             return OperationResult.Failure("CCCD hoặc GPLX của khách không còn hiệu lực đến ngày trả xe.");
         }
 
+        if (!await HasValidVehicleDocumentAsync(booking.VehicleId, VehicleDocumentType.Registration,
+                approvedPickup, approvedReturn, allowNoExpiry: true, cancellationToken) ||
+            !await HasValidVehicleDocumentAsync(booking.VehicleId, VehicleDocumentType.Inspection,
+                approvedPickup, approvedReturn, allowNoExpiry: false, cancellationToken) ||
+            !await HasValidVehicleDocumentAsync(booking.VehicleId, VehicleDocumentType.Insurance,
+                approvedPickup, approvedReturn, allowNoExpiry: false, cancellationToken) ||
+            !await HasValidVehicleDocumentAsync(booking.VehicleId, VehicleDocumentType.RoadFee,
+                approvedPickup, approvedReturn, allowNoExpiry: false, cancellationToken))
+        {
+            return OperationResult.Failure("Giấy tờ xe không còn hiệu lực tới thời điểm trả mới. Hãy chọn xe hoặc thời gian khác trước khi thu tiền.");
+        }
+
         var hasConflict = await HasConflictAsync(
             booking.VehicleId,
-            booking.PickupDate,
-            booking.ReturnDate,
+            approvedPickup,
+            approvedReturn,
             booking.PickupMethod,
             booking.Policy,
             booking.BookingId,
@@ -366,7 +410,30 @@ internal sealed class BookingService : IBookingService
 
         if (hasConflict)
         {
-            return OperationResult.Failure("Xe đã phát sinh lịch thuê khác không đủ khoảng đệm vận hành trước/sau chuyến này.");
+            return OperationResult.Failure("Xe đã phát sinh lịch thuê khác không đủ khoảng đệm vận hành trước/sau chuyến này. Hãy chọn xe hoặc thời gian khác trước khi thu tiền.");
+        }
+
+        var actualTurnaroundReadyAt = await GetActualTurnaroundReadyAtAsync(
+            booking.VehicleId,
+            approvedPickup,
+            booking.PickupMethod,
+            booking.Policy,
+            booking.BookingId,
+            cancellationToken);
+        if (actualTurnaroundReadyAt.HasValue &&
+            actualTurnaroundReadyAt.Value > approvedPickup)
+        {
+            return OperationResult.Failure(
+                $"Xe vừa hoàn tất lượt thuê trước và cần chuẩn bị đến {actualTurnaroundReadyAt.Value:dd/MM/yyyy HH:mm}. " +
+                "Không thể duyệt giờ nhận hiện tại.");
+        }
+
+        if (isImmediateCounter)
+        {
+            // Persist this for legacy immediate bookings whose original flag did not exist.
+            booking.IsImmediateCounterRental = true;
+            booking.PickupDate = approvedPickup;
+            booking.ReturnDate = approvedReturn;
         }
 
         booking.Status = BookingStatus.PendingPayment;
@@ -593,6 +660,37 @@ internal sealed class BookingService : IBookingService
                 $"{vehicleStateMessage} Chỉ được xác nhận sẵn sàng khi trạng thái xe là Có sẵn.");
         }
 
+        var latestPreviousReturn = await _dbContext.VehicleReturns
+            .AsNoTracking()
+            .Where(vehicleReturn =>
+                vehicleReturn.Booking.VehicleId == booking.VehicleId &&
+                vehicleReturn.BookingId != booking.BookingId &&
+                vehicleReturn.Booking.PickupDate < booking.PickupDate)
+            .OrderByDescending(vehicleReturn => vehicleReturn.ReturnedAt)
+            .Select(vehicleReturn => (DateTime?)vehicleReturn.ReturnedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var now = DateTime.Now;
+        if (latestPreviousReturn.HasValue &&
+            !BookingWorkflowRules.HasActualTurnaroundElapsed(
+                now,
+                latestPreviousReturn.Value,
+                booking.Policy,
+                booking.PickupMethod))
+        {
+            var readyAt = latestPreviousReturn.Value.AddMinutes(
+                booking.Policy.GetOperationalPreparationMinutes(booking.PickupMethod));
+            return OperationResult.Failure(
+                $"Xe vừa được trả thực tế lúc {latestPreviousReturn.Value:dd/MM/yyyy HH:mm}. " +
+                $"Cần đủ thời gian kiểm tra/chuẩn bị trước lượt này; sớm nhất có thể xác nhận sẵn sàng lúc {readyAt:dd/MM/yyyy HH:mm}.");
+        }
+
+        if (now.Date != booking.PickupDate.Date)
+        {
+            return OperationResult.Failure(
+                $"Chỉ xác nhận xe sẵn sàng trong ngày nhận xe ({booking.PickupDate:dd/MM/yyyy}).");
+        }
+
         booking.Status = BookingStatus.ReadyForPickup;
         _dbContext.Notifications.Add(new Notification
         {
@@ -610,6 +708,8 @@ internal sealed class BookingService : IBookingService
             .AsNoTracking()
             .Select(booking => new BookingListItemDto
             {
+                Source = booking.Source,
+                IsImmediateCounterRental = booking.IsImmediateCounterRental,
                 BookingId = booking.BookingId,
                 CustomerId = booking.CustomerId,
                 CustomerName = _dbContext.Users
@@ -725,6 +825,9 @@ internal sealed class BookingService : IBookingService
 
         return new BookingDetailsDto
         {
+            Source = booking.Source,
+            IsImmediateCounterRental = CounterRentalSchedule.IsImmediate(
+                booking.Source, booking.IsImmediateCounterRental, booking.CreatedAt, booking.PickupDate),
             PolicyJson = booking.PolicyJson,
             BookingId = booking.BookingId,
             CustomerId = booking.CustomerId,
@@ -839,6 +942,29 @@ internal sealed class BookingService : IBookingService
         }
 
         return false;
+    }
+
+    private async Task<DateTime?> GetActualTurnaroundReadyAtAsync(
+        int vehicleId,
+        DateTime requestedPickup,
+        VehiclePickupMethod pickupMethod,
+        RentalPolicySnapshot requestedPolicy,
+        int? excludedBookingId,
+        CancellationToken cancellationToken)
+    {
+        var latestReturnedAt = await _dbContext.VehicleReturns
+            .AsNoTracking()
+            .Where(vehicleReturn =>
+                vehicleReturn.Booking.VehicleId == vehicleId &&
+                (!excludedBookingId.HasValue ||
+                 vehicleReturn.BookingId != excludedBookingId.Value) &&
+                vehicleReturn.Booking.PickupDate < requestedPickup)
+            .OrderByDescending(vehicleReturn => vehicleReturn.ReturnedAt)
+            .Select(vehicleReturn => (DateTime?)vehicleReturn.ReturnedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return latestReturnedAt?.AddMinutes(
+            requestedPolicy.GetOperationalPreparationMinutes(pickupMethod));
     }
 
     private Task<bool> HasValidVehicleDocumentAsync(

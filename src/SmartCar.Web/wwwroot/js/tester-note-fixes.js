@@ -125,16 +125,17 @@ function normalizeAdminInspectionPanel(panel) {
 
 function normalizeSignedBlock(headerRoot, bodyRoot, title) {
     const isHandover = title.includes('giao');
+    // Bản ký được phục vụ qua route an toàn, URL không còn chứa tên file gốc.
     const signedSelector = isHandover
-        ? 'a[href*="signed-handover-"]'
-        : 'a[href*="signed-return-"]';
+        ? 'a[href*="signed-handover-"], a[href*="RentalSignedDocumentFiles"]'
+        : 'a[href*="signed-return-"], a[href*="RentalSignedDocumentFiles"]';
     const signedLinks = Array.from(bodyRoot.querySelectorAll(signedSelector));
     const signedCount = signedLinks.length;
     const badge = headerRoot.querySelector('.badge');
 
-    if (badge) {
-        badge.className = signedCount > 0 ? 'badge bg-success' : 'badge bg-danger';
-        badge.textContent = signedCount > 0 ? 'Đã ký' : 'Thiếu ký';
+    if (badge && signedCount > 0) {
+        badge.className = 'badge bg-success';
+        badge.textContent = 'Đã ký';
     }
 
     signedLinks.forEach((link, index) => {
@@ -507,12 +508,7 @@ function setLocationFields(form, latitude, longitude, placeName) {
 
 async function reverseGeocodePlace(latitude, longitude) {
     const local = await tryFetchJson(`/api/geocoding/reverse?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`);
-    const localName = extractPlaceName(local);
-    if (localName) return localName;
-
-    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}&zoom=18&addressdetails=1`;
-    const nominatim = await tryFetchJson(nominatimUrl);
-    return extractPlaceName(nominatim);
+    return extractPlaceName(local);
 }
 
 async function tryFetchJson(url) {

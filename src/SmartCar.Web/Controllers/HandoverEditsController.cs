@@ -19,6 +19,10 @@ public sealed class HandoverEditsController : Controller
     private const int MinimumImages = 7;
     private const int MaximumImages = 25;
     private const long MaximumImageBytes = 5 * 1024 * 1024;
+    private static readonly string[] RequiredEvidencePrefixes =
+    {
+        "front-", "rear-", "left-", "right-", "interior-", "odometer-", "fuel-"
+    };
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
@@ -98,6 +102,17 @@ public sealed class HandoverEditsController : Controller
         ModelState.Remove(nameof(HandoverViewModel.TrafficFineTerms));
         ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
         ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
+        ModelState.Remove(nameof(HandoverViewModel.HandoverAt));
+        // Edit không xác minh lại danh tính. Các cờ này thuộc bước tạo biên bản ban đầu
+        // và không có input tương ứng trên form chỉnh sửa.
+        ModelState.Remove(nameof(HandoverViewModel.IdentityFaceSessionId));
+        ModelState.Remove(nameof(HandoverViewModel.OriginalCitizenIdChecked));
+        ModelState.Remove(nameof(HandoverViewModel.OriginalDrivingLicenseChecked));
+        ModelState.Remove(nameof(HandoverViewModel.ReceiverIdentityCheckedInPerson));
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable,
+            cancellationToken);
 
         var booking = await _dbContext.Bookings
             .Include(item => item.Vehicle)
@@ -115,6 +130,10 @@ public sealed class HandoverEditsController : Controller
             return RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId = model.BookingId });
         }
 
+        // Thời gian giao là timestamp nghiệp vụ do server chốt khi lập biên bản.
+        // Không nhận lại giá trị từ trình duyệt ở màn chỉnh sửa.
+        model.HandoverAt = booking.Handover.HandoverAt;
+
         var currentPaths = SplitPaths(booking.Handover.ImagePaths).ToList();
         var vehiclePhotos = VehiclePhotos(booking.Handover.ImagePaths).ToList();
         var imagesToDelete = model.ImagesToDelete ?? new List<string>();
@@ -125,6 +144,13 @@ public sealed class HandoverEditsController : Controller
         if (deleteSet.Any(path => !vehiclePhotos.Contains(path, StringComparer.OrdinalIgnoreCase)))
         {
             ModelState.AddModelError(nameof(model.ImagesToDelete), "Danh sách ảnh cần xóa không hợp lệ.");
+        }
+
+        if (deleteSet.Any(IsRequiredEvidence))
+        {
+            ModelState.AddModelError(
+                nameof(model.ImagesToDelete),
+                "7 ảnh đối chiếu bắt buộc (trước, sau, trái, phải, nội thất, công-tơ-mét, nhiên liệu) không được xóa ở bước chỉnh sửa.");
         }
 
         var newImages = (model.NewImages ?? new List<IFormFile>())
@@ -159,16 +185,6 @@ public sealed class HandoverEditsController : Controller
             }
         }
 
-        if (model.HandoverAt > DateTime.Now.AddMinutes(5))
-        {
-            ModelState.AddModelError(nameof(model.HandoverAt), "Thời gian giao xe không được ở tương lai.");
-        }
-
-        if (model.HandoverAt < booking.PickupDate || model.HandoverAt >= booking.ReturnDate)
-        {
-            ModelState.AddModelError(nameof(model.HandoverAt), "Thời gian giao phải nằm trong khoảng thuê đã đặt.");
-        }
-
         if (!model.Mileage.HasValue || model.Mileage.Value < booking.Vehicle.CurrentMileage)
         {
             ModelState.AddModelError(nameof(model.Mileage), $"Số km không được nhỏ hơn số km hiện tại ({booking.Vehicle.CurrentMileage:N0} km).");
@@ -181,6 +197,9 @@ public sealed class HandoverEditsController : Controller
 
         if (!ModelState.IsValid)
         {
+            // POST không gửi lại danh sách ảnh cũ (chỉ gửi các path đánh dấu xóa).
+            // Phải nạp lại từ DB để validation lỗi không làm giao diện trông như mất toàn bộ ảnh.
+            model.ExistingImagePaths = vehiclePhotos;
             PopulatePolicyFields(model, booking.Handover);
             model.IncludedKilometersPerDay = booking.Policy.IncludedKilometersPerDay;
             model.LateReturnGraceMinutes = booking.Policy.LateReturnGraceMinutes;
@@ -200,14 +219,16 @@ public sealed class HandoverEditsController : Controller
                 .Concat(addedPaths)
                 .ToList();
 
-            booking.Handover.HandoverAt = model.HandoverAt;
             booking.Handover.Mileage = model.Mileage!.Value;
             booking.Handover.FuelLevel = $"{fuelPercent}%";
+            booking.Handover.ExteriorCondition = Normalize(model.ExteriorCondition);
+            booking.Handover.InteriorCondition = Normalize(model.InteriorCondition);
             booking.Handover.Accessories = Normalize(model.Accessories);
             booking.Handover.Notes = Normalize(model.Notes);
             booking.Handover.ImagePaths = string.Join(';', updatedPaths);
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
@@ -228,8 +249,76 @@ public sealed class HandoverEditsController : Controller
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = "Đã cập nhật biên bản giao xe. Hãy kiểm tra lại trước khi in và ký.";
+        TempData["ClearFileDraftKeys"] = $"handover-edit-{model.BookingId}-new-images";
         return RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId = model.BookingId });
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DiscardDraft(
+        int bookingId,
+        string? returnTo,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable,
+            cancellationToken);
+
+        var booking = await _dbContext.Bookings
+            .Include(item => item.Handover)
+            .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
+
+        if (booking?.Handover is null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] = "Đơn không còn biên bản giao nháp cần hủy.";
+            return RedirectAfterDiscard(bookingId, returnTo);
+        }
+
+        var signedPaths = SplitPaths(booking.Handover.ImagePaths)
+            .Where(path => path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (booking.Status != BookingStatus.ReadyForPickup ||
+            booking.Handover.SignedDocumentVerified ||
+            signedPaths.Length > 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Chỉ được hủy biên bản giao nháp khi chuyến chưa bắt đầu và chưa tải bất kỳ bản ký nào.";
+            return RedirectAfterDiscard(bookingId, returnTo);
+        }
+
+        var vehiclePhotoPaths = VehiclePhotos(booking.Handover.ImagePaths).ToArray();
+        _dbContext.VehicleHandovers.Remove(booking.Handover);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        DeletePhysicalFiles(vehiclePhotoPaths);
+
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await _auditService.WriteAsync(
+            staffId,
+            "DiscardHandoverDraft",
+            nameof(VehicleHandover),
+            bookingId.ToString(),
+            $"Nhân viên hủy biên bản giao nháp chưa ký của đơn #{bookingId}; chuyến chưa bắt đầu. Ảnh tình trạng xe của draft cũ đã được loại khỏi hồ sơ để có thể lập lại đúng xe.",
+            ipAddress: HttpContext.Connection.RemoteIpAddress?.ToString(),
+            cancellationToken: cancellationToken);
+
+        TempData["SuccessMessage"] =
+            "Đã hủy biên bản giao nháp chưa ký. Có thể lập lại biên bản hoặc tiếp tục xử lý đổi xe.";
+        TempData["ClearFileDraftKeys"] =
+            $"handover-{bookingId}-front|handover-{bookingId}-rear|handover-{bookingId}-left|" +
+            $"handover-{bookingId}-right|handover-{bookingId}-interior|handover-{bookingId}-odometer|" +
+            $"handover-{bookingId}-fuel|handover-{bookingId}-extra|giao-{bookingId}-citizen-front|giao-{bookingId}-citizen-back";
+        return RedirectAfterDiscard(bookingId, returnTo);
+    }
+
+    private IActionResult RedirectAfterDiscard(int bookingId, string? returnTo) =>
+        string.Equals(returnTo, "extension-conflict", StringComparison.OrdinalIgnoreCase)
+            ? RedirectToAction("Index", "StaffExtensionOperations")
+            : RedirectToAction("Details", "Staff", new { id = bookingId });
 
     private static bool CanEdit(BookingStatus status, string? imagePaths) =>
         status == BookingStatus.ReadyForPickup &&
@@ -244,6 +333,13 @@ public sealed class HandoverEditsController : Controller
         SplitPaths(imagePaths)
             .Where(path => !path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
+    private static bool IsRequiredEvidence(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return RequiredEvidencePrefixes.Any(prefix =>
+            fileName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static bool TryParseFuel(string? value, out int percent)
     {

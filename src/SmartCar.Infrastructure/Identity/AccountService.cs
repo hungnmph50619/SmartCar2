@@ -112,7 +112,7 @@ internal sealed class AccountService : IAccountService
         {
             return null;
         }
-
+   
         return await _userManager.GeneratePasswordResetTokenAsync(user);
     }
 

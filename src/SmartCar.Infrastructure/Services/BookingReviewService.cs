@@ -45,6 +45,10 @@ internal sealed class BookingReviewService : IBookingReviewService
             return OperationResult.Failure("Chỉ kiểm tra đơn đang ở trạng thái Chờ xác nhận.");
         }
 
+        var (reviewPickup, reviewReturn) = CounterRentalSchedule.ForApproval(
+            booking.Source, booking.IsImmediateCounterRental, booking.CreatedAt,
+            booking.PickupDate, booking.ReturnDate, DateTime.Now);
+
         if (booking.ReservationExpiresAt.HasValue && booking.ReservationExpiresAt <= DateTime.UtcNow)
         {
             return OperationResult.Failure("Đơn đã hết thời gian giữ chỗ.");
@@ -61,7 +65,7 @@ internal sealed class BookingReviewService : IBookingReviewService
 
         if (!await _documentService.HasValidRentalDocumentsAsync(
                 booking.CustomerId,
-                booking.ReturnDate,
+                reviewReturn,
                 cancellationToken))
         {
             return OperationResult.Failure(
@@ -75,8 +79,8 @@ internal sealed class BookingReviewService : IBookingReviewService
 
         if (await _reservationPolicy.HasBufferedConflictAsync(
                 booking.VehicleId,
-                booking.PickupDate,
-                booking.ReturnDate,
+                reviewPickup,
+                reviewReturn,
                 booking.PickupMethod,
                 booking.BookingId,
                 cancellationToken))
@@ -87,12 +91,12 @@ internal sealed class BookingReviewService : IBookingReviewService
 
         var blockedUntil = await _reservationPolicy.GetActualTurnaroundBlockedUntilAsync(
             booking.VehicleId,
-            booking.PickupDate,
+            reviewPickup,
             booking.PickupMethod,
             booking.BookingId,
             cancellationToken);
 
-        if (blockedUntil.HasValue && blockedUntil.Value > booking.PickupDate)
+        if (blockedUntil.HasValue && blockedUntil.Value > reviewPickup)
         {
             return OperationResult.Failure(
                 $"Xe đang chờ kiểm tra sau lượt trả thực tế. Thời điểm nhận sớm nhất hiện tại là {blockedUntil.Value:dd/MM/yyyy HH:mm}.");

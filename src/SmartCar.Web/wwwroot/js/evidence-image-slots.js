@@ -24,6 +24,7 @@
             initializeMultiple(root).catch(() => { });
         });
         cleanupExpiredDrafts().catch(() => { });
+        clearServerConfirmedDrafts().catch(() => { });
         document.querySelectorAll('form').forEach((form) => {
             if (!form.querySelector('[data-evidence-input], [data-evidence-multiple-input]')) return;
 
@@ -335,6 +336,15 @@
             transaction.onabort = () => reject(transaction.error);
         });
         db.close();
+    }
+
+    async function clearServerConfirmedDrafts() {
+        const marker = document.querySelector('[data-clear-file-draft-keys]');
+        const raw = marker?.getAttribute('data-clear-file-draft-keys') || '';
+        const keys = raw.split('|').map((value) => value.trim()).filter(Boolean);
+        for (const key of new Set(keys)) {
+            await deleteDraft(key);
+        }
     }
 
     async function cleanupExpiredDrafts() {

@@ -10,8 +10,8 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
-using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
+using SmartCar.Web.Services;
 
 namespace SmartCar.Web.Controllers;
 
@@ -25,28 +25,21 @@ public sealed class AdminBookingsController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ReleaseStaffClaim(
-        int bookingId,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> ReleaseStaffClaim(int bookingId, CancellationToken cancellationToken)
     {
         var released = await new StaffBookingClaimService(_dbContext)
             .ForceReleaseAsync(bookingId, cancellationToken);
-
         if (released)
         {
             await _auditService.WriteAsync(
                 User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty,
-                "AdminReleaseStaffClaim",
-                nameof(Booking),
-                bookingId.ToString(),
+                "AdminReleaseStaffClaim", nameof(Booking), bookingId.ToString(),
                 $"Admin chuyển giao quyền xử lý đơn #{bookingId} cho nhân viên khác.",
                 cancellationToken: cancellationToken);
         }
-
         TempData[released ? "SuccessMessage" : "ErrorMessage"] = released
             ? "Đã giải phóng đơn. Nhân viên khác có thể nhận xử lý."
             : "Đơn hiện không có nhân viên phụ trách.";
-
         return RedirectToAction(nameof(Details), new { id = bookingId });
     }
 
@@ -72,6 +65,12 @@ public sealed class AdminBookingsController : Controller
         ViewBag.Query = query;
 
         var bookings = await _bookingService.GetAdminBookingsAsync(status, cancellationToken);
+        // Unreviewed requests belong to Staff, not the Admin approval queue.
+        var unreviewedIds = await _dbContext.Bookings.AsNoTracking()
+            .Where(item => item.Status == BookingStatus.PendingConfirmation && !item.StaffReviewedAt.HasValue)
+            .Select(item => item.BookingId)
+            .ToListAsync(cancellationToken);
+        bookings = bookings.Where(item => !unreviewedIds.Contains(item.BookingId)).ToList();
         if (string.IsNullOrWhiteSpace(query))
             return View(bookings);
 
@@ -94,14 +93,13 @@ public sealed class AdminBookingsController : Controller
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(id, cancellationToken);
-        if (booking is null)
-        {
-            return NotFound();
-        }
-
+        if (booking is null) return NotFound();
+        if (booking.Status == BookingStatus.PendingConfirmation &&
+            !await _dbContext.Bookings.AsNoTracking().AnyAsync(
+                item => item.BookingId == id && item.StaffReviewedAt.HasValue,
+                cancellationToken)) return NotFound();
         ViewBag.HandlingClaim = await new StaffBookingClaimService(_dbContext)
             .GetStateAsync(id, cancellationToken);
-
         return View(booking);
     }
 
@@ -321,6 +319,29 @@ public sealed class AdminBookingsController : Controller
         if (!ModelState.IsValid)
         {
             TempData["ErrorMessage"] = "Vui lòng nhập lý do từ chối.";
+            return RedirectToAction(nameof(Details), new { id = model.BookingId });
+        }
+
+        var staffReview = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(item => item.BookingId == model.BookingId)
+            .Select(item => new
+            {
+                item.StaffReviewedAt,
+                item.StaffReviewedByStaffId
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (staffReview is null)
+        {
+            return NotFound();
+        }
+
+        if (!staffReview.StaffReviewedAt.HasValue ||
+            string.IsNullOrWhiteSpace(staffReview.StaffReviewedByStaffId))
+        {
+            TempData["ErrorMessage"] =
+                "Đơn chưa được nhân viên kiểm tra và gửi duyệt. Quản trị viên không thể bỏ qua bước vận hành này.";
             return RedirectToAction(nameof(Details), new { id = model.BookingId });
         }
 

@@ -15,25 +15,16 @@ public sealed class StaffBookingClaimService
 
     private readonly ApplicationDbContext _dbContext;
 
-    public StaffBookingClaimService(ApplicationDbContext dbContext) =>
-        _dbContext = dbContext;
+    public StaffBookingClaimService(ApplicationDbContext dbContext) => _dbContext = dbContext;
 
     public async Task<bool> TryClaimAsync(
-        int bookingId,
-        string staffId,
-        CancellationToken cancellationToken = default)
+        int bookingId, string staffId, CancellationToken cancellationToken = default)
     {
-        if (bookingId <= 0 || string.IsNullOrWhiteSpace(staffId))
-        {
-            return false;
-        }
-
+        if (bookingId <= 0 || string.IsNullOrWhiteSpace(staffId)) return false;
         var now = DateTime.UtcNow;
         var until = now.Add(LeaseDuration);
-
         var updated = await _dbContext.Bookings
-            .Where(booking =>
-                booking.BookingId == bookingId &&
+            .Where(booking => booking.BookingId == bookingId &&
                 (booking.HandlingStaffId == null ||
                  booking.HandlingLeaseExpiresAt == null ||
                  booking.HandlingLeaseExpiresAt <= now ||
@@ -42,67 +33,39 @@ public sealed class StaffBookingClaimService
                 .SetProperty(booking => booking.HandlingStaffId, staffId)
                 .SetProperty(booking => booking.HandlingLeaseExpiresAt, until),
                 cancellationToken);
-
         return updated == 1;
     }
 
     public async Task<bool> TryRenewAsync(
-        int bookingId,
-        string staffId,
-        CancellationToken cancellationToken = default)
+        int bookingId, string staffId, CancellationToken cancellationToken = default)
     {
-        if (bookingId <= 0 || string.IsNullOrWhiteSpace(staffId))
-        {
-            return false;
-        }
-
+        if (bookingId <= 0 || string.IsNullOrWhiteSpace(staffId)) return false;
         var now = DateTime.UtcNow;
         var until = now.Add(LeaseDuration);
-
         return await _dbContext.Bookings
-            .Where(booking =>
-                booking.BookingId == bookingId &&
-                booking.HandlingStaffId == staffId &&
-                booking.HandlingLeaseExpiresAt > now)
+            .Where(booking => booking.BookingId == bookingId &&
+                booking.HandlingStaffId == staffId && booking.HandlingLeaseExpiresAt > now)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(booking => booking.HandlingLeaseExpiresAt, until),
                 cancellationToken) == 1;
     }
 
     public Task<bool> IsOwnedAsync(
-        int bookingId,
-        string staffId,
-        CancellationToken cancellationToken = default)
+        int bookingId, string staffId, CancellationToken cancellationToken = default)
     {
-        if (bookingId <= 0 || string.IsNullOrWhiteSpace(staffId))
-        {
-            return Task.FromResult(false);
-        }
-
+        if (bookingId <= 0 || string.IsNullOrWhiteSpace(staffId)) return Task.FromResult(false);
         var now = DateTime.UtcNow;
-        return _dbContext.Bookings
-            .AsNoTracking()
-            .AnyAsync(booking =>
-                booking.BookingId == bookingId &&
-                booking.HandlingStaffId == staffId &&
-                booking.HandlingLeaseExpiresAt > now,
-                cancellationToken);
+        return _dbContext.Bookings.AsNoTracking().AnyAsync(booking =>
+            booking.BookingId == bookingId && booking.HandlingStaffId == staffId &&
+            booking.HandlingLeaseExpiresAt > now, cancellationToken);
     }
 
     public async Task<bool> TryReleaseAsync(
-        int bookingId,
-        string staffId,
-        CancellationToken cancellationToken = default)
+        int bookingId, string staffId, CancellationToken cancellationToken = default)
     {
-        if (bookingId <= 0 || string.IsNullOrWhiteSpace(staffId))
-        {
-            return false;
-        }
-
+        if (bookingId <= 0 || string.IsNullOrWhiteSpace(staffId)) return false;
         return await _dbContext.Bookings
-            .Where(booking =>
-                booking.BookingId == bookingId &&
-                booking.HandlingStaffId == staffId)
+            .Where(booking => booking.BookingId == bookingId && booking.HandlingStaffId == staffId)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(booking => booking.HandlingStaffId, (string?)null)
                 .SetProperty(booking => booking.HandlingLeaseExpiresAt, (DateTime?)null),
@@ -110,64 +73,30 @@ public sealed class StaffBookingClaimService
     }
 
     public async Task<bool> ForceReleaseAsync(
-        int bookingId,
-        CancellationToken cancellationToken = default) =>
+        int bookingId, CancellationToken cancellationToken = default) =>
         await _dbContext.Bookings
-            .Where(booking =>
-                booking.BookingId == bookingId &&
-                booking.HandlingStaffId != null)
+            .Where(booking => booking.BookingId == bookingId && booking.HandlingStaffId != null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(booking => booking.HandlingStaffId, (string?)null)
                 .SetProperty(booking => booking.HandlingLeaseExpiresAt, (DateTime?)null),
                 cancellationToken) == 1;
 
-    public Task<int?> ResolveBookingIdByPaymentAsync(
-        int paymentId,
-        CancellationToken cancellationToken = default)
-    {
-        if (paymentId <= 0)
-        {
-            return Task.FromResult<int?>(null);
-        }
-
-        return _dbContext.Payments
-            .AsNoTracking()
-            .Where(payment => payment.PaymentId == paymentId)
-            .Select(payment => (int?)payment.BookingId)
-            .FirstOrDefaultAsync(cancellationToken);
-    }
-
     public async Task<StaffBookingClaimState?> GetStateAsync(
-        int bookingId,
-        CancellationToken cancellationToken = default)
+        int bookingId, CancellationToken cancellationToken = default)
     {
-        var booking = await _dbContext.Bookings
-            .AsNoTracking()
+        var booking = await _dbContext.Bookings.AsNoTracking()
             .Where(item => item.BookingId == bookingId)
-            .Select(item => new
-            {
-                item.HandlingStaffId,
-                item.HandlingLeaseExpiresAt
-            })
+            .Select(item => new { item.HandlingStaffId, item.HandlingLeaseExpiresAt })
             .FirstOrDefaultAsync(cancellationToken);
-
-        if (booking is null)
-        {
-            return null;
-        }
-
-        var isActive =
-            booking.HandlingStaffId != null &&
+        if (booking is null) return null;
+        var isActive = booking.HandlingStaffId != null &&
             booking.HandlingLeaseExpiresAt > DateTime.UtcNow;
-
         var staffName = isActive
-            ? await _dbContext.Users
-                .AsNoTracking()
+            ? await _dbContext.Users.AsNoTracking()
                 .Where(user => user.Id == booking.HandlingStaffId)
                 .Select(user => user.FullName)
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
-
         return new StaffBookingClaimState(
             isActive ? booking.HandlingStaffId : null,
             staffName,

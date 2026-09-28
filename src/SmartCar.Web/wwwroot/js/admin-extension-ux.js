@@ -54,30 +54,7 @@
         principle.innerHTML = '<strong>Nguyên tắc xử lý:</strong> Nếu thời gian gia hạn trùng với đơn thuê kế tiếp, yêu cầu gia hạn thông thường sẽ không được duyệt. Với trường hợp bất khả kháng có ảnh và vị trí xác minh, SmartCar ưu tiên bố trí xe thay thế cho khách có đơn kế tiếp. Nếu không thể bố trí xe phù hợp, thực hiện hủy đơn kế tiếp, hoàn tiền và chỉ bồi thường thiệt hại thực tế có căn cứ.';
     }
 
-    document.querySelectorAll('form[data-swap-form]').forEach(form => {
-        const checkbox = form.querySelector('input[name="customerAccepted"]');
-        if (checkbox instanceof HTMLInputElement) {
-            const wrapper = checkbox.closest('.col-12');
-            const hidden = document.createElement('input');
-            hidden.type = 'hidden';
-            hidden.name = 'customerAccepted';
-            hidden.value = 'true';
-            checkbox.removeAttribute('name');
-            checkbox.required = false;
-
-            if (wrapper) {
-                wrapper.innerHTML = '';
-                wrapper.appendChild(hidden);
-                const note = document.createElement('div');
-                note.className = 'alert alert-light border py-2 mb-0 small';
-                note.textContent = 'Chỉ bấm “Xác nhận đổi xe” sau khi đã trao đổi với khách có đơn kế tiếp và khách đồng ý xe thay thế cùng phần chênh lệch giá (nếu có).';
-                wrapper.appendChild(note);
-            } else {
-                form.appendChild(hidden);
-                checkbox.remove();
-            }
-        }
-    });
+    // Vehicle swap is a Staff-only workflow. Do not synthesize customer consent in JavaScript.
 
     const replacements = [
         ['Xem đơn B →', 'Xem đơn kế tiếp →'],

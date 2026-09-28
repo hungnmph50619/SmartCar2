@@ -1,3 +1,4 @@
+using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
 
 namespace SmartCar.Application.Features.Operations;
@@ -25,9 +26,9 @@ public static class BookingWorkflowRules
 
     public static bool CanCancelBeforeHandover(
         BookingStatus status,
-        bool hasHandover,
+        bool handoverStarted,
         bool hasPaymentAwaitingConfirmation = false) =>
-        !hasHandover &&
+        !handoverStarted &&
         !hasPaymentAwaitingConfirmation &&
         CancellableBeforeHandoverStatuses.Contains(status);
 
@@ -68,6 +69,9 @@ public static class BookingWorkflowRules
         type != PaymentType.Refund &&
         status == PaymentStatus.Pending;
 
+    public static bool IsReturnSurchargePaymentType(PaymentType type) =>
+        type == PaymentType.AdditionalCharge;
+
     public static bool BlocksNewRentalForOutstandingCustomerObligation(
         PaymentType type,
         PaymentStatus status,
@@ -75,12 +79,12 @@ public static class BookingWorkflowRules
         amount > 0m &&
         (
             (type == PaymentType.TrafficFine &&
-             status is PaymentStatus.Pending
-                 or PaymentStatus.AwaitingConfirmation
-                 or PaymentStatus.Failed) ||
+             status is PaymentStatus.Pending or
+                 PaymentStatus.AwaitingConfirmation or
+                 PaymentStatus.Failed) ||
             (type == PaymentType.OverdueCompensationDebt &&
-             status is PaymentStatus.Pending
-                 or PaymentStatus.AwaitingConfirmation)
+             status is PaymentStatus.Pending or
+                 PaymentStatus.AwaitingConfirmation)
         );
 
     public static bool IsOutstandingTrafficFine(
@@ -89,9 +93,9 @@ public static class BookingWorkflowRules
         decimal amount) =>
         type == PaymentType.TrafficFine &&
         amount > 0m &&
-        status is PaymentStatus.Pending
-            or PaymentStatus.AwaitingConfirmation
-            or PaymentStatus.Failed;
+        status is PaymentStatus.Pending or
+            PaymentStatus.AwaitingConfirmation or
+            PaymentStatus.Failed;
 
     public static bool PreserveForLateReconciliationOnReservationExpiry(
         PaymentStatus status) =>
@@ -124,18 +128,25 @@ public static class BookingWorkflowRules
         DateTime? staffReviewedAt) =>
         status == BookingStatus.PendingConfirmation && !staffReviewedAt.HasValue;
 
-    // Biên bản nháp có thể chuẩn bị trước giờ nhận để Staff không phải đợi đến đúng phút
-    // mới bắt đầu nhập ảnh/tình trạng. Chuyến chỉ được bắt đầu bởi CanStartTrip.
     public static bool CanPrepareHandover(
         DateTime now,
+        DateTime pickupDate,
         DateTime returnDate) =>
-        now < returnDate;
+        now >= pickupDate && now < returnDate;
 
     public static bool CanStartTrip(
         DateTime now,
         DateTime pickupDate,
         DateTime returnDate) =>
         now >= pickupDate && now < returnDate;
+
+    public static bool HasActualTurnaroundElapsed(
+        DateTime now,
+        DateTime previousReturnedAt,
+        RentalPolicySnapshot nextBookingPolicy,
+        VehiclePickupMethod nextPickupMethod) =>
+        now >= previousReturnedAt.AddMinutes(
+            nextBookingPolicy.GetOperationalPreparationMinutes(nextPickupMethod));
 
     public static bool CanRecordReturn(
         DateTime returnedAt,
@@ -158,3 +169,4 @@ public static class BookingWorkflowRules
                status is BookingStatus.Cancelled or BookingStatus.NoShow;
     }
 }
+

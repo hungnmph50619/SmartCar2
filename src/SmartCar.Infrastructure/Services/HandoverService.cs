@@ -54,9 +54,52 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Đơn chưa ở trạng thái sẵn sàng giao xe.");
         }
 
+        var activeCustomer = await _dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(user =>
+                user.Id == booking.CustomerId &&
+                user.IsActive,
+                cancellationToken);
+        if (!activeCustomer)
+        {
+            return OperationResult.Failure(
+                "Tài khoản khách đang bị khóa hoặc không còn hoạt động. Dừng bàn giao và báo quản lý.");
+        }
+
         if (booking.Handover is not null)
         {
             return OperationResult.Failure("Đơn đã có biên bản giao xe.");
+        }
+
+        var verifiedDocuments = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == booking.CustomerId &&
+                document.Status == DocumentStatus.Verified &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.CitizenIdBack ||
+                 document.DocumentType == DocumentTypes.DrivingLicense ||
+                 document.DocumentType == DocumentTypes.DrivingLicenseBack))
+            .ToListAsync(cancellationToken);
+
+        var citizenFront = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenIdBack);
+        var licenseFront = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.DrivingLicense);
+        var licenseBack = verifiedDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.DrivingLicenseBack);
+
+        if (citizenFront is null || citizenBack is null ||
+            licenseFront is null || licenseBack is null ||
+            !string.Equals(citizenFront.DocumentNumber, citizenBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(licenseFront.DocumentNumber, licenseBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !citizenFront.ExpiryDate.HasValue || citizenFront.ExpiryDate.Value.Date < booking.ReturnDate.Date ||
+            !licenseFront.ExpiryDate.HasValue || licenseFront.ExpiryDate.Value.Date < booking.ReturnDate.Date)
+        {
+            return OperationResult.Failure(
+                "CCCD/GPLX đã xác minh không còn đủ cả hai mặt hoặc không còn hiệu lực đến ngày trả. Dừng bàn giao và kiểm tra lại KYC.");
         }
 
         var faceSession = await _dbContext.Set<IdentityCaptureSession>()
@@ -68,6 +111,7 @@ internal sealed class HandoverService : IHandoverService
             faceSession.Purpose != IdentityCapturePurposes.Handover ||
             faceSession.BookingId != booking.BookingId ||
             faceSession.TargetCustomerId != booking.CustomerId ||
+            faceSession.CreatedByUserId != request.IdentityVerifiedByStaffId ||
             !faceSession.CanConsume(DateTime.UtcNow) ||
             !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
         {
@@ -162,10 +206,23 @@ internal sealed class HandoverService : IHandoverService
             return OperationResult.Failure("Xe hiện không ở trạng thái sẵn sàng.");
         }
 
-        // Đây chỉ là thời điểm Staff chuẩn bị/lưu biên bản nháp. Chuyến chưa bắt đầu ở đây.
-        // Thời điểm giao thực tế được chốt bằng server time khi xác minh bản ký.
+        if (!await HasRequiredVehicleDocumentsAsync(
+                booking.VehicleId,
+                booking.PickupDate,
+                booking.ReturnDate,
+                cancellationToken))
+        {
+            return OperationResult.Failure(
+                "Giấy tờ xe không còn đủ hiệu lực cho toàn bộ chuyến thuê. Dừng bàn giao và kiểm tra lại Đăng ký xe, Đăng kiểm, Bảo hiểm và Phí đường bộ.");
+        }
+
         var preparedAt = DateTime.Now;
-        // TEST Quy_2: tạm bỏ validation thời gian để chạy trọn luồng giao - trả.
+        if (!BookingWorkflowRules.CanPrepareHandover(
+                preparedAt, booking.PickupDate, booking.ReturnDate))
+        {
+            return OperationResult.Failure(
+                $"Chỉ lập biên bản giao từ {booking.PickupDate:dd/MM/yyyy HH:mm} đến trước {booking.ReturnDate:dd/MM/yyyy HH:mm}.");
+        }
 
         if (request.Mileage < booking.Vehicle.CurrentMileage)
         {
@@ -224,6 +281,58 @@ internal sealed class HandoverService : IHandoverService
         await transaction.CommitAsync(cancellationToken);
         return OperationResult.Success();
     }
+
+    private async Task<bool> HasRequiredVehicleDocumentsAsync(
+        int vehicleId,
+        DateTime pickupDate,
+        DateTime returnDate,
+        CancellationToken cancellationToken)
+    {
+        return await HasValidVehicleDocumentAsync(
+                   vehicleId,
+                   VehicleDocumentType.Registration,
+                   pickupDate,
+                   returnDate,
+                   allowNoExpiry: true,
+                   cancellationToken) &&
+               await HasValidVehicleDocumentAsync(
+                   vehicleId,
+                   VehicleDocumentType.Inspection,
+                   pickupDate,
+                   returnDate,
+                   allowNoExpiry: false,
+                   cancellationToken) &&
+               await HasValidVehicleDocumentAsync(
+                   vehicleId,
+                   VehicleDocumentType.Insurance,
+                   pickupDate,
+                   returnDate,
+                   allowNoExpiry: false,
+                   cancellationToken) &&
+               await HasValidVehicleDocumentAsync(
+                   vehicleId,
+                   VehicleDocumentType.RoadFee,
+                   pickupDate,
+                   returnDate,
+                   allowNoExpiry: false,
+                   cancellationToken);
+    }
+
+    private Task<bool> HasValidVehicleDocumentAsync(
+        int vehicleId,
+        VehicleDocumentType documentType,
+        DateTime requiredFrom,
+        DateTime requiredUntil,
+        bool allowNoExpiry,
+        CancellationToken cancellationToken) =>
+        _dbContext.VehicleDocuments.AnyAsync(document =>
+            document.VehicleId == vehicleId &&
+            document.DocumentType == documentType &&
+            document.IssuedDate.Date <= requiredFrom.Date &&
+            ((allowNoExpiry && !document.ExpiryDate.HasValue) ||
+             (document.ExpiryDate.HasValue &&
+              document.ExpiryDate.Value.Date >= requiredUntil.Date)),
+            cancellationToken);
 
     private static bool TryParseFuelPercent(string? value, out int percent)
     {

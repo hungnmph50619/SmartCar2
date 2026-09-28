@@ -20,6 +20,15 @@ namespace SmartCar.Tests;
 public sealed class CounterRentalWorkflowTests
 {
     [Fact]
+    public void DefaultImmediateRental_DoesNotAccidentallyQuoteTwoDays()
+    {
+        var model = new StaffCounterRentalViewModel();
+
+        Assert.True(model.IsImmediatePickup);
+        Assert.InRange((model.ReturnDate - DateTime.Now).TotalHours, 23.9, 24);
+    }
+
+    [Fact]
     public async Task CounterRental_RejectsActiveCustomerWithoutDefaultRefundAccount()
     {
         await using var db = CreateDbContext();
@@ -67,6 +76,50 @@ public sealed class CounterRentalWorkflowTests
         var redirect = Assert.IsType<RedirectToActionResult>(result);
         Assert.Equal(nameof(StaffController.Details), redirect.ActionName);
         Assert.Equal(1, bookings.CreateCalls);
+    }
+
+    [Fact]
+    public async Task CounterRental_ImmediatePickup_UsesCurrentTimeInsteadOfScheduledTime()
+    {
+        await using var db = CreateDbContext();
+        await SeedActiveCustomerAsync(db);
+        var bookings = new BookingServiceStub();
+        var bank = new UserBankAccountDto(1, "customer-1", "VCB", "Vietcombank",
+            "0123456789", "NGUYEN VAN A", true, true, DateTime.UtcNow, DateTime.UtcNow);
+        var controller = CreateController(db, bookings, new BankAccountServiceStub(bank));
+        var before = DateTime.Now;
+        var model = ValidModel();
+        model.IsImmediatePickup = true;
+
+        await controller.CounterRental(model, default);
+
+        Assert.NotNull(bookings.LastRequest);
+        Assert.True(bookings.LastRequest.IsImmediateCounterRental);
+        Assert.InRange(bookings.LastRequest.PickupDate, before, DateTime.Now);
+        Assert.True(bookings.LastRequest.IsStaffCounterRental);
+    }
+
+    [Fact]
+    public async Task CounterRental_FromCustomerList_PrefillsActiveCustomer()
+    {
+        await using var db = CreateDbContext();
+        await SeedActiveCustomerAsync(db);
+        var controller = CreateController(db, new BookingServiceStub(), new BankAccountServiceStub(null));
+
+        var result = Assert.IsType<ViewResult>(await controller.CounterRental("customer-1", default));
+        var model = Assert.IsType<StaffCounterRentalViewModel>(result.Model);
+        Assert.Equal("customer-1", model.CustomerId);
+        Assert.Equal("Nguyễn Văn A", model.SelectedCustomerName);
+    }
+
+    [Fact]
+    public async Task CounterRental_FromCustomerList_RejectsUnknownCustomer()
+    {
+        await using var db = CreateDbContext();
+        var controller = CreateController(db, new BookingServiceStub(), new BankAccountServiceStub(null));
+
+        var result = Assert.IsType<ViewResult>(await controller.CounterRental("unknown", default));
+        Assert.Equal(string.Empty, Assert.IsType<StaffCounterRentalViewModel>(result.Model).CustomerId);
     }
 
     private static StaffCounterRentalViewModel ValidModel() => new()
@@ -127,6 +180,7 @@ public sealed class CounterRentalWorkflowTests
     private sealed class BookingServiceStub : IBookingService
     {
         public int CreateCalls { get; private set; }
+        public CreateBookingRequest? LastRequest { get; private set; }
 
         public Task<BookingMutationResult> CreateAsync(
             string customerId,
@@ -134,6 +188,7 @@ public sealed class CounterRentalWorkflowTests
             CancellationToken cancellationToken = default)
         {
             CreateCalls++;
+            LastRequest = request;
             return Task.FromResult(BookingMutationResult.Success(777));
         }
 

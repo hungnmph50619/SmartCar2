@@ -39,7 +39,8 @@
     var refundPayments = Model.Payments.Where(payment => payment.Type == PaymentType.Refund).ToList();
     var hasPayablePending = Model.Payments.Any(payment =>
         payment.Status == PaymentStatus.Pending &&
-        (payment.Type is PaymentType.Rental or PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
+        ((payment.Type == PaymentType.Rental && Model.Source == BookingSource.CustomerWeb) ||
+         payment.Type is PaymentType.Extension or PaymentType.VehicleSwapAdjustment or PaymentType.OverdueCompensationDebt ||
          payment.Type == PaymentType.AdditionalCharge &&
          AdditionalChargeSettlementPolicy.IsReadyMarker(payment.TransactionCode)));
     var hasAwaitingConfirmation = Model.Payments.Any(payment => payment.Status == PaymentStatus.AwaitingConfirmation);
@@ -353,7 +354,7 @@
             </div>
         }
 
-        @if (handoverRecord is not null)
+        @if (handoverRecord?.SignedDocumentVerified == true)
         {
             var handoverSignedPaths = SignedPaths(handoverRecord.ImagePaths, "signed-handover-");
             var handoverEvidence = EvidencePaths(handoverRecord.ImagePaths, "signed-handover-");
@@ -460,6 +461,19 @@
                         <div class="col-md-4"><span class="text-muted">Km lúc trả</span><div class="fw-semibold">@returnRecord.Mileage.ToString("N0") km</div></div>
                         <div class="col-md-4"><span class="text-muted">Nhiên liệu</span><div class="fw-semibold">@returnRecord.FuelLevel</div></div>
                     </div>
+                    @if (!additionalChargeFinalized && Model.AdditionalCharges.Count > 0)
+                    {
+                        <div class="alert alert-info small">
+                            <strong>Phụ phí trả xe tạm tính: @Model.AdditionalAmount.ToString("N0") đ</strong>
+                            <ul class="mb-1 mt-2">
+                                @foreach (var charge in Model.AdditionalCharges)
+                                {
+                                    <li>@charge.Description — @charge.Amount.ToString("N0") đ</li>
+                                }
+                            </ul>
+                            Nhân viên sẽ đối chiếu và chốt khoản phải thanh toán. Khoản tạm tính chưa cộng vào tổng hóa đơn.
+                        </div>
+                    }
                     <div class="small mb-3">
                         <strong>Hư hỏng mới:</strong> <span class="@(returnRecord.HasDamage ? "text-danger" : "text-success")">@(returnRecord.HasDamage ? "Có" : "Không")</span>
                         @if (!string.IsNullOrWhiteSpace(returnRecord.ExteriorCondition)) { <div><strong>Ngoại thất:</strong> @returnRecord.ExteriorCondition</div> }
@@ -509,10 +523,16 @@
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white"><strong>Thanh toán</strong></div>
             <div class="card-body">
-                @if (Model.Status is BookingStatus.PendingPayment or BookingStatus.Paid or BookingStatus.ReadyForPickup)
+                @if (Model.Status is BookingStatus.Paid or BookingStatus.ReadyForPickup)
                 {
                     <div class="alert alert-light border small py-2">
                         <strong>Không đến nhận sau @Model.Policy.NoShowGraceMinutes phút:</strong> giữ @Model.Policy.NoShowFeePercent.ToString("0.##")% tiền thuê, hoàn @((100m - Model.Policy.NoShowFeePercent).ToString("0.##"))% tiền thuê và 100% cọc còn lại.
+                    </div>
+                }
+                @if (Model.Status == BookingStatus.PendingPayment && rentalPayment?.Method == PaymentMethods.Cash)
+                {
+                    <div class="alert alert-light border small py-2">
+                        Chưa thu tiền mặt: nếu quá giờ nhận + @Model.Policy.NoShowGraceMinutes phút mà nhân viên chưa nhận đủ tiền, đơn hết hạn giữ xe. Phí no-show chỉ áp dụng cho đơn đã thanh toán và sẵn sàng giao.
                     </div>
                 }
 
@@ -524,7 +544,36 @@
                         SmartCar đang đối chiếu biên bản giao - trả và chốt phụ phí. Khoản tạm tính chưa mở thanh toán; vui lòng chờ số tiền cuối cùng.
                     </div>
                 }
-                <div class="alert alert-info small py-2">Chuyển đúng số tiền hiển thị, sau đó bấm xác nhận đã chuyển.</div>
+                @if (Model.Source == BookingSource.StaffCounter && Model.Status == BookingStatus.PendingPayment)
+                {
+                    <div class="alert alert-info small py-2">Đơn này được lập tại quầy. Vui lòng thanh toán tiền thuê và cọc trực tiếp với nhân viên bằng tiền mặt hoặc quét QR tại quầy; Admin sẽ đối soát chuyển khoản.</div>
+                }
+                @if (Model.Source == BookingSource.CustomerWeb && rentalPayment?.Status == PaymentStatus.Pending && Model.Status == BookingStatus.PendingPayment)
+                {
+                    <fieldset class="border rounded p-3 mb-3" id="upfront-payment-methods">
+                        <legend class="float-none w-auto fs-6 fw-semibold px-1">Chọn cách thanh toán tiền thuê và cọc</legend>
+                        <form asp-controller="Payments" asp-action="ChooseUpfrontMethod" method="post">
+                            <input type="hidden" name="bookingId" value="@Model.BookingId" />
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="method" id="pay-upfront-qr" value="qr" checked="@(rentalPayment.Method != PaymentMethods.Cash ? "checked" : null)" />
+                            <label class="form-check-label" for="pay-upfront-qr">Chuyển khoản / quét QR</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="method" id="pay-upfront-cash" value="cash" checked="@(rentalPayment.Method == PaymentMethods.Cash ? "checked" : null)" />
+                            <label class="form-check-label" for="pay-upfront-cash">Tiền mặt tại quầy</label>
+                        </div>
+                        <div class="alert alert-info small mt-3 mb-0 d-none" id="upfront-cash-instructions">
+                            Mang <strong>@Model.UpfrontAmount.ToString("N0") đ</strong> đến quầy SmartCar (@storeAddress) muộn nhất lúc @(Model.PickupDate.AddMinutes(Model.Policy.NoShowGraceMinutes).ToString("dd/MM/yyyy HH:mm")).
+                            Bấm “Lưu phương thức thanh toán” để giữ lịch đến mốc này. Nhân viên chỉ xác nhận sau khi thực nhận đủ tiền thuê và cọc.
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm mt-2" type="submit">Lưu phương thức thanh toán</button>
+                        </form>
+                    </fieldset>
+                }
+                else if (hasPayablePending || hasAwaitingConfirmation)
+                {
+                    <div class="alert alert-info small py-2">Chuyển đúng số tiền hiển thị, sau đó bấm xác nhận đã chuyển. Nếu đã báo chuyển, vui lòng chờ Admin đối soát.</div>
+                }
 
                 <div class="border border-primary rounded p-3 mb-3 bg-light">
                     <div class="small text-uppercase text-muted fw-semibold">Trước khi nhận xe</div>
@@ -541,6 +590,8 @@
 
                 @if (hasPayablePending || hasAwaitingConfirmation)
                 {
+                    <div id="upfront-qr-details"
+                         class="@(Model.Status == BookingStatus.PendingPayment && rentalPayment?.Method == PaymentMethods.Cash ? "d-none" : string.Empty)">
                     <div class="text-center mb-3">
                         <img src="@qrImagePath" alt="QR thanh toán SmartCar" class="img-fluid border rounded" style="max-height:260px" />
                     </div>
@@ -550,6 +601,7 @@
                         <dt class="col-5">Chủ tài khoản</dt><dd class="col-7">@accountHolder</dd>
                         <dt class="col-5">Nội dung</dt><dd class="col-7"><code>SMARTCAR @Model.BookingId</code></dd>
                     </dl>
+                    </div>
                 }
 
                 <div class="vstack gap-2">
@@ -570,9 +622,11 @@
                                 <div><strong>Tiền thuê@(Model.DeliveryFee > 0 ? " + giao" : "") + cọc</strong><div class="fs-5">@bundledAmount.ToString("N0") đ</div></div>
                                 <span class="badge @upfrontBadgeClass">@upfrontStatus.ToVietnamese()</span>
                             </div>
-                            @if (rentalPayment.Status == PaymentStatus.Pending)
+                            @if (Model.Source == BookingSource.CustomerWeb && rentalPayment.Status == PaymentStatus.Pending)
                             {
-                                <form asp-controller="Payments" asp-action="SubmitQr" method="post" class="mt-2">
+                                <form asp-controller="Payments" asp-action="SubmitQr" method="post"
+                                      class="mt-2 @(rentalPayment.Method == PaymentMethods.Cash ? "d-none" : string.Empty)"
+                                      id="upfront-qr-submit">
                                     <input type="hidden" name="bookingId" value="@Model.BookingId" />
                                     <input type="hidden" name="type" value="@PaymentType.Rental" />
                                     <input type="hidden" name="paymentId" value="@rentalPayment.PaymentId" />
@@ -759,6 +813,22 @@
 
 <script>
     (() => {
+        const cash = document.getElementById('pay-upfront-cash');
+        const qr = document.getElementById('pay-upfront-qr');
+        if (!cash || !qr) return;
+        const note = document.getElementById('upfront-cash-instructions');
+        const qrDetails = document.getElementById('upfront-qr-details');
+        const qrSubmit = document.getElementById('upfront-qr-submit');
+        const sync = () => {
+            note?.classList.toggle('d-none', !cash.checked);
+            qrDetails?.classList.toggle('d-none', cash.checked);
+            qrSubmit?.classList.toggle('d-none', cash.checked);
+        };
+        cash.addEventListener('change', sync);
+        qr.addEventListener('change', sync);
+        sync();
+    })();
+    (() => {
         const form = document.getElementById('customer-extension-form');
         if (!form) return;
 
@@ -908,4 +978,3 @@
         sync();
     })();
 </script>
-

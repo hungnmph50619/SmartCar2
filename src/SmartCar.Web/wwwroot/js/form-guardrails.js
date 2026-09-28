@@ -1,5 +1,6 @@
 (() => {
     const draftDbName = 'smartcar-form-drafts';
+    const evidenceDraftDbName = 'smartcar-evidence-drafts';
     const draftStoreName = 'files';
     const draftMaxAgeMs = 60 * 60 * 1000;
 
@@ -162,9 +163,18 @@
 
         const db = await openDraftDb();
         await purgeExpiredDrafts(db);
+        await clearServerConfirmedDrafts(db);
+        await clearServerConfirmedEvidenceDrafts();
 
         const registerInput = async (input) => {
             if (!(input instanceof HTMLInputElement) || input.type !== 'file' || !input.dataset.fileDraftKey) return;
+
+            // Evidence slots have their own draft store + preview lifecycle in
+            // evidence-image-slots.js. Registering the same input here as well
+            // creates two independent IndexedDB restores that can race and
+            // overwrite each other's FileList after a validation failure/reload.
+            if (input.matches('[data-evidence-input], [data-evidence-multiple-input]')) return;
+
             if (input.dataset.fileDraftInitialized === 'true') return;
             input.dataset.fileDraftInitialized = 'true';
             input.addEventListener('change', () => saveInputDraft(db, input));
@@ -261,6 +271,43 @@
 
         input.files = transfer.files;
         input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function serverConfirmedDraftKeys() {
+        const marker = document.querySelector('[data-clear-file-draft-keys]');
+        const raw = marker?.getAttribute('data-clear-file-draft-keys') || '';
+        return [...new Set(raw.split('|').map((value) => value.trim()).filter(Boolean))];
+    }
+
+    async function clearServerConfirmedDrafts(db) {
+        for (const key of serverConfirmedDraftKeys()) {
+            await transactionRequest(db, 'readwrite', (store) => store.delete(key));
+        }
+    }
+
+    async function clearServerConfirmedEvidenceDrafts() {
+        const keys = serverConfirmedDraftKeys();
+        if (keys.length === 0) return;
+
+        const db = await new Promise((resolve, reject) => {
+            const request = indexedDB.open(evidenceDraftDbName, 1);
+            request.onupgradeneeded = () => {
+                const evidenceDb = request.result;
+                if (!evidenceDb.objectStoreNames.contains(draftStoreName)) {
+                    evidenceDb.createObjectStore(draftStoreName, { keyPath: 'key' });
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+
+        try {
+            for (const key of keys) {
+                await transactionRequest(db, 'readwrite', (store) => store.delete(key));
+            }
+        } finally {
+            db.close();
+        }
     }
 
     async function purgeExpiredDrafts(db) {

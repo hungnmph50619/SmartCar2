@@ -10,6 +10,21 @@
             const fallbackUrl = widget.dataset.fallbackUrl;
             if (!button || !fileInput || !reasonInput || !fallbackUrl) return;
 
+            let localPreviewUrl = null;
+            fileInput.addEventListener('change', () => {
+                if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+                localPreviewUrl = null;
+                const file = fileInput.files?.[0];
+                if (!preview || !file || !file.type.startsWith('image/')) return;
+                localPreviewUrl = URL.createObjectURL(file);
+                preview.src = localPreviewUrl;
+                preview.classList.remove('d-none');
+                if (status) status.textContent = 'Xem ảnh đã chọn, ghi lý do rồi bấm “Dùng ảnh dự phòng” để lưu.';
+            });
+            window.addEventListener('pagehide', () => {
+                if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+            }, { once: true });
+
             button.addEventListener('click', async () => {
                 const file = fileInput.files?.[0];
                 const reason = reasonInput.value.trim();
@@ -49,6 +64,8 @@
                     if (!response.ok) throw new Error(payload?.error || 'Không lưu được ảnh dự phòng.');
                     if (hidden) hidden.value = payload.sessionId;
                     if (preview) {
+                        if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+                        localPreviewUrl = null;
                         preview.src = payload.imageUrl;
                         preview.classList.remove('d-none');
                     }

@@ -53,7 +53,14 @@
             <option value="">Tất cả trạng thái</option>
             @foreach (var status in Enum.GetValues<BookingStatus>())
             {
-                <option value="@status" selected="@(selectedStatus == status)">@status.ToVietnamese()</option>
+                if (selectedStatus == status)
+                {
+                    <option value="@status" selected>@status.ToVietnamese()</option>
+                }
+                else
+                {
+                    <option value="@status">@status.ToVietnamese()</option>
+                }
             }
         </select>
     </div>

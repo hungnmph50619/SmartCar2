@@ -159,7 +159,8 @@ internal sealed class IncidentService : IIncidentService
 
         _dbContext.VehicleIncidents.Add(incident);
 
-        if (request.IncidentType != IncidentType.TrafficFine && vehicle.Status != VehicleStatus.Rented)
+        if (request.IncidentType != IncidentType.TrafficFine &&
+            vehicle.Status is not (VehicleStatus.Rented or VehicleStatus.Inspection or VehicleStatus.Inactive))
         {
             vehicle.Status = VehicleStatus.Maintenance;
         }
@@ -282,7 +283,12 @@ internal sealed class IncidentService : IIncidentService
 
         if (!customerHandlesTrafficFine && request.RequiresMaintenance)
         {
-            incident.Vehicle.Status = VehicleStatus.Maintenance;
+            // Keep the current rental/inspection workflow usable. Return settlement
+            // will pick up the open maintenance record after the vehicle is checked.
+            if (incident.Vehicle.Status is not (VehicleStatus.Rented or VehicleStatus.Inspection or VehicleStatus.Inactive))
+            {
+                incident.Vehicle.Status = VehicleStatus.Maintenance;
+            }
 
             var hasOpenMaintenance = await _dbContext.MaintenanceRecords.AnyAsync(item =>
                 item.VehicleId == incident.VehicleId &&

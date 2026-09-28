@@ -42,18 +42,10 @@
 @if (ViewBag.HandlingClaim is StaffBookingClaimState claim && claim.IsActive)
 {
     <div class="alert alert-light border d-flex justify-content-between align-items-center gap-3 flex-wrap">
-        <div>
-            Nhân viên đang phụ trách:
-            <strong>@(claim.StaffName ?? "Không rõ tên")</strong>.
-            Chỉ chuyển giao khi người này đã dừng thao tác.
-        </div>
-        <form asp-action="ReleaseStaffClaim"
-              method="post"
-              data-confirm="Nhân viên cũ đã dừng thao tác và bạn muốn chuyển giao đơn?">
+        <div>Nhân viên đang phụ trách: <strong>@(claim.StaffName ?? "Không rõ tên")</strong>. Chỉ chuyển giao khi người này đã dừng thao tác.</div>
+        <form asp-action="ReleaseStaffClaim" method="post" data-confirm="Nhân viên cũ đã dừng thao tác và bạn muốn chuyển giao đơn?">
             <input type="hidden" name="bookingId" value="@Model.BookingId" />
-            <button class="btn btn-sm btn-outline-secondary" type="submit">
-                Chuyển giao cho Staff khác
-            </button>
+            <button class="btn btn-sm btn-outline-secondary" type="submit">Chuyển giao cho Staff khác</button>
         </form>
     </div>
 }
@@ -88,6 +80,11 @@ else if (isOperational)
 
                 <dt class="col-sm-4">Trả dự kiến</dt>
                 <dd class="col-sm-8">@Model.ReturnDate.ToString("dd/MM/yyyy HH:mm")</dd>
+                @if (Model.IsImmediateCounterRental && Model.Status == BookingStatus.PendingConfirmation)
+                {
+                    <dt class="col-sm-4">Nhận ngay tại quầy</dt>
+                    <dd class="col-sm-8">Hệ thống sẽ dời giờ nhận và trả tới thời điểm duyệt, giữ nguyên thời lượng; kiểm tra lại xe và giấy tờ trước khi thu tiền.</dd>
+                }
 
                 <dt class="col-sm-4">Hình thức nhận</dt>
                 <dd class="col-sm-8">

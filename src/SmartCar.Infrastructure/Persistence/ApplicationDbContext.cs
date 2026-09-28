@@ -160,6 +160,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(booking => booking.RefundAmount).HasPrecision(18, 2);
             entity.Property(booking => booking.Status).HasConversion<string>().HasMaxLength(40);
             entity.Property(booking => booking.PickupMethod).HasConversion<string>().HasMaxLength(30);
+            entity.Property(booking => booking.Source).HasConversion<string>().HasMaxLength(30);
             entity.Property(booking => booking.DeliveryAddress).HasMaxLength(500);
             entity.Property(booking => booking.DeliveryLatitude).HasPrecision(10, 7);
             entity.Property(booking => booking.DeliveryLongitude).HasPrecision(10, 7);

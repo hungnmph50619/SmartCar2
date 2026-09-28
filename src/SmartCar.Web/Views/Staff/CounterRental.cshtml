@@ -95,6 +95,8 @@
                            class="form-control form-control-lg"
                            autocomplete="off"
                            placeholder="Ví dụ: Nguyễn Văn A, 098..., a@gmail.com"
+                           data-selected-name="@Model.SelectedCustomerName"
+                           data-selected-detail="@Model.SelectedCustomerDetail"
                            aria-autocomplete="list"
                            aria-controls="counter-customer-results" />
                     <div id="counter-customer-results" class="staff-search-results d-none" role="listbox"></div>
@@ -114,7 +116,14 @@
                 </div>
 
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input asp-for="IsImmediatePickup" class="form-check-input" id="counter-immediate" />
+                            <label asp-for="IsImmediatePickup" class="form-check-label fw-semibold">Nhận ngay tại quầy</label>
+                        </div>
+                        <div class="form-text">Không cần chờ tới giờ nhận để demo. Sau khi Admin duyệt, hệ thống cập nhật giờ nhận và dời giờ trả để giữ nguyên thời lượng thuê, rồi kiểm tra lại lịch xe. Chuyến bắt đầu khi ký bàn giao.</div>
+                    </div>
+                    <div class="col-md-6" id="counter-scheduled-pickup">
                         <label asp-for="PickupDate" class="form-label fw-semibold">Thời gian nhận *</label>
                         <input asp-for="PickupDate" type="datetime-local" class="form-control" asp-format="{0:yyyy-MM-ddTHH:mm}" id="counter-pickup" required />
                         <span asp-validation-for="PickupDate" class="text-danger small"></span>
@@ -145,7 +154,7 @@
                     <span class="staff-step-number">3</span>
                     <div>
                         <h3 class="h5 mb-0">Xe khả dụng</h3>
-                        <div class="small text-muted">Chỉ tìm sau khi khoảng thuê hợp lệ.</div>
+                        <div class="small text-muted">Xe còn trống có thể chọn; xe đang bận vẫn hiển thị nhưng bị khóa. Nhập tên hoặc biển số để lọc.</div>
                     </div>
                 </div>
 
@@ -155,12 +164,14 @@
                            type="search"
                            class="form-control form-control-lg"
                            autocomplete="off"
-                           placeholder="Chọn thời gian trước, sau đó nhập tên xe hoặc biển số"
+                           placeholder="Lọc tên xe hoặc biển số (không bắt buộc)"
+                           data-selected-name="@Model.SelectedVehicleName"
+                           data-selected-detail="@Model.SelectedVehicleDetail"
                            aria-autocomplete="list"
                            aria-controls="counter-vehicle-results" />
-                    <div id="counter-vehicle-results" class="staff-search-results d-none" role="listbox"></div>
+                    <div id="counter-vehicle-results" class="staff-vehicle-list d-none mt-3" role="listbox" aria-label="Xe theo lịch thuê"></div>
                     <div id="counter-vehicle-selected" class="staff-selected-result d-none mt-2"></div>
-                    <div id="counter-vehicle-status" class="form-text">Hệ thống sẽ kiểm tra lịch và chỉ trả xe còn nhận được đơn này.</div>
+                    <div id="counter-vehicle-status" class="form-text">Hệ thống kiểm tra lịch và đánh dấu xe chưa thể nhận đơn này.</div>
                     <span asp-validation-for="VehicleId" class="text-danger small"></span>
                 </div>
             </section>
@@ -168,7 +179,7 @@
             <section class="staff-note p-3 mb-4 small">
                 <strong>Thanh toán chưa được chọn ở bước này.</strong>
                 <div class="mt-1">
-                    Sau khi Staff kiểm tra và Admin duyệt, đơn chuyển sang <strong>Chờ thanh toán</strong>. Khi đó màn xử lý đơn mới cho phép nhân viên chọn thao tác thực tế: <strong>thu tiền mặt</strong> hoặc <strong>ghi nhận khách đã chuyển khoản/QR để Staff đối soát</strong>.
+                    Sau khi Staff kiểm tra và Admin duyệt, đơn chuyển sang <strong>Chờ thanh toán</strong>. Nhân viên có thể <strong>thu tiền mặt</strong> hoặc đưa <strong>QR</strong> cho khách chuyển khoản; chuyển khoản cần Admin đối soát.
                 </div>
             </section>
 
@@ -197,6 +208,8 @@
             const vehicleStatus = document.getElementById('counter-vehicle-status');
 
             const pickup = document.getElementById('counter-pickup');
+            const immediate = document.getElementById('counter-immediate');
+            const scheduledPickup = document.getElementById('counter-scheduled-pickup');
             const returned = document.getElementById('counter-return');
             const duration = document.getElementById('counter-duration');
             const form = document.getElementById('counter-rental-form');
@@ -232,20 +245,57 @@
                         button.className = 'staff-search-option';
                         button.setAttribute('role', 'option');
                         button.innerHTML = `<span class="fw-semibold">${escapeHtml(item.label)}</span><span class="small text-muted">${escapeHtml(item.detail)}</span>`;
-                        button.addEventListener('click', () => onSelect(item));
+                        if (item.canBook === false) {
+                            button.disabled = true;
+                            button.title = 'Hãy chỉnh giờ trả theo giới hạn hiển thị rồi tìm lại xe.';
+                        } else {
+                            button.addEventListener('click', () => onSelect(item));
+                        }
                         container.appendChild(button);
                     });
                 }
                 container.classList.remove('d-none');
             };
 
+            const renderVehicles = items => {
+                vehicleResults.replaceChildren();
+                if (!items.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'staff-search-empty';
+                    empty.textContent = 'Không có xe phù hợp. Hãy đổi thời gian hoặc từ khóa.';
+                    vehicleResults.appendChild(empty);
+                }
+                items.forEach(item => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'staff-vehicle-card';
+                    button.setAttribute('role', 'option');
+                    button.setAttribute('aria-selected', String(String(item.value) === vehicleId.value));
+                    button.innerHTML = `<span class="fw-semibold">${escapeHtml(item.label)}</span><span class="small text-muted">${escapeHtml(item.detail)}</span><span class="badge ${item.canBook ? 'text-bg-success' : 'text-bg-secondary'}">${item.canBook ? 'Chọn xe này' : 'Chưa thể chọn'}</span>`;
+                    if (!item.canBook) {
+                        button.disabled = true;
+                    } else {
+                        button.addEventListener('click', () => {
+                            selectVehicle(item);
+                            vehicleResults.querySelectorAll('.staff-vehicle-card').forEach(card =>
+                                card.setAttribute('aria-selected', String(card === button)));
+                        });
+                    }
+                    vehicleResults.appendChild(button);
+                });
+                vehicleResults.classList.remove('d-none');
+            };
+
             const clearCustomer = () => {
+                ++customerRequest;
                 customerId.value = '';
                 customerSelected.replaceChildren();
                 customerSelected.classList.add('d-none');
             };
 
             const clearVehicle = (message = 'Hãy tìm lại xe phù hợp với khoảng thời gian mới.') => {
+                ++vehicleRequest;
+                clearTimeout(vehicleTimer);
                 vehicleId.value = '0';
                 vehicleSelected.replaceChildren();
                 vehicleSelected.classList.add('d-none');
@@ -255,6 +305,7 @@
             };
 
             const selectCustomer = item => {
+                ++customerRequest;
                 customerId.value = item.value;
                 customerSearch.value = item.label;
                 customerSelected.innerHTML = `<strong>${escapeHtml(item.label)}</strong><span class="small text-muted ms-2">${escapeHtml(item.detail)}</span>`;
@@ -268,8 +319,9 @@
                 vehicleSearch.value = item.label;
                 vehicleSelected.innerHTML = `<strong>${escapeHtml(item.label)}</strong><span class="small text-muted ms-2">${escapeHtml(item.detail)}</span>`;
                 vehicleSelected.classList.remove('d-none');
-                vehicleStatus.textContent = 'Đã chọn xe còn khả dụng trong khoảng thời gian này.';
-                hideResults(vehicleResults);
+                vehicleStatus.textContent = item.latestReturn
+                    ? `Đã chọn xe. Giờ trả muộn nhất trước đơn kế tiếp: ${new Date(item.latestReturn).toLocaleString('vi-VN')}.`
+                    : 'Đã chọn xe còn khả dụng trong khoảng thời gian này.';
             };
 
             customerSearch.addEventListener('input', () => {
@@ -312,9 +364,9 @@
                 const minimumPickup = minimumPickupDate();
                 pickup.min = toLocalMinuteValue(minimumPickup);
 
-                const start = pickup.value ? new Date(pickup.value) : null;
+                const start = immediate.checked ? new Date() : (pickup.value ? new Date(pickup.value) : null);
                 if (start && Number.isFinite(start.valueOf())) {
-                    returned.min = toLocalMinuteValue(new Date(start.getTime() + 60000));
+                    returned.min = toLocalMinuteValue(new Date(Math.ceil((start.getTime() + 60000) / 60000) * 60000));
                 } else {
                     returned.removeAttribute('min');
                 }
@@ -322,15 +374,15 @@
                 pickup.setCustomValidity('');
                 returned.setCustomValidity('');
 
-                if (pickup.value) {
+                if (!immediate.checked && pickup.value) {
                     const selectedPickup = new Date(pickup.value);
                     if (!Number.isFinite(selectedPickup.valueOf()) || selectedPickup < minimumPickup) {
                         pickup.setCustomValidity(`Thời gian nhận phải cách hiện tại ít nhất @policy.MinimumPickupLeadMinutes phút.`);
                     }
                 }
 
-                if (pickup.value && returned.value) {
-                    const selectedPickup = new Date(pickup.value);
+                if ((immediate.checked || pickup.value) && returned.value) {
+                    const selectedPickup = immediate.checked ? new Date() : new Date(pickup.value);
                     const selectedReturn = new Date(returned.value);
                     if (!Number.isFinite(selectedReturn.valueOf()) || selectedReturn <= selectedPickup) {
                         returned.setCustomValidity('Thời gian trả phải sau thời gian nhận.');
@@ -340,8 +392,8 @@
 
             const validRange = () => {
                 syncTimeConstraints();
-                if (!pickup.value || !returned.value) return false;
-                const start = new Date(pickup.value);
+                if ((!immediate.checked && !pickup.value) || !returned.value) return false;
+                const start = immediate.checked ? new Date() : new Date(pickup.value);
                 const end = new Date(returned.value);
                 return pickup.checkValidity() &&
                     returned.checkValidity() &&
@@ -351,11 +403,11 @@
             };
 
             const renderDuration = () => {
-                if (!pickup.value || !returned.value) {
+                if ((!immediate.checked && !pickup.value) || !returned.value) {
                     duration.textContent = 'Chọn đủ thời gian nhận và trả.';
                     return;
                 }
-                const start = new Date(pickup.value);
+                const start = immediate.checked ? new Date() : new Date(pickup.value);
                 const end = new Date(returned.value);
                 const diff = end - start;
                 if (!Number.isFinite(diff) || diff <= 0) {
@@ -367,52 +419,65 @@
                 duration.textContent = `${hours.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} giờ · ${billableDays} ngày tính phí`;
             };
 
-            const onTimeChanged = () => {
-                syncTimeConstraints();
-                renderDuration();
-                clearVehicle(validRange()
-                    ? 'Thời gian đã thay đổi. Hãy tìm và chọn lại xe khả dụng.'
-                    : 'Khoảng thời gian chưa hợp lệ nên chưa thể tìm xe.');
-                vehicleSearch.disabled = !validRange();
-            };
-
-            pickup.addEventListener('change', onTimeChanged);
-            returned.addEventListener('change', onTimeChanged);
-
-            vehicleSearch.addEventListener('input', () => {
-                vehicleId.value = '0';
-                vehicleSelected.classList.add('d-none');
+            const searchVehicles = () => {
                 clearTimeout(vehicleTimer);
-                hideResults(vehicleResults);
-
+                const requestId = ++vehicleRequest;
                 if (!validRange()) {
+                    hideResults(vehicleResults);
                     vehicleStatus.textContent = 'Hãy chọn thời gian nhận/trả hợp lệ trước khi tìm xe.';
                     return;
                 }
-
                 const term = vehicleSearch.value.trim();
                 vehicleStatus.textContent = 'Đang kiểm tra xe khả dụng...';
-                const requestId = ++vehicleRequest;
                 vehicleTimer = setTimeout(async () => {
                     const query = new URLSearchParams({
                         pickupDate: pickup.value,
                         returnDate: returned.value,
+                        immediatePickup: immediate.checked,
                         term
                     });
                     try {
                         const response = await fetch(`@Url.Action("Vehicles", "StaffLookups")?${query}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                         if (!response.ok) {
-                            const error = await response.json().catch(() => null);
-                            throw new Error(error?.message ?? 'lookup-failed');
+                            const failure = await response.json().catch(() => null);
+                            throw new Error(failure?.message ?? 'Không thể kiểm tra xe lúc này.');
                         }
                         const items = await response.json();
                         if (requestId !== vehicleRequest) return;
-                        renderResults(vehicleResults, items, selectVehicle, 'Không có xe phù hợp còn khả dụng trong khoảng này.');
-                        vehicleStatus.textContent = items.length ? `Có ${items.length} xe phù hợp để chọn.` : 'Không có xe phù hợp còn khả dụng.';
-                    } catch (error) {
-                        if (requestId === vehicleRequest) vehicleStatus.textContent = error.message === 'lookup-failed' ? 'Không thể kiểm tra xe lúc này.' : error.message;
+                        renderVehicles(items);
+                        const count = items.filter(item => item.canBook).length;
+                        vehicleStatus.textContent = count
+                            ? `Có ${count} xe chọn được${items.length >= 60 ? ' trong 60 kết quả đầu; gõ từ khóa để tìm thêm' : ''}. Xe có đơn sau ghi rõ giới hạn giờ trả.`
+                            : 'Không có xe đủ khoảng thuê này. Hãy đổi giờ nhận/trả hoặc xem giới hạn của xe bên dưới.';
+                    } catch (ex) {
+                        if (requestId === vehicleRequest) vehicleStatus.textContent = ex.message;
                     }
                 }, 250);
+            };
+
+            const onTimeChanged = () => {
+                syncTimeConstraints();
+                renderDuration();
+                const rangeValid = validRange();
+                clearVehicle(rangeValid
+                    ? 'Thời gian đã thay đổi. Đang cập nhật xe khả dụng...'
+                    : 'Khoảng thời gian chưa hợp lệ nên chưa thể tìm xe.');
+                vehicleSearch.disabled = !rangeValid;
+                if (rangeValid) searchVehicles();
+            };
+
+            pickup.addEventListener('change', onTimeChanged);
+            returned.addEventListener('change', onTimeChanged);
+            immediate.addEventListener('change', () => {
+                pickup.disabled = immediate.checked;
+                scheduledPickup.classList.toggle('d-none', immediate.checked);
+                onTimeChanged();
+            });
+
+            vehicleSearch.addEventListener('input', () => {
+                vehicleId.value = '0';
+                vehicleSelected.classList.add('d-none');
+                searchVehicles();
             });
 
             form.addEventListener('submit', event => {
@@ -445,13 +510,20 @@
 
             document.addEventListener('click', event => {
                 if (!event.target.closest('[data-autocomplete="customer"]')) hideResults(customerResults);
-                if (!event.target.closest('[data-autocomplete="vehicle"]')) hideResults(vehicleResults);
             });
 
+            pickup.disabled = immediate.checked;
+            scheduledPickup.classList.toggle('d-none', immediate.checked);
             syncTimeConstraints();
             renderDuration();
             vehicleSearch.disabled = !validRange();
+            if (customerId.value && customerSearch.dataset.selectedName) {
+                selectCustomer({ value: customerId.value, label: customerSearch.dataset.selectedName, detail: customerSearch.dataset.selectedDetail });
+            }
+            if (vehicleId.value !== '0' && vehicleSearch.dataset.selectedName) {
+                selectVehicle({ value: vehicleId.value, label: vehicleSearch.dataset.selectedName, detail: vehicleSearch.dataset.selectedDetail });
+            }
+            searchVehicles();
         })();
     </script>
 }
-

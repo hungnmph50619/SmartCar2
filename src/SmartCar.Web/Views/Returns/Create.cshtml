@@ -5,6 +5,8 @@
     ViewData["Title"] = "Biên bản trả xe";
     const string imageAccept = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
     var handoverMileage = ViewBag.HandoverMileage is int mileage ? mileage : 0;
+    var includedKilometers = ViewBag.EffectiveIncludedKilometers is int allowance ? allowance : 0;
+    var excessKmFeePerKm = ViewBag.HandoverExcessKmFeePerKm is decimal rate ? rate : 0m;
     var handoverFuelLevel = ViewBag.HandoverFuelLevel as string ?? "-";
     var handoverAt = ViewBag.HandoverAt is DateTime at ? at : (DateTime?)null;
     var handoverExterior = ViewBag.HandoverExteriorCondition as string;
@@ -40,7 +42,7 @@
     <section class="border rounded-4 p-3 p-lg-4 mb-4">
         <div class="text-uppercase small text-primary fw-semibold">Bước 1/4</div>
         <h2 class="h5 mb-1">Xác minh đúng người trả</h2>
-        <p class="small text-muted">Không nhập lại số CCCD. Staff xem CCCD đã KYC, kiểm bản gốc và chụp mặt người đang đứng trước quầy.</p>
+        <p class="small text-muted">Chụp lại hai mặt CCCD người đang trả và đối chiếu với CCCD lúc giao, hồ sơ KYC và người đang có mặt. Không nhập lại số CCCD.</p>
 
         <div class="row g-3 mb-3">
             <div class="col-lg-8">
@@ -57,6 +59,29 @@
             </div>
         </div>
 
+        <div class="row g-2 mb-3">
+            @foreach (var side in new[] { "front", "back" })
+            {
+                <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded-3 p-2 h-100">
+                        <div class="small fw-semibold">CCCD @(side == "front" ? "mặt trước" : "mặt sau") đã duyệt</div>
+                        <img src="@Url.Action("KycCitizen", "StaffCounterIdentityEvidence", new { bookingId = Model.BookingId, side })"
+                             alt="CCCD KYC @side" class="img-fluid rounded-2 mt-1" style="max-height:125px;object-fit:contain" />
+                    </div>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <div class="border rounded-3 p-2 h-100">
+                        <div class="small fw-semibold">CCCD @(side == "front" ? "mặt trước" : "mặt sau") lúc giao</div>
+                        <img src="@Url.Action("HandoverCitizen", "StaffCounterIdentityEvidence", new { bookingId = Model.BookingId, side })"
+                             alt="CCCD lúc giao @side" class="img-fluid rounded-2 mt-1" style="max-height:125px;object-fit:contain" />
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="alert alert-warning small mb-3">
+            Nếu người trả xuất trình CCCD khác hoặc không phải khách đứng tên đơn, dừng xác minh trả xe thông thường và báo quản lý. Ghi nhận thời điểm xe thực tế được đưa tới để xử lý riêng.
+        </div>
         <partial name="_IdentityCaptureWidget" model="@(new IdentityCaptureWidgetViewModel
         {
             Purpose = IdentityCapturePurposes.Return,
@@ -97,8 +122,9 @@
         <div class="row g-3 mt-1">
             <div class="col-md-4">
                 <label asp-for="Mileage" class="form-label fw-semibold">Số km khi trả</label>
-                <input asp-for="Mileage" type="number" min="@handoverMileage" step="1" data-integer="true" class="form-control" required />
-                <div class="form-text">Lúc giao: @handoverMileage.ToString("N0") km</div>
+                <input asp-for="Mileage" type="number" min="@handoverMileage" step="1" data-integer="true" class="form-control" required
+                       data-return-mileage data-handover-mileage="@handoverMileage" data-included-kilometers="@includedKilometers" data-excess-km-rate="@excessKmFeePerKm.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                <div class="form-text">Lúc giao: @handoverMileage.ToString("N0") km · Định mức: @includedKilometers.ToString("N0") km · Vượt: @excessKmFeePerKm.ToString("N0") đ/km</div>
                 <span asp-validation-for="Mileage" class="text-danger small"></span>
             </div>
             <div class="col-md-4">
@@ -111,8 +137,16 @@
                 <label class="form-label fw-semibold">Phụ kiện</label>
                 <input asp-for="AccessoryStatus" type="hidden" data-accessory-value />
                 <select class="form-select" data-accessory-mode>
-                    <option value="Đủ" selected="@(!accessoryMissing)">Đủ như lúc giao</option>
-                    <option value="missing" selected="@accessoryMissing">Thiếu / mất</option>
+                    @if (accessoryMissing)
+                    {
+                        <option value="Đủ">Đủ như lúc giao</option>
+                        <option value="missing" selected>Thiếu / mất</option>
+                    }
+                    else
+                    {
+                        <option value="Đủ" selected>Đủ như lúc giao</option>
+                        <option value="missing">Thiếu / mất</option>
+                    }
                 </select>
                 <input type="text" class="form-control mt-2 @(accessoryMissing ? "" : "d-none")" maxlength="980" data-accessory-missing placeholder="Ghi rõ đồ thiếu/mất" value="@(accessoryMissing ? Model.AccessoryStatus["Thiếu/mất:".Length..].Trim() : string.Empty)" />
                 <div class="form-text">Lúc giao: @(string.IsNullOrWhiteSpace(handoverAccessories) ? "Không ghi" : handoverAccessories)</div>
@@ -132,6 +166,10 @@
             </div>
         </div>
 
+        <div class="alert alert-info small mt-3 mb-0" role="status" aria-live="polite" data-return-mileage-estimate>
+            Nhập số km lúc trả để xem phụ phí vượt km tạm tính.
+        </div>
+
         <div class="form-check border rounded-3 p-3 ps-5 mt-3">
             <input asp-for="HasDamage" class="form-check-input" />
             <label asp-for="HasDamage" class="form-check-label fw-semibold">Có hư hỏng mới phát sinh</label>
@@ -144,13 +182,13 @@
         <h2 class="h5 mb-1">7 ảnh trả xe bắt buộc</h2>
         <p class="small text-muted">Chụp cùng các góc với lúc giao. Ảnh preview ngay, giữ tạm nếu validation server trả lại form và server chặn nội dung ảnh bị dùng lặp.</p>
         <div class="row g-3">
-            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Mặt trước xe *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview mặt trước" style="height:150px;object-fit:cover" /><input asp-for="FrontImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-front" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="FrontImage" class="text-danger small"></span></div></div>
-            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Mặt sau xe *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview mặt sau" style="height:150px;object-fit:cover" /><input asp-for="RearImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-rear" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="RearImage" class="text-danger small"></span></div></div>
-            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Bên trái xe *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview bên trái" style="height:150px;object-fit:cover" /><input asp-for="LeftImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-left" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="LeftImage" class="text-danger small"></span></div></div>
-            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Bên phải xe *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview bên phải" style="height:150px;object-fit:cover" /><input asp-for="RightImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-right" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="RightImage" class="text-danger small"></span></div></div>
-            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Nội thất *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview nội thất" style="height:150px;object-fit:cover" /><input asp-for="InteriorImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-interior" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="InteriorImage" class="text-danger small"></span></div></div>
-            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Đồng hồ số km *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview số km" style="height:150px;object-fit:cover" /><input asp-for="OdometerImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-odometer" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="OdometerImage" class="text-danger small"></span></div></div>
-            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Mức nhiên liệu *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview nhiên liệu" style="height:150px;object-fit:cover" /><input asp-for="FuelImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-fuel" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="FuelImage" class="text-danger small"></span></div></div>
+            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Mặt trước xe *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview mặt trước" style="height:150px;object-fit:contain" /><input asp-for="FrontImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-front" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="FrontImage" class="text-danger small"></span></div></div>
+            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Mặt sau xe *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview mặt sau" style="height:150px;object-fit:contain" /><input asp-for="RearImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-rear" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="RearImage" class="text-danger small"></span></div></div>
+            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Bên trái xe *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview bên trái" style="height:150px;object-fit:contain" /><input asp-for="LeftImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-left" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="LeftImage" class="text-danger small"></span></div></div>
+            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Bên phải xe *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview bên phải" style="height:150px;object-fit:contain" /><input asp-for="RightImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-right" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="RightImage" class="text-danger small"></span></div></div>
+            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Nội thất *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview nội thất" style="height:150px;object-fit:contain" /><input asp-for="InteriorImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-interior" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="InteriorImage" class="text-danger small"></span></div></div>
+            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Đồng hồ số km *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview số km" style="height:150px;object-fit:contain" /><input asp-for="OdometerImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-odometer" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="OdometerImage" class="text-danger small"></span></div></div>
+            <div class="col-md-6 col-lg-4"><div class="border rounded-4 p-3 h-100" data-evidence-slot><strong>Mức nhiên liệu *</strong><img data-evidence-preview class="d-none w-100 rounded-3 border my-2" alt="Preview nhiên liệu" style="height:150px;object-fit:contain" /><input asp-for="FuelImage" type="file" class="form-control mt-2" accept="@imageAccept" required data-evidence-input data-file-draft-key="return-@Model.BookingId-fuel" /><div data-evidence-name class="small text-muted mt-1">Chưa chọn ảnh</div><span asp-validation-for="FuelImage" class="text-danger small"></span></div></div>
         </div>
 
         <div class="row g-3 mt-1">
@@ -191,6 +229,7 @@
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script src="~/js/evidence-image-slots.js" asp-append-version="true"></script>
+    <script src="~/js/return-mileage-estimate.js" asp-append-version="true"></script>
     <script>
         (() => {
             const mode = document.querySelector('[data-accessory-mode]');

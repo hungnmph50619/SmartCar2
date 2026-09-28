@@ -228,3 +228,4 @@ public static class VietnameseDisplayExtensions
         return normalized;
     }
 }
+

@@ -81,6 +81,24 @@
     display: block;
 }
 
+.admin-content .staff-citizen-photo-frame {
+    min-height: 170px;
+    background: #0b0f14;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
+.admin-content .staff-citizen-photo-frame img {
+    width: 100%;
+    height: 170px;
+    object-fit: contain;
+}
+
+.admin-content .staff-citizen-photo-frame .d-none {
+    display: none !important;
+}
+
 .admin-content .staff-secure-doc-empty {
     padding: .75rem;
     text-align: center;

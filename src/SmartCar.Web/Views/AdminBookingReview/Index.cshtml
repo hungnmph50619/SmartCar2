@@ -23,9 +23,7 @@
 @if (hasDeliveryMap)
 {
     <link rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossorigin="" />
+          href="~/lib/leaflet/leaflet.css" asp-append-version="true" />
 }
 
 <style>
@@ -191,11 +189,18 @@
                       data-loading-form
                       data-confirm="Xác nhận đơn thuê này?">
                     <input type="hidden" name="id" value="@Model.BookingId" />
-                    <button class="btn btn-success w-100"
-                            type="submit"
-                            disabled="@(!kycVerified)">
-                        Xác nhận đơn
-                    </button>
+                    @if (kycVerified)
+                    {
+                        <button class="btn btn-success w-100" type="submit">
+                            Xác nhận đơn
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-success w-100" type="submit" disabled>
+                            Xác nhận đơn
+                        </button>
+                    }
                 </form>
 
                 @if (!kycVerified)
@@ -230,14 +235,12 @@
 
 @if (hasDeliveryMap)
 {
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-            crossorigin=""></script>
+    <script src="~/lib/leaflet/leaflet.js" asp-append-version="true"></script>
 
     <script>
         (() => {
             const mapElement = document.getElementById('admin-delivery-map');
-            if (!mapElement || typeof L === 'undefined') {
+            if (!mapElement) {
                 return;
             }
 
@@ -245,6 +248,23 @@
             const longitude = Number(mapElement.dataset.longitude);
 
             if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                mapElement.textContent = 'Không đọc được tọa độ điểm giao xe.';
+                return;
+            }
+
+            if (typeof L === 'undefined') {
+                mapElement.replaceChildren();
+                const fallbackFrame = document.createElement('iframe');
+                fallbackFrame.title = 'Bản đồ điểm giao xe';
+                fallbackFrame.src =
+                    `https://www.google.com/maps?q=${encodeURIComponent(latitude + ',' + longitude)}&z=16&output=embed`;
+                fallbackFrame.loading = 'lazy';
+                fallbackFrame.referrerPolicy = 'no-referrer-when-downgrade';
+                fallbackFrame.style.width = '100%';
+                fallbackFrame.style.height = '100%';
+                fallbackFrame.style.border = '0';
+                fallbackFrame.style.borderRadius = 'inherit';
+                mapElement.appendChild(fallbackFrame);
                 return;
             }
 
@@ -252,10 +272,32 @@
                 scrollWheelZoom: false
             }).setView([latitude, longitude], 16);
 
+            let tileLoaded = false;
+            let tileErrors = 0;
+            let fallbackStarted = false;
+
+            const addFallbackTiles = () => {
+                if (fallbackStarted || tileLoaded) return;
+                fallbackStarted = true;
+                L.tileLayer(
+                    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                    {
+                        maxZoom: 19,
+                        attribution: 'Tiles &copy; Esri'
+                    })
+                    .on('tileload', () => { tileLoaded = true; })
+                    .addTo(map);
+            };
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(map);
+            })
+                .on('tileload', () => { tileLoaded = true; })
+                .on('tileerror', () => {
+                    if (++tileErrors >= 2 && !tileLoaded) addFallbackTiles();
+                })
+                .addTo(map);
 
             L.marker([latitude, longitude])
                 .addTo(map)

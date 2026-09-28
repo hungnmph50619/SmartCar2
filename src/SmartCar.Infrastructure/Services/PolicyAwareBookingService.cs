@@ -204,10 +204,14 @@ internal sealed class PolicyAwareBookingService : IBookingService
                 "Đơn chưa hoàn tất bước Staff kiểm tra và gửi duyệt. Admin không được bỏ qua bước vận hành này.");
         }
 
+        var (approvalPickup, approvalReturn) = CounterRentalSchedule.ForApproval(
+            booking.Source, booking.IsImmediateCounterRental, booking.CreatedAt,
+            booking.PickupDate, booking.ReturnDate, DateTime.Now);
+
         if (await _policy.HasBufferedConflictAsync(
                 booking.VehicleId,
-                booking.PickupDate,
-                booking.ReturnDate,
+                approvalPickup,
+                approvalReturn,
                 booking.PickupMethod,
                 booking.BookingId,
                 cancellationToken))
@@ -219,12 +223,12 @@ internal sealed class PolicyAwareBookingService : IBookingService
 
         var blockedUntil = await _policy.GetActualTurnaroundBlockedUntilAsync(
             booking.VehicleId,
-            booking.PickupDate,
+            approvalPickup,
             booking.PickupMethod,
             booking.BookingId,
             cancellationToken);
 
-        if (blockedUntil.HasValue && blockedUntil.Value > booking.PickupDate)
+        if (blockedUntil.HasValue && blockedUntil.Value > approvalPickup)
         {
             return OperationResult.Failure(
                 $"Xe chưa đủ thời gian chuẩn bị sau lượt trả thực tế. Thời điểm nhận sớm nhất là {blockedUntil.Value:dd/MM/yyyy HH:mm}.");
@@ -294,4 +298,3 @@ internal sealed class PolicyAwareBookingService : IBookingService
         return $"{Math.Max(1, (int)Math.Ceiling(remaining.TotalMinutes))} phút";
     }
 }
-

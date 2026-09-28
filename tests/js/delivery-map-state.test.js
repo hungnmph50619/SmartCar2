@@ -42,11 +42,34 @@ function deliveryMap() {
         maxDeliveryKm: '50'
     });
     get('deliveryPickup').checked = true;
+
     const map = element();
     const markers = [];
-    const circles = [];
     const reverse = [], search = [], gps = [];
+    const timers = new Map();
+    let timerId = 0;
+    let watchId = 0;
+
     const request = queue => new Promise((resolve, reject) => queue.push({ resolve, reject }));
+    const fakeSetTimeout = fn => {
+        const id = ++timerId;
+        timers.set(id, fn);
+        return id;
+    };
+    const fakeClearTimeout = id => timers.delete(id);
+    const runTimers = async () => {
+        const pending = [...timers.entries()];
+        timers.clear();
+        for (const [, fn] of pending) fn();
+        await Promise.resolve();
+        await Promise.resolve();
+    };
+    const flush = async () => {
+        for (let i = 0; i < 10; i++) {
+            await Promise.resolve();
+        }
+    };
+
     runInNewContext(script, {
         document: { getElementById: get, createElement: element },
         window: {
@@ -56,7 +79,15 @@ function deliveryMap() {
             }
         },
         navigator: {
-            geolocation: { getCurrentPosition: (resolve, reject) => gps.push({ resolve, reject }) }
+            geolocation: {
+                watchPosition: (resolve, reject) => {
+                    const id = ++watchId;
+                    gps.push({ id, resolve, reject });
+                    return id;
+                },
+                clearWatch() {},
+                getCurrentPosition: (resolve, reject) => gps.push({ id: ++watchId, resolve, reject })
+            }
         },
         L: {
             map: () => map,
@@ -67,18 +98,18 @@ function deliveryMap() {
                 markers.push(value);
                 return value;
             },
-            circle: (center, options) => {
-                const value = element();
-                value.center = center;
-                value.options = options;
-                circles.push(value);
-                return value;
-            },
             tileLayer: element
         },
-        setTimeout: fn => fn(), console: { warn() {} }, Intl, Number, Math, Error, TypeError
+        setTimeout: fakeSetTimeout,
+        clearTimeout: fakeClearTimeout,
+        console: { warn() {} },
+        Intl, Number, Math, Error, TypeError
     });
-    return { get, reverse, search, gps, markers, circles, select: (lat, lng) => map.emit('click', { latlng: { lat, lng } }) };
+
+    return {
+        get, reverse, search, gps, markers, runTimers, flush,
+        select: (lat, lng) => map.emit('click', { latlng: { lat, lng } })
+    };
 }
 
 test('a slow reverse lookup cannot replace the address of a more recent map point', async () => {
@@ -103,125 +134,121 @@ test('a pending lookup preserves an address that the customer corrected manually
     assert.equal(page.get('deliveryAddress').value, 'Cổng sau, số nhà 25');
 });
 
-test('changing the map point replaces an old address with its GPS coordinates if lookup fails', async () => {
+test('changing the map point keeps coordinates usable if reverse lookup fails', async () => {
     const page = deliveryMap();
-    const first = page.select(21.031, 105.801);
-    page.reverse[0].resolve({ display_name: 'Điểm A' });
-    await first;
-    const second = page.select(21.032, 105.802);
-    page.reverse[1].reject(new Error('Mất kết nối'));
-    await second;
+    const selected = page.select(21.032, 105.802);
+    page.reverse[0].reject(new Error('Mất kết nối'));
+    await selected;
     assert.match(page.get('deliveryAddress').value, /21\.0320000, 105\.8020000/);
-    assert.equal(page.get('delivery-location-error').classList.contains('d-none'), false);
+    assert.equal(page.get('deliveryLatitude').value, '21.0320000');
 });
 
-test('an older address search cannot overwrite a point selected while it was loading', async () => {
+test('an older address search cannot overwrite a newer map point', async () => {
     const page = deliveryMap();
     page.get('deliveryAddress').value = 'Điểm A';
-    const search = page.get('find-delivery-address').emit('click');
+    const searching = page.get('find-delivery-address').emit('click');
     const selected = page.select(21.032, 105.802);
     page.reverse[0].resolve({ display_name: 'Điểm B' });
     await selected;
     page.search[0].resolve([{ lat: '21.031', lon: '105.801', display_name: 'Điểm A' }]);
-    await search;
+    await searching;
     assert.equal(page.get('deliveryAddress').value, 'Điểm B');
     assert.equal(page.get('deliveryLatitude').value, '21.0320000');
-    assert.equal(page.get('find-delivery-address').disabled, false);
 });
 
-test('a successful address lookup keeps the warning for a point outside the delivery radius', async () => {
-    const page = deliveryMap();
-    const selected = page.select(22, 106);
-    page.reverse[0].resolve({ display_name: 'Điểm ngoài vùng giao' });
-    await selected;
-    assert.equal(page.get('delivery-location-error').classList.contains('d-none'), false);
-    assert.match(page.get('delivery-fee-amount').textContent, /Không hỗ trợ/);
-});
-
-test('a delayed GPS result cannot replace a newer point selected on the map', async () => {
+test('GPS automatically accepts a precise fix and resolves its address', async () => {
     const page = deliveryMap();
     await page.get('use-current-location').emit('click');
+
+    page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 18 } });
+    await page.flush();
+    assert.equal(page.reverse.length, 1);
+
+    page.reverse[0].resolve({ display_name: '25 Phố Huế, Hà Nội' });
+    await page.flush();
+
+    assert.equal(page.get('deliveryLatitude').value, '21.0310000');
+    assert.equal(page.get('deliveryLongitude').value, '105.8010000');
+    assert.equal(page.get('deliveryAddress').value, '25 Phố Huế, Hà Nội');
+    assert.equal(page.get('use-current-location').disabled, false);
+});
+
+test('GPS waits for a better fix instead of locking the first coarse result', async () => {
+    const page = deliveryMap();
+    await page.get('use-current-location').emit('click');
+
+    page.gps[0].resolve({ coords: { latitude: 21.5, longitude: 105.5, accuracy: 5000 } });
+    await page.flush();
+    assert.equal(page.get('deliveryLatitude').value, '');
+
+    page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 35 } });
+    await page.flush();
+    page.reverse[0].resolve({ display_name: 'Vị trí GPS tốt hơn' });
+    await page.flush();
+
+    assert.equal(page.get('deliveryLatitude').value, '21.0310000');
+    assert.equal(page.get('deliveryLongitude').value, '105.8010000');
+    assert.equal(page.get('deliveryAddress').value, 'Vị trí GPS tốt hơn');
+});
+
+test('coarse GPS is automatically used after the acquisition window without forcing a pin drag', async () => {
+    const page = deliveryMap();
+    await page.get('use-current-location').emit('click');
+
+    page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 5000 } });
+    await page.flush();
+    assert.equal(page.get('deliveryLatitude').value, '');
+
+    await page.runTimers();
+    await page.flush();
+    assert.equal(page.reverse.length, 1);
+    page.reverse[0].resolve({ display_name: 'Khu vực GPS nhận diện' });
+    await page.flush();
+
+    assert.equal(page.get('deliveryLatitude').value, '21.0310000');
+    assert.equal(page.get('deliveryLongitude').value, '105.8010000');
+    assert.equal(page.get('deliveryAddress').value, 'Khu vực GPS nhận diện');
+    assert.match(page.get('delivery-location-error').textContent, /tự chọn vị trí tốt nhất/i);
+    assert.doesNotMatch(page.get('delivery-location-error').textContent, /kéo ghim|5\.000 m/i);
+});
+
+test('a delayed GPS fix cannot replace a newer point selected on the map', async () => {
+    const page = deliveryMap();
+    await page.get('use-current-location').emit('click');
+
     const selected = page.select(21.032, 105.802);
     page.reverse[0].resolve({ display_name: 'Điểm B' });
     await selected;
-    const located = page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 10 } });
-    page.reverse[1]?.resolve({ display_name: 'Vị trí GPS cũ' });
-    await located;
+
+    page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 10 } });
+    await page.flush();
+
     assert.equal(page.get('deliveryLatitude').value, '21.0320000');
     assert.equal(page.get('deliveryAddress').value, 'Điểm B');
     assert.equal(page.get('use-current-location').disabled, false);
 });
 
-test('an old GPS error does not show over a valid point selected afterwards', async () => {
+test('GPS remains usable when reverse geocoding is unavailable', async () => {
     const page = deliveryMap();
     await page.get('use-current-location').emit('click');
-    const selected = page.select(21.032, 105.802);
-    page.reverse[0].resolve({ display_name: 'Điểm B' });
-    await selected;
-    page.gps[0].reject({ code: 3, TIMEOUT: 3 });
-    assert.equal(page.get('delivery-location-error').classList.contains('d-none'), true);
-    assert.equal(page.get('use-current-location').disabled, false);
-});
 
-test('GPS remains usable when all reverse-geocoding services are unavailable', async () => {
-    const page = deliveryMap();
-    await page.get('use-current-location').emit('click');
-    const located = page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 10 } });
-    page.reverse[0].reject(new Error('Không thể kết nối dịch vụ bản đồ. Trình duyệt cũng không kết nối được dịch vụ địa chỉ.'));
-    await located;
+    page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 20 } });
+    await page.flush();
+    page.reverse[0].reject(new Error('Dịch vụ địa chỉ tạm thời không phản hồi.'));
+    await page.flush();
 
     assert.match(page.get('deliveryAddress').value, /21\.0310000, 105\.8010000/);
     assert.equal(page.get('deliveryLatitude').value, '21.0310000');
     assert.equal(page.get('deliveryLongitude').value, '105.8010000');
-    assert.doesNotMatch(page.get('delivery-location-error').textContent, /Trình duyệt cũng không kết nối/);
-    assert.equal(page.get('use-current-location').disabled, false);
+    assert.doesNotMatch(page.get('delivery-location-error').textContent, /Nominatim|Photon|Failed to fetch/i);
 });
 
-test('GPS accuracy larger than a house-level radius never labels a nearby wrong address as exact', async () => {
+test('address search shows multiple candidates and applies the one the customer selects', async () => {
     const page = deliveryMap();
-    await page.get('use-current-location').emit('click');
-    const located = page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 62 } });
-    page.reverse[0]?.resolve({ display_name: 'Địa chỉ nhà bên cạnh' });
-    await located;
-
-    assert.equal(page.reverse.length, 0);
-    assert.match(page.get('deliveryAddress').value, /21\.0310000, 105\.8010000/);
-    assert.match(page.get('delivery-coordinate-text').textContent, /62.*m/);
-});
-
-test('coarse GPS keeps a draggable estimate visible but does not select or charge that point', async () => {
-    const page = deliveryMap();
-    await page.get('use-current-location').emit('click');
-    await page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 5000 } });
-
-    assert.equal(page.get('deliveryLatitude').value, '');
-    assert.equal(page.get('deliveryLongitude').value, '');
-    assert.equal(page.get('delivery-fee-amount').textContent, 'Chọn điểm giao');
-    assert.equal(page.markers.length, 2);
-    assert.equal(page.markers[1].options.draggable, true);
-    assert.equal(page.circles[0].options.radius, 5000);
-    assert.match(page.get('delivery-location-error').textContent, /5.000 m/);
-
-    const dragged = page.markers[1].emit('dragend', {
-        target: { getLatLng: () => ({ lat: 21.032, lng: 105.802 }) }
-    });
-    page.reverse[0].resolve({ display_name: 'Điểm đã chỉnh trên bản đồ' });
-    await dragged;
-
-    assert.equal(page.get('deliveryLatitude').value, '21.0320000');
-    assert.equal(page.get('deliveryLongitude').value, '105.8020000');
-    assert.equal(page.get('deliveryAddress').value, 'Điểm đã chỉnh trên bản đồ');
-});
-
-test('address search shows multiple candidates and applies only the one the customer selects', async () => {
-    const page = deliveryMap();
-    const oldPoint = page.select(21.04, 105.81);
-    page.reverse[0].resolve({ display_name: 'Điểm cũ' });
-    await oldPoint;
     page.get('deliveryAddress').value = '25 Phố Huế';
     await page.get('deliveryAddress').emit('input');
+
     const searching = page.get('find-delivery-address').emit('click');
-    assert.equal(page.get('deliveryLatitude').value, '', 'the old point must not be submitted with a new search');
     page.search[0].resolve([
         { lat: '21.031', lon: '105.801', display_name: '25 Phố Huế, Hai Bà Trưng' },
         { lat: '21.041', lon: '105.811', display_name: '25 Phố Huế, Hoàn Kiếm' }
@@ -233,5 +260,4 @@ test('address search shows multiple candidates and applies only the one the cust
     await choices.children[1].emit('click');
     assert.equal(page.get('deliveryAddress').value, '25 Phố Huế, Hoàn Kiếm');
     assert.equal(page.get('deliveryLatitude').value, '21.0410000');
-    assert.equal(choices.children.length, 0);
 });

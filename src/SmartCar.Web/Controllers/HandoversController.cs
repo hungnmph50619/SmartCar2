@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Handovers;
+using SmartCar.Application.Features.Operations;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
@@ -63,7 +64,11 @@ public sealed class HandoversController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        // TEST Quy_2: tạm bỏ chặn thời gian để có thể lập biên bản và chạy hết chuyến.
+        if (!BookingWorkflowRules.CanPrepareHandover(DateTime.Now, booking.PickupDate, booking.ReturnDate))
+        {
+            TempData["ErrorMessage"] = $"Chưa đến giờ nhận xe ({booking.PickupDate:dd/MM/yyyy HH:mm}); chưa thể lập biên bản giao.";
+            return RedirectToBookingDetails(bookingId);
+        }
 
         var model = new HandoverViewModel
         {
@@ -109,7 +114,11 @@ public sealed class HandoversController : Controller
             return RedirectToBookingDetails(model.BookingId);
         }
 
-        // TEST Quy_2: tạm bỏ chặn thời gian để có thể lập biên bản và chạy hết chuyến.
+        if (!BookingWorkflowRules.CanPrepareHandover(DateTime.Now, booking.PickupDate, booking.ReturnDate))
+        {
+            TempData["ErrorMessage"] = $"Chưa đến giờ nhận xe ({booking.PickupDate:dd/MM/yyyy HH:mm}); chưa thể lập biên bản giao.";
+            return RedirectToBookingDetails(model.BookingId);
+        }
 
         ModelState.Remove(nameof(HandoverViewModel.CustomerId));
         ModelState.Remove(nameof(HandoverViewModel.VerifiedCustomerName));
@@ -122,6 +131,7 @@ public sealed class HandoversController : Controller
         ModelState.Remove(nameof(HandoverViewModel.DamageCompensationTerms));
         ModelState.Remove(nameof(HandoverViewModel.PenaltyPolicyAccepted));
         ModelState.Remove(nameof(HandoverViewModel.Images));
+        model.Images ??= new();
 
         model.HandoverAt = DateTime.Now;
         model.IncludedKilometersPerDay = booking.Policy.IncludedKilometersPerDay;
@@ -232,6 +242,10 @@ public sealed class HandoversController : Controller
 
         TempData["SuccessMessage"] =
             "Đã lưu biên bản, ảnh mặt trực tiếp và kết quả đối chiếu người nhận. Hãy in, ký và tải bản ký để Staff kiểm tra trước khi bắt đầu chuyến.";
+        TempData["ClearFileDraftKeys"] =
+            $"handover-{model.BookingId}-front|handover-{model.BookingId}-rear|handover-{model.BookingId}-left|" +
+            $"handover-{model.BookingId}-right|handover-{model.BookingId}-interior|handover-{model.BookingId}-odometer|" +
+            $"handover-{model.BookingId}-fuel|handover-{model.BookingId}-extra|giao-{model.BookingId}-citizen-front|giao-{model.BookingId}-citizen-back";
         return RedirectToBookingDetails(model.BookingId);
     }
 
@@ -260,22 +274,30 @@ public sealed class HandoversController : Controller
                 document.CustomerId == booking.CustomerId &&
                 document.Status == DocumentStatus.Verified &&
                 (document.DocumentType == DocumentTypes.CitizenId ||
-                 document.DocumentType == DocumentTypes.DrivingLicense))
+                 document.DocumentType == DocumentTypes.CitizenIdBack ||
+                 document.DocumentType == DocumentTypes.DrivingLicense ||
+                 document.DocumentType == DocumentTypes.DrivingLicenseBack))
             .ToListAsync(cancellationToken);
 
-        var citizen = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.CitizenId);
-        var license = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.DrivingLicense);
-        if (citizen is null || license is null ||
-            !citizen.ExpiryDate.HasValue || citizen.ExpiryDate.Value.Date < booking.ReturnDate.Date ||
-            !license.ExpiryDate.HasValue || license.ExpiryDate.Value.Date < booking.ReturnDate.Date)
+        var citizenFront = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.CitizenIdBack);
+        var licenseFront = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.DrivingLicense);
+        var licenseBack = documents.FirstOrDefault(document => document.DocumentType == DocumentTypes.DrivingLicenseBack);
+
+        if (citizenFront is null || citizenBack is null ||
+            licenseFront is null || licenseBack is null ||
+            !string.Equals(citizenFront.DocumentNumber, citizenBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(licenseFront.DocumentNumber, licenseBack.DocumentNumber, StringComparison.OrdinalIgnoreCase) ||
+            !citizenFront.ExpiryDate.HasValue || citizenFront.ExpiryDate.Value.Date < booking.ReturnDate.Date ||
+            !licenseFront.ExpiryDate.HasValue || licenseFront.ExpiryDate.Value.Date < booking.ReturnDate.Date)
         {
             return false;
         }
 
         model.CustomerId = customer.Id;
         model.VerifiedCustomerName = customer.FullName;
-        model.VerifiedCitizenId = citizen.DocumentNumber;
-        model.VerifiedDrivingLicenseNumber = license.DocumentNumber;
+        model.VerifiedCitizenId = citizenFront.DocumentNumber;
+        model.VerifiedDrivingLicenseNumber = licenseFront.DocumentNumber;
         return true;
     }
 
@@ -335,17 +357,6 @@ public sealed class HandoversController : Controller
         HandoverViewModel model,
         CancellationToken cancellationToken)
     {
-        var required = new IFormFile?[]
-        {
-            model.FrontImage,
-            model.RearImage,
-            model.LeftImage,
-            model.RightImage,
-            model.InteriorImage,
-            model.OdometerImage,
-            model.FuelImage
-        };
-
         await ValidateRequiredImageAsync(model.FrontImage, nameof(HandoverViewModel.FrontImage), "ảnh mặt trước xe", cancellationToken);
         await ValidateRequiredImageAsync(model.RearImage, nameof(HandoverViewModel.RearImage), "ảnh mặt sau xe", cancellationToken);
         await ValidateRequiredImageAsync(model.LeftImage, nameof(HandoverViewModel.LeftImage), "ảnh bên trái xe", cancellationToken);
@@ -354,7 +365,9 @@ public sealed class HandoversController : Controller
         await ValidateRequiredImageAsync(model.OdometerImage, nameof(HandoverViewModel.OdometerImage), "ảnh đồng hồ số km", cancellationToken);
         await ValidateRequiredImageAsync(model.FuelImage, nameof(HandoverViewModel.FuelImage), "ảnh mức nhiên liệu", cancellationToken);
 
-        var additional = model.Images.Where(file => file.Length > 0).ToList();
+        var additional = (model.Images ?? new List<IFormFile>())
+            .Where(file => file.Length > 0)
+            .ToList();
         if (additional.Count > MaximumAdditionalImages)
         {
             ModelState.AddModelError(
@@ -444,7 +457,9 @@ public sealed class HandoversController : Controller
                 paths.Add(await SaveOneImageAsync(folder, relativeFolder, label, file, cancellationToken));
             }
 
-            var extras = model.Images.Where(file => file.Length > 0).ToList();
+            var extras = (model.Images ?? new List<IFormFile>())
+                .Where(file => file.Length > 0)
+                .ToList();
             for (var index = 0; index < extras.Count; index++)
             {
                 paths.Add(await SaveOneImageAsync(

@@ -118,27 +118,26 @@ public sealed class StaffExtensionOperationsController : Controller
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] =
-                "Đơn kế tiếp không còn xung đột. Hãy tải lại danh sách trước khi thao tác.";
+                "Đơn kế tiếp không còn xung đột hoặc đã bắt đầu lập hồ sơ bàn giao nên không được đổi xe bằng luồng này. Hãy tải lại trạng thái và xử lý thủ công nếu cần.";
             return RedirectToAction(nameof(Index));
         }
 
-        var staffId =
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            string.Empty;
-
+        var staffId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         if (!await new StaffBookingClaimService(_dbContext)
-                .IsOwnedAsync(
-                    conflict.BookingId,
-                    staffId,
-                    cancellationToken))
+                .IsOwnedAsync(conflict.BookingId, staffId, cancellationToken))
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] =
                 $"Hãy nhận xử lý đơn #{conflict.BookingId} trước khi đổi xe cho khách này.";
-            return RedirectToAction(
-                "Details",
-                "Staff",
-                new { id = conflict.BookingId });
+            return RedirectToAction("Details", "Staff", new { id = conflict.BookingId });
+        }
+
+        if (conflict.Handover is not null)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            TempData["ErrorMessage"] =
+                "Đơn kế tiếp đã có biên bản giao xe. Không được đổi VehicleId vì sẽ làm biên bản/ảnh giao thuộc xe cũ nhưng booking trỏ sang xe mới.";
+            return RedirectToAction(nameof(Index));
         }
 
         var replacement = await _dbContext.Vehicles
@@ -148,44 +147,17 @@ public sealed class StaffExtensionOperationsController : Controller
 
         if (replacement is null ||
             replacement.VehicleId == conflict.VehicleId ||
-            replacement.Status is VehicleStatus.Maintenance
-                or VehicleStatus.Inspection
-                or VehicleStatus.Inactive)
+            replacement.Status != VehicleStatus.Available)
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] = "Xe thay thế không còn khả dụng.";
             return RedirectToAction(nameof(Index));
         }
 
-        var conflictPreparation = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(
-                conflict.PickupMethod));
-        var conflictPickupBoundary =
-            conflict.PickupDate - conflictPreparation;
-        var conflictReturnWithStorePreparation =
-            conflict.ReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.StorePickup));
-        var conflictReturnWithDeliveryPreparation =
-            conflict.ReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.Delivery));
-
-        var replacementHasConflict = await _dbContext.Bookings
-            .AsNoTracking()
-            .AnyAsync(item =>
-                item.VehicleId == replacement.VehicleId &&
-                item.BookingId != conflict.BookingId &&
-                BlockingStatuses.Contains(item.Status) &&
-                conflictPickupBoundary < item.ReturnDate &&
-                (
-                    item.PickupMethod == VehiclePickupMethod.Delivery
-                        ? conflictReturnWithDeliveryPreparation >
-                          item.PickupDate
-                        : conflictReturnWithStorePreparation >
-                          item.PickupDate
-                ),
-                cancellationToken);
+        var replacementHasConflict = await HasScheduleConflictAsync(
+            replacement.VehicleId,
+            conflict,
+            cancellationToken);
 
         if (replacementHasConflict)
         {
@@ -251,7 +223,7 @@ public sealed class StaffExtensionOperationsController : Controller
         {
             await transaction.RollbackAsync(cancellationToken);
             TempData["ErrorMessage"] =
-                "Đơn kế tiếp đang có giao dịch trước giao xe chờ Staff đối soát. Cần xử lý giao dịch trước khi đổi xe.";
+                "Đơn kế tiếp đang có giao dịch trước giao xe chờ Admin đối soát. Cần xử lý giao dịch trước khi đổi xe.";
             return RedirectToAction(nameof(Index));
         }
 
@@ -345,6 +317,22 @@ public sealed class StaffExtensionOperationsController : Controller
             deliveryFee +
             conflict.AdditionalAmount;
 
+        if (conflict.Status == BookingStatus.PendingConfirmation &&
+            conflict.StaffReviewedAt.HasValue)
+        {
+            conflict.StaffReviewedAt = null;
+            conflict.StaffReviewedByStaffId = null;
+
+            var staleAdminReviewTitle = $"Đơn thuê chờ xử lý|{conflict.BookingId}";
+            var staleAdminReviewNotifications = await _dbContext.Notifications
+                .Where(item => item.Title == staleAdminReviewTitle)
+                .ToListAsync(cancellationToken);
+            if (staleAdminReviewNotifications.Count > 0)
+            {
+                _dbContext.Notifications.RemoveRange(staleAdminReviewNotifications);
+            }
+        }
+
         var amountToCollect =
             Math.Max(0m, rentalPaidDifference) +
             Math.Max(0m, depositPaidDifference);
@@ -363,11 +351,14 @@ public sealed class StaffExtensionOperationsController : Controller
                 Method = PaymentMethods.NotSelected,
                 Status = PaymentStatus.Pending
             });
+        }
 
-            if (conflict.Status == BookingStatus.ReadyForPickup)
-            {
-                conflict.Status = BookingStatus.Paid;
-            }
+        // Đổi VehicleId làm vô hiệu bước "xe đã sẵn sàng" của chiếc xe cũ.
+        // Dù xe mới cùng giá/rẻ hơn và không cần thu thêm, Staff vẫn phải kiểm tra
+        // thực tế chiếc xe thay thế rồi MarkReady lại trước khi bàn giao.
+        if (conflict.Status == BookingStatus.ReadyForPickup)
+        {
+            conflict.Status = BookingStatus.Paid;
         }
 
         if (rentalRefund > 0m)
@@ -428,7 +419,11 @@ public sealed class StaffExtensionOperationsController : Controller
             "StaffResolveExtensionConflictByVehicleSwap",
             nameof(Booking),
             conflict.BookingId.ToString(),
-            $"Nhân viên đổi xe đơn #{conflict.BookingId} từ xe #{oldVehicleId} sang xe #{replacement.VehicleId}. Thu thêm: {amountToCollect:N0}; hoàn chờ duyệt: {totalRefund:N0} đồng.",
+            $"Nhân viên đổi xe đơn #{conflict.BookingId} từ xe #{oldVehicleId} sang xe #{replacement.VehicleId}. " +
+            $"Thu thêm: {amountToCollect:N0}; hoàn chờ duyệt: {totalRefund:N0} đồng. " +
+            (conflict.Status == BookingStatus.PendingConfirmation
+                ? "Nếu đơn đã được Staff review trước khi đổi xe, review cũ đã bị xóa và phải kiểm tra lại xe mới trước khi gửi Admin duyệt."
+                : string.Empty),
             ipAddress:
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
             cancellationToken: cancellationToken);
@@ -455,13 +450,14 @@ public sealed class StaffExtensionOperationsController : Controller
         var conflict = await _dbContext.Bookings
             .AsNoTracking()
             .Include(item => item.Vehicle)
+            .Include(item => item.Handover)
             .FirstOrDefaultAsync(
                 item =>
                     item.BookingId ==
                     extension.ConflictingBookingId.Value,
                 cancellationToken);
 
-        if (conflict is null)
+        if (conflict is null || conflict.Handover?.SignedDocumentVerified == true)
         {
             return null;
         }
@@ -473,9 +469,11 @@ public sealed class StaffExtensionOperationsController : Controller
             .FirstOrDefaultAsync(cancellationToken)
             ?? "Khách hàng";
 
-        var alternatives = await GetAlternativeVehiclesAsync(
-            conflict,
-            cancellationToken);
+        var alternatives = conflict.Handover is null
+            ? await GetAlternativeVehiclesAsync(
+                conflict,
+                cancellationToken)
+            : Array.Empty<ExtensionAlternativeVehicleViewModel>();
 
         return new ExtensionConflictResolutionViewModel
         {
@@ -488,6 +486,7 @@ public sealed class StaffExtensionOperationsController : Controller
             LicensePlate = conflict.Vehicle.LicensePlate,
             PickupDate = conflict.PickupDate,
             ReturnDate = conflict.ReturnDate,
+            HandoverDraftExists = conflict.Handover is not null,
             Alternatives = alternatives
         };
     }
@@ -497,40 +496,11 @@ public sealed class StaffExtensionOperationsController : Controller
             Booking conflict,
             CancellationToken cancellationToken)
     {
-        var conflictPreparation = TimeSpan.FromMinutes(
-            RentalPolicy.GetOperationalPreparationMinutes(
-                conflict.PickupMethod));
-        var conflictPickupBoundary =
-            conflict.PickupDate - conflictPreparation;
-        var conflictReturnWithStorePreparation =
-            conflict.ReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.StorePickup));
-        var conflictReturnWithDeliveryPreparation =
-            conflict.ReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.Delivery));
-
         var candidates = await _dbContext.Vehicles
             .AsNoTracking()
             .Where(vehicle =>
                 vehicle.VehicleId != conflict.VehicleId &&
-                vehicle.Status != VehicleStatus.Maintenance &&
-                vehicle.Status != VehicleStatus.Inspection &&
-                vehicle.Status != VehicleStatus.Inactive &&
-                !_dbContext.Bookings.Any(booking =>
-                    booking.VehicleId == vehicle.VehicleId &&
-                    booking.BookingId != conflict.BookingId &&
-                    BlockingStatuses.Contains(booking.Status) &&
-                    conflictPickupBoundary < booking.ReturnDate &&
-                    (
-                        booking.PickupMethod ==
-                        VehiclePickupMethod.Delivery
-                            ? conflictReturnWithDeliveryPreparation >
-                              booking.PickupDate
-                            : conflictReturnWithStorePreparation >
-                              booking.PickupDate
-                    )) &&
+                vehicle.Status == VehicleStatus.Available &&
                 !_dbContext.VehicleIncidents.Any(incident =>
                     incident.VehicleId == vehicle.VehicleId &&
                     incident.Status != IncidentStatus.Resolved &&
@@ -574,41 +544,109 @@ public sealed class StaffExtensionOperationsController : Controller
                 })
             .ToListAsync(cancellationToken);
 
-        return candidates
+        var scheduleSafeCandidates = new List<ExtensionAlternativeVehicleViewModel>();
+        foreach (var candidate in candidates)
+        {
+            if (!await HasScheduleConflictAsync(
+                    candidate.VehicleId,
+                    conflict,
+                    cancellationToken))
+            {
+                scheduleSafeCandidates.Add(candidate);
+            }
+        }
+
+        return scheduleSafeCandidates
             .OrderBy(item => Math.Abs(item.PriceDifference))
             .ThenBy(item => item.DailyPrice)
             .ToList();
+    }
+
+    private async Task<bool> HasScheduleConflictAsync(
+        int vehicleId,
+        Booking targetBooking,
+        CancellationToken cancellationToken)
+    {
+        var targetPolicy = targetBooking.Policy;
+        var targetPreparationMinutes =
+            targetPolicy.GetOperationalPreparationMinutes(
+                targetBooking.PickupMethod);
+
+        var otherBookings = await _dbContext.Bookings
+            .AsNoTracking()
+            .Where(other =>
+                other.VehicleId == vehicleId &&
+                other.BookingId != targetBooking.BookingId &&
+                BlockingStatuses.Contains(other.Status))
+            .Select(other => new
+            {
+                other.PickupDate,
+                other.ReturnDate,
+                other.PickupMethod,
+                other.PolicyJson
+            })
+            .ToListAsync(cancellationToken);
+
+        foreach (var other in otherBookings)
+        {
+            var otherPolicy = RentalPolicySnapshot.FromJson(other.PolicyJson);
+            var otherPreparationMinutes =
+                otherPolicy.GetOperationalPreparationMinutes(
+                    other.PickupMethod);
+
+            var overlaps =
+                targetBooking.PickupDate <
+                    other.ReturnDate.AddMinutes(targetPreparationMinutes) &&
+                targetBooking.ReturnDate.AddMinutes(otherPreparationMinutes) >
+                    other.PickupDate;
+
+            if (overlaps)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task<Booking?> FindConflictingBookingAsync(
         BookingExtension extension,
         CancellationToken cancellationToken)
     {
-        var storeBoundary =
-            extension.RequestedReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.StorePickup));
-        var deliveryBoundary =
-            extension.RequestedReturnDate.AddMinutes(
-                RentalPolicy.GetOperationalPreparationMinutes(
-                    VehiclePickupMethod.Delivery));
-
-        return await _dbContext.Bookings
+        var candidates = await _dbContext.Bookings
             .Include(item => item.Vehicle)
             .Include(item => item.Payments)
+            .Include(item => item.Handover)
             .Where(other =>
                 other.VehicleId == extension.Booking.VehicleId &&
                 other.BookingId != extension.BookingId &&
                 BlockingStatuses.Contains(other.Status) &&
-                other.ReturnDate > extension.OriginalReturnDate &&
-                (
-                    other.PickupMethod ==
-                    VehiclePickupMethod.Delivery
-                        ? other.PickupDate < deliveryBoundary
-                        : other.PickupDate < storeBoundary
-                ))
+                other.ReturnDate > extension.OriginalReturnDate)
             .OrderBy(other => other.PickupDate)
-            .FirstOrDefaultAsync(cancellationToken);
+            .ThenBy(other => other.BookingId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var other in candidates)
+        {
+            if (other.Handover is not null)
+            {
+                continue;
+            }
+
+            var otherPolicy = other.Policy;
+            var preparationMinutes =
+                otherPolicy.GetOperationalPreparationMinutes(
+                    other.PickupMethod);
+            var requiredBoundary =
+                extension.RequestedReturnDate.AddMinutes(preparationMinutes);
+
+            if (other.PickupDate < requiredBoundary)
+            {
+                return other;
+            }
+        }
+
+        return null;
     }
 
     private async Task<bool> HasRequiredVehicleDocumentsAsync(
@@ -741,4 +779,3 @@ public sealed class StaffExtensionOperationsController : Controller
             ? addition
             : $"{current.Trim()} {addition}";
 }
-

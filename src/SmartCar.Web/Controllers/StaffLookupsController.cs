@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SmartCar.Application.Features.Bookings;
 using SmartCar.Application.Features.Vehicles;
 using SmartCar.Domain.Constants;
 using SmartCar.Domain.Enums;
@@ -12,6 +13,7 @@ namespace SmartCar.Web.Controllers;
 public sealed class StaffLookupsController : Controller
 {
     private const int MaximumResults = 15;
+    private const int MaximumVehicleResults = 60;
 
     private readonly ApplicationDbContext _dbContext;
     private readonly IVehicleService _vehicleService;
@@ -75,9 +77,17 @@ public sealed class StaffLookupsController : Controller
         DateTime pickupDate,
         DateTime returnDate,
         string? term,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool immediatePickup = false)
     {
-        if (pickupDate < DateTime.Now.AddMinutes(5) || pickupDate >= returnDate)
+        var policy = await SmartCar.Infrastructure.Services.BusinessPolicyStore.ReadAsync(
+            _dbContext, cancellationToken);
+        if (immediatePickup)
+        {
+            pickupDate = DateTime.Now;
+        }
+        if ((!immediatePickup && pickupDate < DateTime.Now.AddMinutes(policy.MinimumPickupLeadMinutes)) ||
+            pickupDate >= returnDate)
         {
             return BadRequest(new
             {
@@ -85,12 +95,19 @@ public sealed class StaffLookupsController : Controller
             });
         }
 
-        var vehicles = await _vehicleService.SearchAvailableAsync(
+        // Tập ứng viên không được lọc theo phút nhận: xe đang ở chuyến trước
+        // sẽ biến mất thay vì hiện là không thể chọn cho khoảng thuê này.
+        IReadOnlyList<VehicleDto> vehicles = (await _vehicleService.GetAllAsync(cancellationToken))
+            .Where(vehicle => vehicle.Status is VehicleStatus.Available or VehicleStatus.Rented)
+            .ToList();
+
+        var availableForRequestedRange = await _vehicleService.SearchAvailableAsync(
             new VehicleSearchRequest(
                 pickupDate,
                 returnDate,
                 PickupMethod: VehiclePickupMethod.StorePickup),
             cancellationToken);
+        var availableIds = availableForRequestedRange.Select(vehicle => vehicle.VehicleId).ToHashSet();
 
         var keyword = term?.Trim();
         if (!string.IsNullOrWhiteSpace(keyword))
@@ -105,14 +122,61 @@ public sealed class StaffLookupsController : Controller
                 .ToList();
         }
 
-        var result = vehicles
-            .Take(MaximumResults)
-            .Select(vehicle => new
+        var candidates = vehicles.ToList();
+        var candidateIds = candidates.Select(vehicle => vehicle.VehicleId).ToArray();
+        var upcoming = await _dbContext.Bookings.AsNoTracking()
+            .Where(booking => candidateIds.Contains(booking.VehicleId) &&
+                booking.PickupDate > pickupDate &&
+                (booking.Status == BookingStatus.PendingConfirmation ||
+                 booking.Status == BookingStatus.PendingPayment ||
+                 booking.Status == BookingStatus.Paid ||
+                 booking.Status == BookingStatus.ReadyForPickup ||
+                 booking.Status == BookingStatus.Rented ||
+                 booking.Status == BookingStatus.PendingInspection))
+            .Select(booking => new
             {
-                value = vehicle.VehicleId,
-                label = vehicle.VehicleName,
-                detail = $"{vehicle.LicensePlate} · {vehicle.BrandName} · {vehicle.DailyPrice:N0} đ/ngày",
-                image = vehicle.PrimaryImagePath
+                booking.VehicleId, booking.PickupDate, booking.PickupMethod, booking.PolicyJson
+            })
+            .ToListAsync(cancellationToken);
+        var nextByVehicle = upcoming
+            .GroupBy(booking => booking.VehicleId)
+            .ToDictionary(group => group.Key, group => group.OrderBy(booking => booking.PickupDate).First());
+
+        var result = candidates
+            .Select(vehicle =>
+            {
+                nextByVehicle.TryGetValue(vehicle.VehicleId, out var next);
+                DateTime? latestReturn = next is null ? null : CounterRentalSchedule.LatestReturn(
+                    next.PickupDate,
+                    next.PickupMethod,
+                    RentalPolicySnapshot.FromJson(next.PolicyJson));
+                var canBook = availableIds.Contains(vehicle.VehicleId);
+                return new
+                {
+                    vehicle,
+                    canBook,
+                    latestReturn,
+                    nextPickup = next?.PickupDate
+                };
+            })
+            .OrderByDescending(item => item.canBook)
+            .Take(MaximumVehicleResults)
+            .Select(item => new
+            {
+                value = item.vehicle.VehicleId,
+                label = item.vehicle.VehicleName,
+                detail = item.canBook
+                    ? $"{item.vehicle.LicensePlate} · {item.vehicle.BrandName} · {item.vehicle.DailyPrice:N0} đ/ngày" +
+                      (item.latestReturn.HasValue
+                          ? $" · Có đơn sau: nhận {item.nextPickup:dd/MM HH:mm}, trả muộn nhất {item.latestReturn:dd/MM HH:mm}"
+                          : string.Empty)
+                    : item.latestReturn.HasValue
+                        ? $"{item.vehicle.LicensePlate} · Xe chưa trống trong khoảng này. " +
+                          $"Giờ trả muộn nhất {item.latestReturn:dd/MM HH:mm} để chuẩn bị cho đơn nhận {item.nextPickup:dd/MM HH:mm}"
+                        : $"{item.vehicle.LicensePlate} · Xe đang có lịch thuê hoặc chưa đủ điều kiện trong khoảng này",
+                image = item.vehicle.PrimaryImagePath,
+                canBook = item.canBook,
+                latestReturn = item.latestReturn?.ToString("yyyy-MM-ddTHH:mm")
             })
             .ToList();
 

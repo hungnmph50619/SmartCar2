@@ -133,6 +133,10 @@ public sealed class AdminRentalDocumentsController : Controller
     IFormFile? signedDocument,
     CancellationToken cancellationToken)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var booking = await _dbContext.Bookings
             .Include(item => item.Handover)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
@@ -168,7 +172,7 @@ public sealed class AdminRentalDocumentsController : Controller
         if (error is not null)
         {
             TempData["ErrorMessage"] = error;
-            return RedirectToAction("HandoverPrint", "AdminRentalDocuments", new { bookingId });
+            return RedirectToBookingDetails(bookingId);
         }
 
         var newPaths = await SaveSignedDocumentsAsync(
@@ -185,6 +189,7 @@ public sealed class AdminRentalDocumentsController : Controller
             booking.Handover.SignedDocumentVerifiedByStaffId = null;
             booking.Handover.SignedDocumentVerifiedAt = null;
             await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
         }
         catch
         {
@@ -203,6 +208,7 @@ public sealed class AdminRentalDocumentsController : Controller
 
         TempData["SuccessMessage"] =
             $"Đã lưu {newPaths.Count} trang bản ký. Hãy mở kiểm tra và xác nhận hợp lệ trước khi bắt đầu chuyến.";
+        TempData["ClearFileDraftKeys"] = $"handover-{bookingId}-signed";
 
         return RedirectToBookingDetails(bookingId);
     }
@@ -290,6 +296,7 @@ public sealed class AdminRentalDocumentsController : Controller
 
         TempData["SuccessMessage"] =
             $"Đã lưu {newPaths.Count} trang bản trả xe. Nhân viên cần xác minh chữ ký trước khi quyết toán.";
+        TempData["ClearFileDraftKeys"] = $"return-{bookingId}-signed";
         return RedirectToBookingDetails(bookingId);
     }
 

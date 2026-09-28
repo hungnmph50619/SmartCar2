@@ -74,7 +74,10 @@ public sealed class ReturnsController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        SetHandoverBaseline(handover);
+        SetHandoverBaseline(handover, Math.Max(
+            handover.IncludedKilometers,
+            Math.Max(1, (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d)) *
+            booking.Policy.IncludedKilometersPerDay));
         var model = new ReturnViewModel
         {
             BookingId = bookingId,
@@ -117,6 +120,11 @@ public sealed class ReturnsController : Controller
         ModelState.Remove(nameof(ReturnViewModel.VerifiedCustomerName));
         ModelState.Remove(nameof(ReturnViewModel.VerifiedCitizenId));
         ModelState.Remove(nameof(ReturnViewModel.ReturnedAt));
+        // Optional image groups are validated explicitly below; damage needs proof only when present.
+        ModelState.Remove(nameof(ReturnViewModel.Images));
+        ModelState.Remove(nameof(ReturnViewModel.DamageImages));
+        model.Images ??= new();
+        model.DamageImages ??= new();
         model.ReturnedAt = DateTime.Now;
 
         var identityFailures = new List<string>();
@@ -224,6 +232,11 @@ public sealed class ReturnsController : Controller
 
         TempData["SuccessMessage"] =
             "Đã lưu biên bản trả xe, ảnh mặt trực tiếp và kết quả xác minh người trả. Hãy in, ký và tải bản ký trước khi quyết toán.";
+        TempData["ClearFileDraftKeys"] =
+            $"return-{model.BookingId}-front|return-{model.BookingId}-rear|return-{model.BookingId}-left|" +
+            $"return-{model.BookingId}-right|return-{model.BookingId}-interior|return-{model.BookingId}-odometer|" +
+            $"return-{model.BookingId}-fuel|return-{model.BookingId}-damage|return-{model.BookingId}-other|" +
+            $"trả-{model.BookingId}-citizen-front|trả-{model.BookingId}-citizen-back";
 
         return RedirectToAction("Details", "Staff", new { id = model.BookingId });
     }
@@ -259,10 +272,27 @@ public sealed class ReturnsController : Controller
             return RedirectToBookingDetails(bookingId);
         }
 
-        var refundPayment = booking.Payments
+        var refundPayments = booking.Payments
             .Where(payment => payment.Type == PaymentType.Refund)
-            .OrderByDescending(payment => payment.PaymentId)
-            .FirstOrDefault();
+            .ToList();
+
+        var refundAwaitingApprovalAmount = refundPayments
+            .Where(payment => payment.Status == PaymentStatus.AwaitingRefund)
+            .Sum(payment => payment.Amount);
+        var refundApprovedAmount = refundPayments
+            .Where(payment => payment.Status == PaymentStatus.RefundApproved)
+            .Sum(payment => payment.Amount);
+        var refundTransferredAmount = refundPayments
+            .Where(payment => payment.Status == PaymentStatus.Refunded)
+            .Sum(payment => payment.Amount);
+        var openRefundAmount = refundAwaitingApprovalAmount + refundApprovedAmount;
+        var aggregateRefundStatus = refundAwaitingApprovalAmount > 0m
+            ? PaymentStatus.AwaitingRefund
+            : refundApprovedAmount > 0m
+                ? PaymentStatus.RefundApproved
+                : refundTransferredAmount > 0m
+                    ? PaymentStatus.Refunded
+                    : (PaymentStatus?)null;
 
         var overdueRows = await _dbContext.Payments
             .AsNoTracking()
@@ -333,8 +363,11 @@ public sealed class ReturnsController : Controller
                 payment.Type == PaymentType.OverdueCompensationDebt &&
                 payment.Amount > 0m &&
                 payment.Status == PaymentStatus.AwaitingConfirmation),
-            RefundStatus = refundPayment?.Status,
-            RefundAmount = refundPayment?.Amount ?? 0m,
+            RefundStatus = aggregateRefundStatus,
+            RefundAmount = openRefundAmount > 0m ? openRefundAmount : refundTransferredAmount,
+            RefundAwaitingApprovalAmount = refundAwaitingApprovalAmount,
+            RefundApprovedAmount = refundApprovedAmount,
+            RefundTransferredAmount = refundTransferredAmount,
             AdditionalCharges = booking.AdditionalCharges,
             OverdueImpacts = overdueImpacts,
             HandoverIdentityVerified = records.Handover.CustomerIdentityVerified,
@@ -755,7 +788,7 @@ public sealed class ReturnsController : Controller
     {
         var customer = await _dbContext.Users
             .AsNoTracking()
-            .Where(user => user.Id == booking.CustomerId && user.IsActive)
+            .Where(user => user.Id == booking.CustomerId)
             .Select(user => new { user.Id, user.FullName })
             .FirstOrDefaultAsync(cancellationToken);
         if (customer is null)
@@ -763,21 +796,32 @@ public sealed class ReturnsController : Controller
             return false;
         }
 
-        var citizen = await _dbContext.CustomerDocuments
+        var citizenDocuments = await _dbContext.CustomerDocuments
             .AsNoTracking()
-            .FirstOrDefaultAsync(document =>
+            .Where(document =>
                 document.CustomerId == booking.CustomerId &&
-                document.DocumentType == DocumentTypes.CitizenId &&
-                document.Status == DocumentStatus.Verified,
-                cancellationToken);
-        if (citizen is null)
+                document.Status == DocumentStatus.Verified &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.CitizenIdBack))
+            .ToListAsync(cancellationToken);
+
+        var citizenFront = citizenDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenId);
+        var citizenBack = citizenDocuments.FirstOrDefault(document =>
+            document.DocumentType == DocumentTypes.CitizenIdBack);
+
+        if (citizenFront is null || citizenBack is null ||
+            !string.Equals(
+                citizenFront.DocumentNumber,
+                citizenBack.DocumentNumber,
+                StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         model.CustomerId = customer.Id;
         model.VerifiedCustomerName = customer.FullName;
-        model.VerifiedCitizenId = citizen.DocumentNumber;
+        model.VerifiedCitizenId = citizenFront.DocumentNumber;
         return true;
     }
 
@@ -851,22 +895,28 @@ public sealed class ReturnsController : Controller
         int bookingId,
         CancellationToken cancellationToken)
     {
-        var handover = await _dbContext.VehicleHandovers
+        var booking = await _dbContext.Bookings
             .AsNoTracking()
+            .Include(item => item.Handover)
             .FirstOrDefaultAsync(item => item.BookingId == bookingId, cancellationToken);
 
-        if (handover is not null)
+        if (booking?.Handover is { } handover)
         {
-            SetHandoverBaseline(handover);
+            var paidRentalDays = Math.Max(1,
+                (int)Math.Ceiling((booking.ReturnDate - booking.PickupDate).TotalHours / 24d));
+            SetHandoverBaseline(handover, Math.Max(
+                handover.IncludedKilometers,
+                paidRentalDays * booking.Policy.IncludedKilometersPerDay));
         }
     }
 
-    private void SetHandoverBaseline(VehicleHandover handover)
+    private void SetHandoverBaseline(VehicleHandover handover, int effectiveIncludedKilometers)
     {
         ViewBag.HandoverMileage = handover.Mileage;
         ViewBag.HandoverFuelLevel = handover.FuelLevel;
         ViewBag.HandoverAt = handover.HandoverAt;
         ViewBag.HandoverIncludedKilometers = handover.IncludedKilometers;
+        ViewBag.EffectiveIncludedKilometers = effectiveIncludedKilometers;
         ViewBag.HandoverExcessKmFeePerKm = handover.ExcessKmFeePerKm;
         ViewBag.HandoverExteriorCondition = handover.ExteriorCondition;
         ViewBag.HandoverInteriorCondition = handover.InteriorCondition;

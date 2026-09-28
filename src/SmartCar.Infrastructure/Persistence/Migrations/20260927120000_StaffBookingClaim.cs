@@ -10,16 +10,10 @@ public sealed class StaffBookingClaim : Migration
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.AddColumn<string>(
-            name: "HandlingStaffId",
-            table: "Bookings",
-            type: "nvarchar(450)",
-            maxLength: 450,
-            nullable: true);
-
+            name: "HandlingStaffId", table: "Bookings", type: "nvarchar(450)",
+            maxLength: 450, nullable: true);
         migrationBuilder.AddColumn<DateTime>(
-            name: "HandlingLeaseExpiresAt",
-            table: "Bookings",
-            type: "datetime2",
+            name: "HandlingLeaseExpiresAt", table: "Bookings", type: "datetime2",
             nullable: true);
     }
 

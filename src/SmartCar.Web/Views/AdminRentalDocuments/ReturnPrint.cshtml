@@ -17,6 +17,7 @@
         var legacyAccessory = separatorIndex >= 0
             ? body[..separatorIndex].Trim()
             : body;
+
         returnedAccessories ??= legacyAccessory;
         returnNote = separatorIndex >= 0
             ? body[(separatorIndex + noteSeparator.Length)..].Trim()

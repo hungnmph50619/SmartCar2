@@ -21,6 +21,7 @@ public sealed class StaffBookingDetailsViewModel
     public StaffBookingClaimState? HandlingClaim { get; init; }
     public string CurrentStaffId { get; init; } = string.Empty;
     public DateTime? StaffReviewedAt { get; init; }
+    public DateTime? ActualTurnaroundReadyAt { get; init; }
     public bool HandoverIdentityVerified { get; init; }
     public string? HandoverIdentityVerifiedBy { get; init; }
     public DateTime? HandoverIdentityVerifiedAt { get; init; }
@@ -42,6 +43,12 @@ public sealed class StaffBookingDetailsViewModel
 
 public sealed class StaffCounterRentalViewModel
 {
+    public string? SelectedCustomerName { get; set; }
+    public string? SelectedCustomerDetail { get; set; }
+    public string? SelectedVehicleName { get; set; }
+    public string? SelectedVehicleDetail { get; set; }
+    public bool IsImmediatePickup { get; set; } = true;
+
     [Required(ErrorMessage = "Vui lòng chọn khách hàng.")]
     public string CustomerId { get; set; } = string.Empty;
 
@@ -52,7 +59,7 @@ public sealed class StaffCounterRentalViewModel
     public DateTime PickupDate { get; set; } = DateTime.Now.AddMinutes(10);
 
     [Required(ErrorMessage = "Vui lòng chọn thời gian trả xe.")]
-    public DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(1).AddMinutes(10);
+    public DateTime ReturnDate { get; set; } = DateTime.Now.AddDays(1);
     public string? PolicyVersion { get; set; }
 }
 

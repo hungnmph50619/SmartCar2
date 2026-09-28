@@ -11,6 +11,7 @@ public sealed class ExtensionConflictResolutionViewModel
     public string LicensePlate { get; init; } = string.Empty;
     public DateTime PickupDate { get; init; }
     public DateTime ReturnDate { get; init; }
+    public bool HandoverDraftExists { get; init; }
 
     public IReadOnlyList<ExtensionAlternativeVehicleViewModel> Alternatives { get; init; }
         = Array.Empty<ExtensionAlternativeVehicleViewModel>();

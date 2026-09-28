@@ -93,8 +93,8 @@ public sealed class ReturnEditsController : Controller
     {
         ModelState.Remove(nameof(ReturnEditViewModel.ExistingImagePaths));
         ModelState.Remove(nameof(ReturnEditViewModel.ImagesToDelete));
+        ModelState.Remove(nameof(ReturnEditViewModel.DamageImages));
         ModelState.Remove(nameof(ReturnEditViewModel.NewImages));
-        ModelState.Remove(nameof(ReturnEditViewModel.NewDamageImages));
         ModelState.Remove(nameof(ReturnEditViewModel.ReturnedAt));
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -134,6 +134,9 @@ public sealed class ReturnEditsController : Controller
             ModelState.AddModelError(nameof(model.ImagesToDelete), "Danh sách ảnh cần xóa không hợp lệ.");
         }
 
+        var damageImages = (model.DamageImages ?? new List<IFormFile>())
+            .Where(file => file.Length > 0)
+            .ToList();
         if (deleteSet.Any(IsRequiredEvidence))
         {
             ModelState.AddModelError(
@@ -144,12 +147,11 @@ public sealed class ReturnEditsController : Controller
         var newImages = (model.NewImages ?? new List<IFormFile>())
             .Where(file => file.Length > 0)
             .ToList();
-        var newDamageImages = (model.NewDamageImages ?? new List<IFormFile>())
-            .Where(file => file.Length > 0)
+        var retainedReturnPhotos = returnPhotos
+            .Where(path => !deleteSet.Contains(path))
             .ToList();
 
-        var finalImageCount =
-            returnPhotos.Count - deleteSet.Count + newImages.Count + newDamageImages.Count;
+        var finalImageCount = retainedReturnPhotos.Count + damageImages.Count + newImages.Count;
         if (finalImageCount < MinimumImages)
         {
             ModelState.AddModelError(
@@ -164,6 +166,15 @@ public sealed class ReturnEditsController : Controller
                 $"Biên bản chỉ được lưu tối đa {MaximumImages} ảnh đối chiếu.");
         }
 
+        foreach (var image in damageImages)
+        {
+            var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
+            if (error is not null)
+            {
+                ModelState.AddModelError(nameof(model.DamageImages), $"{image.FileName}: {error}");
+            }
+        }
+
         foreach (var image in newImages)
         {
             var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
@@ -173,23 +184,13 @@ public sealed class ReturnEditsController : Controller
             }
         }
 
-        foreach (var image in newDamageImages)
-        {
-            var error = await ImageFileValidator.ValidateAsync(image, MaximumImageBytes, cancellationToken);
-            if (error is not null)
-            {
-                ModelState.AddModelError(nameof(model.NewDamageImages), $"{image.FileName}: {error}");
-            }
-        }
-
-        var survivingDamageEvidence = returnPhotos.Count(path =>
-            !deleteSet.Contains(path) &&
-            Path.GetFileName(path).StartsWith("damage-", StringComparison.OrdinalIgnoreCase));
-        if (model.HasDamage && survivingDamageEvidence + newDamageImages.Count == 0)
+        if (model.HasDamage &&
+            !retainedReturnPhotos.Any(IsDamageEvidencePath) &&
+            damageImages.Count == 0)
         {
             ModelState.AddModelError(
-                nameof(model.NewDamageImages),
-                "Đã ghi nhận hư hỏng mới thì phải giữ hoặc bổ sung ít nhất một ảnh hư hỏng.");
+                nameof(model.DamageImages),
+                "Đã đánh dấu hư hỏng thì bộ ảnh cuối cùng phải có ít nhất một ảnh hư hỏng.");
         }
 
         if (!model.Mileage.HasValue || model.Mileage.Value < booking.Handover.Mileage)
@@ -234,18 +235,11 @@ public sealed class ReturnEditsController : Controller
         var addedPaths = new List<string>();
         try
         {
-            var addedDamagePaths = await SaveImagesAsync(
+            addedPaths = await SaveImagesAsync(
                 model.BookingId,
-                newDamageImages,
-                "damage-edit",
-                cancellationToken);
-            var addedOtherPaths = await SaveImagesAsync(
-                model.BookingId,
+                damageImages,
                 newImages,
-                "other-edit",
                 cancellationToken);
-            addedPaths.AddRange(addedDamagePaths);
-            addedPaths.AddRange(addedOtherPaths);
 
             var updatedPaths = currentPaths
                 .Where(path => !deleteSet.Contains(path))
@@ -267,6 +261,7 @@ public sealed class ReturnEditsController : Controller
             booking.VehicleReturn.ImagePaths = string.Join(';', updatedPaths);
             booking.Vehicle.CurrentMileage = model.Mileage.Value;
 
+            RemoveUnsupportedManualCharges(booking);
             RecalculateAutomaticCharges(booking);
             SynchronizePendingAdditionalChargePayment(booking);
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -291,6 +286,8 @@ public sealed class ReturnEditsController : Controller
             cancellationToken: cancellationToken);
 
         TempData["SuccessMessage"] = "Đã cập nhật biên bản trả xe và đồng bộ lại phụ phí. Hãy kiểm tra lại trước khi in và ký.";
+        TempData["ClearFileDraftKeys"] =
+            $"return-edit-{model.BookingId}-damage-images|return-edit-{model.BookingId}-new-images";
         return RedirectToAction("Inspect", "Returns", new { bookingId = model.BookingId });
     }
 
@@ -348,6 +345,15 @@ public sealed class ReturnEditsController : Controller
         SplitPaths(imagePaths)
             .Where(path => !path.Contains(SignedMarker, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+
+    private static bool IsDamageEvidencePath(string path)
+    {
+        var fileName = path
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .LastOrDefault();
+        return !string.IsNullOrWhiteSpace(fileName) &&
+               fileName.StartsWith("damage-", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool IsRequiredEvidence(string path)
     {
@@ -407,15 +413,6 @@ public sealed class ReturnEditsController : Controller
         return (AccessoriesComplete, null, string.IsNullOrWhiteSpace(note) ? null : note);
     }
 
-    private static string BuildReturnNotes(string accessoryStatus, string? missingAccessories, string? note)
-    {
-        var normalizedAccessory = NormalizeAccessoryValue(accessoryStatus, missingAccessories);
-        var normalizedNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
-        return normalizedNote is null
-            ? $"{ReturnAccessoriesLabel} {normalizedAccessory}"
-            : $"{ReturnAccessoriesLabel} {normalizedAccessory}{ReturnNoteSeparator}{normalizedNote}";
-    }
-
     private static void PopulateExistingImages(ReturnEditViewModel model, VehicleReturn record)
     {
         model.ExistingImagePaths = ReturnPhotos(record.ImagePaths).ToList();
@@ -423,13 +420,14 @@ public sealed class ReturnEditsController : Controller
 
     private async Task<List<string>> SaveImagesAsync(
         int bookingId,
-        IEnumerable<IFormFile> images,
-        string filePrefix,
+        IEnumerable<IFormFile> damageImages,
+        IEnumerable<IFormFile> otherImages,
         CancellationToken cancellationToken)
     {
-        var selectedImages = images.Where(file => file.Length > 0).ToList();
+        var selectedDamageImages = damageImages.Where(file => file.Length > 0).ToList();
+        var selectedOtherImages = otherImages.Where(file => file.Length > 0).ToList();
         var paths = new List<string>();
-        if (selectedImages.Count == 0)
+        if (selectedDamageImages.Count + selectedOtherImages.Count == 0)
         {
             return paths;
         }
@@ -440,15 +438,24 @@ public sealed class ReturnEditsController : Controller
 
         try
         {
-            foreach (var image in selectedImages)
+            foreach (var image in selectedDamageImages)
             {
-                var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-                var fileName = $"{filePrefix}-{Guid.NewGuid():N}{extension}";
-                var fullPath = Path.Combine(folder, fileName);
+                paths.Add(await SaveEditedImageAsync(
+                    folder,
+                    relativeFolder,
+                    "damage-edit",
+                    image,
+                    cancellationToken));
+            }
 
-                await using var stream = System.IO.File.Create(fullPath);
-                await image.CopyToAsync(stream, cancellationToken);
-                paths.Add($"/{relativeFolder}/{fileName}");
+            foreach (var image in selectedOtherImages)
+            {
+                paths.Add(await SaveEditedImageAsync(
+                    folder,
+                    relativeFolder,
+                    "other-edit",
+                    image,
+                    cancellationToken));
             }
         }
         catch
@@ -459,6 +466,73 @@ public sealed class ReturnEditsController : Controller
 
         return paths;
     }
+
+    private static async Task<string> SaveEditedImageAsync(
+        string folder,
+        string relativeFolder,
+        string label,
+        IFormFile image,
+        CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+        var fileName = $"{label}-{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(folder, fileName);
+
+        await using var stream = System.IO.File.Create(fullPath);
+        await image.CopyToAsync(stream, cancellationToken);
+        return $"/{relativeFolder}/{fileName}";
+    }
+
+    private static void RemoveUnsupportedManualCharges(Booking booking)
+    {
+        if (booking.VehicleReturn is null || booking.Handover is null)
+        {
+            return;
+        }
+
+        var vehicleReturn = booking.VehicleReturn;
+        var returnPhotos = ReturnPhotos(vehicleReturn.ImagePaths);
+        var hasDamageEvidence = returnPhotos.Any(IsDamageEvidencePath);
+
+        if (!vehicleReturn.HasDamage || !hasDamageEvidence)
+        {
+            foreach (var charge in vehicleReturn.AdditionalCharges
+                         .Where(charge => charge.ChargeType == AdditionalChargeType.Damage)
+                         .ToList())
+            {
+                vehicleReturn.AdditionalCharges.Remove(charge);
+            }
+        }
+
+        if (!HasMissingAccessories(vehicleReturn.AccessoryStatus))
+        {
+            foreach (var charge in vehicleReturn.AdditionalCharges
+                         .Where(charge => charge.ChargeType == AdditionalChargeType.MissingAccessory)
+                         .ToList())
+            {
+                vehicleReturn.AdditionalCharges.Remove(charge);
+            }
+        }
+
+        var fuelChargeStillSupported =
+            TryParseFuel(booking.Handover.FuelLevel, out var handoverFuel) &&
+            TryParseFuel(vehicleReturn.FuelLevel, out var returnFuel) &&
+            returnFuel < handoverFuel;
+
+        if (!fuelChargeStillSupported)
+        {
+            foreach (var charge in vehicleReturn.AdditionalCharges
+                         .Where(charge => charge.ChargeType == AdditionalChargeType.Fuel)
+                         .ToList())
+            {
+                vehicleReturn.AdditionalCharges.Remove(charge);
+            }
+        }
+    }
+
+    private static bool HasMissingAccessories(string? value) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value.StartsWith(AccessoriesMissingPrefix, StringComparison.OrdinalIgnoreCase);
 
     private static void RecalculateAutomaticCharges(Booking booking)
     {
@@ -552,3 +626,4 @@ public sealed class ReturnEditsController : Controller
         }
     }
 }
+

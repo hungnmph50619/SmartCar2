@@ -19,7 +19,6 @@ internal sealed class ReturnService : IReturnService
     private const string AccessoriesComplete = "Đủ";
     private const string AccessoriesMissingPrefix = "Thiếu/mất:";
     private const string ReturnAccessoriesLabel = "Phụ kiện khi trả:";
-    private const string ReturnNoteSeparator = " | Ghi chú: ";
     private const string HandoverSignedMarker = "signed-handover-";
     private const string ReturnSignedMarker = "signed-return-";
     private static readonly string[] RequiredReturnEvidencePrefixes =
@@ -99,7 +98,7 @@ internal sealed class ReturnService : IReturnService
                 BookingWorkflowRules.BlocksVehicleReturnForExtensionPayment(payment.Status)))
         {
             return OperationResult.Failure(
-                "Đơn đang có tiền gia hạn chuyển khoản/QR chờ Staff đối soát. " +
+                "Đơn đang có tiền gia hạn chuyển khoản/QR chờ Admin đối soát. " +
                 "Cần xác nhận hoặc từ chối giao dịch trước khi nhận xe trả để tránh thất lạc tiền khách đã chuyển.");
         }
 
@@ -128,6 +127,7 @@ internal sealed class ReturnService : IReturnService
             faceSession.Purpose != IdentityCapturePurposes.Return ||
             faceSession.BookingId != booking.BookingId ||
             faceSession.TargetCustomerId != booking.CustomerId ||
+            faceSession.CreatedByUserId != request.IdentityVerifiedByStaffId ||
             !faceSession.CanConsume(DateTime.UtcNow) ||
             !IdentityCaptureMethods.All.Contains(faceSession.CaptureMethod ?? string.Empty, StringComparer.Ordinal))
         {
@@ -144,7 +144,70 @@ internal sealed class ReturnService : IReturnService
         // ReturnedAt là thời điểm nghiệp vụ thực tế, vì vậy lấy từ server khi Staff lưu biên bản.
         // Không tin một timestamp tùy ý từ trình duyệt để tránh tính sai phí trả muộn.
         var actualReturnedAt = DateTime.Now;
-        // TEST Quy_2: tạm bỏ validation thứ tự thời gian giao/trả để chạy hết chuyến.
+        if (actualReturnedAt < booking.Handover.HandoverAt)
+        {
+            return OperationResult.Failure(
+                "Thời gian trả xe không được trước thời gian giao xe.");
+        }
+
+        var verifiedCitizenDocuments = await _dbContext.CustomerDocuments
+            .AsNoTracking()
+            .Where(document =>
+                document.CustomerId == booking.CustomerId &&
+                document.Status == DocumentStatus.Verified &&
+                (document.DocumentType == DocumentTypes.CitizenId ||
+                 document.DocumentType == DocumentTypes.CitizenIdBack))
+            .ToListAsync(cancellationToken);
+
+        var verifiedCitizenFront = verifiedCitizenDocuments
+            .Where(document => document.DocumentType == DocumentTypes.CitizenId)
+            .OrderByDescending(document => document.VerifiedAt)
+            .FirstOrDefault();
+        var verifiedCitizenBack = verifiedCitizenDocuments
+            .Where(document => document.DocumentType == DocumentTypes.CitizenIdBack)
+            .OrderByDescending(document => document.VerifiedAt)
+            .FirstOrDefault();
+
+        if (verifiedCitizenFront is null ||
+            verifiedCitizenBack is null ||
+            string.IsNullOrWhiteSpace(verifiedCitizenFront.DocumentNumber) ||
+            !string.Equals(
+                verifiedCitizenFront.DocumentNumber,
+                verifiedCitizenBack.DocumentNumber,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return OperationResult.Failure(
+                "Không có đủ CCCD mặt trước + mặt sau đã được Admin xác minh của khách đứng tên đơn. Dừng nhận xe trả và báo quản lý.");
+        }
+
+        var verifiedCitizenId = verifiedCitizenFront.DocumentNumber;
+
+        var returnCitizenSessions = await _dbContext.Set<IdentityCaptureSession>()
+            .Where(session =>
+                session.BookingId == booking.BookingId &&
+                session.TargetCustomerId == booking.CustomerId &&
+                session.CreatedByUserId == request.IdentityVerifiedByStaffId &&
+                !session.ConsumedAt.HasValue &&
+                session.CompletedAt.HasValue &&
+                session.ExpiresAt > DateTime.UtcNow &&
+                session.ImagePath != null &&
+                session.CaptureMethod == IdentityCaptureMethods.StaffCounterDocument &&
+                (session.Purpose == IdentityCapturePurposes.ReturnCitizenFront ||
+                 session.Purpose == IdentityCapturePurposes.ReturnCitizenBack))
+            .OrderByDescending(session => session.CompletedAt)
+            .ToListAsync(cancellationToken);
+
+        var citizenFront = returnCitizenSessions.FirstOrDefault(session =>
+            session.Purpose == IdentityCapturePurposes.ReturnCitizenFront);
+        var citizenBack = returnCitizenSessions.FirstOrDefault(session =>
+            session.Purpose == IdentityCapturePurposes.ReturnCitizenBack);
+
+        if (citizenFront is null || citizenBack is null)
+        {
+            return OperationResult.Failure(
+                "Cần chụp và lưu đủ CCCD mặt trước + mặt sau của người đang trả xe " +
+                "trong đúng đơn và bởi đúng nhân viên trước khi lập biên bản.");
+        }
 
         var evidencePaths = SplitImagePaths(request.ImagePaths)
             .Where(path => !path.Contains(ReturnSignedMarker, StringComparison.OrdinalIgnoreCase))
@@ -251,6 +314,8 @@ internal sealed class ReturnService : IReturnService
         };
 
         faceSession.ConsumedAt = identityVerifiedAt;
+        citizenFront.ConsumedAt = identityVerifiedAt;
+        citizenBack.ConsumedAt = identityVerifiedAt;
 
         var excessKilometers = Math.Max(0, drivenKilometers - effectiveIncludedKilometers);
         var excessMileageFee = excessKilometers * booking.Handover.ExcessKmFeePerKm;
@@ -845,7 +910,9 @@ internal sealed class ReturnService : IReturnService
                     : "Đơn vẫn còn khoản tiền chưa thanh toán, đang chờ đối soát hoặc chưa ghi nhận đủ tiền thuê/cọc.");
         }
 
-        // Chỉ khấu trừ cọc theo các Payment DepositDeduction đã được nghiệp vụ xác minh.
+        // Mọi khoản khấu trừ cọc hợp lệ phải đã được ghi thành Payment
+        // DepositDeduction bởi luồng nghiệp vụ đã xác minh trước đó.
+        // Không tự suy diễn/khấu trừ thêm từ marker legacy trong BookingExtension.CustomerNote.
         var totalDepositDeducted = depositAlreadyDeducted;
         var depositToRefund = Math.Max(
             0m,
@@ -892,7 +959,8 @@ internal sealed class ReturnService : IReturnService
             booking.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
                 _dbContext,
                 booking.Vehicle,
-                cancellationToken: cancellationToken);
+                cancellationToken: cancellationToken,
+                excludedBookingId: booking.BookingId);
         }
 
         if (requiresMaintenance)
@@ -966,10 +1034,11 @@ internal sealed class ReturnService : IReturnService
             0m,
             booking.TotalAmount - booking.RentalAmount - booking.AdditionalAmount);
 
-        booking.AdditionalAmount = await _dbContext.AdditionalCharges
+        var chargeAmounts = await _dbContext.AdditionalCharges
             .Where(charge => charge.VehicleReturn.BookingId == booking.BookingId)
-            .SumAsync(charge => (decimal?)charge.Amount, cancellationToken)
-            ?? 0;
+            .Select(charge => charge.Amount)
+            .ToListAsync(cancellationToken);
+        booking.AdditionalAmount = chargeAmounts.Sum();
 
         booking.TotalAmount = Math.Max(
             0,
@@ -1087,4 +1156,3 @@ internal sealed class ReturnService : IReturnService
             ? addition
             : $"{current.Trim()} {addition}";
 }
-

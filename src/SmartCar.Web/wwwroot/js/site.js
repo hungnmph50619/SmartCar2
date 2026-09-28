@@ -9,8 +9,22 @@
 
 function initializeForms() {
     document.querySelectorAll("form[data-confirm], form[data-loading-form]").forEach((form) => {
+        let pendingSubmission = null;
+        window.addEventListener("pageshow", () => { pendingSubmission = null; });
         form.addEventListener("submit", (event) => {
-            if (event.defaultPrevented || !form.checkValidity()) {
+            if (event.defaultPrevented) {
+                return;
+            }
+
+            // Guard the whole form, including Enter and a different submit button.
+            // A later validator may have cancelled the preceding event already.
+            if (pendingSubmission && !pendingSubmission.defaultPrevented) {
+                event.preventDefault();
+                return;
+            }
+
+            if (!form.checkValidity()) {
+                event.preventDefault();
                 return;
             }
 
@@ -30,22 +44,45 @@ function initializeForms() {
             }
 
             const submitter = event.submitter ?? form.querySelector('button[type="submit"], input[type="submit"]');
-            if (!submitter || submitter.disabled) {
-                return;
-            }
 
-            submitter.disabled = true;
-            submitter.setAttribute("aria-busy", "true");
+            // Let every synchronous submit handler run before committing to a loading state.
+            pendingSubmission = event;
+            window.setTimeout(() => {
+                if (pendingSubmission !== event) return;
+                if (event.defaultPrevented || !form.isConnected) {
+                    pendingSubmission = null;
+                    return;
+                }
+                if (!submitter || submitter.disabled) return;
 
-            if (submitter instanceof HTMLButtonElement) {
-                const loadingText = submitter.dataset.loadingText ?? "Đang xử lý...";
-                submitter.dataset.originalHtml = submitter.innerHTML;
-                submitter.innerHTML = `
-                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
-                    <span>${escapeHtml(loadingText)}</span>`;
-            } else {
-                submitter.dataset.originalValue = submitter.value;
-                submitter.value = submitter.dataset.loadingText ?? "Đang xử lý...";
+                submitter.disabled = true;
+                submitter.setAttribute("aria-busy", "true");
+
+                if (submitter instanceof HTMLButtonElement) {
+                    const loadingText = submitter.dataset.loadingText ?? "Đang xử lý...";
+                    submitter.dataset.originalHtml = submitter.innerHTML;
+                    submitter.innerHTML = `
+                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                        <span>${escapeHtml(loadingText)}</span>`;
+                } else if (submitter instanceof HTMLInputElement) {
+                    submitter.dataset.originalValue = submitter.value;
+                    submitter.value = submitter.dataset.loadingText ?? "Đang xử lý...";
+                }
+            }, 0);
+        });
+    });
+
+    window.addEventListener("pageshow", () => {
+        document.querySelectorAll('form[data-loading-form] [aria-busy="true"]').forEach((submitter) => {
+            submitter.disabled = false;
+            submitter.removeAttribute("aria-busy");
+
+            if (submitter instanceof HTMLButtonElement && submitter.dataset.originalHtml !== undefined) {
+                submitter.innerHTML = submitter.dataset.originalHtml;
+                delete submitter.dataset.originalHtml;
+            } else if (submitter instanceof HTMLInputElement && submitter.dataset.originalValue !== undefined) {
+                submitter.value = submitter.dataset.originalValue;
+                delete submitter.dataset.originalValue;
             }
         });
     });
