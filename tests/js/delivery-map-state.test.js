@@ -81,7 +81,7 @@ test('a pending lookup preserves an address that the customer corrected manually
     assert.equal(page.get('deliveryAddress').value, 'Cổng sau, số nhà 25');
 });
 
-test('changing the map point clears the old address even if the new lookup fails', async () => {
+test('changing the map point replaces an old address with its GPS coordinates if lookup fails', async () => {
     const page = deliveryMap();
     const first = page.select(21.031, 105.801);
     page.reverse[0].resolve({ display_name: 'Điểm A' });
@@ -89,7 +89,7 @@ test('changing the map point clears the old address even if the new lookup fails
     const second = page.select(21.032, 105.802);
     page.reverse[1].reject(new Error('Mất kết nối'));
     await second;
-    assert.equal(page.get('deliveryAddress').value, '');
+    assert.match(page.get('deliveryAddress').value, /21\.0320000, 105\.8020000/);
     assert.equal(page.get('delivery-location-error').classList.contains('d-none'), false);
 });
 
@@ -138,5 +138,19 @@ test('an old GPS error does not show over a valid point selected afterwards', as
     await selected;
     page.gps[0].reject({ code: 3, TIMEOUT: 3 });
     assert.equal(page.get('delivery-location-error').classList.contains('d-none'), true);
+    assert.equal(page.get('use-current-location').disabled, false);
+});
+
+test('GPS remains usable when all reverse-geocoding services are unavailable', async () => {
+    const page = deliveryMap();
+    await page.get('use-current-location').emit('click');
+    const located = page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 10 } });
+    page.reverse[0].reject(new Error('Không thể kết nối dịch vụ bản đồ. Trình duyệt cũng không kết nối được dịch vụ địa chỉ.'));
+    await located;
+
+    assert.match(page.get('deliveryAddress').value, /21\.0310000, 105\.8010000/);
+    assert.equal(page.get('deliveryLatitude').value, '21.0310000');
+    assert.equal(page.get('deliveryLongitude').value, '105.8010000');
+    assert.doesNotMatch(page.get('delivery-location-error').textContent, /Trình duyệt cũng không kết nối/);
     assert.equal(page.get('use-current-location').disabled, false);
 });

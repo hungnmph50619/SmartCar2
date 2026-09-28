@@ -503,12 +503,22 @@
                 error.classList.add('d-none');
             };
 
-            // Tọa độ chỉ là vị trí; tên đường cần dịch vụ dữ liệu địa chỉ.
-            let reverseFailureMessage = 'Không tra được địa chỉ từ tọa độ lúc này.';
+            // Reverse geocoding is optional: GPS coordinates still identify the
+            // delivery point when external address services are unreachable.
             const showReverseFailure = () => {
                 if (address.value.trim()) return;
-                error.textContent = reverseFailureMessage +
-                    ' Tọa độ đã giữ để tính phí; hãy nhập địa chỉ giao xe thủ công.';
+
+                const latitude = latInput.value;
+                const longitude = lngInput.value;
+                if (latitude && longitude) {
+                    address.value = `Điểm GPS (${latitude}, ${longitude})`;
+                    error.textContent =
+                        'Đã giữ điểm GPS giao xe. Chưa lấy được tên đường; nhân viên có thể mở đúng vị trí trên bản đồ. ' +
+                        'Nhập thêm số nhà hoặc hướng dẫn giao nếu cần.';
+                } else {
+                    error.textContent =
+                        'Chưa tra được tên địa chỉ. Hãy nhập địa chỉ giao xe hoặc chọn lại vị trí.';
+                }
                 error.classList.remove('d-none');
             };
             const reverseGeocode = async (lat, lng) => {
@@ -526,9 +536,6 @@
                     throw new Error('Không có tên địa chỉ tại điểm này.');
                 } catch (ex) {
                     if (revision !== locationRevision) return true;
-                    reverseFailureMessage = ex instanceof TypeError
-                        ? 'Không kết nối được máy chủ tìm địa chỉ.'
-                        : ex instanceof Error ? ex.message : 'Không tra được địa chỉ lúc này.';
                     console.warn('Không reverse geocode được địa chỉ:', ex);
                 }
 
