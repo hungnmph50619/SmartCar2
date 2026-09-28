@@ -18,12 +18,12 @@ public sealed class CounterRentalScheduleTests
     }
 
     [Fact]
-    public void LatestReturn_AlsoLeavesDeliveryLeadWhenNextBookingIsDelivery()
+    public void LatestReturn_UsesSameTurnaroundWhenNextBookingIsDelivery()
     {
         var nextPickup = new DateTime(2026, 9, 26, 18, 0, 0);
-        var policy = new RentalPolicySnapshot { VehicleTurnaroundMinutes = 60, DeliveryLeadMinutes = 30 };
+        var policy = new RentalPolicySnapshot { VehicleTurnaroundMinutes = 60 };
 
-        Assert.Equal(new DateTime(2026, 9, 26, 16, 30, 0),
+        Assert.Equal(new DateTime(2026, 9, 26, 17, 0, 0),
             CounterRentalSchedule.LatestReturn(nextPickup, VehiclePickupMethod.Delivery, policy));
     }
 
