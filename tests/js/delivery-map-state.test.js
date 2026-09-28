@@ -65,9 +65,9 @@ function deliveryMap() {
         await Promise.resolve();
     };
     const flush = async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-        await Promise.resolve();
+        for (let i = 0; i < 10; i++) {
+            await Promise.resolve();
+        }
     };
 
     runInNewContext(script, {
