@@ -60,8 +60,9 @@ public sealed class ExtensionsController : Controller
             return Challenge();
         }
 
-        var selectedEvidenceImages = CollectEvidenceImages(evidenceImages, evidenceImage);
-        string? liveLocationText = null;
+        IReadOnlyList<string> imagePaths = Array.Empty<string>();
+        string? composedEvidence = null;
+
         if (isForceMajeure)
         {
             if (string.IsNullOrWhiteSpace(model.CustomerNote))
@@ -70,6 +71,7 @@ public sealed class ExtensionsController : Controller
                 return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
             }
 
+            var selectedEvidenceImages = CollectEvidenceImages(evidenceImages, evidenceImage);
             var imageCountError = ValidateEvidenceImageCount(selectedEvidenceImages);
             if (imageCountError is not null)
             {
@@ -83,23 +85,28 @@ public sealed class ExtensionsController : Controller
                 return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
             }
 
-            liveLocationText =
+            var liveLocationText =
                 $"Vị trí trực tiếp: {latitude.ToString("0.000000", CultureInfo.InvariantCulture)}, " +
                 longitude.ToString("0.000000", CultureInfo.InvariantCulture);
+
+            var savedEvidence = await SaveEvidenceImagesAsync(
+                model.BookingId,
+                selectedEvidenceImages,
+                cancellationToken);
+
+            imagePaths = savedEvidence.Paths;
+            if (savedEvidence.Error is not null)
+            {
+                TempData["ErrorMessage"] = savedEvidence.Error;
+                return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
+            }
+
+            composedEvidence = ComposeEvidence(
+                evidenceNote,
+                imagePaths,
+                liveLocationText,
+                evidencePlaceName);
         }
-
-        var (imagePaths, imageError) = await SaveEvidenceImagesAsync(
-            model.BookingId,
-            selectedEvidenceImages,
-            cancellationToken);
-
-        if (imageError is not null)
-        {
-            TempData["ErrorMessage"] = imageError;
-            return RedirectToAction("Details", "Bookings", new { id = model.BookingId });
-        }
-
-        var composedEvidence = ComposeEvidence(evidenceNote, imagePaths, liveLocationText, evidencePlaceName);
         var result = ModelState.IsValid
             ? await _extensionService.RequestAsync(
                 customerId,
