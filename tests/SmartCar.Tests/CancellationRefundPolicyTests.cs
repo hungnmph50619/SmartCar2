@@ -7,7 +7,7 @@ namespace SmartCar.Tests;
 public sealed class CancellationRefundPolicyTests
 {
     [Fact]
-    public void GetRentalRefundRate_RefundsAllWithinFirstHourWhenTripIsAtLeast24HoursAway()
+    public void GetRentalRefundRate_RefundsAllWithinFirstHourAfterPayment()
     {
         var paidAt = new DateTime(2026, 9, 13, 10, 0, 0);
         var cancelledAt = paidAt.AddMinutes(30);
@@ -19,7 +19,7 @@ public sealed class CancellationRefundPolicyTests
     }
 
     [Fact]
-    public void GetRentalRefundRate_DoesNotApplyFreeWindowWhenTripIsLessThan24HoursAway()
+    public void GetRentalRefundRate_FreeWindowStillAppliesWhenPickupIsLessThan24HoursAway()
     {
         var paidAt = new DateTime(2026, 9, 13, 10, 0, 0);
         var cancelledAt = paidAt.AddMinutes(30);
@@ -27,7 +27,7 @@ public sealed class CancellationRefundPolicyTests
 
         var rate = CancellationRefundPolicy.GetRentalRefundRate(cancelledAt, pickupDate, paidAt);
 
-        Assert.Equal(0.20m, rate);
+        Assert.Equal(1.00m, rate);
     }
 
     [Fact]
@@ -38,8 +38,7 @@ public sealed class CancellationRefundPolicyTests
         var pickupDate = new DateTime(2026, 9, 20, 21, 0, 0);
         var policy = new RentalPolicySnapshot
         {
-            FreeCancellationWindowMinutes = 60,
-            FreeCancellationRequiresMinimumLead = false
+            FreeCancellationWindowMinutes = 60
         };
 
         var rate = CancellationRefundPolicy.GetRentalRefundRate(
@@ -52,17 +51,13 @@ public sealed class CancellationRefundPolicyTests
     }
 
     [Fact]
-    public void GetRentalRefundRate_OldBookingSnapshotStillRequiresMinimumLead()
+    public void GetRentalRefundRate_LegacySnapshotFieldsDoNotRestoreOld24HourRequirement()
     {
         var paidAt = new DateTime(2026, 9, 20, 20, 0, 0);
         var cancelledAt = paidAt.AddMinutes(10);
         var pickupDate = new DateTime(2026, 9, 20, 21, 0, 0);
-        var policy = new RentalPolicySnapshot
-        {
-            FreeCancellationWindowMinutes = 60,
-            MinimumHoursForFreeCancellation = 24,
-            FreeCancellationRequiresMinimumLead = true
-        };
+        var policy = RentalPolicySnapshot.FromJson(
+            """{"FreeCancellationWindowMinutes":60,"MinimumHoursForFreeCancellation":24,"FreeCancellationRequiresMinimumLead":true}""");
 
         var rate = CancellationRefundPolicy.GetRentalRefundRate(
             cancelledAt,
@@ -70,7 +65,7 @@ public sealed class CancellationRefundPolicyTests
             paidAt,
             policy);
 
-        Assert.Equal(0m, rate);
+        Assert.Equal(1.00m, rate);
     }
 
     [Theory]
@@ -102,7 +97,6 @@ public sealed class CancellationRefundPolicyTests
         var policy = new RentalPolicySnapshot
         {
             FreeCancellationWindowMinutes = 15,
-            MinimumHoursForFreeCancellation = 48,
             CancellationTier1Hours = 120,
             CancellationTier1RefundPercent = 80,
             CancellationTier2Hours = 36,
