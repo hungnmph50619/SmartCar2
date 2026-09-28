@@ -189,8 +189,7 @@ public sealed class BookingWorkflowRulesTests
         var returnedAt = new DateTime(2026, 9, 25, 10, 0, 0);
         var policy = new RentalPolicySnapshot
         {
-            VehicleTurnaroundMinutes = 75,
-            DeliveryLeadMinutes = 20
+            VehicleTurnaroundMinutes = 75
         };
 
         Assert.False(BookingWorkflowRules.HasActualTurnaroundElapsed(
@@ -206,22 +205,21 @@ public sealed class BookingWorkflowRulesTests
     }
 
     [Fact]
-    public void HasActualTurnaroundElapsed_AddsDeliveryLeadForDeliveryPickup()
+    public void HasActualTurnaroundElapsed_UsesSameTurnaroundForDeliveryPickup()
     {
         var returnedAt = new DateTime(2026, 9, 25, 10, 0, 0);
         var policy = new RentalPolicySnapshot
         {
-            VehicleTurnaroundMinutes = 60,
-            DeliveryLeadMinutes = 30
+            VehicleTurnaroundMinutes = 60
         };
 
         Assert.False(BookingWorkflowRules.HasActualTurnaroundElapsed(
-            returnedAt.AddMinutes(89),
+            returnedAt.AddMinutes(59),
             returnedAt,
             policy,
             VehiclePickupMethod.Delivery));
         Assert.True(BookingWorkflowRules.HasActualTurnaroundElapsed(
-            returnedAt.AddMinutes(90),
+            returnedAt.AddMinutes(60),
             returnedAt,
             policy,
             VehiclePickupMethod.Delivery));
