@@ -64,7 +64,24 @@ test('both network paths failing reports which connections failed', async () => 
         : { ok: false, status: 503, json: async () => ({}) });
 
     await assert.rejects(geocoding.search('Hà Nội'),
-        /Máy chủ không kết nối được Nominatim.*Trình duyệt cũng không kết nối/);
+        /Máy chủ không kết nối được Nominatim.*Dịch vụ địa chỉ dự phòng không phản hồi/);
+});
+
+test('network failures show a useful browser message instead of the raw fetch exception', async () => {
+    const geocoding = client(async url => {
+        if (url.startsWith('/api/')) return {
+            ok: false, status: 502,
+            json: async () => ({ message: 'Máy chủ không kết nối được dịch vụ tìm địa chỉ.' })
+        };
+        throw new TypeError('Failed to fetch');
+    });
+
+    await assert.rejects(geocoding.search('Trâu Quỳ'), error => {
+        assert.match(error.message, /Máy chủ không kết nối được dịch vụ tìm địa chỉ/);
+        assert.match(error.message, /Trình duyệt không kết nối được Nominatim/);
+        assert.doesNotMatch(error.message, /Failed to fetch/);
+        return true;
+    });
 });
 
 test('search uses an independent geocoder if Nominatim is unreachable from server and browser', async () => {

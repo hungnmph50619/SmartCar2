@@ -444,9 +444,12 @@
 
             const money = value =>
                 new Intl.NumberFormat('vi-VN').format(value) + ' đ';
+            const formatMeters = value =>
+                new Intl.NumberFormat('vi-VN').format(Math.round(value));
 
             let map = null;
             let marker = null;
+            let accuracyCircle = null;
             let storeMarker = null;
             let googleMap = false;
             let currentDeliveryFee = 0;
@@ -558,6 +561,78 @@
                 return false;
             };
 
+            const clearAccuracyCircle = () => {
+                if (!accuracyCircle) return;
+                if (googleMap) accuracyCircle.setMap(null);
+                else accuracyCircle.remove?.();
+                accuracyCircle = null;
+            };
+
+            const clearSelectedPoint = () => {
+                latInput.value = '';
+                lngInput.value = '';
+                currentDeliveryFee = 0;
+                deliveryFeeLabel.textContent = 'Phí giao xe tận nơi';
+                deliveryFeeAmount.textContent = 'Chọn điểm giao';
+                upfrontAmount.textContent = money(baseAmount);
+                coordinateText.textContent = 'Chưa chọn điểm giao.';
+
+                if (marker) {
+                    if (googleMap) marker.setMap(null);
+                    else marker.remove?.();
+                    marker = null;
+                }
+                clearAccuracyCircle();
+            };
+
+            const setApproximatePoint = (lat, lng, accuracy) => {
+                clearSelectedPoint();
+                const zoom = accuracy >= 3000 ? 11 : accuracy >= 1000 ? 12 : 14;
+                const title = `Vị trí gần đúng, sai số khoảng ${formatMeters(accuracy)} m. Kéo ghim để xác nhận điểm giao.`;
+
+                if (googleMap) {
+                    map.setCenter({ lat, lng });
+                    map.setZoom(zoom);
+                    marker = new google.maps.Marker({
+                        map, position: { lat, lng }, draggable: true, title
+                    });
+                    marker.addListener('dragend', async event => {
+                        const point = event.latLng;
+                        setPoint(point.lat(), point.lng(), map.getZoom());
+                        if (!await reverseGeocode(point.lat(), point.lng())) showReverseFailure();
+                    });
+                    accuracyCircle = new google.maps.Circle({
+                        map,
+                        center: { lat, lng },
+                        radius: accuracy,
+                        strokeColor: '#d97706',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 1,
+                        fillColor: '#f59e0b',
+                        fillOpacity: 0.12,
+                        clickable: false
+                    });
+                } else if (map) {
+                    map.setView([lat, lng], zoom);
+                    marker = L.marker([lat, lng], { draggable: true, title }).addTo(map);
+                    marker.on('dragend', async event => {
+                        const point = event.target.getLatLng();
+                        setPoint(point.lat, point.lng, map.getZoom());
+                        if (!await reverseGeocode(point.lat, point.lng)) showReverseFailure();
+                    });
+                    accuracyCircle = L.circle([lat, lng], {
+                        radius: accuracy,
+                        color: '#d97706',
+                        fillColor: '#f59e0b',
+                        fillOpacity: 0.12,
+                        interactive: false
+                    }).addTo(map);
+                }
+
+                coordinateText.textContent =
+                    `Vị trí gần đúng: ${lat.toFixed(6)}, ${lng.toFixed(6)} (sai số khoảng ${formatMeters(accuracy)} m). Kéo ghim để xác nhận.`;
+            };
+
             const setPoint = (lat, lng, zoom = 16) => {
                 const normalizedLat = Number(lat);
                 const normalizedLng = Number(lng);
@@ -578,6 +653,7 @@
                 // Hidden input luôn dùng dấu chấm theo chuẩn JavaScript.
                 // BookingsController sẽ parse bằng InvariantCulture.
                 locationRevision++;
+                clearAccuracyCircle();
                 address.value = '';
                 searchHelp.textContent = '';
                 latInput.value = normalizedLat.toFixed(7);
@@ -635,19 +711,7 @@
             };
 
             const clearPointBeforeAddressSearch = () => {
-                latInput.value = '';
-                lngInput.value = '';
-                currentDeliveryFee = 0;
-                deliveryFeeLabel.textContent = 'Phí giao xe tận nơi';
-                deliveryFeeAmount.textContent = 'Chọn điểm giao';
-                upfrontAmount.textContent = money(baseAmount);
-                coordinateText.textContent = 'Chưa chọn điểm giao.';
-
-                if (marker) {
-                    if (googleMap) marker.setMap(null);
-                    else marker.remove?.();
-                    marker = null;
-                }
+                clearSelectedPoint();
 
                 if (map && googleMap) {
                     map.setCenter({ lat: storeLat, lng: storeLng });
@@ -824,13 +888,20 @@
                         const lng = position.coords.longitude;
                         const accuracy = position.coords.accuracy;
 
-                        // Geolocation trên máy tính thường suy ra từ Wi-Fi/IP và có thể
-                        // lệch hàng trăm mét. Không ghi điểm giao khi sai số quá lớn.
+                        // Trình duyệt trên máy tính có thể chỉ suy ra vị trí từ mạng/IP.
+                        // Hiện ghim ước lượng để người dùng chỉnh, nhưng không dùng điểm
+                        // này tính phí cho đến khi ghim được kéo hoặc bản đồ được bấm.
                         if (!Number.isFinite(accuracy) || accuracy > 100) {
-                            if (map && !googleMap) map.setView([lat, lng], 15);
-                            if (map && googleMap) map.setCenter({ lat, lng });
-                            error.textContent = `Thiết bị chỉ ước lượng vị trí với sai số khoảng ${Math.round(accuracy) || 'không rõ'} m. ` +
-                                'Chưa chọn điểm giao; hãy bấm hoặc kéo ghim đến đúng địa chỉ trên bản đồ.';
+                            if (Number.isFinite(accuracy) &&
+                                Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+                                Number.isFinite(lng) && lng >= -180 && lng <= 180) {
+                                setApproximatePoint(lat, lng, accuracy);
+                            }
+                            const accuracyLabel = Number.isFinite(accuracy)
+                                ? `${formatMeters(accuracy)} m`
+                                : 'không rõ';
+                            error.textContent = `Thiết bị chỉ ước lượng vị trí với sai số khoảng ${accuracyLabel}. ` +
+                                'Ghim và vùng màu cam chỉ để tham khảo; kéo ghim đến đúng địa chỉ hoặc bấm trực tiếp lên bản đồ. Chưa chọn điểm giao để tính phí.';
                             error.classList.remove('d-none');
                             locationButton.disabled = false;
                             locationButton.textContent = oldLocationText;

@@ -43,6 +43,8 @@ function deliveryMap() {
     });
     get('deliveryPickup').checked = true;
     const map = element();
+    const markers = [];
+    const circles = [];
     const reverse = [], search = [], gps = [];
     const request = queue => new Promise((resolve, reject) => queue.push({ resolve, reject }));
     runInNewContext(script, {
@@ -56,10 +58,27 @@ function deliveryMap() {
         navigator: {
             geolocation: { getCurrentPosition: (resolve, reject) => gps.push({ resolve, reject }) }
         },
-        L: { map: () => map, marker: element, tileLayer: element },
+        L: {
+            map: () => map,
+            marker: (position, options) => {
+                const value = element();
+                value.position = position;
+                value.options = options;
+                markers.push(value);
+                return value;
+            },
+            circle: (center, options) => {
+                const value = element();
+                value.center = center;
+                value.options = options;
+                circles.push(value);
+                return value;
+            },
+            tileLayer: element
+        },
         setTimeout: fn => fn(), console: { warn() {} }, Intl, Number, Math, Error, TypeError
     });
-    return { get, reverse, search, gps, select: (lat, lng) => map.emit('click', { latlng: { lat, lng } }) };
+    return { get, reverse, search, gps, markers, circles, select: (lat, lng) => map.emit('click', { latlng: { lat, lng } }) };
 }
 
 test('a slow reverse lookup cannot replace the address of a more recent map point', async () => {
@@ -168,6 +187,30 @@ test('GPS accuracy larger than a house-level radius never labels a nearby wrong 
     assert.equal(page.reverse.length, 0);
     assert.match(page.get('deliveryAddress').value, /21\.0310000, 105\.8010000/);
     assert.match(page.get('delivery-coordinate-text').textContent, /62.*m/);
+});
+
+test('coarse GPS keeps a draggable estimate visible but does not select or charge that point', async () => {
+    const page = deliveryMap();
+    await page.get('use-current-location').emit('click');
+    await page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 5000 } });
+
+    assert.equal(page.get('deliveryLatitude').value, '');
+    assert.equal(page.get('deliveryLongitude').value, '');
+    assert.equal(page.get('delivery-fee-amount').textContent, 'Chọn điểm giao');
+    assert.equal(page.markers.length, 2);
+    assert.equal(page.markers[1].options.draggable, true);
+    assert.equal(page.circles[0].options.radius, 5000);
+    assert.match(page.get('delivery-location-error').textContent, /5.000 m/);
+
+    const dragged = page.markers[1].emit('dragend', {
+        target: { getLatLng: () => ({ lat: 21.032, lng: 105.802 }) }
+    });
+    page.reverse[0].resolve({ display_name: 'Điểm đã chỉnh trên bản đồ' });
+    await dragged;
+
+    assert.equal(page.get('deliveryLatitude').value, '21.0320000');
+    assert.equal(page.get('deliveryLongitude').value, '105.8020000');
+    assert.equal(page.get('deliveryAddress').value, 'Điểm đã chỉnh trên bản đồ');
 });
 
 test('address search shows multiple candidates and applies only the one the customer selects', async () => {

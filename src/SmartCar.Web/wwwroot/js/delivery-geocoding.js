@@ -107,7 +107,11 @@
                 const result = await directLookup(appendViewbox(directPath, focusPoint));
                 if (hasResults(result, reverse)) return result;
             } catch (error) {
-                directError = error;
+                directError = error?.name === 'AbortError'
+                    ? new Error('Tra địa chỉ từ trình duyệt quá thời gian.')
+                    : error?.name === 'TypeError' || /failed to fetch|networkerror/i.test(error?.message || '')
+                        ? new Error('Trình duyệt không kết nối được Nominatim.')
+                        : error;
             }
         }
 
@@ -117,7 +121,11 @@
             return reverse ? null : [];
         } catch (error) {
             const reason = [serverError, directError?.message].filter(Boolean).join(' ');
-            const fallbackFailure = 'Trình duyệt cũng không kết nối được dịch vụ địa chỉ.';
+            const fallbackFailure = error?.name === 'AbortError'
+                ? 'Tra địa chỉ bằng dịch vụ dự phòng quá thời gian.'
+                : error?.name === 'TypeError' || /failed to fetch|networkerror/i.test(error?.message || '')
+                    ? 'Trình duyệt cũng không kết nối được dịch vụ địa chỉ dự phòng.'
+                    : 'Dịch vụ địa chỉ dự phòng không phản hồi.';
             throw new Error(`${reason || error?.message || 'Không tìm thấy địa chỉ.'} ${fallbackFailure}`);
         }
     };
