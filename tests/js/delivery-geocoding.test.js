@@ -8,7 +8,7 @@ const source = fs.readFileSync(path.resolve(__dirname,
     '../../src/SmartCar.Web/wwwroot/js/delivery-geocoding.js'), 'utf8');
 
 function client(fetchImpl) {
-    const context = { fetch: fetchImpl, setTimeout, Date, Promise };
+    const context = { fetch: fetchImpl, setTimeout, clearTimeout, Date, Promise, AbortController };
     context.window = context;
     vm.runInNewContext(source, context);
     return context.SmartCarDeliveryGeocoding;
@@ -85,4 +85,51 @@ test('search uses an independent geocoder if Nominatim is unreachable from serve
     assert.equal(results[0].lat, '21.03');
     assert.equal(results[0].lon, '105.8');
     assert.match(results[0].display_name, /Hà Nội/);
+});
+
+test('search falls back to Photon when Nominatim responds successfully with no matches', async () => {
+    const requests = [];
+    const geocoding = client(async url => {
+        requests.push(url);
+        if (url.startsWith('/api/')) return { ok: true, json: async () => [] };
+        if (url.startsWith('https://photon.komoot.io/api')) return {
+            ok: true,
+            json: async () => ({ features: [
+                { geometry: { coordinates: [105.81, 21.04] }, properties: {
+                    countrycode: 'VN', housenumber: '25', street: 'Phố Huế', district: 'Hai Bà Trưng'
+                } },
+                { geometry: { coordinates: [105.82, 21.05] }, properties: {
+                    countrycode: 'VN', housenumber: '25', street: 'Phố Huế', district: 'Hoàn Kiếm'
+                } }
+            ] })
+        };
+        throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const results = await geocoding.search('25 Phố Huế', { lat: 21.03, lon: 105.8 });
+
+    assert.equal(results.length, 2);
+    assert.match(results[0].display_name, /25 Phố Huế/);
+    assert.match(requests[0], /nearLat=21\.03.*nearLon=105\.8/);
+    assert.match(requests[1], /countrycode=VN/);
+    assert.match(requests[1], /limit=5/);
+    assert.match(requests[1], /lat=21\.03.*lon=105\.8/);
+});
+
+test('reverse Photon fallback searches within 100 metres of the selected GPS point', async () => {
+    let photonUrl = '';
+    const geocoding = client(async url => {
+        if (url.startsWith('/api/')) return { ok: false, status: 404, json: async () => ({ message: 'Không có địa chỉ.' }) };
+        if (url.startsWith('https://nominatim.')) return { ok: false, status: 404, json: async () => ({}) };
+        photonUrl = url;
+        return { ok: true, json: async () => ({ features: [{
+            geometry: { coordinates: [105.8, 21.03] },
+            properties: { countrycode: 'VN', housenumber: '25', street: 'Phố Huế' }
+        }] }) };
+    });
+
+    const result = await geocoding.reverse(21.03, 105.8);
+
+    assert.equal(result.display_name, '25 Phố Huế');
+    assert.match(photonUrl, /radius=0\.1/);
 });

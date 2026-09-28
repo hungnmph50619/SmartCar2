@@ -277,6 +277,13 @@
                                             Tìm trên bản đồ
                                         </button>
                                     </div>
+                                    <div id="delivery-search-results"
+                                         class="list-group d-none mb-2"
+                                         role="group"
+                                         aria-label="Chọn địa chỉ tìm thấy"></div>
+                                    <div id="delivery-search-help"
+                                         class="small text-muted mb-2"
+                                         aria-live="polite"></div>
 
                                     <input type="hidden"
                                            id="deliveryLatitude"
@@ -290,7 +297,7 @@
                                         align-items-center gap-2 mb-2 flex-wrap">
 
                                         <small class="text-muted" id="delivery-map-help">
-                                            Tìm địa chỉ, bấm lên bản đồ hoặc dùng GPS để chọn điểm giao. Có thể chỉnh tên đường sau khi chọn điểm.
+                                            Nhập số nhà và tên đường rồi chọn đúng quận/huyện trong kết quả. Vị trí GPS có thể có sai số; hãy kiểm tra ghim trước khi đặt.
                                         </small>
 
                                         <button type="button"
@@ -418,6 +425,8 @@
             const error = document.getElementById('delivery-location-error');
             const locationButton = document.getElementById('use-current-location');
             const findAddressButton = document.getElementById('find-delivery-address');
+            const searchResults = document.getElementById('delivery-search-results');
+            const searchHelp = document.getElementById('delivery-search-help');
             const coordinateText = document.getElementById('delivery-coordinate-text');
             const mapHelp = document.getElementById('delivery-map-help');
             const deliveryFeeRow = document.getElementById('delivery-fee-row');
@@ -442,7 +451,13 @@
             let googleMap = false;
             let currentDeliveryFee = 0;
             let locationRevision = 0;
-            address.addEventListener('input', () => { locationRevision++; });
+            const preciseAddressAccuracyMeters = 25;
+            address.addEventListener('input', () => {
+                locationRevision++;
+                searchResults.replaceChildren();
+                searchResults.classList.add('d-none');
+                searchHelp.textContent = '';
+            });
 
             const toRadians = degrees => degrees * Math.PI / 180;
 
@@ -492,7 +507,7 @@
                         `Điểm giao cách cửa hàng khoảng ${distanceKm.toFixed(1)} km, ` +
                         `vượt phạm vi tối đa ${maxDeliveryKm.toFixed(0)} km.`;
                     error.classList.remove('d-none');
-                    return;
+                    return false;
                 }
 
                 currentDeliveryFee = calculateDeliveryFee(distanceKm);
@@ -530,6 +545,7 @@
                     if (revision !== locationRevision) return true;
                     if (place) {
                         address.value = place;
+                        searchHelp.textContent = 'Tên địa chỉ là gợi ý từ bản đồ. Kiểm tra ghim và thêm số nhà nếu cần.';
                         updatePriceByPoint(lat, lng);
                         return true;
                     }
@@ -556,13 +572,14 @@
                     error.textContent =
                         'Tọa độ được chọn không hợp lệ. Vui lòng chọn lại điểm giao xe.';
                     error.classList.remove('d-none');
-                    return;
+                    return false;
                 }
 
                 // Hidden input luôn dùng dấu chấm theo chuẩn JavaScript.
                 // BookingsController sẽ parse bằng InvariantCulture.
                 locationRevision++;
                 address.value = '';
+                searchHelp.textContent = '';
                 latInput.value = normalizedLat.toFixed(7);
                 lngInput.value = normalizedLng.toFixed(7);
 
@@ -570,7 +587,7 @@
 
                 updatePriceByPoint(normalizedLat, normalizedLng);
 
-                if (!map) return;
+                if (!map) return true;
 
                 if (googleMap) {
                     if (marker) marker.setPosition({ lat: normalizedLat, lng: normalizedLng });
@@ -586,7 +603,7 @@
                     }
                     map.setCenter({ lat: normalizedLat, lng: normalizedLng });
                     map.setZoom(zoom);
-                    return;
+                    return true;
                 }
 
                 if (marker) {
@@ -614,6 +631,30 @@
                 map.setView(
                     [normalizedLat, normalizedLng],
                     zoom);
+                return true;
+            };
+
+            const clearPointBeforeAddressSearch = () => {
+                latInput.value = '';
+                lngInput.value = '';
+                currentDeliveryFee = 0;
+                deliveryFeeLabel.textContent = 'Phí giao xe tận nơi';
+                deliveryFeeAmount.textContent = 'Chọn điểm giao';
+                upfrontAmount.textContent = money(baseAmount);
+                coordinateText.textContent = 'Chưa chọn điểm giao.';
+
+                if (marker) {
+                    if (googleMap) marker.setMap(null);
+                    else marker.remove?.();
+                    marker = null;
+                }
+
+                if (map && googleMap) {
+                    map.setCenter({ lat: storeLat, lng: storeLng });
+                    map.setZoom(13);
+                } else if (map) {
+                    map.setView([storeLat, storeLng], 13);
+                }
             };
 
             const initMap = () => {
@@ -800,10 +841,19 @@
                         setPoint(lat, lng);
                         coordinateText.textContent += ` GPS báo sai số khoảng ${Math.round(accuracy)} m; hãy kiểm tra ghim trước khi đặt.`;
 
-                        locationButton.textContent = 'Đang tìm địa chỉ...';
-                        const filled = await reverseGeocode(lat, lng);
-
-                        if (!filled) showReverseFailure();
+                        if (accuracy > preciseAddressAccuracyMeters) {
+                            address.value = `Điểm GPS (${latInput.value}, ${lngInput.value})`;
+                            if (calculateDistanceKm(lat, lng) <= maxDeliveryKm) {
+                                error.textContent =
+                                    `Sai số GPS khoảng ${Math.round(accuracy)} m nên tên đường có thể không chính xác. ` +
+                                    'Đã giữ điểm gần đúng; hãy kéo ghim hoặc tìm địa chỉ để chỉnh lại.';
+                                error.classList.remove('d-none');
+                            }
+                        } else {
+                            locationButton.textContent = 'Đang tìm địa chỉ...';
+                            const filled = await reverseGeocode(lat, lng);
+                            if (!filled) showReverseFailure();
+                        }
 
                         locationButton.disabled = false;
                         locationButton.textContent = oldLocationText;
@@ -861,6 +911,15 @@
                 }
 
                 const revision = ++locationRevision;
+                const focus = {
+                    lat: Number(latInput.value || storeLat),
+                    lon: Number(lngInput.value || storeLng)
+                };
+                clearPointBeforeAddressSearch();
+                searchResults.replaceChildren();
+                searchResults.classList.add('d-none');
+                searchHelp.textContent = '';
+                error.classList.add('d-none');
                 findAddressButton.disabled = true;
                 const oldText = findAddressButton.textContent;
                 findAddressButton.textContent = 'Đang tìm...';
@@ -872,23 +931,45 @@
                             lon: item.geometry.location.lng(),
                             display_name: item.formatted_address
                         }))
-                        : await window.SmartCarDeliveryGeocoding.search(query);
+                        : await window.SmartCarDeliveryGeocoding.search(query, focus);
                     if (revision !== locationRevision) return;
                     if (!Array.isArray(results)) throw new Error('Dữ liệu địa chỉ chưa hợp lệ.');
 
-                    if (!results.length) {
+                    const candidates = results.filter(item =>
+                        Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon)) &&
+                        Math.abs(Number(item.lat)) <= 90 && Math.abs(Number(item.lon)) <= 180 &&
+                        typeof item.display_name === 'string' && item.display_name.trim())
+                        .slice(0, 8);
+
+                    if (!candidates.length) {
                         error.textContent =
-                            'Không tìm thấy địa chỉ. Hãy nhập rõ số nhà, đường, phường/xã, quận/huyện.';
+                            'Chưa thấy địa chỉ phù hợp. Hãy nhập thêm số nhà, tên đường và quận/huyện, hoặc chọn ghim trên bản đồ.';
                         error.classList.remove('d-none');
                         return;
                     }
 
-                    setPoint(
-                        Number(results[0].lat),
-                        Number(results[0].lon));
+                    const selectCandidate = candidate => {
+                        if (revision !== locationRevision) return;
+                        if (!setPoint(Number(candidate.lat), Number(candidate.lon))) return;
+                        address.value = candidate.display_name;
+                        searchResults.replaceChildren();
+                        searchResults.classList.add('d-none');
+                        searchHelp.textContent = 'Đã chọn vị trí. Kiểm tra ghim và địa chỉ trước khi gửi yêu cầu.';
+                    };
 
-                    if (results[0].display_name) {
-                        address.value = results[0].display_name;
+                    if (candidates.length === 1) {
+                        selectCandidate(candidates[0]);
+                    } else {
+                        candidates.forEach(candidate => {
+                            const choice = document.createElement('button');
+                            choice.type = 'button';
+                            choice.className = 'list-group-item list-group-item-action text-start text-break';
+                            choice.textContent = candidate.display_name;
+                            choice.addEventListener('click', () => selectCandidate(candidate));
+                            searchResults.append(choice);
+                        });
+                        searchResults.classList.remove('d-none');
+                        searchHelp.textContent = 'Có nhiều địa chỉ gần giống. Chọn đúng số nhà và quận/huyện để đặt ghim.';
                     }
                 } catch (ex) {
                     if (revision !== locationRevision) return;

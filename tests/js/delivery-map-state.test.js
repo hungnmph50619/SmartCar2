@@ -11,7 +11,7 @@ function element() {
     const listeners = new Map();
     const classes = new Set();
     return {
-        value: '', textContent: '', dataset: {}, checked: false, disabled: false,
+        value: '', textContent: '', className: '', type: '', dataset: {}, checked: false, disabled: false, children: [],
         classList: {
             add: value => classes.add(value), remove: value => classes.delete(value),
             contains: value => classes.has(value),
@@ -21,6 +21,9 @@ function element() {
         on(name, fn) { this.addEventListener(name, fn); return this; },
         off(name) { listeners.delete(name); return this; },
         emit(name, event) { return Promise.all((listeners.get(name) || []).map(fn => fn(event))); },
+        replaceChildren(...children) { this.children = children; },
+        append(child) { this.children.push(child); },
+        remove() {}, setMap() {},
         focus() {}, scrollIntoView() {}, invalidateSize() {},
         setView() { return this; }, getZoom() { return 16; },
         addTo() { return this; }, bindPopup() { return this; }, setLatLng() { return this; }
@@ -43,7 +46,7 @@ function deliveryMap() {
     const reverse = [], search = [], gps = [];
     const request = queue => new Promise((resolve, reject) => queue.push({ resolve, reject }));
     runInNewContext(script, {
-        document: { getElementById: get },
+        document: { getElementById: get, createElement: element },
         window: {
             isSecureContext: true,
             SmartCarDeliveryGeocoding: {
@@ -153,4 +156,39 @@ test('GPS remains usable when all reverse-geocoding services are unavailable', a
     assert.equal(page.get('deliveryLongitude').value, '105.8010000');
     assert.doesNotMatch(page.get('delivery-location-error').textContent, /Trình duyệt cũng không kết nối/);
     assert.equal(page.get('use-current-location').disabled, false);
+});
+
+test('GPS accuracy larger than a house-level radius never labels a nearby wrong address as exact', async () => {
+    const page = deliveryMap();
+    await page.get('use-current-location').emit('click');
+    const located = page.gps[0].resolve({ coords: { latitude: 21.031, longitude: 105.801, accuracy: 62 } });
+    page.reverse[0]?.resolve({ display_name: 'Địa chỉ nhà bên cạnh' });
+    await located;
+
+    assert.equal(page.reverse.length, 0);
+    assert.match(page.get('deliveryAddress').value, /21\.0310000, 105\.8010000/);
+    assert.match(page.get('delivery-coordinate-text').textContent, /62.*m/);
+});
+
+test('address search shows multiple candidates and applies only the one the customer selects', async () => {
+    const page = deliveryMap();
+    const oldPoint = page.select(21.04, 105.81);
+    page.reverse[0].resolve({ display_name: 'Điểm cũ' });
+    await oldPoint;
+    page.get('deliveryAddress').value = '25 Phố Huế';
+    await page.get('deliveryAddress').emit('input');
+    const searching = page.get('find-delivery-address').emit('click');
+    assert.equal(page.get('deliveryLatitude').value, '', 'the old point must not be submitted with a new search');
+    page.search[0].resolve([
+        { lat: '21.031', lon: '105.801', display_name: '25 Phố Huế, Hai Bà Trưng' },
+        { lat: '21.041', lon: '105.811', display_name: '25 Phố Huế, Hoàn Kiếm' }
+    ]);
+    await searching;
+
+    const choices = page.get('delivery-search-results');
+    assert.equal(choices.children.length, 2);
+    await choices.children[1].emit('click');
+    assert.equal(page.get('deliveryAddress').value, '25 Phố Huế, Hoàn Kiếm');
+    assert.equal(page.get('deliveryLatitude').value, '21.0410000');
+    assert.equal(choices.children.length, 0);
 });

@@ -16,7 +16,11 @@ public sealed class GeocodingController : ControllerBase
     }
 
     [HttpGet("search")]
-    public async Task<IActionResult> Search([FromQuery] string? q, CancellationToken cancellationToken)
+    public async Task<IActionResult> Search(
+        [FromQuery] string? q,
+        [FromQuery] double? nearLat,
+        [FromQuery] double? nearLon,
+        CancellationToken cancellationToken)
     {
         var query = q?.Trim();
         if (string.IsNullOrWhiteSpace(query) || query.Length < 3 || query.Length > 200)
@@ -27,7 +31,20 @@ public sealed class GeocodingController : ControllerBase
             "SmartCar2/1.0 (+https://github.com/hungnmph50619/SmartCar2)");
         client.Timeout = TimeSpan.FromSeconds(12);
         client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("vi-VN,vi;q=0.9,en;q=0.7");
-        var url = $"https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=vn&q={Uri.EscapeDataString(query)}";
+        var url = $"https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&countrycodes=vn&q={Uri.EscapeDataString(query)}";
+        if (nearLat.HasValue && nearLon.HasValue &&
+            double.IsFinite(nearLat.Value) && double.IsFinite(nearLon.Value) &&
+            nearLat.Value is >= -90 and <= 90 && nearLon.Value is >= -180 and <= 180)
+        {
+            var viewbox = string.Join(",", new[]
+            {
+                Math.Max(-180, nearLon.Value - 0.55),
+                Math.Max(-90, nearLat.Value - 0.45),
+                Math.Min(180, nearLon.Value + 0.55),
+                Math.Min(90, nearLat.Value + 0.45)
+            }.Select(value => value.ToString("0.#####", CultureInfo.InvariantCulture)));
+            url += $"&viewbox={Uri.EscapeDataString(viewbox)}";
+        }
         try
         {
             using var response = await client.GetAsync(url, cancellationToken);
