@@ -34,7 +34,8 @@ partial class ApplicationDbContextModelSnapshot
                     .HasColumnType("int");
 
                 b.Property<string>("CustomerNote")
-                    .HasColumnType("nvarchar(max)");
+                    .HasMaxLength(4000)
+                    .HasColumnType("nvarchar(4000)");
 
                 b.Property<DateTime?>("DecidedAt")
                     .HasColumnType("datetime2");

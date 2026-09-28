@@ -14,6 +14,7 @@ internal sealed class ExtensionService : IExtensionService
     private const string ForceMajeureMarker = "[FORCE_MAJEURE]";
     private const string EvidenceMarker = "[EVIDENCE]";
     private const string NoteMarker = "[NOTE]";
+    private const int MaximumStoredCustomerNoteLength = 4000;
 
     private static readonly BookingStatus[] BlockingStatuses =
     {
@@ -140,16 +141,22 @@ internal sealed class ExtensionService : IExtensionService
             (int)Math.Ceiling((request.RequestedReturnDate - booking.ReturnDate).TotalHours / 24d));
         var additionalAmount = additionalDays * booking.DailyPrice;
 
+        var storedCustomerNote = BuildStoredCustomerNote(
+            request.IsForceMajeure,
+            request.CustomerNote,
+            request.EvidenceNote);
+        if (storedCustomerNote is { Length: > MaximumStoredCustomerNoteLength })
+        {
+            return OperationResult.Failure("Minh chứng gia hạn quá dài. Vui lòng rút gọn mô tả hoặc giảm số lượng ảnh.");
+        }
+
         booking.Extensions.Add(new BookingExtension
         {
             OriginalReturnDate = booking.ReturnDate,
             RequestedReturnDate = request.RequestedReturnDate,
             AdditionalDays = additionalDays,
             AdditionalAmount = additionalAmount,
-            CustomerNote = BuildStoredCustomerNote(
-                request.IsForceMajeure,
-                request.CustomerNote,
-                request.EvidenceNote),
+            CustomerNote = storedCustomerNote,
             Status = BookingExtensionStatus.Pending,
             RequestedAt = DateTime.UtcNow
         });
@@ -355,10 +362,16 @@ internal sealed class ExtensionService : IExtensionService
         }
 
         var isForceMajeure = IsForceMajeure(extension.CustomerNote);
-        extension.CustomerNote = BuildStoredCustomerNote(
+        var storedCustomerNote = BuildStoredCustomerNote(
             isForceMajeure,
             resolvedCustomerNote,
             evidenceNote);
+        if (storedCustomerNote is { Length: > MaximumStoredCustomerNoteLength })
+        {
+            return OperationResult.Failure("Minh chứng gia hạn quá dài. Vui lòng rút gọn mô tả hoặc giảm số lượng ảnh.");
+        }
+
+        extension.CustomerNote = storedCustomerNote;
         extension.Status = BookingExtensionStatus.Pending;
         extension.AdminNote = null;
         extension.DecidedAt = null;

@@ -19,7 +19,7 @@ public sealed class BookingExtensionStorageTests
             .FindEntityType(typeof(BookingExtension))!
             .FindProperty(nameof(BookingExtension.CustomerNote))!;
 
-        Assert.Null(property.GetMaxLength());
-        Assert.Equal("nvarchar(max)", property.GetColumnType());
+        Assert.Equal(4000, property.GetMaxLength());
+        Assert.Equal("nvarchar(4000)", property.GetColumnType());
     }
 }

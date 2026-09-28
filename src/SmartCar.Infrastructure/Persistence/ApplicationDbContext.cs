@@ -194,7 +194,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasKey(extension => extension.BookingExtensionId);
             entity.Property(extension => extension.AdditionalAmount).HasPrecision(18, 2);
             entity.Property(extension => extension.Status).HasConversion<string>().HasMaxLength(30);
-            entity.Property(extension => extension.CustomerNote).HasColumnType("nvarchar(max)");
+            entity.Property(extension => extension.CustomerNote).HasMaxLength(4000);
             entity.Property(extension => extension.AdminNote).HasMaxLength(500);
             entity.HasIndex(extension => new { extension.BookingId, extension.Status });
             entity.HasOne(extension => extension.Booking)
