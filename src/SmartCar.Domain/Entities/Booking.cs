@@ -40,6 +40,10 @@ public class Booking
     public DateTime? StaffReviewedAt { get; set; }
     public string? StaffReviewedByStaffId { get; set; }
 
+    // Nhân viên đang giữ quyền xử lý vận hành của đơn. Hết hạn thì Staff khác có thể nhận.
+    public string? HandlingStaffId { get; set; }
+    public DateTime? HandlingLeaseExpiresAt { get; set; }
+
     public string? CancelReason { get; set; }
     public string? CancelledBy { get; set; }
     public DateTime? CancelledAt { get; set; }
