@@ -1,76 +1,101 @@
 (() => {
-    // Mọi tra cứu địa chỉ đi qua backend SmartCar. Backend chịu trách nhiệm
-    // gọi provider bên ngoài, nhờ đó browser không còn phụ thuộc CORS/DNS
-    // của Nominatim/Photon và không phát sinh chuỗi "Failed to fetch".
-    const requestTimeoutMs = 16000;
+    // Giữ đúng đường chạy đã hoạt động trên master:
+    // browser gọi Nominatim trực tiếp trước. Backend SmartCar chỉ là fallback
+    // cho các môi trường browser không truy cập được provider.
+    const directJson = async url => {
+        const response = await fetch(url, {
+            headers: { 'Accept': 'application/json' }
+        });
 
-    const fetchJson = async (url, options = {}) => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
-        try {
-            const response = await fetch(url, { ...options, signal: controller.signal });
-            const result = await response.json().catch(() => null);
-            return { response, result };
-        } finally {
-            clearTimeout(timeoutId);
+        if (!response.ok) {
+            throw new Error(`Nominatim trả lỗi HTTP ${response.status}.`);
         }
+
+        return response.json();
     };
 
-    const hasResults = (result, reverse) => reverse
-        ? Boolean(result?.display_name)
-        : Array.isArray(result) && result.length > 0;
+    const serverJson = async endpoint => {
+        const response = await fetch(`/api/geocoding/${endpoint}`, {
+            headers: { 'Accept': 'application/json' }
+        });
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok) {
+            throw new Error(
+                result?.message ||
+                'Dịch vụ tìm địa chỉ tạm thời không phản hồi.');
+        }
+
+        return result;
+    };
 
     const validFocus = focus => {
         const lat = Number(focus?.lat);
         const lon = Number(focus?.lon);
+
         return Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
             Number.isFinite(lon) && lon >= -180 && lon <= 180
             ? { lat, lon }
             : null;
     };
 
-    const focusQuery = focus => focus
-        ? `&nearLat=${encodeURIComponent(focus.lat)}&nearLon=${encodeURIComponent(focus.lon)}`
-        : '';
+    const buildViewbox = focus => {
+        const point = validFocus(focus);
+        if (!point) return '';
 
-    const lookup = async (endpoint, reverse = false, focus = null) => {
-        const focusPoint = validFocus(focus);
+        const box = [
+            point.lon - 0.55,
+            point.lat - 0.45,
+            point.lon + 0.55,
+            point.lat + 0.45
+        ].map(value => value.toFixed(5)).join(',');
+
+        return `&viewbox=${encodeURIComponent(box)}`;
+    };
+
+    const buildServerFocus = focus => {
+        const point = validFocus(focus);
+        if (!point) return '';
+
+        return `&nearLat=${encodeURIComponent(point.lat)}&nearLon=${encodeURIComponent(point.lon)}`;
+    };
+
+    const search = async (query, focus) => {
+        const encoded = encodeURIComponent(query);
+        const directUrl =
+            'https://nominatim.openstreetmap.org/search' +
+            '?format=jsonv2&limit=8&countrycodes=vn' +
+            buildViewbox(focus) +
+            '&q=' + encoded;
+
         try {
-            const { response, result } = await fetchJson(
-                `/api/geocoding/${endpoint}${focusQuery(focusPoint)}`,
-                { headers: { 'Accept': 'application/json' } });
-
-            if (!response.ok) {
-                throw new Error(
-                    result?.message ||
-                    (reverse
-                        ? 'Không thể tìm tên địa chỉ cho vị trí hiện tại.'
-                        : 'Không thể tìm địa chỉ lúc này.'));
-            }
-
-            if (hasResults(result, reverse)) return result;
-            return reverse ? null : [];
+            const result = await directJson(directUrl);
+            if (Array.isArray(result)) return result;
         } catch (error) {
-            if (error?.name === 'AbortError') {
-                throw new Error('Dịch vụ tìm địa chỉ phản hồi quá lâu. Vui lòng thử lại.');
-            }
-
-            if (error instanceof TypeError ||
-                /failed to fetch|networkerror/i.test(error?.message || '')) {
-                throw new Error('Không thể kết nối máy chủ SmartCar để tìm địa chỉ. Vui lòng thử lại.');
-            }
-
-            throw error;
+            console.warn('Browser không tra được Nominatim search, thử qua SmartCar server:', error);
         }
+
+        return serverJson(
+            `search?q=${encoded}${buildServerFocus(focus)}`);
     };
 
-    window.SmartCarDeliveryGeocoding = {
-        search: (query, focus) =>
-            lookup(`search?q=${encodeURIComponent(query)}`, false, focus),
+    const reverse = async (lat, lon) => {
+        const directUrl =
+            'https://nominatim.openstreetmap.org/reverse' +
+            '?format=jsonv2&addressdetails=1&zoom=18&accept-language=vi' +
+            '&lat=' + encodeURIComponent(lat) +
+            '&lon=' + encodeURIComponent(lon);
 
-        reverse: (lat, lon) =>
-            lookup(
-                `reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
-                true)
+        try {
+            const result = await directJson(directUrl);
+            if (result?.display_name) return result;
+        } catch (error) {
+            console.warn('Browser không reverse-geocode được Nominatim, thử qua SmartCar server:', error);
+        }
+
+        return serverJson(
+            `reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
     };
+
+    window.SmartCarDeliveryGeocoding = { search, reverse };
 })();
