@@ -62,6 +62,16 @@ public sealed class StaffBookingClaimFilter : IAsyncActionFilter
 
         var bookingId = FindBookingId(context.ActionArguments);
 
+        if (bookingId is null &&
+            context.ActionArguments.TryGetValue("paymentId", out var paymentValue) &&
+            paymentValue is int paymentId &&
+            paymentId > 0)
+        {
+            bookingId = await _claims.ResolveBookingIdByPaymentAsync(
+                paymentId,
+                context.HttpContext.RequestAborted);
+        }
+
         if (bookingId is null && isIdentityCapture)
         {
             await next();
