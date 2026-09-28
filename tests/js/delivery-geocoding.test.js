@@ -102,6 +102,7 @@ test('empty successful search remains an empty result instead of calling externa
 
     const results = await geocoding.search('Địa chỉ không tồn tại');
 
-    assert.deepEqual(results, []);
+    assert.equal(Array.isArray(results), true);
+    assert.equal(results.length, 0);
     assert.equal(calls, 1);
 });
