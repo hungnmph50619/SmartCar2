@@ -84,7 +84,6 @@ public sealed class RentalPolicySnapshotTests
         Assert.Equal(RentalPolicy.NoShowGraceMinutes, policy.NoShowGraceMinutes);
         Assert.Equal(RentalPolicy.NoShowFeeRate * 100m, policy.NoShowFeePercent);
         Assert.Equal(24, policy.CancellationRefundProcessingHours);
-        Assert.True(policy.FreeCancellationRequiresMinimumLead);
     }
 
     [Fact]
@@ -110,7 +109,6 @@ public sealed class RentalPolicySnapshotTests
             NoShowGraceMinutes = 40,
             NoShowFeePercent = 75,
             FreeCancellationWindowMinutes = 90,
-            FreeCancellationRequiresMinimumLead = false,
             CancellationRefundProcessingHours = 36
         };
 
@@ -122,7 +120,6 @@ public sealed class RentalPolicySnapshotTests
         Assert.Equal(40, restored.NoShowGraceMinutes);
         Assert.Equal(75m, restored.NoShowFeePercent);
         Assert.Equal(90, restored.FreeCancellationWindowMinutes);
-        Assert.False(restored.FreeCancellationRequiresMinimumLead);
         Assert.Equal(36, restored.CancellationRefundProcessingHours);
     }
 
