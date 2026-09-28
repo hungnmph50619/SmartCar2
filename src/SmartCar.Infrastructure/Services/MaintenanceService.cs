@@ -73,7 +73,11 @@ internal sealed class MaintenanceService : IMaintenanceService
             return OperationResult.Failure("Xe đang có một phiếu bảo trì chưa hoàn tất.");
         }
 
-        vehicle.Status = VehicleStatus.Maintenance;
+        // Maintenance must not undo an explicit decision to retire the vehicle.
+        if (vehicle.Status != VehicleStatus.Inactive)
+        {
+            vehicle.Status = VehicleStatus.Maintenance;
+        }
         vehicle.MaintenanceRecords.Add(new MaintenanceRecord
         {
             StartDate = request.StartDate,

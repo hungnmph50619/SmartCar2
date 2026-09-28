@@ -441,6 +441,8 @@
             let storeMarker = null;
             let googleMap = false;
             let currentDeliveryFee = 0;
+            let locationRevision = 0;
+            address.addEventListener('input', () => { locationRevision++; });
 
             const toRadians = degrees => degrees * Math.PI / 180;
 
@@ -510,17 +512,20 @@
                 error.classList.remove('d-none');
             };
             const reverseGeocode = async (lat, lng) => {
+                const revision = locationRevision;
                 try {
                     const place = googleMap
                         ? (await new google.maps.Geocoder().geocode({ location: { lat, lng } })).results?.[0]?.formatted_address
                         : (await window.SmartCarDeliveryGeocoding.reverse(lat, lng))?.display_name;
+                    if (revision !== locationRevision) return true;
                     if (place) {
                         address.value = place;
-                        error.classList.add('d-none');
+                        updatePriceByPoint(lat, lng);
                         return true;
                     }
                     throw new Error('Không có tên địa chỉ tại điểm này.');
                 } catch (ex) {
+                    if (revision !== locationRevision) return true;
                     reverseFailureMessage = ex instanceof TypeError
                         ? 'Không kết nối được máy chủ tìm địa chỉ.'
                         : ex instanceof Error ? ex.message : 'Không tra được địa chỉ lúc này.';
@@ -549,6 +554,8 @@
 
                 // Hidden input luôn dùng dấu chấm theo chuẩn JavaScript.
                 // BookingsController sẽ parse bằng InvariantCulture.
+                locationRevision++;
+                address.value = '';
                 latInput.value = normalizedLat.toFixed(7);
                 lngInput.value = normalizedLng.toFixed(7);
 
@@ -753,12 +760,18 @@
                     return;
                 }
 
+                const revision = ++locationRevision;
                 locationButton.disabled = true;
                 const oldLocationText = locationButton.textContent;
                 locationButton.textContent = 'Đang lấy vị trí...';
 
                 navigator.geolocation.getCurrentPosition(
                     async position => {
+                        if (revision !== locationRevision) {
+                            locationButton.disabled = false;
+                            locationButton.textContent = oldLocationText;
+                            return;
+                        }
                         const lat = position.coords.latitude;
                         const lng = position.coords.longitude;
                         const accuracy = position.coords.accuracy;
@@ -789,6 +802,11 @@
                         locationButton.textContent = oldLocationText;
                     },
                     geolocationError => {
+                        if (revision !== locationRevision) {
+                            locationButton.disabled = false;
+                            locationButton.textContent = oldLocationText;
+                            return;
+                        }
                         switch (geolocationError.code) {
                             case geolocationError.PERMISSION_DENIED:
                                 error.textContent =
@@ -835,6 +853,7 @@
                     return;
                 }
 
+                const revision = ++locationRevision;
                 findAddressButton.disabled = true;
                 const oldText = findAddressButton.textContent;
                 findAddressButton.textContent = 'Đang tìm...';
@@ -847,6 +866,7 @@
                             display_name: item.formatted_address
                         }))
                         : await window.SmartCarDeliveryGeocoding.search(query);
+                    if (revision !== locationRevision) return;
                     if (!Array.isArray(results)) throw new Error('Dữ liệu địa chỉ chưa hợp lệ.');
 
                     if (!results.length) {
@@ -864,6 +884,7 @@
                         address.value = results[0].display_name;
                     }
                 } catch (ex) {
+                    if (revision !== locationRevision) return;
                     error.textContent =
                         (ex instanceof Error ? ex.message : 'Không thể tìm địa chỉ lúc này.') +
                         ' Bạn có thể bấm trực tiếp lên bản đồ hoặc dùng GPS để chọn điểm giao.';

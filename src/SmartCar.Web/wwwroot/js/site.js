@@ -9,8 +9,22 @@
 
 function initializeForms() {
     document.querySelectorAll("form[data-confirm], form[data-loading-form]").forEach((form) => {
+        let pendingSubmission = null;
+        window.addEventListener("pageshow", () => { pendingSubmission = null; });
         form.addEventListener("submit", (event) => {
-            if (event.defaultPrevented || !form.checkValidity()) {
+            if (event.defaultPrevented) {
+                return;
+            }
+
+            // Guard the whole form, including Enter and a different submit button.
+            // A later validator may have cancelled the preceding event already.
+            if (pendingSubmission && !pendingSubmission.defaultPrevented) {
+                event.preventDefault();
+                return;
+            }
+
+            if (!form.checkValidity()) {
+                event.preventDefault();
                 return;
             }
 
@@ -30,17 +44,16 @@ function initializeForms() {
             }
 
             const submitter = event.submitter ?? form.querySelector('button[type="submit"], input[type="submit"]');
-            if (!submitter || submitter.disabled || submitter.dataset.submitPending === "true") {
-                return;
-            }
 
             // Let every synchronous submit handler run before committing to a loading state.
-            submitter.dataset.submitPending = "true";
+            pendingSubmission = event;
             window.setTimeout(() => {
-                if (event.defaultPrevented || !form.isConnected || submitter.disabled) {
-                    delete submitter.dataset.submitPending;
+                if (pendingSubmission !== event) return;
+                if (event.defaultPrevented || !form.isConnected) {
+                    pendingSubmission = null;
                     return;
                 }
+                if (!submitter || submitter.disabled) return;
 
                 submitter.disabled = true;
                 submitter.setAttribute("aria-busy", "true");
@@ -63,7 +76,6 @@ function initializeForms() {
         document.querySelectorAll('form[data-loading-form] [aria-busy="true"]').forEach((submitter) => {
             submitter.disabled = false;
             submitter.removeAttribute("aria-busy");
-            delete submitter.dataset.submitPending;
 
             if (submitter instanceof HTMLButtonElement && submitter.dataset.originalHtml !== undefined) {
                 submitter.innerHTML = submitter.dataset.originalHtml;
