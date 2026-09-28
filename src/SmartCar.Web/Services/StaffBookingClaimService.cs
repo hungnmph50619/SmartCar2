@@ -121,6 +121,22 @@ public sealed class StaffBookingClaimService
                 .SetProperty(booking => booking.HandlingLeaseExpiresAt, (DateTime?)null),
                 cancellationToken) == 1;
 
+    public Task<int?> ResolveBookingIdByPaymentAsync(
+        int paymentId,
+        CancellationToken cancellationToken = default)
+    {
+        if (paymentId <= 0)
+        {
+            return Task.FromResult<int?>(null);
+        }
+
+        return _dbContext.Payments
+            .AsNoTracking()
+            .Where(payment => payment.PaymentId == paymentId)
+            .Select(payment => (int?)payment.BookingId)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<StaffBookingClaimState?> GetStateAsync(
         int bookingId,
         CancellationToken cancellationToken = default)
