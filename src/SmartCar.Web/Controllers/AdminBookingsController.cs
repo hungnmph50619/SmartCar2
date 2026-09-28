@@ -10,6 +10,7 @@ using SmartCar.Domain.Constants;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -21,6 +22,33 @@ public sealed class AdminBookingsController : Controller
     private readonly IBookingReviewService _bookingReviewService;
     private readonly IAuditService _auditService;
     private readonly ApplicationDbContext _dbContext;
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReleaseStaffClaim(
+        int bookingId,
+        CancellationToken cancellationToken)
+    {
+        var released = await new StaffBookingClaimService(_dbContext)
+            .ForceReleaseAsync(bookingId, cancellationToken);
+
+        if (released)
+        {
+            await _auditService.WriteAsync(
+                User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty,
+                "AdminReleaseStaffClaim",
+                nameof(Booking),
+                bookingId.ToString(),
+                $"Admin chuyển giao quyền xử lý đơn #{bookingId} cho nhân viên khác.",
+                cancellationToken: cancellationToken);
+        }
+
+        TempData[released ? "SuccessMessage" : "ErrorMessage"] = released
+            ? "Đã giải phóng đơn. Nhân viên khác có thể nhận xử lý."
+            : "Đơn hiện không có nhân viên phụ trách.";
+
+        return RedirectToAction(nameof(Details), new { id = bookingId });
+    }
 
     public AdminBookingsController(
         IBookingService bookingService,
@@ -66,7 +94,15 @@ public sealed class AdminBookingsController : Controller
     public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
     {
         var booking = await _bookingService.GetAdminBookingAsync(id, cancellationToken);
-        return booking is null ? NotFound() : View(booking);
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        ViewBag.HandlingClaim = await new StaffBookingClaimService(_dbContext)
+            .GetStateAsync(id, cancellationToken);
+
+        return View(booking);
     }
 
     [HttpGet]
