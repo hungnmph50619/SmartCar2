@@ -9,7 +9,7 @@ namespace SmartCar.Web.Controllers;
 [Route("api/geocoding")]
 public sealed class GeocodingController : ControllerBase
 {
-    private static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan ProviderTimeout = TimeSpan.FromSeconds(6);
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<GeocodingController> _logger;
 
@@ -69,7 +69,7 @@ public sealed class GeocodingController : ControllerBase
 
         return StatusCode(502, new
         {
-            message = "Máy chủ không kết nối được dịch vụ tìm địa chỉ. Hãy chọn điểm trực tiếp trên bản đồ hoặc thử lại sau."
+            message = "Dịch vụ tìm địa chỉ tạm thời không phản hồi. Vui lòng thử lại sau."
         });
     }
 
@@ -126,7 +126,7 @@ public sealed class GeocodingController : ControllerBase
 
         return StatusCode(502, new
         {
-            message = "Máy chủ không tìm được địa chỉ cho điểm này. Tọa độ vẫn được giữ; bạn có thể nhập địa chỉ thủ công."
+            message = "Dịch vụ chưa tìm được tên địa chỉ cho vị trí này. Tọa độ hiện tại vẫn được giữ."
         });
     }
 
