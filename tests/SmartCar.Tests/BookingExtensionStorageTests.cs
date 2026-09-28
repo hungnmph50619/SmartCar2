@@ -8,10 +8,11 @@ namespace SmartCar.Tests;
 public sealed class BookingExtensionStorageTests
 {
     [Fact]
-    public void CustomerNote_UsesUnlimitedColumnForForceMajeureEvidence()
+    public void CustomerNote_UsesSqlSafeCapacityForForceMajeureEvidence()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .UseSqlServer(
+                "Server=localhost;Database=SmartCarModelMetadata;User Id=sa;Password=unused;TrustServerCertificate=True")
             .Options;
 
         using var context = new ApplicationDbContext(options);
