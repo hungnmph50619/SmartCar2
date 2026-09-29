@@ -7,6 +7,32 @@ namespace SmartCar.Tests;
 public sealed class CancellationRefundPolicyTests
 {
     [Fact]
+    public void FreeCancellationWindow_TreatsPersistedUnspecifiedPaidAtAsUtc()
+    {
+        var paidAtUtc = new DateTime(2026, 9, 29, 15, 40, 0, DateTimeKind.Utc);
+        var persistedPaidAt = DateTime.SpecifyKind(paidAtUtc, DateTimeKind.Unspecified);
+        var cancelledAtUtc = paidAtUtc.AddMinutes(1);
+
+        Assert.True(CancellationRefundPolicy.IsWithinFreeCancellationWindowUtc(
+            cancelledAtUtc,
+            persistedPaidAt,
+            60));
+    }
+
+    [Fact]
+    public void FreeCancellationWindow_RejectsCancellationAfterConfiguredWindow()
+    {
+        var paidAtUtc = new DateTime(2026, 9, 29, 15, 40, 0, DateTimeKind.Utc);
+        var persistedPaidAt = DateTime.SpecifyKind(paidAtUtc, DateTimeKind.Unspecified);
+        var cancelledAtUtc = paidAtUtc.AddMinutes(61);
+
+        Assert.False(CancellationRefundPolicy.IsWithinFreeCancellationWindowUtc(
+            cancelledAtUtc,
+            persistedPaidAt,
+            60));
+    }
+
+    [Fact]
     public void GetRentalRefundRate_RefundsAllWithinFirstHourAfterPayment()
     {
         var paidAt = new DateTime(2026, 9, 13, 10, 0, 0);
