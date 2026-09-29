@@ -19,6 +19,9 @@ namespace SmartCar.Domain.Constants
         // đối chiếu km/nhiên liệu và vệ sinh nhanh trước lượt kế tiếp.
         public const int VehicleTurnaroundMinutes = 60;
 
+        // Giao tận nơi cần thêm thời gian điều phối nhân viên và di chuyển xe khỏi cửa hàng.
+        public const int DeliveryLeadMinutes = 30;
+
 
         // No-show: sau thời gian chờ, không hoàn phần tiền thuê. Tiền cọc và phí giao chưa thực hiện
         // vẫn được hoàn theo số thực tế còn lại của đơn.
@@ -52,7 +55,8 @@ namespace SmartCar.Domain.Constants
             "Trường hợp bất khả kháng phải có minh chứng và vị trí hiện tại; SmartCar ưu tiên xử lý đổi xe cho khách kế tiếp. Nếu khách kế tiếp không chấp nhận phương án đổi xe và phải hủy đơn, các khoản khách đó đã thanh toán được hoàn theo chính sách; khoản bồi thường (nếu có) được xác định theo thiệt hại thực tế có căn cứ và khấu trừ từ tiền cọc của khách đang thuê. Khoản bồi thường này được thông báo rõ trước khi duyệt/thanh toán gia hạn và không tự động lấy bằng giá hợp đồng của đơn kế tiếp.";
 
         public static int GetOperationalPreparationMinutes(VehiclePickupMethod pickupMethod) =>
-            VehicleTurnaroundMinutes;
+            VehicleTurnaroundMinutes +
+            (pickupMethod == VehiclePickupMethod.Delivery ? DeliveryLeadMinutes : 0);
 
         public static bool HasOperationalConflict(
             DateTime pickupA,
@@ -63,7 +67,7 @@ namespace SmartCar.Domain.Constants
             VehiclePickupMethod pickupMethodB)
         {
             // Khoảng đệm trước một lượt thuê phụ thuộc vào cách nhận của CHÍNH lượt đó:
-            // Mọi phương thức nhận xe đều dùng cùng một khoảng xoay vòng.
+            // giao tận nơi cần thêm thời gian điều phối ngoài khoảng xoay vòng cơ bản.
             var preparationBeforeA = TimeSpan.FromMinutes(
                 GetOperationalPreparationMinutes(pickupMethodA));
             var preparationBeforeB = TimeSpan.FromMinutes(
