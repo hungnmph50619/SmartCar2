@@ -671,22 +671,18 @@ function initializeRestrictedTextInputs() {
             return;
         }
 
-        // Không dùng input/beforeinput để sửa value của họ tên:
-        // UniKey/Telex cần tự quản lý chuỗi phím trong lúc ghép dấu tiếng Việt.
-        input.addEventListener("keydown", (event) => {
-            if (event.ctrlKey || event.metaKey || event.altKey) {
-                return;
-            }
+        // Tuyệt đối không bắt keydown, beforeinput hoặc input ở ô họ tên.
+        // Cốc Cốc + UniKey/Telex cần toàn quyền xử lý chuỗi phím để ghép dấu tiếng Việt.
+        input.addEventListener("blur", () => {
+            const currentValue = input.value;
+            const sanitizedValue = currentValue
+                .replace(/[^\p{L}\p{M}\s]/gu, "")
+                .replace(/\s{2,}/g, " ")
+                .trim();
 
-            // Các phím điều khiển như Backspace, Delete, Arrow, Tab, Enter...
-            // có tên dài hơn 1 ký tự và không phải dữ liệu cần chặn.
-            if (event.key.length !== 1) {
-                return;
-            }
-
-            // Chỉ cho chữ Unicode (kể cả tiếng Việt) và khoảng trắng.
-            if (!/^[\p{L}\p{M} ]$/u.test(event.key)) {
-                event.preventDefault();
+            if (sanitizedValue !== currentValue) {
+                input.value = sanitizedValue;
+                input.dispatchEvent(new Event("change", { bubbles: true }));
             }
         });
 
@@ -694,20 +690,24 @@ function initializeRestrictedTextInputs() {
             const pastedText = event.clipboardData?.getData("text") ?? "";
             const sanitizedText = pastedText.replace(/[^\p{L}\p{M}\s]/gu, "");
 
+            if (sanitizedText === pastedText) {
+                return;
+            }
+
             event.preventDefault();
 
-            const start = input.selectionStart ?? input.value.length;
-            const end = input.selectionEnd ?? start;
+            const selectionStart = input.selectionStart ?? input.value.length;
+            const selectionEnd = input.selectionEnd ?? selectionStart;
             const maximumLength = input.maxLength > 0 ? input.maxLength : Number.MAX_SAFE_INTEGER;
-            const availableLength = Math.max(0, maximumLength - (input.value.length - (end - start)));
-            const textToInsert = sanitizedText.slice(0, availableLength);
+            const availableLength = Math.max(
+                0,
+                maximumLength - (input.value.length - (selectionEnd - selectionStart)));
 
-            input.setRangeText(textToInsert, start, end, "end");
-            input.dispatchEvent(new Event("change", { bubbles: true }));
-        });
-
-        input.addEventListener("drop", (event) => {
-            event.preventDefault();
+            input.setRangeText(
+                sanitizedText.slice(0, availableLength),
+                selectionStart,
+                selectionEnd,
+                "end");
         });
     });
 
