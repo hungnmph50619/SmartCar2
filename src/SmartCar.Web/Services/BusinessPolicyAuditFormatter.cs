@@ -37,6 +37,7 @@ public static class BusinessPolicyAuditFormatter
         new("BookingTransferReconciliationHoldMinutes", "Kiểm tra chuyển khoản", value => $"{FormatInteger(value)} phút"),
         new("MinimumPickupLeadMinutes", "Đặt trước giờ nhận", value => $"{FormatInteger(value)} phút"),
         new("VehicleTurnaroundMinutes", "Xoay vòng giữa hai lượt thuê", value => $"{FormatInteger(value)} phút"),
+        new("DeliveryLeadMinutes", "Chuẩn bị thêm khi giao tận nơi", value => $"{FormatInteger(value)} phút"),
         new("NoShowGraceMinutes", "Chờ khách đến nhận", value => $"{FormatInteger(value)} phút"),
         new("NoShowFeePercent", "Tỷ lệ giữ tiền thuê khi No-show", value => $"{FormatDecimal(value)}%"),
         new("FreeCancellationWindowMinutes", "Cửa sổ hủy miễn phí", value => $"{FormatInteger(value)} phút"),
