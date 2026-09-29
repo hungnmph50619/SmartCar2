@@ -48,7 +48,7 @@
 <body>
 <div class="no-print">
     <div class="actions">
-        <button class="primary" type="button" onclick="window.print()">In để ký</button>
+        <button class="primary" type="button" onclick="window.print()">@(signedDocumentPaths.Count == 0 ? "In để ký" : "In lại biên bản")</button>
         @if (awaitingSignature)
         {
             <a class="back edit" href="/HandoverEdits/Edit?bookingId=@booking.BookingId">← Chỉnh sửa biên bản</a>
