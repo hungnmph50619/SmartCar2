@@ -27,7 +27,7 @@
                         </div>
                         <div class="col-md-6">
                             <label asp-for="FullName" class="form-label"></label>
-                            <input asp-for="FullName" id="staffFullName" class="form-control" maxlength="100" autocomplete="name" />
+                            <input asp-for="FullName" id="staffFullName" class="form-control" maxlength="100" autocomplete="name" data-name-only />
                             <div class="form-text">Chỉ nhập chữ cái và khoảng trắng; không nhập số hoặc ký tự đặc biệt.</div>
                             <span asp-validation-for="FullName" class="text-danger small"></span>
                         </div>
@@ -38,7 +38,7 @@
                         </div>
                         <div class="col-md-6">
                             <label asp-for="PhoneNumber" class="form-label"></label>
-                            <input asp-for="PhoneNumber" class="form-control" inputmode="numeric" maxlength="10" autocomplete="tel" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
+                            <input asp-for="PhoneNumber" class="form-control" inputmode="numeric" maxlength="10" autocomplete="tel" pattern="0[0-9]{9}" data-digits-only />
                             <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
