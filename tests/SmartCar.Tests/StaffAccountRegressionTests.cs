@@ -27,7 +27,7 @@ public sealed class StaffAccountRegressionTests
     {
         using var users = new TestUserManager();
         var audit = new TestAudit();
-        var controller = new AdminStaffController(users, null!, audit);
+        var controller = new AdminStaffController(users, null!, audit, null!);
         Prepare(controller);
 
         await controller.LockStaff(users.Staff.Id, default);
@@ -64,7 +64,7 @@ public sealed class StaffAccountRegressionTests
     public async Task MissingCreateFieldsReturnValidationWithoutDatabaseAccess()
     {
         using var users = new TestUserManager();
-        var controller = new AdminStaffController(users, null!, new TestAudit());
+        var controller = new AdminStaffController(users, null!, new TestAudit(), null!);
         Prepare(controller);
         controller.ModelState.AddModelError("Email", "Required");
         var result = await controller.Create(new AdminStaffCreateViewModel
