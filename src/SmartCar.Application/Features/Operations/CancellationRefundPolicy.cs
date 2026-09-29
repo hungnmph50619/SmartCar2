@@ -76,6 +76,31 @@ public static class CancellationRefundPolicy
         return belowTierRate;
     }
 
+    public static bool IsWithinFreeCancellationWindowUtc(
+        DateTime cancelledAtUtc,
+        DateTime persistedRentalPaidAt,
+        int freeWindowMinutes)
+    {
+        if (freeWindowMinutes < 0)
+        {
+            return false;
+        }
+
+        var normalizedCancelledAtUtc = NormalizePersistedUtc(cancelledAtUtc);
+        var normalizedPaidAtUtc = NormalizePersistedUtc(persistedRentalPaidAt);
+
+        return normalizedCancelledAtUtc >= normalizedPaidAtUtc &&
+               (normalizedCancelledAtUtc - normalizedPaidAtUtc).TotalMinutes <= freeWindowMinutes;
+    }
+
+    private static DateTime NormalizePersistedUtc(DateTime value) =>
+        value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+
     public static string GetVietnamesePolicySummary() =>
         "Hoàn tiền thuê theo thời điểm hủy: trong 60 phút sau thanh toán: 100%; " +
         "sau 60 phút, từ 7 ngày trở lên: 90%; từ 48 giờ đến dưới 7 ngày: 70%; " +
