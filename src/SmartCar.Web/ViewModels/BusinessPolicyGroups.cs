@@ -9,7 +9,7 @@ public static class BusinessPolicyGroups
         "late" => new[] { "LateReturnFeeMultiplier", "LateReturnGraceMinutes" },
         "delivery" => new[] { "IncludedDeliveryDistanceKm", "BaseDeliveryFee", "DeliveryFeePerExtraKm", "MaxDeliveryDistanceKm" },
         "reservation" => new[] { "BookingConfirmationHoldMinutes", "BookingPaymentHoldMinutes", "BookingTransferReconciliationHoldMinutes", "MinimumPickupLeadMinutes" },
-        "schedule" => new[] { "VehicleTurnaroundMinutes" },
+        "schedule" => new[] { "VehicleTurnaroundMinutes", "DeliveryLeadMinutes" },
         "cancellation" => new[]
         {
             "FreeCancellationWindowMinutes", "CancellationRefundProcessingHours",
