@@ -110,6 +110,17 @@ public sealed class StaffAccountRegressionTests
         Assert.Equal(expected, ValidProperty(new ProfileViewModel(), "FullName", name));
     }
 
+    [Theory]
+    [InlineData("0901234567", true)]
+    [InlineData("080598529820", false)]
+    [InlineData("+84901234567", false)]
+    [InlineData("09012A4567", false)]
+    [InlineData("1901234567", false)]
+    public void StaffSelfProfilePhoneUsesTenLocalDigits(string phone, bool expected)
+    {
+        Assert.Equal(expected, ProfileInputRules.IsValidPhoneNumber(phone));
+    }
+
     [Fact]
     public void ProfileRejectsValuesLongerThanDatabaseColumns()
     {
