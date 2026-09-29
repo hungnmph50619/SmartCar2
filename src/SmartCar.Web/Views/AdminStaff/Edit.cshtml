@@ -38,7 +38,7 @@
                         </div>
                         <div class="col-md-6">
                             <label asp-for="PhoneNumber" class="form-label"></label>
-                            <input asp-for="PhoneNumber" class="form-control" inputmode="tel" maxlength="12" autocomplete="tel" />
+                            <input asp-for="PhoneNumber" class="form-control" inputmode="numeric" maxlength="10" autocomplete="tel" pattern="[0-9]{10}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" />
                             <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
