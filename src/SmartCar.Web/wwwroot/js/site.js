@@ -666,48 +666,48 @@ function initializeKycEditToggles() {
 }
 
 function initializeRestrictedTextInputs() {
-    const sanitizeNameInput = (input) => {
-        const currentValue = input.value;
-        const sanitizedValue = currentValue.replace(/[^\p{L}\p{M}\s]/gu, "");
-
-        // Quan trọng: chỉ gán lại value khi thật sự có ký tự sai.
-        // Nhờ vậy UniKey/Telex không bị reset trong lúc ghép dấu tiếng Việt.
-        if (sanitizedValue === currentValue) {
-            return;
-        }
-
-        const selectionStart = input.selectionStart ?? currentValue.length;
-        const invalidBeforeCursor =
-            currentValue.slice(0, selectionStart).replace(/[\p{L}\p{M}\s]/gu, "").length;
-
-        input.value = sanitizedValue.slice(0, input.maxLength > 0 ? input.maxLength : undefined);
-
-        const nextCursor = Math.max(0, selectionStart - invalidBeforeCursor);
-        input.setSelectionRange?.(nextCursor, nextCursor);
-    };
-
     document.querySelectorAll("[data-name-only]").forEach((input) => {
         if (!(input instanceof HTMLInputElement)) {
             return;
         }
 
-        let isComposing = false;
-
-        input.addEventListener("compositionstart", () => {
-            isComposing = true;
-        });
-
-        input.addEventListener("compositionend", () => {
-            isComposing = false;
-            sanitizeNameInput(input);
-        });
-
-        input.addEventListener("input", (event) => {
-            if (isComposing || event.isComposing) {
+        // Không dùng input/beforeinput để sửa value của họ tên:
+        // UniKey/Telex cần tự quản lý chuỗi phím trong lúc ghép dấu tiếng Việt.
+        input.addEventListener("keydown", (event) => {
+            if (event.ctrlKey || event.metaKey || event.altKey) {
                 return;
             }
 
-            sanitizeNameInput(input);
+            // Các phím điều khiển như Backspace, Delete, Arrow, Tab, Enter...
+            // có tên dài hơn 1 ký tự và không phải dữ liệu cần chặn.
+            if (event.key.length !== 1) {
+                return;
+            }
+
+            // Chỉ cho chữ Unicode (kể cả tiếng Việt) và khoảng trắng.
+            if (!/^[\p{L}\p{M} ]$/u.test(event.key)) {
+                event.preventDefault();
+            }
+        });
+
+        input.addEventListener("paste", (event) => {
+            const pastedText = event.clipboardData?.getData("text") ?? "";
+            const sanitizedText = pastedText.replace(/[^\p{L}\p{M}\s]/gu, "");
+
+            event.preventDefault();
+
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? start;
+            const maximumLength = input.maxLength > 0 ? input.maxLength : Number.MAX_SAFE_INTEGER;
+            const availableLength = Math.max(0, maximumLength - (input.value.length - (end - start)));
+            const textToInsert = sanitizedText.slice(0, availableLength);
+
+            input.setRangeText(textToInsert, start, end, "end");
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+
+        input.addEventListener("drop", (event) => {
+            event.preventDefault();
         });
     });
 
