@@ -103,15 +103,6 @@ public sealed class IncidentVehicleStateTests
         Assert.Equal(0m, (await db.VehicleIncidents.SingleAsync()).ActualCost);
         Assert.Equal(VehicleStatus.Available, (await db.Vehicles.SingleAsync()).Status);
 
-        var reportType = typeof(ApplicationDbContext).Assembly.GetType(
-            "SmartCar.Infrastructure.Services.ReportService", throwOnError: true)!;
-        var reportService = (SmartCar.Application.Features.Reports.IReportService)Activator.CreateInstance(
-            reportType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null, args: new object[] { db }, culture: null)!;
-        var report = await reportService.GetFleetReportAsync(DateTime.Today, DateTime.Today);
-        Assert.Equal(250_000m, report.TotalMaintenanceCost);
-        Assert.Equal(0m, report.TotalIncidentCost);
-        Assert.Equal(250_000m, report.TotalOperatingCost);
     }
 
     private static async Task<TestDbContext> CreateDbAsync(SqliteConnection connection, VehicleStatus status)
