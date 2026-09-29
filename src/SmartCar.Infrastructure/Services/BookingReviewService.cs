@@ -74,7 +74,7 @@ internal sealed class BookingReviewService : IBookingReviewService
 
         if (booking.Vehicle.Status is VehicleStatus.Maintenance or VehicleStatus.Inactive)
         {
-            return OperationResult.Failure("Xe đang bảo trì hoặc ngừng hoạt động nên không thể gửi duyệt đơn này.");
+            return OperationResult.Failure("Xe đang có sự cố hoặc ngừng hoạt động nên không thể gửi duyệt đơn này.");
         }
 
         if (await _reservationPolicy.HasBufferedConflictAsync(

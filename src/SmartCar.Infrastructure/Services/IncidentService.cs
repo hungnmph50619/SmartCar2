@@ -271,6 +271,11 @@ internal sealed class IncidentService : IIncidentService
         });
 
         var customerHandlesTrafficFine = incident.IncidentType == IncidentType.TrafficFine;
+        const string legacyRecordPrefix = "LEGACY-MAINTENANCE-ID:";
+        var legacyRecordId = incident.Notes?.StartsWith(legacyRecordPrefix, StringComparison.Ordinal) == true &&
+                             int.TryParse(incident.Notes[legacyRecordPrefix.Length..], out var parsedId)
+            ? parsedId
+            : (int?)null;
 
         incident.Status = IncidentStatus.Resolved;
         incident.ActualCost = customerHandlesTrafficFine ? 0m : request.ActualCost;
@@ -278,6 +283,20 @@ internal sealed class IncidentService : IIncidentService
         incident.CustomerLiabilityAmount = customerHandlesTrafficFine ? 0m : request.CustomerLiabilityAmount;
         incident.Notes = Normalize(request.Notes) ?? incident.Notes;
         incident.ResolvedAt = DateTime.UtcNow;
+
+        if (legacyRecordId.HasValue)
+        {
+            var legacyRecord = await _dbContext.MaintenanceRecords.FirstOrDefaultAsync(record =>
+                record.MaintenanceRecordId == legacyRecordId.Value &&
+                record.VehicleId == incident.VehicleId &&
+                record.Status == MaintenanceStatus.InProgress,
+                cancellationToken);
+            if (legacyRecord is not null)
+            {
+                legacyRecord.Status = MaintenanceStatus.Completed;
+                legacyRecord.CompletedDate = DateTime.UtcNow;
+            }
+        }
 
         // Closing a case must not make a car ready while its rental or return
         // inspection is still active. Those workflows own the next transition.

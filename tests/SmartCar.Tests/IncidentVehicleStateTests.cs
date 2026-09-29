@@ -63,6 +63,46 @@ public sealed class IncidentVehicleStateTests
         Assert.Equal(100_000m, (await db.VehicleIncidents.SingleAsync()).ActualCost);
     }
 
+    [Fact]
+    public async Task ResolveTransferredIncident_CompletesLegacyRecordWithoutLosingItsCost()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = await CreateDbAsync(connection, VehicleStatus.Maintenance);
+        var record = new MaintenanceRecord
+        {
+            VehicleId = 1,
+            StartDate = DateTime.UtcNow.AddDays(-2),
+            Content = "Hỏng phanh",
+            Cost = 250_000m,
+            Status = MaintenanceStatus.InProgress
+        };
+        db.MaintenanceRecords.Add(record);
+        await db.SaveChangesAsync();
+        db.VehicleIncidents.Add(new VehicleIncident
+        {
+            VehicleId = 1,
+            IncidentType = IncidentType.Breakdown,
+            Description = record.Content,
+            OccurredAt = record.StartDate,
+            Notes = $"LEGACY-MAINTENANCE-ID:{record.MaintenanceRecordId}"
+        });
+        await db.SaveChangesAsync();
+        var incidentId = (await db.VehicleIncidents.SingleAsync()).VehicleIncidentId;
+
+        var result = await CreateIncidentService(db).ResolveAsync(
+            new ResolveIncidentRequest(incidentId, 0m, 0m, 0m, "Đã kiểm tra an toàn"),
+            string.Empty);
+
+        Assert.True(result.Succeeded, string.Join("; ", result.Errors));
+        db.ChangeTracker.Clear();
+        var closedRecord = await db.MaintenanceRecords.SingleAsync();
+        Assert.Equal(MaintenanceStatus.Completed, closedRecord.Status);
+        Assert.NotNull(closedRecord.CompletedDate);
+        Assert.Equal(250_000m, closedRecord.Cost);
+        Assert.Equal(VehicleStatus.Available, (await db.Vehicles.SingleAsync()).Status);
+    }
+
     private static async Task<TestDbContext> CreateDbAsync(SqliteConnection connection, VehicleStatus status)
     {
         var db = new TestDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()

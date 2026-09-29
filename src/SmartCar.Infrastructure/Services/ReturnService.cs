@@ -965,28 +965,17 @@ internal sealed class ReturnService : IReturnService
 
         if (stopRentingVehicle)
         {
-            var hasOpenIncidentForBooking = await _dbContext.VehicleIncidents.AnyAsync(incident =>
-                incident.VehicleId == booking.VehicleId &&
-                incident.BookingId == booking.BookingId &&
-                incident.IncidentType != IncidentType.TrafficFine &&
-                incident.Status != IncidentStatus.Resolved &&
-                incident.Status != IncidentStatus.Cancelled,
-                cancellationToken);
-
-            if (!hasOpenIncidentForBooking)
+            _dbContext.VehicleIncidents.Add(new VehicleIncident
             {
-                _dbContext.VehicleIncidents.Add(new VehicleIncident
-                {
-                    VehicleId = booking.VehicleId,
-                    BookingId = booking.BookingId,
-                    IncidentType = IncidentType.Breakdown,
-                    Status = IncidentStatus.Open,
-                    OccurredAt = booking.VehicleReturn!.ReturnedAt,
-                    Description = normalizedVehicleIssueNote!,
-                    Notes = "Ảnh và biên bản trả xe nằm trong hồ sơ đơn thuê liên quan.",
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
+                VehicleId = booking.VehicleId,
+                BookingId = booking.BookingId,
+                IncidentType = IncidentType.Breakdown,
+                Status = IncidentStatus.Open,
+                OccurredAt = booking.VehicleReturn!.ReturnedAt,
+                Description = normalizedVehicleIssueNote!,
+                Notes = "Ảnh và biên bản trả xe nằm trong hồ sơ đơn thuê liên quan.",
+                CreatedAt = DateTime.UtcNow
+            });
         }
 
         var hasPendingRefund = booking.Payments.Any(payment =>

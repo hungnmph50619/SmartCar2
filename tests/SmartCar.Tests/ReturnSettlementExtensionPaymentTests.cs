@@ -14,9 +14,11 @@ namespace SmartCar.Tests;
 public sealed class ReturnSettlementExtensionPaymentTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CompleteAsync_CountsPaidExtensionAndRecordsUnsafeVehicleAsIncident(bool unsafeVehicle)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CompleteAsync_CountsPaidExtensionAndRecordsUnsafeVehicleAsIncident(
+        bool unsafeVehicle, bool hasEarlierIncident)
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -137,6 +139,19 @@ public sealed class ReturnSettlementExtensionPaymentTests
                 PaidAt = DateTime.UtcNow.AddHours(-2)
             });
 
+        if (hasEarlierIncident)
+        {
+            db.VehicleIncidents.Add(new VehicleIncident
+            {
+                VehicleId = 10,
+                BookingId = 701,
+                IncidentType = IncidentType.Damage,
+                Status = IncidentStatus.Open,
+                OccurredAt = DateTime.Now.AddHours(-1),
+                Description = "Vết xước đã ghi nhận trước đó"
+            });
+        }
+
         await db.SaveChangesAsync();
 
         var service = CreateReturnService(db);
@@ -153,11 +168,13 @@ public sealed class ReturnSettlementExtensionPaymentTests
         Assert.Equal(BookingStatus.Completed, booking.Status);
         Assert.Equal(unsafeVehicle ? VehicleStatus.Maintenance : VehicleStatus.Available,
             (await db.Vehicles.SingleAsync()).Status);
-        Assert.Equal(unsafeVehicle ? 1 : 0, await db.VehicleIncidents.CountAsync());
+        Assert.Equal((unsafeVehicle ? 1 : 0) + (hasEarlierIncident ? 1 : 0),
+            await db.VehicleIncidents.CountAsync());
         Assert.Empty(await db.MaintenanceRecords.ToListAsync());
         if (unsafeVehicle)
         {
-            var incident = await db.VehicleIncidents.SingleAsync();
+            var incident = await db.VehicleIncidents.SingleAsync(item =>
+                item.Description.Contains("Hỏng phanh"));
             Assert.Equal(701, incident.BookingId);
             Assert.Equal(IncidentStatus.Open, incident.Status);
             Assert.Contains("Hỏng phanh", incident.Description);
