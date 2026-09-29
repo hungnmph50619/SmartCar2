@@ -120,32 +120,6 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
-            const fullNameInput = document.getElementById('staffFullName');
-            if (fullNameInput) {
-                const validNameCharacters = /^[\p{L}\p{M}\s]+$/u;
-
-                // Không ghi lại .value ở mỗi lần input vì sẽ làm UniKey/Telex
-                // mất trạng thái ghép dấu và khiến chữ tiếng Việt bị nhảy/mất.
-                fullNameInput.addEventListener('beforeinput', event => {
-                    if (event.isComposing ||
-                        event.inputType?.includes('Composition') ||
-                        !event.data) {
-                        return;
-                    }
-
-                    if (!validNameCharacters.test(event.data)) {
-                        event.preventDefault();
-                    }
-                });
-
-                // Chỉ chuẩn hóa khoảng trắng sau khi người dùng gõ xong.
-                fullNameInput.addEventListener('blur', () => {
-                    fullNameInput.value = fullNameInput.value
-                        .replace(/\s{2,}/g, ' ')
-                        .trim();
-                });
-            }
-
             document.querySelectorAll('.password-toggle').forEach(button => {
                 button.addEventListener('click', () => {
                     const input = document.getElementById(button.dataset.target);
