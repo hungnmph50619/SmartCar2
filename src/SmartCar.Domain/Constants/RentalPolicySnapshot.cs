@@ -37,6 +37,9 @@ public sealed class RentalPolicySnapshot : IValidatableObject
     [Range(0, 360, ErrorMessage = "Thời gian xoay vòng xe phải từ 0 đến 360 phút.")]
     public int VehicleTurnaroundMinutes { get; set; } = RentalPolicy.VehicleTurnaroundMinutes;
 
+    [Range(0, 360, ErrorMessage = "Thời gian chuẩn bị thêm khi giao tận nơi phải từ 0 đến 360 phút.")]
+    public int DeliveryLeadMinutes { get; set; } = RentalPolicy.DeliveryLeadMinutes;
+
 
     // Không đến nhận xe.
     [Range(0, 180, ErrorMessage = "Thời gian chờ khách đến nhận phải từ 0 đến 180 phút.")]
@@ -77,17 +80,35 @@ public sealed class RentalPolicySnapshot : IValidatableObject
         (decimal)Math.Ceiling(Math.Max(0d, distanceKm - IncludedDeliveryDistanceKm)) * DeliveryFeePerExtraKm;
 
     public int GetOperationalPreparationMinutes(VehiclePickupMethod pickupMethod) =>
-        VehicleTurnaroundMinutes;
+        VehicleTurnaroundMinutes +
+        (pickupMethod == VehiclePickupMethod.Delivery ? DeliveryLeadMinutes : 0);
 
     // Each started 24-hour period AFTER the grace period is charged as one day.
     public int LateChargeDays(int lateMinutes) =>
         (int)Math.Ceiling(Math.Max(0, lateMinutes - LateReturnGraceMinutes) / 1440d);
 
     public string ToJson() => JsonSerializer.Serialize(this);
-    public static RentalPolicySnapshot FromJson(string? json) => string.IsNullOrWhiteSpace(json)
-        ? new RentalPolicySnapshot()
-        : JsonSerializer.Deserialize<RentalPolicySnapshot>(json)
+
+    public static RentalPolicySnapshot FromJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new RentalPolicySnapshot();
+        }
+
+        var policy = JsonSerializer.Deserialize<RentalPolicySnapshot>(json)
             ?? throw new InvalidOperationException("Không đọc được chính sách của đơn.");
+
+        // PolicyJson được tạo trong giai đoạn Quy_2 bỏ thời gian chuẩn bị giao tận nơi
+        // không có field này. Giữ 0 phút cho các booking cũ để không đổi snapshot giữa chừng.
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty(nameof(DeliveryLeadMinutes), out _))
+        {
+            policy.DeliveryLeadMinutes = 0;
+        }
+
+        return policy;
+    }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext context)
     {
