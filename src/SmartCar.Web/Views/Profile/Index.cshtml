@@ -372,7 +372,8 @@
                                    class="form-control"
                                    autocomplete="name"
                                    maxlength="100"
-                                   data-profile-name />
+                                   data-profile-name
+                                   data-name-only />
                             <span asp-validation-for="FullName" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
@@ -390,7 +391,8 @@
                                        maxlength="10"
                                        pattern="0[0-9]{9}"
                                        placeholder="Ví dụ: 0982223792"
-                                       data-staff-profile-phone />
+                                       data-staff-profile-phone
+                                       data-digits-only />
                                 <div class="form-text">Nhập đúng 10 chữ số và bắt đầu bằng 0.</div>
                             }
                             else
@@ -519,7 +521,6 @@
             fullNameInput?.addEventListener('blur', validateFullName);
 
             phoneInput?.addEventListener('input', () => {
-                phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 10);
                 phoneInput.setCustomValidity('');
             });
             phoneInput?.addEventListener('blur', validateStaffPhone);
