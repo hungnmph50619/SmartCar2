@@ -279,11 +279,16 @@ internal sealed class IncidentService : IIncidentService
         incident.Notes = Normalize(request.Notes) ?? incident.Notes;
         incident.ResolvedAt = DateTime.UtcNow;
 
-        incident.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
-            _dbContext,
-            incident.Vehicle,
-            excludedIncidentId: incident.VehicleIncidentId,
-            cancellationToken: cancellationToken);
+        // Closing a case must not make a car ready while its rental or return
+        // inspection is still active. Those workflows own the next transition.
+        if (incident.Vehicle.Status is not (VehicleStatus.Rented or VehicleStatus.Inspection))
+        {
+            incident.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
+                _dbContext,
+                incident.Vehicle,
+                excludedIncidentId: incident.VehicleIncidentId,
+                cancellationToken: cancellationToken);
+        }
 
         if (customerHandlesTrafficFine && incident.BookingId.HasValue)
         {
