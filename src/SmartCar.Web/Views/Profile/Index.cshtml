@@ -11,6 +11,7 @@
     var avatarInitial = Model.FullName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
     var avatarPath = currentUser?.AvatarPath;
     var isCustomer = User.IsInRole(RoleNames.Customer);
+    var isStaff = User.IsInRole(RoleNames.Staff);
     var requestedTab = Context.Request.Query["tab"].ToString();
     var showSecurity = string.Equals(requestedTab, "security", StringComparison.OrdinalIgnoreCase);
     var showBanking = isCustomer && string.Equals(requestedTab, "banking", StringComparison.OrdinalIgnoreCase);
@@ -366,7 +367,12 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label asp-for="FullName" class="form-label fw-semibold"></label>
-                            <input asp-for="FullName" class="form-control" autocomplete="name" />
+                            <input asp-for="FullName"
+                                   id="profileFullName"
+                                   class="form-control"
+                                   autocomplete="name"
+                                   maxlength="100"
+                                   data-profile-name />
                             <span asp-validation-for="FullName" class="text-danger small"></span>
                         </div>
                         <div class="col-md-6">
@@ -375,12 +381,35 @@
                         </div>
                         <div class="col-md-6">
                             <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
-                            <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" placeholder="Ví dụ: 0982223792" />
+                            @if (isStaff)
+                            {
+                                <input asp-for="PhoneNumber"
+                                       class="form-control"
+                                       autocomplete="tel"
+                                       inputmode="numeric"
+                                       maxlength="10"
+                                       pattern="0[0-9]{9}"
+                                       placeholder="Ví dụ: 0982223792"
+                                       data-staff-profile-phone />
+                                <div class="form-text">Nhập đúng 10 chữ số và bắt đầu bằng 0.</div>
+                            }
+                            else
+                            {
+                                <input asp-for="PhoneNumber"
+                                       class="form-control"
+                                       autocomplete="tel"
+                                       placeholder="Ví dụ: 0982223792" />
+                            }
                             <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
                         </div>
                         <div class="col-12">
                             <label asp-for="Address" class="form-label fw-semibold"></label>
-                            <textarea asp-for="Address" class="form-control" rows="3" autocomplete="street-address" placeholder="Địa chỉ liên hệ hoặc địa chỉ giao nhận thường dùng"></textarea>
+                            <textarea asp-for="Address"
+                                      class="form-control"
+                                      rows="3"
+                                      maxlength="250"
+                                      autocomplete="street-address"
+                                      placeholder="Địa chỉ liên hệ hoặc địa chỉ giao nhận thường dùng"></textarea>
                             <span asp-validation-for="Address" class="text-danger small"></span>
                         </div>
                     </div>
@@ -431,6 +460,81 @@
                     avatarInitial?.classList.add('d-none');
                 }
             });
+        })();
+    </script>
+
+    <script>
+        (() => {
+            const form = document.querySelector('.profile-form-card');
+            const fullNameInput = form?.querySelector('[data-profile-name]');
+            const phoneInput = form?.querySelector('[data-staff-profile-phone]');
+
+            const setFieldError = (input, message) => {
+                if (!input) return true;
+
+                input.setCustomValidity(message);
+                const fieldName = input.getAttribute('name');
+                const messageElement = fieldName
+                    ? form?.querySelector(`[data-valmsg-for="${fieldName}"]`)
+                    : null;
+
+                if (messageElement) {
+                    messageElement.textContent = message;
+                    messageElement.classList.toggle('field-validation-error', Boolean(message));
+                    messageElement.classList.toggle('field-validation-valid', !message);
+                }
+
+                return !message;
+            };
+
+            const validateFullName = () => {
+                if (!fullNameInput) return true;
+
+                const value = fullNameInput.value.trim();
+                let message = '';
+
+                if (!value) {
+                    message = 'Vui lòng nhập họ và tên.';
+                } else if (value.length < 2 || value.length > 100) {
+                    message = 'Họ và tên phải từ 2 đến 100 ký tự.';
+                } else if (!/^[\p{L}\p{M}]+(?:\s+[\p{L}\p{M}]+)*$/u.test(value)) {
+                    message = 'Họ và tên chỉ được chứa chữ cái và khoảng trắng.';
+                }
+
+                return setFieldError(fullNameInput, message);
+            };
+
+            const validateStaffPhone = () => {
+                if (!phoneInput) return true;
+
+                const value = phoneInput.value.trim();
+                const message = /^0[0-9]{9}$/.test(value)
+                    ? ''
+                    : 'Số điện thoại nhân viên phải gồm đúng 10 chữ số và bắt đầu bằng 0.';
+
+                return setFieldError(phoneInput, message);
+            };
+
+            // Không can thiệp vào quá trình gõ họ tên để UniKey/Telex hoạt động bình thường.
+            fullNameInput?.addEventListener('blur', validateFullName);
+
+            phoneInput?.addEventListener('input', () => {
+                phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 10);
+                phoneInput.setCustomValidity('');
+            });
+            phoneInput?.addEventListener('blur', validateStaffPhone);
+
+            form?.addEventListener('submit', event => {
+                const nameValid = validateFullName();
+                const phoneValid = validateStaffPhone();
+
+                if (!nameValid || !phoneValid) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    const firstInvalid = !nameValid ? fullNameInput : phoneInput;
+                    firstInvalid?.focus();
+                }
+            }, true);
         })();
     </script>
 }
