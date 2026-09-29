@@ -437,14 +437,18 @@
                 </div>
 
                 <div class="d-flex gap-2 flex-wrap mt-3">
-                    <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản giao</a>
-                    @if (Model.HandoverSignedPaths.Count > 0)
+                    @if (Model.HandoverSignedPaths.Count == 0)
                     {
+                        <a class="btn btn-primary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@b.BookingId">In biên bản để ký</a>
+                    }
+                    else
+                    {
+                        <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="HandoverPrint" asp-route-bookingId="@b.BookingId">Xem biên bản giao</a>
                         <a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Handover" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
                     }
                 </div>
 
-                @if (!Model.HandoverSignedDocumentVerified)
+                @if (!Model.HandoverSignedDocumentVerified && Model.HandoverSignedPaths.Count == 0)
                 {
                     <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned"
                           method="post" enctype="multipart/form-data" class="border rounded-4 p-3 mt-3">
@@ -453,9 +457,28 @@
                         <input id="handover-signed-files" name="signedDocuments" type="file"
                                accept="image/jpeg,image/png,image/webp" multiple required class="form-control"
                                data-file-draft-key="handover-@b.BookingId-signed" />
-                        <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh. Nếu tải lại, chọn đủ các trang để thay bộ bản ký cũ.</div>
-                        <button type="submit" class="btn btn-outline-success mt-2">Tải bản ký giao xe</button>
+                        <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh.</div>
+                        <button type="submit" class="btn btn-success mt-2">Tải bản ký giao xe</button>
                     </form>
+                }
+                else if (!Model.HandoverSignedDocumentVerified && Model.HandoverSignedPaths.Count > 0)
+                {
+                    <div class="alert alert-info mt-3 mb-2">
+                        <strong>✓ Bản ký đã được tải.</strong> Bước tiếp theo là mở bản ký để đối chiếu và xác minh. Không cần tải lại nếu file đã đúng.
+                    </div>
+                    <details class="border rounded-3 p-3">
+                        <summary class="text-muted fw-semibold">Bản ký tải nhầm hoặc thiếu trang? Tải lại</summary>
+                        <form asp-controller="AdminRentalDocuments" asp-action="UploadHandoverSigned"
+                              method="post" enctype="multipart/form-data" class="mt-3">
+                            <input type="hidden" name="bookingId" value="@b.BookingId" />
+                            <label for="handover-signed-files-replace" class="form-label fw-semibold">Chọn lại toàn bộ bản ký giao xe</label>
+                            <input id="handover-signed-files-replace" name="signedDocuments" type="file"
+                                   accept="image/jpeg,image/png,image/webp" multiple required class="form-control"
+                                   data-file-draft-key="handover-@b.BookingId-signed-replace" />
+                            <div class="form-text">Bộ mới sẽ thay toàn bộ bộ cũ. Chọn đủ 1–12 trang, tối đa 8 MB/ảnh.</div>
+                            <button type="submit" class="btn btn-outline-warning mt-2">Thay bộ bản ký giao xe</button>
+                        </form>
+                    </details>
                 }
 
                 @if (Model.HandoverSignedPaths.Count == 0)
@@ -755,18 +778,19 @@
             </div>
 
             <div class="d-flex gap-2 flex-wrap mt-3">
-                <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@b.BookingId">In / xem biên bản trả</a>
                 @if (Model.ReturnSignedPaths.Count == 0)
                 {
+                    <a class="btn btn-primary" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@b.BookingId">In biên bản để ký</a>
                     <a class="btn btn-outline-warning" asp-controller="ReturnEdits" asp-action="Edit" asp-route-bookingId="@b.BookingId">Chỉnh sửa biên bản trả</a>
                 }
                 else
                 {
+                    <a class="btn btn-outline-primary" asp-controller="AdminRentalDocuments" asp-action="ReturnPrint" asp-route-bookingId="@b.BookingId">Xem biên bản trả</a>
                     <a class="btn btn-outline-secondary" asp-controller="AdminSignedDocuments" asp-action="Return" asp-route-bookingId="@b.BookingId" target="_blank">Mở bản ký đã tải</a>
                 }
             </div>
 
-            @if (!Model.ReturnSignedDocumentVerified)
+            @if (!Model.ReturnSignedDocumentVerified && Model.ReturnSignedPaths.Count == 0)
             {
                 <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned"
                       method="post" enctype="multipart/form-data" class="border rounded-4 p-3 mt-3">
@@ -775,9 +799,28 @@
                     <input id="return-signed-files" name="signedDocuments" type="file"
                            accept="image/jpeg,image/png,image/webp" multiple required class="form-control"
                            data-file-draft-key="return-@b.BookingId-signed" />
-                    <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh. Nếu tải lại, chọn đủ các trang để thay bộ bản ký cũ.</div>
-                    <button type="submit" class="btn btn-outline-success mt-2">Tải bản ký trả xe</button>
+                    <div class="form-text">Chọn 1–12 ảnh JPG, PNG hoặc WebP; tối đa 8 MB mỗi ảnh.</div>
+                    <button type="submit" class="btn btn-success mt-2">Tải bản ký trả xe</button>
                 </form>
+            }
+            else if (!Model.ReturnSignedDocumentVerified && Model.ReturnSignedPaths.Count > 0)
+            {
+                <div class="alert alert-info mt-3 mb-2">
+                    <strong>✓ Bản ký đã được tải.</strong> Bước tiếp theo là mở bản ký để đối chiếu và xác minh. Không cần tải lại nếu file đã đúng.
+                </div>
+                <details class="border rounded-3 p-3">
+                    <summary class="text-muted fw-semibold">Bản ký tải nhầm hoặc thiếu trang? Tải lại</summary>
+                    <form asp-controller="AdminRentalDocuments" asp-action="UploadReturnSigned"
+                          method="post" enctype="multipart/form-data" class="mt-3">
+                        <input type="hidden" name="bookingId" value="@b.BookingId" />
+                        <label for="return-signed-files-replace" class="form-label fw-semibold">Chọn lại toàn bộ bản ký trả xe</label>
+                        <input id="return-signed-files-replace" name="signedDocuments" type="file"
+                               accept="image/jpeg,image/png,image/webp" multiple required class="form-control"
+                               data-file-draft-key="return-@b.BookingId-signed-replace" />
+                        <div class="form-text">Bộ mới sẽ thay toàn bộ bộ cũ. Chọn đủ 1–12 trang, tối đa 8 MB/ảnh.</div>
+                        <button type="submit" class="btn btn-outline-warning mt-2">Thay bộ bản ký trả xe</button>
+                    </form>
+                </details>
             }
 
             @if (Model.ReturnSignedPaths.Count == 0)
