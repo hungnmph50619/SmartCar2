@@ -51,7 +51,8 @@ public sealed class ProfileController : Controller
             return Challenge();
         }
 
-        var activeTab = User.IsInRole(RoleNames.Customer) &&
+        var activeTab = !User.IsInRole(RoleNames.Staff) &&
+                        User.IsInRole(RoleNames.Customer) &&
                         string.Equals(tab, "documents", StringComparison.OrdinalIgnoreCase)
             ? "documents"
             : "profile";
@@ -74,6 +75,11 @@ public sealed class ProfileController : Controller
         DateTime? returnDate,
         CancellationToken cancellationToken)
     {
+        if (User.IsInRole(RoleNames.Staff))
+        {
+            return Forbid();
+        }
+
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
         {
@@ -148,6 +154,11 @@ public sealed class ProfileController : Controller
         DateTime? returnDate,
         CancellationToken cancellationToken)
     {
+        if (User.IsInRole(RoleNames.Staff))
+        {
+            return Forbid();
+        }
+
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
         {
@@ -232,6 +243,11 @@ public sealed class ProfileController : Controller
         DateTime? returnDate,
         CancellationToken cancellationToken)
     {
+        if (User.IsInRole(RoleNames.Staff))
+        {
+            return Forbid();
+        }
+
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
         {
@@ -511,7 +527,7 @@ public sealed class ProfileController : Controller
         string userId,
         CancellationToken cancellationToken)
     {
-        if (!User.IsInRole(RoleNames.Customer))
+        if (User.IsInRole(RoleNames.Staff) || !User.IsInRole(RoleNames.Customer))
         {
             return Array.Empty<DocumentDto>();
         }
@@ -521,4 +537,3 @@ public sealed class ProfileController : Controller
             cancellationToken);
     }
 }
-

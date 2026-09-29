@@ -5,12 +5,16 @@
 @using SmartCar.Infrastructure.Identity
 @inject UserManager<ApplicationUser> UserManager
 @{
-    ViewData["Title"] = "Hồ sơ cá nhân";
-
     var currentUser = await UserManager.GetUserAsync(User);
     var avatarInitial = Model.FullName.Trim().FirstOrDefault().ToString().ToUpperInvariant();
     var avatarPath = currentUser?.AvatarPath;
-    var isCustomer = User.IsInRole(RoleNames.Customer);
+    var isStaff = User.IsInRole(RoleNames.Staff);
+    var isCustomer = !isStaff && User.IsInRole(RoleNames.Customer);
+    var staffCitizenId = currentUser?.CitizenIdNumber;
+    var maskedStaffCitizenId = !string.IsNullOrWhiteSpace(staffCitizenId) && staffCitizenId.Length >= 4
+        ? $"••••••••{staffCitizenId[^4..]}"
+        : "Chưa cập nhật";
+    ViewData["Title"] = isStaff ? "Hồ sơ nhân viên" : "Hồ sơ cá nhân";
     var requestedTab = Context.Request.Query["tab"].ToString();
     var showSecurity = string.Equals(requestedTab, "security", StringComparison.OrdinalIgnoreCase);
     var showBanking = isCustomer && string.Equals(requestedTab, "banking", StringComparison.OrdinalIgnoreCase);
@@ -106,8 +110,14 @@
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div>
             <span class="section-eyebrow">TÀI KHOẢN SMARTCAR</span>
-            <h1 class="h2 fw-bold mb-1">Hồ sơ cá nhân</h1>
-            <p class="text-muted mb-0">Quản lý thông tin liên hệ, giấy tờ xác minh, tài khoản nhận hoàn tiền và bảo mật.</p>
+            <h1 class="h2 fw-bold mb-1">@(isStaff ? "Hồ sơ nhân viên" : "Hồ sơ cá nhân")</h1>
+            <p class="text-muted mb-0">
+                @(isStaff
+                    ? "Thông tin nhân viên do Quản trị viên quản lý. Bạn có thể tự đổi mật khẩu trong mục Bảo mật."
+                    : isCustomer
+                        ? "Quản lý thông tin liên hệ, giấy tờ xác minh, tài khoản nhận hoàn tiền và bảo mật."
+                        : "Quản lý thông tin tài khoản và bảo mật.")
+            </p>
         </div>
         @if (isCustomer)
         {
@@ -124,7 +134,7 @@
            asp-route-returnVehicleId="@returnVehicleId"
            asp-route-pickupDate="@returnPickupRoute"
            asp-route-returnDate="@returnDateRoute">
-            Thông tin cá nhân
+            @(isStaff ? "Thông tin nhân viên" : "Thông tin cá nhân")
         </a>
         @if (isCustomer)
         {
@@ -247,6 +257,51 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    }
+    else if (isStaff)
+    {
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <section class="profile-card h-100">
+                    <div class="profile-header flex-column text-center">
+                        @if (!string.IsNullOrWhiteSpace(avatarPath))
+                        {
+                            <img src="@avatarPath" alt="Ảnh đại diện của @Model.FullName" class="profile-avatar profile-avatar-photo mb-3" />
+                        }
+                        else
+                        {
+                            <div class="profile-avatar mb-3" aria-hidden="true">@avatarInitial</div>
+                        }
+                        <h2 class="h4 fw-bold mb-1">@Model.FullName</h2>
+                        <p class="text-muted mb-0">@Model.Email</p>
+                    </div>
+                    <div class="profile-body">
+                        <div class="profile-detail">
+                            <span>Ngày tạo tài khoản</span>
+                            <strong>@Model.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                        </div>
+                        <p class="small text-muted mt-3 mb-0">Cần cập nhật hồ sơ? Liên hệ Quản trị viên để đối chiếu và chỉnh sửa.</p>
+                    </div>
+                </section>
+            </div>
+            <div class="col-lg-8">
+                <section class="card card-body shadow-sm border-0 h-100 profile-form-card" aria-label="Thông tin nhân viên">
+                    <h2 class="h5 mb-3">Thông tin do Quản trị viên quản lý</h2>
+                    <dl class="row mb-0 gy-3">
+                        <dt class="col-sm-4">Mã nhân viên</dt>
+                        <dd class="col-sm-8 mb-0">@(string.IsNullOrWhiteSpace(currentUser?.EmployeeCode) ? "Chưa có" : currentUser.EmployeeCode)</dd>
+                        <dt class="col-sm-4">Họ và tên</dt>
+                        <dd class="col-sm-8 mb-0">@Model.FullName</dd>
+                        <dt class="col-sm-4">Email đăng nhập</dt>
+                        <dd class="col-sm-8 mb-0">@Model.Email</dd>
+                        <dt class="col-sm-4">Số điện thoại</dt>
+                        <dd class="col-sm-8 mb-0">@(string.IsNullOrWhiteSpace(Model.PhoneNumber) ? "Chưa cập nhật" : Model.PhoneNumber)</dd>
+                        <dt class="col-sm-4">CCCD nhân viên</dt>
+                        <dd class="col-sm-8 mb-0">@maskedStaffCitizenId</dd>
+                    </dl>
+                </section>
             </div>
         </div>
     }

@@ -119,6 +119,79 @@ public sealed class StaffAccountRegressionTests
         Assert.False(ValidProperty(new ProfileViewModel(), "Address", new string('A', 251)));
     }
 
+    [Fact]
+    public async Task StaffCannotUpdateOwnEmployeeDetails()
+    {
+        using var users = new TestUserManager();
+        users.Staff.FullName = "Tên do Admin quản lý";
+        var controller = new ProfileController(users, null!, null!, null!, null!);
+        PrepareAsStaff(controller, users.Staff.Id);
+
+        var result = await controller.Update(new ProfileViewModel
+        {
+            FullName = "Tên tự sửa",
+            PhoneNumber = "0987654321"
+        }, null, null, null, default);
+
+        Assert.IsType<ForbidResult>(result);
+        Assert.Equal("Tên do Admin quản lý", users.Staff.FullName);
+        Assert.Equal(0, users.Updates);
+    }
+
+    [Fact]
+    public async Task StaffCannotUploadOwnAvatar()
+    {
+        using var users = new TestUserManager();
+        var controller = new ProfileSettingsController(users, null!, null!, null!, null!, null!, null!);
+        PrepareAsStaff(controller, users.Staff.Id);
+
+        var result = await controller.UploadAvatar(null, null, null, null, default);
+
+        Assert.IsType<ForbidResult>(result);
+        Assert.Equal(0, users.Updates);
+    }
+
+    [Fact]
+    public async Task StaffWithAnExtraCustomerRoleStillSeesEmployeeProfile()
+    {
+        using var users = new TestUserManager();
+        var controller = new ProfileController(users, null!, null!, null!, null!);
+        PrepareAsStaff(controller, users.Staff.Id, RoleNames.Customer);
+
+        var result = await controller.Index("documents", null, null, null, default);
+
+        var view = Assert.IsType<ViewResult>(result);
+        Assert.Equal("profile", Assert.IsType<ProfileViewModel>(view.Model).ActiveTab);
+    }
+
+    [Fact]
+    public async Task StaffWithAnExtraCustomerRoleCannotSubmitRentalIdentityDocuments()
+    {
+        using var users = new TestUserManager();
+        var controller = new ProfileController(users, null!, null!, null!, null!);
+        PrepareAsStaff(controller, users.Staff.Id, RoleNames.Customer);
+
+        var citizenResult = await controller.SubmitCitizenId(
+            new CitizenIdVerificationViewModel(), null, null, null, default);
+        var licenseResult = await controller.SubmitDrivingLicense(
+            new DrivingLicenseVerificationViewModel(), null, null, null, default);
+
+        Assert.IsType<ForbidResult>(citizenResult);
+        Assert.IsType<ForbidResult>(licenseResult);
+    }
+
+    [Fact]
+    public async Task StaffWithAnExtraCustomerRoleCannotSetCustomerRefundBankAccount()
+    {
+        using var users = new TestUserManager();
+        var controller = new ProfileSettingsController(users, null!, null!, null!, null!, null!, null!);
+        PrepareAsStaff(controller, users.Staff.Id, RoleNames.Customer);
+
+        var result = await controller.SaveBankAccount(new BankAccountViewModel(), null, null, null, default);
+
+        Assert.IsType<ForbidResult>(result);
+    }
+
     private static bool ValidProperty(object model, string member, object? value) =>
         Validator.TryValidateProperty(value, new ValidationContext(model) { MemberName = member }, new List<ValidationResult>());
 
@@ -129,10 +202,23 @@ public sealed class StaffAccountRegressionTests
         controller.TempData = new TempDataDictionary(context, new TestTempData());
     }
 
+    private static void PrepareAsStaff(Controller controller, string userId, params string[] additionalRoles)
+    {
+        Prepare(controller);
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, userId),
+            new(ClaimTypes.Role, RoleNames.Staff)
+        };
+        claims.AddRange(additionalRoles.Select(role => new Claim(ClaimTypes.Role, role)));
+        controller.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+    }
+
     private sealed class TestUserManager : UserManager<ApplicationUser>
     {
         public ApplicationUser Staff { get; } = new() { Id = "staff", IsActive = true, MustChangePassword = true };
         public int PasswordChanges { get; private set; }
+        public int Updates { get; private set; }
 
         public TestUserManager() : base(
             new UserStore<ApplicationUser>(new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().Options)),
@@ -144,7 +230,11 @@ public sealed class StaffAccountRegressionTests
         public override Task<ApplicationUser?> FindByIdAsync(string userId) => Task.FromResult<ApplicationUser?>(Staff);
         public override Task<ApplicationUser?> GetUserAsync(ClaimsPrincipal principal) => Task.FromResult<ApplicationUser?>(Staff);
         public override Task<bool> IsInRoleAsync(ApplicationUser user, string role) => Task.FromResult(role == RoleNames.Staff);
-        public override Task<IdentityResult> UpdateAsync(ApplicationUser user) => Task.FromResult(IdentityResult.Success);
+        public override Task<IdentityResult> UpdateAsync(ApplicationUser user)
+        {
+            Updates++;
+            return Task.FromResult(IdentityResult.Success);
+        }
         public override Task<IdentityResult> UpdateSecurityStampAsync(ApplicationUser user) => Task.FromResult(IdentityResult.Success);
         public override Task<IdentityResult> ChangePasswordAsync(ApplicationUser user, string currentPassword, string newPassword)
         {

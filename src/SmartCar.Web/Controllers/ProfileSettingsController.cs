@@ -58,6 +58,11 @@ public sealed class ProfileSettingsController : Controller
         DateTime? returnDate,
         CancellationToken cancellationToken)
     {
+        if (User.IsInRole(RoleNames.Staff))
+        {
+            return Forbid();
+        }
+
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
         {
@@ -136,6 +141,11 @@ public sealed class ProfileSettingsController : Controller
         DateTime? returnDate,
         CancellationToken cancellationToken)
     {
+        if (User.IsInRole(RoleNames.Staff))
+        {
+            return Forbid();
+        }
+
         var user = await _userManager.GetUserAsync(User);
         if (user is null)
         {
