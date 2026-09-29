@@ -5,6 +5,7 @@
     initializeImageInputs();
     initializeKycEditToggles();
     initializeAdminCustomerNavigation();
+    initializeRestrictedTextInputs();
 });
 
 function initializeForms() {
@@ -659,6 +660,68 @@ function initializeKycEditToggles() {
                 if (firstControl instanceof HTMLElement) {
                     firstControl.focus();
                 }
+            }
+        });
+    });
+}
+
+function initializeRestrictedTextInputs() {
+    const sanitizeNameInput = (input) => {
+        const currentValue = input.value;
+        const sanitizedValue = currentValue.replace(/[^\p{L}\p{M}\s]/gu, "");
+
+        // Quan trọng: chỉ gán lại value khi thật sự có ký tự sai.
+        // Nhờ vậy UniKey/Telex không bị reset trong lúc ghép dấu tiếng Việt.
+        if (sanitizedValue === currentValue) {
+            return;
+        }
+
+        const selectionStart = input.selectionStart ?? currentValue.length;
+        const invalidBeforeCursor =
+            currentValue.slice(0, selectionStart).replace(/[\p{L}\p{M}\s]/gu, "").length;
+
+        input.value = sanitizedValue.slice(0, input.maxLength > 0 ? input.maxLength : undefined);
+
+        const nextCursor = Math.max(0, selectionStart - invalidBeforeCursor);
+        input.setSelectionRange?.(nextCursor, nextCursor);
+    };
+
+    document.querySelectorAll("[data-name-only]").forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
+        let isComposing = false;
+
+        input.addEventListener("compositionstart", () => {
+            isComposing = true;
+        });
+
+        input.addEventListener("compositionend", () => {
+            isComposing = false;
+            sanitizeNameInput(input);
+        });
+
+        input.addEventListener("input", (event) => {
+            if (isComposing || event.isComposing) {
+                return;
+            }
+
+            sanitizeNameInput(input);
+        });
+    });
+
+    document.querySelectorAll("[data-digits-only]").forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
+        input.addEventListener("input", () => {
+            const maximumLength = input.maxLength > 0 ? input.maxLength : Number.MAX_SAFE_INTEGER;
+            const sanitizedValue = input.value.replace(/\D/g, "").slice(0, maximumLength);
+
+            if (sanitizedValue !== input.value) {
+                input.value = sanitizedValue;
             }
         });
     });
