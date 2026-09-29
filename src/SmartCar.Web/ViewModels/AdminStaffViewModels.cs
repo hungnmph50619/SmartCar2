@@ -44,7 +44,7 @@ public sealed class AdminStaffCreateViewModel
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại.")]
-    [RegularExpression(ProfileInputRules.PhonePattern, ErrorMessage = ProfileInputRules.PhoneError)]
+    [RegularExpression(@"^0[0-9]{9}$", ErrorMessage = "Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng 0.")]
     [Display(Name = "Số điện thoại")]
     public string PhoneNumber { get; set; } = string.Empty;
 
@@ -91,7 +91,7 @@ public sealed class AdminStaffEditViewModel
     public string Email { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập số điện thoại.")]
-    [RegularExpression(ProfileInputRules.PhonePattern, ErrorMessage = ProfileInputRules.PhoneError)]
+    [RegularExpression(@"^0[0-9]{9}$", ErrorMessage = "Số điện thoại phải gồm đúng 10 chữ số và bắt đầu bằng 0.")]
     [Display(Name = "Số điện thoại")]
     public string PhoneNumber { get; set; } = string.Empty;
 
