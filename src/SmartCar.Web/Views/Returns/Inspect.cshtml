@@ -22,6 +22,9 @@
         ? $"{(fuelDifference.Value > 0 ? "+" : string.Empty)}{fuelDifference.Value}%"
         : null;
     var fuelReduced = fuelDifference.HasValue && fuelDifference.Value < 0;
+    var recordedMileageFee = Model.AdditionalCharges
+        .Where(charge => charge.ChargeType == AdditionalChargeType.ExcessMileage)
+        .Sum(charge => charge.Amount);
 
     var handoverSignedPaths = Model.Handover.ImagePaths
         .Where(path => path.Contains("signed-handover-", StringComparison.OrdinalIgnoreCase))
@@ -415,6 +418,26 @@ else
             </p>
         </div>
 
+    </div>
+
+    <div class="border rounded p-3 bg-light mb-3">
+        <div class="fw-semibold mb-2">Cách tính phí vượt km của đơn này</div>
+        <div>Đã chạy <strong>@Model.DrivenKilometers.ToString("N0") km</strong> · Định mức cả chuyến <strong>@Model.EffectiveIncludedKilometers.ToString("N0") km</strong> · Vượt <strong>@Model.ExcessKilometers.ToString("N0") km</strong>.</div>
+        <div class="small text-muted">Định mức lấy mức cao hơn giữa @Model.PaidRentalDays ngày tính thuê × @Model.IncludedKilometersPerDay.ToString("N0") km/ngày và @Model.HandoverIncludedKilometers.ToString("N0") km đã ghi lúc giao.</div>
+        <div>Mức phí đã lưu khi giao xe: <strong>@Model.ExcessKmFeePerKm.ToString("N0") đ/km</strong> · Phí vượt km theo phép tính: <strong>@Model.ExpectedExcessMileageFee.ToString("N0") đ</strong>.</div>
+        <div class="small text-muted mt-1">Số ngày và định mức dựa trên thời gian thuê đã đặt và thanh toán, kể cả khi khách trả xe sớm.</div>
+        @if (Model.ExcessKilometers == 0)
+        {
+            <div class="small text-success mt-2">Chưa vượt định mức của cả chuyến nên không phát sinh phí vượt km.</div>
+        }
+        else if (Model.ExcessKmFeePerKm == 0m)
+        {
+            <div class="small text-warning-emphasis mt-2">Đã vượt định mức nhưng mức phí lưu trên biên bản giao là 0 đ/km.</div>
+        }
+        @if (Model.ExpectedExcessMileageFee != recordedMileageFee)
+        {
+            <div class="alert alert-warning mt-2 mb-0">Phí vượt km ghi nhận (@recordedMileageFee.ToString("N0") đ) chưa khớp phép tính. Hãy kiểm tra dữ liệu đơn trước khi quyết toán.</div>
+        }
     </div>
 
 
@@ -926,4 +949,3 @@ else if (Model.Status == BookingStatus.Completed)
         })();
     </script>
 }
-

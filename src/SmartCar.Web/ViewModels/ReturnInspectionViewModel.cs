@@ -52,6 +52,20 @@ public sealed class ReturnInspectionViewModel
     public IReadOnlyList<OverdueImpactViewModel> OverdueImpacts { get; init; }
         = Array.Empty<OverdueImpactViewModel>();
 
+    public int PaidRentalDays { get; init; }
+
+    public int IncludedKilometersPerDay { get; init; }
+
+    public int HandoverIncludedKilometers { get; init; }
+
+    public int EffectiveIncludedKilometers { get; init; }
+
+    public decimal ExcessKmFeePerKm { get; init; }
+
+    public int ExcessKilometers => Math.Max(0, DrivenKilometers - EffectiveIncludedKilometers);
+
+    public decimal ExpectedExcessMileageFee => ExcessKilometers * ExcessKmFeePerKm;
+
 
     // ==============================
     // XÁC MINH NGHIỆP VỤ NHÂN VIÊN

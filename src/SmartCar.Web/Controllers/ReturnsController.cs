@@ -333,6 +333,10 @@ public sealed class ReturnsController : Controller
         ViewBag.DepositEligibleAt = DepositHoldPolicy.CalculateEligibleAt(
             records.VehicleReturn.ReturnedAt, records.DepositHoldDaysApplied);
 
+        var paidRentalDays = Math.Max(
+            1,
+            (int)Math.Ceiling((records.ReturnDate - records.PickupDate).TotalHours / 24d));
+
         var model = new ReturnInspectionViewModel
         {
             BookingId = booking.BookingId,
@@ -370,6 +374,13 @@ public sealed class ReturnsController : Controller
             RefundTransferredAmount = refundTransferredAmount,
             AdditionalCharges = booking.AdditionalCharges,
             OverdueImpacts = overdueImpacts,
+            PaidRentalDays = paidRentalDays,
+            IncludedKilometersPerDay = records.Policy.IncludedKilometersPerDay,
+            HandoverIncludedKilometers = records.Handover.IncludedKilometers,
+            EffectiveIncludedKilometers = Math.Max(
+                records.Handover.IncludedKilometers,
+                paidRentalDays * records.Policy.IncludedKilometersPerDay),
+            ExcessKmFeePerKm = records.Handover.ExcessKmFeePerKm,
             HandoverIdentityVerified = records.Handover.CustomerIdentityVerified,
             HandoverSignedDocumentVerified = records.Handover.SignedDocumentVerified,
             ReturnIdentityVerified = records.VehicleReturn.CustomerIdentityVerified,
