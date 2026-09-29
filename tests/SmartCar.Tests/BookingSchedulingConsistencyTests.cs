@@ -31,11 +31,11 @@ public sealed class BookingSchedulingConsistencyTests
     }
 
     [Fact]
-    public void HasOperationalConflict_DeliveryUsesSameTurnaroundGap()
+    public void HasOperationalConflict_DeliveryAddsDeliveryLeadToTurnaroundGap()
     {
         var firstPickup = new DateTime(2026, 9, 18, 8, 0, 0);
         var firstReturn = new DateTime(2026, 9, 18, 10, 0, 0);
-        var requiredGap = RentalPolicy.VehicleTurnaroundMinutes;
+        var requiredGap = RentalPolicy.VehicleTurnaroundMinutes + RentalPolicy.DeliveryLeadMinutes;
 
         Assert.True(RentalPolicy.HasOperationalConflict(
             firstPickup,
