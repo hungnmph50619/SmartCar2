@@ -792,7 +792,7 @@ else
                 <input type="hidden" name="reviewConfirmed" value="true" />
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="checkbox" name="StopRentingVehicle" value="true" id="inspectionStopRentingVehicle" />
-                    <label class="form-check-label" for="inspectionStopRentingVehicle">Phát hiện hỏng hóc: tạm ngừng nhận đơn thuê xe này</label>
+                    <label class="form-check-label" for="inspectionStopRentingVehicle">Phát hiện hỏng hóc: chuyển xe sang Ngừng hoạt động</label>
                 </div>
                 <textarea name="VehicleIssueNote" id="inspectionVehicleIssueNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Mô tả hỏng hóc để Admin xử lý sự cố"></textarea>
                 <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">@(Model.DepositAmount > 0 ? "Xác nhận & quyết toán cọc" : "Xác nhận → Hoàn tất")</button>

@@ -717,6 +717,15 @@
         </section>
     }
 
+    @if (b.HasReturn)
+    {
+        <div class="card card-body shadow-sm mb-3 rounded-4">
+            <h2 class="h6 mb-2">Tình trạng xe sau thuê</h2>
+            <a class="btn btn-outline-danger align-self-start" asp-controller="Incidents" asp-action="Create"
+               asp-route-bookingId="@b.BookingId" asp-route-vehicleId="@b.VehicleId">Phát hiện hỏng hóc</a>
+        </div>
+    }
+
     @if (b.Status == BookingStatus.PendingInspection)
     {
         <section class="card card-body shadow-sm mb-3 rounded-4">

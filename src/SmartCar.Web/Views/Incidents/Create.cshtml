@@ -4,6 +4,7 @@
     ViewData["Title"] = "Ghi nhận sự cố";
     var occurredDate = Model.OccurredAt.ToString("yyyy-MM-dd");
     var occurredTime = Model.OccurredAt.ToString("HH:mm");
+    var isStaff = User.IsInRole("Staff") && !User.IsInRole("Admin");
 }
 
 <div class="row justify-content-center">
@@ -11,13 +12,14 @@
         <div class="card card-body shadow-sm border-0 rounded-4 p-4 p-lg-5">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4">
                 <div>
-                    <h1 class="h3 mb-1">Sự cố / vi phạm</h1>
-                    <p class="text-muted mb-0">Gắn đúng xe, đúng đơn thuê và bằng chứng. Phạt nguội được đối chiếu theo thời gian khách thực tế giữ xe.</p>
+                    <h1 class="h3 mb-1">@(isStaff ? "Phát hiện hỏng hóc" : "Sự cố / vi phạm")</h1>
+                    <p class="text-muted mb-0">@(isStaff ? "Ghi mô tả, ảnh và đơn thuê liên quan. Xe sẽ ngừng hoạt động sau khi lưu." : "Gắn đúng xe, đúng đơn thuê và bằng chứng. Phạt nguội được đối chiếu theo thời gian khách thực tế giữ xe.")</p>
                 </div>
-                <a class="btn btn-outline-secondary" asp-action="Index">← Danh sách</a>
+                @if (isStaff) { <a class="btn btn-outline-secondary" asp-controller="Staff" asp-action="Details" asp-route-id="@Model.BookingId">← Về đơn thuê</a> }
+                else { <a class="btn btn-outline-secondary" asp-action="Index">← Danh sách</a> }
             </div>
 
-            <form asp-action="Create" method="post" class="row g-3" id="incident-form" novalidate>
+            <form asp-action="Create" method="post" enctype="multipart/form-data" class="row g-3" id="incident-form" novalidate>
                 <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2"></div>
                 <input asp-for="OccurredAt" type="hidden" id="occurred-at-value" />
 
@@ -28,10 +30,10 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Đơn liên quan</label>
                     <input asp-for="BookingId" type="number" min="1" step="1" class="form-control" id="incident-booking-id" placeholder="#" />
-                    <div class="form-text">Bắt buộc với phạt nguội.</div>
+                    <div class="form-text">@(isStaff ? "Bắt buộc khi nhân viên báo hỏng sau thuê." : "Bắt buộc với phạt nguội.")</div>
                     <span asp-validation-for="BookingId" class="text-danger small"></span>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-4 @(isStaff ? "d-none" : "")">
                     <label class="form-label fw-semibold">Loại</label>
                     <select asp-for="IncidentType" class="form-select" id="incident-type">
                         @foreach (var type in Enum.GetValues<IncidentType>())
@@ -72,28 +74,34 @@
                     <span asp-validation-for="Description" class="text-danger"></span>
                 </div>
 
-                <div class="col-md-4" id="estimated-cost-group">
+                <div class="col-md-4 @(isStaff ? "d-none" : "")" id="estimated-cost-group">
                     <label class="form-label fw-semibold">Chi phí ước tính</label>
                     <input asp-for="EstimatedCost" type="number" min="0" step="1" class="form-control" id="incident-estimated-cost" inputmode="numeric" />
                     <span asp-validation-for="EstimatedCost" class="text-danger small"></span>
                 </div>
-                <div class="col-md-4" id="fine-amount-group">
+                <div class="col-md-4 @(isStaff ? "d-none" : "")" id="fine-amount-group">
                     <label class="form-label fw-semibold">Tiền phạt chính thức</label>
                     <input asp-for="FineAmount" type="number" min="0" step="1" class="form-control" id="incident-fine-amount" inputmode="numeric" />
                     <span asp-validation-for="FineAmount" class="text-danger small"></span>
                 </div>
-                <div class="col-md-4" id="liability-group">
+                <div class="col-md-4 @(isStaff ? "d-none" : "")" id="liability-group">
                     <label class="form-label fw-semibold">Khách chịu</label>
                     <input asp-for="CustomerLiabilityAmount" type="number" min="0" step="1" class="form-control" id="incident-liability-amount" inputmode="numeric" />
                     <span asp-validation-for="CustomerLiabilityAmount" class="text-danger small"></span>
                     <div class="form-text d-none" id="liability-help">Không được lớn hơn tiền phạt chính thức.</div>
                 </div>
 
-                <div class="col-12">
+                <div class="col-12 @(isStaff ? "d-none" : "")">
                     <label class="form-label fw-semibold">Bằng chứng / thông báo</label>
                     <input asp-for="EvidencePaths" class="form-control" id="incident-evidence" placeholder="Đường dẫn ảnh/tài liệu, phân cách bằng ;" />
                     <div class="form-text">Với phạt nguội: bắt buộc có thông báo/ảnh làm căn cứ trước khi tạo khoản phải thu.</div>
                     <span asp-validation-for="EvidencePaths" class="text-danger small"></span>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Images" class="form-label fw-semibold">Ảnh hỏng hóc @(isStaff ? "*" : "(nếu có)")</label>
+                    <input asp-for="Images" type="file" multiple accept="image/jpeg,image/png,image/webp" class="form-control" />
+                    <div class="form-text">Tối đa 5 ảnh, mỗi ảnh không quá 5 MB.</div>
+                    <span asp-validation-for="Images" class="text-danger small"></span>
                 </div>
                 <div class="col-12">
                     <label class="form-label fw-semibold">Ghi chú</label>
@@ -101,7 +109,8 @@
                 </div>
                 <div class="col-12 d-flex gap-2 pt-2">
                     <button class="btn btn-primary px-4" type="submit">Lưu hồ sơ</button>
-                    <a class="btn btn-outline-secondary px-4" asp-action="Index">Quay lại</a>
+                    @if (isStaff) { <a class="btn btn-outline-secondary px-4" asp-controller="Staff" asp-action="Details" asp-route-id="@Model.BookingId">Quay lại</a> }
+                    else { <a class="btn btn-outline-secondary px-4" asp-action="Index">Quay lại</a> }
                 </div>
             </form>
         </div>

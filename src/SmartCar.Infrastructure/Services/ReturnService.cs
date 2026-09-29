@@ -952,7 +952,7 @@ internal sealed class ReturnService : IReturnService
 
         if (stopRentingVehicle)
         {
-            booking.Vehicle.Status = VehicleStatus.Maintenance;
+            booking.Vehicle.Status = VehicleStatus.Inactive;
         }
         else
         {

@@ -23,6 +23,15 @@ public sealed class TransferOpenMaintenanceToIncidents : Migration
                    GETUTCDATE()
             FROM MaintenanceRecords AS m
             WHERE m.Status = 'InProgress';
+
+            UPDATE v
+            SET Status = 'Inactive'
+            FROM Vehicles AS v
+            WHERE v.Status = 'Maintenance'
+              AND EXISTS (
+                  SELECT 1 FROM MaintenanceRecords AS m
+                  WHERE m.VehicleId = v.VehicleId
+                    AND m.Status = 'InProgress');
             """);
     }
 

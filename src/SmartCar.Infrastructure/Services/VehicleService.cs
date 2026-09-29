@@ -282,7 +282,17 @@ internal sealed class VehicleService : IVehicleService
             BlockingBookingStatuses.Contains(booking.Status),
             cancellationToken);
 
-        if (hasBlockingBooking && status != vehicle.Status)
+        var reopeningAfterIncident = vehicle.Status == VehicleStatus.Inactive &&
+                                     status == VehicleStatus.Available;
+        var hasActiveRentalOrInspection = reopeningAfterIncident &&
+            await _dbContext.Bookings.AnyAsync(booking =>
+                booking.VehicleId == vehicleId &&
+                (booking.Status == BookingStatus.Rented ||
+                 booking.Status == BookingStatus.PendingInspection),
+                cancellationToken);
+
+        if (status != vehicle.Status &&
+            (hasActiveRentalOrInspection || (hasBlockingBooking && !reopeningAfterIncident)))
         {
             return OperationResult.Failure(
                 "Không thể tùy ý đổi trạng thái xe khi đang có đơn thuê chưa hoàn tất.");

@@ -49,7 +49,7 @@ internal static class VehicleStatusResolver
             cancellationToken);
 
         return hasOpenIncident
-            ? VehicleStatus.Maintenance
+            ? VehicleStatus.Inactive
             : VehicleStatus.Available;
     }
 }

@@ -14,9 +14,9 @@ public sealed class IncidentVehicleStateTests
 {
     [Theory]
     [InlineData(VehicleStatus.Rented, VehicleStatus.Rented)]
-    [InlineData(VehicleStatus.Inspection, VehicleStatus.Inspection)]
+    [InlineData(VehicleStatus.Inspection, VehicleStatus.Inactive)]
     [InlineData(VehicleStatus.Inactive, VehicleStatus.Inactive)]
-    [InlineData(VehicleStatus.Available, VehicleStatus.Maintenance)]
+    [InlineData(VehicleStatus.Available, VehicleStatus.Inactive)]
     public async Task CreateIncident_PreservesRentalInspectionAndInactiveState(
         VehicleStatus initialStatus, VehicleStatus expectedStatus)
     {
@@ -91,7 +91,7 @@ public sealed class IncidentVehicleStateTests
         var incidentId = (await db.VehicleIncidents.SingleAsync()).VehicleIncidentId;
 
         var result = await CreateIncidentService(db).ResolveAsync(
-            new ResolveIncidentRequest(incidentId, 0m, 0m, 0m, "Đã kiểm tra an toàn"),
+            new ResolveIncidentRequest(incidentId, 250_000m, 0m, 0m, "Đã kiểm tra an toàn"),
             string.Empty);
 
         Assert.True(result.Succeeded, string.Join("; ", result.Errors));
@@ -100,7 +100,18 @@ public sealed class IncidentVehicleStateTests
         Assert.Equal(MaintenanceStatus.Completed, closedRecord.Status);
         Assert.NotNull(closedRecord.CompletedDate);
         Assert.Equal(250_000m, closedRecord.Cost);
+        Assert.Equal(0m, (await db.VehicleIncidents.SingleAsync()).ActualCost);
         Assert.Equal(VehicleStatus.Available, (await db.Vehicles.SingleAsync()).Status);
+
+        var reportType = typeof(ApplicationDbContext).Assembly.GetType(
+            "SmartCar.Infrastructure.Services.ReportService", throwOnError: true)!;
+        var reportService = (SmartCar.Application.Features.Reports.IReportService)Activator.CreateInstance(
+            reportType, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null, args: new object[] { db }, culture: null)!;
+        var report = await reportService.GetFleetReportAsync(DateTime.Today, DateTime.Today);
+        Assert.Equal(250_000m, report.TotalMaintenanceCost);
+        Assert.Equal(0m, report.TotalIncidentCost);
+        Assert.Equal(250_000m, report.TotalOperatingCost);
     }
 
     private static async Task<TestDbContext> CreateDbAsync(SqliteConnection connection, VehicleStatus status)

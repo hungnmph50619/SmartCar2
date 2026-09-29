@@ -8,7 +8,6 @@
     var available = Model.Count(x => x.Status == VehicleStatus.Available);
     var rented = Model.Count(x => x.Status == VehicleStatus.Rented);
     var inspection = Model.Count(x => x.Status == VehicleStatus.Inspection);
-    var maintenance = Model.Count(x => x.Status == VehicleStatus.Maintenance);
     var inactive = Model.Count(x => x.Status == VehicleStatus.Inactive);
     var brands = Model.Select(x => x.BrandName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x).ToList();
     var transmissions = Model.Select(x => x.Transmission).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x).ToList();
@@ -49,10 +48,6 @@
         <article class="vehicle-stat-card">
             <div class="vehicle-stat-icon stat-inspection">⌕</div>
             <div><span>Đang kiểm tra</span><strong>@inspection</strong><small>Chờ/đang kiểm tra xe</small></div>
-        </article>
-        <article class="vehicle-stat-card">
-            <div class="vehicle-stat-icon stat-maintenance">⚠</div>
-            <div><span>Có sự cố</span><strong>@maintenance</strong><small>Tạm ngừng nhận thuê</small></div>
         </article>
         <article class="vehicle-stat-card">
             <div class="vehicle-stat-icon stat-inactive">⊘</div>

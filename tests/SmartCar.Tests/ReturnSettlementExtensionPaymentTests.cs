@@ -166,7 +166,7 @@ public sealed class ReturnSettlementExtensionPaymentTests
         db.ChangeTracker.Clear();
         var booking = await db.Bookings.SingleAsync(item => item.BookingId == 701);
         Assert.Equal(BookingStatus.Completed, booking.Status);
-        Assert.Equal(unsafeVehicle ? VehicleStatus.Maintenance : VehicleStatus.Available,
+        Assert.Equal(unsafeVehicle ? VehicleStatus.Inactive : VehicleStatus.Available,
             (await db.Vehicles.SingleAsync()).Status);
         Assert.Equal((unsafeVehicle ? 1 : 0) + (hasEarlierIncident ? 1 : 0),
             await db.VehicleIncidents.CountAsync());

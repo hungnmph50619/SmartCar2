@@ -61,6 +61,8 @@ public sealed class IncidentCreateViewModel
     [StringLength(2000, ErrorMessage = "Bằng chứng/thông báo không được vượt quá 2.000 ký tự.")]
     public string? EvidencePaths { get; set; }
 
+    public List<IFormFile> Images { get; set; } = new();
+
     [StringLength(1000, ErrorMessage = "Ghi chú không được vượt quá 1.000 ký tự.")]
     public string? Notes { get; set; }
 }

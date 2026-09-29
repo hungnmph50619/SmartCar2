@@ -160,9 +160,9 @@ internal sealed class IncidentService : IIncidentService
         _dbContext.VehicleIncidents.Add(incident);
 
         if (request.IncidentType != IncidentType.TrafficFine &&
-            vehicle.Status is not (VehicleStatus.Rented or VehicleStatus.Inspection or VehicleStatus.Inactive))
+            vehicle.Status != VehicleStatus.Rented)
         {
-            vehicle.Status = VehicleStatus.Maintenance;
+            vehicle.Status = VehicleStatus.Inactive;
         }
 
         if (customerHandlesTrafficFine && relatedBooking is not null)
@@ -276,26 +276,34 @@ internal sealed class IncidentService : IIncidentService
                              int.TryParse(incident.Notes[legacyRecordPrefix.Length..], out var parsedId)
             ? parsedId
             : (int?)null;
+        var legacyRecord = legacyRecordId.HasValue
+            ? await _dbContext.MaintenanceRecords.FirstOrDefaultAsync(record =>
+                record.MaintenanceRecordId == legacyRecordId.Value &&
+                record.VehicleId == incident.VehicleId &&
+                record.Status == MaintenanceStatus.InProgress,
+                cancellationToken)
+            : null;
 
         incident.Status = IncidentStatus.Resolved;
-        incident.ActualCost = customerHandlesTrafficFine ? 0m : request.ActualCost;
+        // The transferred maintenance record is the expense source in reports.
+        // Storing the same cost on both records would count the repair twice.
+        incident.ActualCost = customerHandlesTrafficFine || legacyRecord is not null
+            ? 0m
+            : request.ActualCost;
         incident.FineAmount = customerHandlesTrafficFine ? 0m : request.FineAmount;
         incident.CustomerLiabilityAmount = customerHandlesTrafficFine ? 0m : request.CustomerLiabilityAmount;
         incident.Notes = Normalize(request.Notes) ?? incident.Notes;
         incident.ResolvedAt = DateTime.UtcNow;
 
-        if (legacyRecordId.HasValue)
+        if (legacyRecord is not null)
         {
-            var legacyRecord = await _dbContext.MaintenanceRecords.FirstOrDefaultAsync(record =>
-                record.MaintenanceRecordId == legacyRecordId.Value &&
-                record.VehicleId == incident.VehicleId &&
-                record.Status == MaintenanceStatus.InProgress,
-                cancellationToken);
-            if (legacyRecord is not null)
+            if (request.ActualCost > 0m)
             {
-                legacyRecord.Status = MaintenanceStatus.Completed;
-                legacyRecord.CompletedDate = DateTime.UtcNow;
+                legacyRecord.Cost = request.ActualCost;
             }
+
+            legacyRecord.Status = MaintenanceStatus.Completed;
+            legacyRecord.CompletedDate = DateTime.UtcNow;
         }
 
         // Closing a case must not make a car ready while its rental or return

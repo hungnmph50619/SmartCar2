@@ -186,7 +186,7 @@ internal sealed class DashboardService : IDashboardService
                     .CountAsync(
                         vehicle =>
                             vehicle.Status ==
-                            VehicleStatus.Maintenance,
+                            VehicleStatus.Inactive,
                         cancellationToken),
 
             PendingBookings =
