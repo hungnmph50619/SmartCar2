@@ -85,8 +85,19 @@ public sealed class ProfileController : Controller
         model.ActiveTab = "profile";
         model.Documents = await LoadDocumentsForCurrentRoleAsync(user.Id, cancellationToken);
 
+        var rawPhoneNumber = (model.PhoneNumber ?? string.Empty).Trim();
+        if (User.IsInRole(RoleNames.Staff) &&
+            !ProfileInputRules.IsValidPhoneNumber(rawPhoneNumber))
+        {
+            ModelState.AddModelError(
+                nameof(model.PhoneNumber),
+                "Số điện thoại nhân viên phải gồm đúng 10 chữ số và bắt đầu bằng 0.");
+        }
+
         model.FullName = ProfileInputRules.NormalizeFullName(model.FullName);
         model.PhoneNumber = ProfileInputRules.NormalizePhoneNumber(model.PhoneNumber);
+        model.Address = (model.Address ?? string.Empty).Trim();
+
         if (await AccountInputGuard.PhoneExistsAsync(_userManager, model.PhoneNumber, user.Id, cancellationToken))
         {
             ModelState.AddModelError(nameof(model.PhoneNumber), AccountInputGuard.DuplicatePhoneMessage);
