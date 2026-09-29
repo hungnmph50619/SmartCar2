@@ -3,7 +3,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Application.Features.Incidents;
-using SmartCar.Application.Features.Maintenance;
 using SmartCar.Domain.Entities;
 using SmartCar.Domain.Enums;
 using SmartCar.Infrastructure.Persistence;
@@ -13,24 +12,6 @@ namespace SmartCar.Tests;
 
 public sealed class IncidentVehicleStateTests
 {
-    [Fact]
-    public async Task MaintenanceCompletion_DoesNotReactivateInactiveVehicle()
-    {
-        await using var connection = new SqliteConnection("Data Source=:memory:");
-        await connection.OpenAsync();
-        await using var db = await CreateDbAsync(connection, VehicleStatus.Inactive);
-        var service = CreateService<IMaintenanceService>("MaintenanceService", db);
-
-        var created = await service.CreateAsync(new CreateMaintenanceRequest(
-            1, DateTime.Now, "Bảo dưỡng xe đang ngừng khai thác", 100_000m, null, 0));
-        Assert.True(created.Succeeded, string.Join("; ", created.Errors));
-        var maintenance = await db.MaintenanceRecords.SingleAsync();
-        var completed = await service.CompleteAsync(maintenance.MaintenanceRecordId, 100_000m, null);
-
-        Assert.True(completed.Succeeded, string.Join("; ", completed.Errors));
-        Assert.Equal(VehicleStatus.Inactive, (await db.Vehicles.AsNoTracking().SingleAsync()).Status);
-    }
-
     [Theory]
     [InlineData(VehicleStatus.Rented, VehicleStatus.Rented)]
     [InlineData(VehicleStatus.Inspection, VehicleStatus.Inspection)]
@@ -57,8 +38,8 @@ public sealed class IncidentVehicleStateTests
     [InlineData(VehicleStatus.Rented, VehicleStatus.Rented)]
     [InlineData(VehicleStatus.Inspection, VehicleStatus.Inspection)]
     [InlineData(VehicleStatus.Inactive, VehicleStatus.Inactive)]
-    [InlineData(VehicleStatus.Maintenance, VehicleStatus.Maintenance)]
-    public async Task ResolveWithMaintenance_RecordsRepairWithoutInterruptingRentalOrInspection(
+    [InlineData(VehicleStatus.Maintenance, VehicleStatus.Available)]
+    public async Task ResolveIncident_RestoresSafeVehicleStateWithoutCreatingMaintenance(
         VehicleStatus initialStatus, VehicleStatus expectedStatus)
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -73,23 +54,13 @@ public sealed class IncidentVehicleStateTests
         var incident = await db.VehicleIncidents.SingleAsync();
 
         var result = await CreateIncidentService(db).ResolveAsync(
-            new ResolveIncidentRequest(incident.VehicleIncidentId, 100_000m, 0m, 0m, null, true),
+            new ResolveIncidentRequest(incident.VehicleIncidentId, 100_000m, 0m, 0m, null),
             string.Empty);
 
         Assert.True(result.Succeeded, string.Join("; ", result.Errors));
         Assert.Equal(expectedStatus, (await db.Vehicles.AsNoTracking().SingleAsync()).Status);
-        var maintenance = await db.MaintenanceRecords.AsNoTracking().SingleAsync();
-        Assert.Equal(MaintenanceStatus.InProgress, maintenance.Status);
-        Assert.Equal(100_000m, maintenance.Cost);
-
-        // Resolving and completing repairs must not silently reactivate a retired vehicle.
-        if (initialStatus == VehicleStatus.Inactive)
-        {
-            var completed = await CreateService<IMaintenanceService>("MaintenanceService", db)
-                .CompleteAsync(maintenance.MaintenanceRecordId, 100_000m, null);
-            Assert.True(completed.Succeeded, string.Join("; ", completed.Errors));
-            Assert.Equal(VehicleStatus.Inactive, (await db.Vehicles.AsNoTracking().SingleAsync()).Status);
-        }
+        Assert.Empty(await db.MaintenanceRecords.ToListAsync());
+        Assert.Equal(100_000m, (await db.VehicleIncidents.SingleAsync()).ActualCost);
     }
 
     private static async Task<TestDbContext> CreateDbAsync(SqliteConnection connection, VehicleStatus status)

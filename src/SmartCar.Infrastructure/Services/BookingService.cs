@@ -181,7 +181,7 @@ internal sealed class BookingService : IBookingService
         if (vehicle.Status is not (VehicleStatus.Available or VehicleStatus.Rented))
         {
             return BookingMutationResult.Failure(
-                "Xe đang bảo trì, kiểm tra hoặc ngừng hoạt động nên chưa thể đặt.");
+                "Xe đang có sự cố, kiểm tra hoặc ngừng hoạt động nên chưa thể đặt.");
         }
 
         var hasOpenIncident = await _dbContext.VehicleIncidents.AnyAsync(
@@ -652,7 +652,7 @@ internal sealed class BookingService : IBookingService
             {
                 VehicleStatus.Rented => "Xe vẫn đang được khách trước sử dụng.",
                 VehicleStatus.Inspection => "Xe đã được trả nhưng đang chờ hoàn tất kiểm tra.",
-                VehicleStatus.Maintenance => "Xe đang bảo trì.",
+                VehicleStatus.Maintenance => "Xe đang tạm ngừng cho thuê do có sự cố.",
                 _ => "Xe hiện chưa ở trạng thái sẵn sàng."
             };
 

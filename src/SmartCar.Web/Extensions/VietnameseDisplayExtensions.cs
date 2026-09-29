@@ -31,7 +31,7 @@ public static class VietnameseDisplayExtensions
             VehicleStatus.Available => "Sẵn sàng",
             VehicleStatus.Rented => "Đang cho thuê",
             VehicleStatus.Inspection => "Đang kiểm tra",
-            VehicleStatus.Maintenance => "Đang bảo trì",
+            VehicleStatus.Maintenance => "Tạm ngừng do sự cố",
             VehicleStatus.Inactive => "Ngừng hoạt động",
             _ => status.ToString()
         },
@@ -228,4 +228,3 @@ public static class VietnameseDisplayExtensions
         return normalized;
     }
 }
-

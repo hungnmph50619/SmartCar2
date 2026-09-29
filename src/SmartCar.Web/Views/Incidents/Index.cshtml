@@ -44,7 +44,7 @@ else
                         <div><strong>@item.VehicleName</strong> · @item.LicensePlate</div>
                         <div class="text-muted small">
                             @item.OccurredAt.ToString("dd/MM/yyyy HH:mm")
-                            @if (item.BookingId.HasValue) { <span> · Đơn #@item.BookingId</span> }
+                            @if (item.BookingId.HasValue) { <span> · <a asp-controller="AdminBookings" asp-action="Details" asp-route-id="@item.BookingId">Đơn #@item.BookingId</a></span> }
                             <span> · @(item.Location ?? "Không ghi địa điểm")</span>
                         </div>
                     </div>
@@ -107,7 +107,6 @@ else
                             @if (isTrafficFine)
                             {
                                 <input type="hidden" name="ActualCost" value="0" />
-                                <input type="hidden" name="RequiresMaintenance" value="false" />
                                 <div class="col-md-3">
                                     <label class="form-label small mb-1">Tiền phạt chính thức</label>
                                     <input name="FineAmount" type="number" min="1" value="@item.FineAmount" class="form-control" required />
@@ -132,13 +131,7 @@ else
                                 <div class="col-md-3"><input name="ActualCost" type="number" min="0" value="@item.ActualCost" class="form-control" placeholder="Chi phí thực tế" /></div>
                                 <div class="col-md-3"><input name="FineAmount" type="number" min="0" value="@item.FineAmount" class="form-control" placeholder="Khoản phạt/chi phí" /></div>
                                 <div class="col-md-3"><input name="CustomerLiabilityAmount" type="number" min="0" value="@item.CustomerLiabilityAmount" class="form-control" placeholder="Khách chịu" /></div>
-                                <div class="col-md-3 d-flex align-items-center">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="maintenance-@item.VehicleIncidentId" />
-                                        <label class="form-check-label" for="maintenance-@item.VehicleIncidentId">Cần bảo trì</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-9"><input name="Notes" class="form-control" placeholder="Kết luận xử lý" /></div>
+                                <div class="col-12"><input name="Notes" class="form-control" placeholder="Kết luận xử lý và xác nhận xe đã đủ điều kiện cho thuê" /></div>
                                 <div class="col-md-3"><button class="btn btn-success w-100" type="submit">Hoàn tất</button></div>
                             }
                         </form>

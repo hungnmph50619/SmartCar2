@@ -82,5 +82,4 @@ public sealed class IncidentResolveViewModel
     [StringLength(1000, ErrorMessage = "Ghi chú không được vượt quá 1.000 ký tự.")]
     public string? Notes { get; set; }
 
-    public bool RequiresMaintenance { get; set; }
 }

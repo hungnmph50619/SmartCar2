@@ -116,6 +116,7 @@
         setDocumentState('detailDocInsurance', row.dataset.docInsurance, 'Bảo hiểm');
         setDocumentState('detailDocRoadFee', row.dataset.docRoadfee, 'Phí đường bộ');
         fields('detailEditLink').href = `/AdminVehicles/Edit/${row.dataset.id}`;
+        fields('detailIncidentLink').href = `/Incidents/Create?vehicleId=${encodeURIComponent(row.dataset.id)}`;
         const docsUrl = `/VehicleDocuments?vehicleId=${encodeURIComponent(row.dataset.id)}`;
         fields('detailDocumentsLink').href = docsUrl;
         fields('detailDocumentAction').href = docsUrl;

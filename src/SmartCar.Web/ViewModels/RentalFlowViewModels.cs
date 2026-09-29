@@ -302,6 +302,6 @@ public sealed class AddChargeViewModel
 public sealed class CompleteBookingViewModel
 {
     public int BookingId { get; set; }
-    public bool RequiresMaintenance { get; set; }
-    public string? MaintenanceNote { get; set; }
+    public bool StopRentingVehicle { get; set; }
+    public string? VehicleIssueNote { get; set; }
 }

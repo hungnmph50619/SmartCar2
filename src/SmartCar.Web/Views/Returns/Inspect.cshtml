@@ -791,10 +791,10 @@ else
                 <input type="hidden" name="BookingId" value="@Model.BookingId" />
                 <input type="hidden" name="reviewConfirmed" value="true" />
                 <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" name="RequiresMaintenance" value="true" id="inspectionRequiresMaintenance" />
-                    <label class="form-check-label" for="inspectionRequiresMaintenance">Xe cần bảo trì hoặc sửa chữa</label>
+                    <input class="form-check-input" type="checkbox" name="StopRentingVehicle" value="true" id="inspectionStopRentingVehicle" />
+                    <label class="form-check-label" for="inspectionStopRentingVehicle">Phát hiện hỏng hóc: tạm ngừng nhận đơn thuê xe này</label>
                 </div>
-                <textarea name="MaintenanceNote" id="inspectionMaintenanceNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Ghi rõ nội dung cần bảo trì/sửa chữa"></textarea>
+                <textarea name="VehicleIssueNote" id="inspectionVehicleIssueNote" maxlength="1000" class="form-control mb-3" rows="2" placeholder="Mô tả hỏng hóc để Admin xử lý sự cố"></textarea>
                 <button class="btn btn-primary" type="submit" data-loading-text="Đang xử lý...">@(Model.DepositAmount > 0 ? "Xác nhận & quyết toán cọc" : "Xác nhận → Hoàn tất")</button>
             </form>
         }
@@ -838,16 +838,16 @@ else if (Model.Status == BookingStatus.Completed)
 @section Scripts {
     <script>
         (() => {
-            const maintenanceCheckbox = document.getElementById('inspectionRequiresMaintenance');
-            const maintenanceNote = document.getElementById('inspectionMaintenanceNote');
-            const syncMaintenanceRequirement = () => {
-                if (!maintenanceNote) return;
-                const required = maintenanceCheckbox?.checked === true;
-                maintenanceNote.required = required;
-                if (!required) maintenanceNote.setCustomValidity('');
+            const vehicleIssueCheckbox = document.getElementById('inspectionStopRentingVehicle');
+            const vehicleIssueNote = document.getElementById('inspectionVehicleIssueNote');
+            const syncVehicleIssueRequirement = () => {
+                if (!vehicleIssueNote) return;
+                const required = vehicleIssueCheckbox?.checked === true;
+                vehicleIssueNote.required = required;
+                if (!required) vehicleIssueNote.setCustomValidity('');
             };
-            maintenanceCheckbox?.addEventListener('change', syncMaintenanceRequirement);
-            syncMaintenanceRequirement();
+            vehicleIssueCheckbox?.addEventListener('change', syncVehicleIssueRequirement);
+            syncVehicleIssueRequirement();
 
             const maximumPages = 12;
             const maximumBytes = 8 * 1024 * 1024;

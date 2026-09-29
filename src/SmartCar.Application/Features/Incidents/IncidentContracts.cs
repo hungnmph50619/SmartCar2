@@ -40,8 +40,7 @@ public sealed record ResolveIncidentRequest(
     decimal ActualCost,
     decimal FineAmount,
     decimal CustomerLiabilityAmount,
-    string? Notes,
-    bool RequiresMaintenance);
+    string? Notes);
 
 public interface IIncidentService
 {

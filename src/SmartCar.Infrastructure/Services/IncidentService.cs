@@ -273,49 +273,17 @@ internal sealed class IncidentService : IIncidentService
         var customerHandlesTrafficFine = incident.IncidentType == IncidentType.TrafficFine;
 
         incident.Status = IncidentStatus.Resolved;
-        incident.ActualCost = customerHandlesTrafficFine
-            ? 0m
-            : request.RequiresMaintenance ? 0m : request.ActualCost;
+        incident.ActualCost = customerHandlesTrafficFine ? 0m : request.ActualCost;
         incident.FineAmount = customerHandlesTrafficFine ? 0m : request.FineAmount;
         incident.CustomerLiabilityAmount = customerHandlesTrafficFine ? 0m : request.CustomerLiabilityAmount;
         incident.Notes = Normalize(request.Notes) ?? incident.Notes;
         incident.ResolvedAt = DateTime.UtcNow;
 
-        if (!customerHandlesTrafficFine && request.RequiresMaintenance)
-        {
-            // Keep the current rental/inspection workflow usable. Return settlement
-            // will pick up the open maintenance record after the vehicle is checked.
-            if (incident.Vehicle.Status is not (VehicleStatus.Rented or VehicleStatus.Inspection or VehicleStatus.Inactive))
-            {
-                incident.Vehicle.Status = VehicleStatus.Maintenance;
-            }
-
-            var hasOpenMaintenance = await _dbContext.MaintenanceRecords.AnyAsync(item =>
-                item.VehicleId == incident.VehicleId &&
-                item.Status == MaintenanceStatus.InProgress,
-                cancellationToken);
-
-            if (!hasOpenMaintenance)
-            {
-                _dbContext.MaintenanceRecords.Add(new MaintenanceRecord
-                {
-                    VehicleId = incident.VehicleId,
-                    StartDate = DateTime.UtcNow,
-                    Content = $"Khắc phục sự cố #{incident.VehicleIncidentId}: {incident.Description}",
-                    Cost = request.ActualCost,
-                    Mileage = incident.Vehicle.CurrentMileage,
-                    Status = MaintenanceStatus.InProgress
-                });
-            }
-        }
-        else
-        {
-            incident.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
-                _dbContext,
-                incident.Vehicle,
-                excludedIncidentId: incident.VehicleIncidentId,
-                cancellationToken: cancellationToken);
-        }
+        incident.Vehicle.Status = await VehicleStatusResolver.ResolveAsync(
+            _dbContext,
+            incident.Vehicle,
+            excludedIncidentId: incident.VehicleIncidentId,
+            cancellationToken: cancellationToken);
 
         if (customerHandlesTrafficFine && incident.BookingId.HasValue)
         {
@@ -363,7 +331,6 @@ internal sealed class IncidentService : IIncidentService
                 incident.FineAmount,
                 incident.CustomerLiabilityAmount,
                 incident.ResolvedAt,
-                RequiresMaintenance = customerHandlesTrafficFine ? false : request.RequiresMaintenance,
                 CustomerHandlesTrafficFine = customerHandlesTrafficFine
             }),
             cancellationToken: cancellationToken);

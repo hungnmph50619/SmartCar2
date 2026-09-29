@@ -10,7 +10,6 @@ internal static class VehicleStatusResolver
     public static async Task<VehicleStatus> ResolveAsync(
         ApplicationDbContext dbContext,
         Vehicle vehicle,
-        int? excludedMaintenanceId = null,
         int? excludedIncidentId = null,
         CancellationToken cancellationToken = default,
         int? excludedBookingId = null)
@@ -40,13 +39,6 @@ internal static class VehicleStatusResolver
             return VehicleStatus.Inspection;
         }
 
-        var hasOpenMaintenance = await dbContext.MaintenanceRecords.AnyAsync(record =>
-            record.VehicleId == vehicle.VehicleId &&
-            (!excludedMaintenanceId.HasValue ||
-             record.MaintenanceRecordId != excludedMaintenanceId.Value) &&
-            record.Status == MaintenanceStatus.InProgress,
-            cancellationToken);
-
         var hasOpenIncident = await dbContext.VehicleIncidents.AnyAsync(incident =>
             incident.VehicleId == vehicle.VehicleId &&
             incident.IncidentType != IncidentType.TrafficFine &&
@@ -56,7 +48,7 @@ internal static class VehicleStatusResolver
             incident.Status != IncidentStatus.Cancelled,
             cancellationToken);
 
-        return hasOpenMaintenance || hasOpenIncident
+        return hasOpenIncident
             ? VehicleStatus.Maintenance
             : VehicleStatus.Available;
     }

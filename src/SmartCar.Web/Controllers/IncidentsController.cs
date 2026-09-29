@@ -44,6 +44,7 @@ public sealed class IncidentsController : Controller
         {
             VehicleId = vehicleId ?? 0,
             BookingId = bookingId,
+            IncidentType = vehicleId.HasValue ? IncidentType.Breakdown : IncidentType.Accident,
             OccurredAt = DateTime.Now
         });
     }
@@ -120,8 +121,7 @@ public sealed class IncidentsController : Controller
                     form.ActualCost,
                     form.FineAmount,
                     form.CustomerLiabilityAmount,
-                    form.Notes,
-                    form.RequiresMaintenance),
+                    form.Notes),
                 GetUserId(),
                 cancellationToken)
             : SmartCar.Application.Common.OperationResult.Failure("Dữ liệu xử lý sự cố không hợp lệ.");

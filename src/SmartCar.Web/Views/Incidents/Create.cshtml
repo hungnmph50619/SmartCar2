@@ -36,7 +36,7 @@
                     <select asp-for="IncidentType" class="form-select" id="incident-type">
                         @foreach (var type in Enum.GetValues<IncidentType>())
                         {
-                            <option value="@type">@type.ToVietnamese()</option>
+                            <option value="@type" selected="@(type == Model.IncidentType)">@type.ToVietnamese()</option>
                         }
                     </select>
                 </div>

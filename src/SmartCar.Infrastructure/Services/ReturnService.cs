@@ -736,20 +736,20 @@ internal sealed class ReturnService : IReturnService
 
     public async Task<OperationResult> CompleteAsync(
         int bookingId,
-        bool requiresMaintenance,
-        string? maintenanceNote,
+        bool stopRentingVehicle,
+        string? vehicleIssueNote,
         CancellationToken cancellationToken = default)
     {
-        var normalizedMaintenanceNote = Normalize(maintenanceNote);
-        if (requiresMaintenance && normalizedMaintenanceNote is null)
+        var normalizedVehicleIssueNote = Normalize(vehicleIssueNote);
+        if (stopRentingVehicle && normalizedVehicleIssueNote is null)
         {
             return OperationResult.Failure(
-                "Đã đánh dấu xe cần bảo trì/sửa chữa thì phải ghi rõ nội dung cần xử lý.");
+                "Đã đánh dấu xe hỏng, tạm ngừng cho thuê thì phải ghi rõ tình trạng xe.");
         }
 
-        if (normalizedMaintenanceNote is { Length: > 1000 })
+        if (normalizedVehicleIssueNote is { Length: > 1000 })
         {
-            return OperationResult.Failure("Nội dung bảo trì tối đa 1.000 ký tự.");
+            return OperationResult.Failure("Mô tả hỏng hóc tối đa 1.000 ký tự.");
         }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(
@@ -950,7 +950,7 @@ internal sealed class ReturnService : IReturnService
                 $"Hoàn cọc còn lại sau khi kiểm tra xe: {depositToRefund:N0} đồng.");
         }
 
-        if (requiresMaintenance)
+        if (stopRentingVehicle)
         {
             booking.Vehicle.Status = VehicleStatus.Maintenance;
         }
@@ -963,36 +963,29 @@ internal sealed class ReturnService : IReturnService
                 excludedBookingId: booking.BookingId);
         }
 
-        if (requiresMaintenance)
+        if (stopRentingVehicle)
         {
-            var openMaintenance = await _dbContext.MaintenanceRecords
-                .Where(record =>
-                    record.VehicleId == booking.VehicleId &&
-                    record.Status == MaintenanceStatus.InProgress)
-                .OrderByDescending(record => record.StartDate)
-                .FirstOrDefaultAsync(cancellationToken);
+            var hasOpenIncidentForBooking = await _dbContext.VehicleIncidents.AnyAsync(incident =>
+                incident.VehicleId == booking.VehicleId &&
+                incident.BookingId == booking.BookingId &&
+                incident.IncidentType != IncidentType.TrafficFine &&
+                incident.Status != IncidentStatus.Resolved &&
+                incident.Status != IncidentStatus.Cancelled,
+                cancellationToken);
 
-            if (openMaintenance is null)
+            if (!hasOpenIncidentForBooking)
             {
-                _dbContext.MaintenanceRecords.Add(new MaintenanceRecord
+                _dbContext.VehicleIncidents.Add(new VehicleIncident
                 {
                     VehicleId = booking.VehicleId,
-                    StartDate = DateTime.UtcNow,
-                    Content = normalizedMaintenanceNote
-                        ?? "Kiểm tra hoặc sửa chữa sau lượt thuê",
-                    Cost = 0,
-                    Mileage = booking.Vehicle.CurrentMileage,
-                    Status = MaintenanceStatus.InProgress
+                    BookingId = booking.BookingId,
+                    IncidentType = IncidentType.Breakdown,
+                    Status = IncidentStatus.Open,
+                    OccurredAt = booking.VehicleReturn!.ReturnedAt,
+                    Description = normalizedVehicleIssueNote!,
+                    Notes = "Ảnh và biên bản trả xe nằm trong hồ sơ đơn thuê liên quan.",
+                    CreatedAt = DateTime.UtcNow
                 });
-            }
-            else if (!string.IsNullOrWhiteSpace(normalizedMaintenanceNote) &&
-                     !openMaintenance.Content.Contains(
-                         normalizedMaintenanceNote,
-                         StringComparison.OrdinalIgnoreCase))
-            {
-                openMaintenance.Content = AppendText(
-                    openMaintenance.Content,
-                    $"Bổ sung khi quyết toán đơn #{booking.BookingId}: {normalizedMaintenanceNote}");
             }
         }
 

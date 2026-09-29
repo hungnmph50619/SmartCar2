@@ -741,8 +741,8 @@ public sealed class ReturnsController : Controller
 
         var result = await _returnService.CompleteAsync(
             model.BookingId,
-            model.RequiresMaintenance,
-            model.MaintenanceNote,
+            model.StopRentingVehicle,
+            model.VehicleIssueNote,
             cancellationToken);
 
         if (!result.Succeeded)

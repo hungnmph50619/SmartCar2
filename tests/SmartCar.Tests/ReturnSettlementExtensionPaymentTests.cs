@@ -13,8 +13,10 @@ namespace SmartCar.Tests;
 
 public sealed class ReturnSettlementExtensionPaymentTests
 {
-    [Fact]
-    public async Task CompleteAsync_CountsPaidExtensionTowardRequiredRentalAmount()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompleteAsync_CountsPaidExtensionAndRecordsUnsafeVehicleAsIncident(bool unsafeVehicle)
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -140,8 +142,8 @@ public sealed class ReturnSettlementExtensionPaymentTests
         var service = CreateReturnService(db);
         var result = await service.CompleteAsync(
             701,
-            requiresMaintenance: false,
-            maintenanceNote: null,
+            stopRentingVehicle: unsafeVehicle,
+            vehicleIssueNote: unsafeVehicle ? "Hỏng phanh sau chuyến thuê" : null,
             default);
 
         Assert.True(result.Succeeded, string.Join("; ", result.Errors));
@@ -149,6 +151,17 @@ public sealed class ReturnSettlementExtensionPaymentTests
         db.ChangeTracker.Clear();
         var booking = await db.Bookings.SingleAsync(item => item.BookingId == 701);
         Assert.Equal(BookingStatus.Completed, booking.Status);
+        Assert.Equal(unsafeVehicle ? VehicleStatus.Maintenance : VehicleStatus.Available,
+            (await db.Vehicles.SingleAsync()).Status);
+        Assert.Equal(unsafeVehicle ? 1 : 0, await db.VehicleIncidents.CountAsync());
+        Assert.Empty(await db.MaintenanceRecords.ToListAsync());
+        if (unsafeVehicle)
+        {
+            var incident = await db.VehicleIncidents.SingleAsync();
+            Assert.Equal(701, incident.BookingId);
+            Assert.Equal(IncidentStatus.Open, incident.Status);
+            Assert.Contains("Hỏng phanh", incident.Description);
+        }
     }
 
     private static IReturnService CreateReturnService(ApplicationDbContext db)

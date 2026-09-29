@@ -43,7 +43,7 @@ public interface IReturnService
         CancellationToken cancellationToken = default);
     Task<OperationResult> CompleteAsync(
         int bookingId,
-        bool requiresMaintenance,
-        string? maintenanceNote,
+        bool stopRentingVehicle,
+        string? vehicleIssueNote,
         CancellationToken cancellationToken = default);
 }

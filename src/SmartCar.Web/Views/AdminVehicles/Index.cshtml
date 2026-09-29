@@ -51,8 +51,8 @@
             <div><span>Đang kiểm tra</span><strong>@inspection</strong><small>Chờ/đang kiểm tra xe</small></div>
         </article>
         <article class="vehicle-stat-card">
-            <div class="vehicle-stat-icon stat-maintenance">⚙</div>
-            <div><span>Bảo dưỡng</span><strong>@maintenance</strong><small>Tạm ngừng để bảo dưỡng</small></div>
+            <div class="vehicle-stat-icon stat-maintenance">⚠</div>
+            <div><span>Có sự cố</span><strong>@maintenance</strong><small>Tạm ngừng nhận thuê</small></div>
         </article>
         <article class="vehicle-stat-card">
             <div class="vehicle-stat-icon stat-inactive">⊘</div>
@@ -311,7 +311,7 @@
                 <div class="vehicle-detail-actions">
                     <a id="detailEditLink" class="vehicle-secondary-btn flex-fill justify-content-center" href="#">✎ Chỉnh sửa</a>
                     <a id="detailDocumentAction" class="vehicle-primary-btn flex-fill justify-content-center" href="#">▤ Giấy tờ xe</a>
-                    <a class="vehicle-secondary-btn flex-fill justify-content-center" asp-controller="Maintenance" asp-action="Index">⚙ Bảo trì</a>
+                    <a id="detailIncidentLink" class="vehicle-secondary-btn flex-fill justify-content-center" href="#">⚠ Phát hiện hỏng hóc</a>
                 </div>
             </div>
         </aside>

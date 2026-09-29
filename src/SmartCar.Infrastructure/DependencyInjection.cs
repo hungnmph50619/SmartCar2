@@ -11,7 +11,6 @@ using SmartCar.Application.Features.Documents;
 using SmartCar.Application.Features.Extensions;
 using SmartCar.Application.Features.Handovers;
 using SmartCar.Application.Features.Incidents;
-using SmartCar.Application.Features.Maintenance;
 using SmartCar.Application.Features.Notifications;
 using SmartCar.Application.Features.Operations;
 using SmartCar.Application.Features.Payments;
@@ -97,7 +96,6 @@ public static class DependencyInjection
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IHandoverService, HandoverService>();
         services.AddScoped<IReturnService, ReturnService>();
-        services.AddScoped<IMaintenanceService, MaintenanceService>();
         services.AddScoped<IncidentService>();
         services.AddScoped<IIncidentService, PolicyAwareIncidentService>();
         services.AddScoped<INotificationService, NotificationService>();

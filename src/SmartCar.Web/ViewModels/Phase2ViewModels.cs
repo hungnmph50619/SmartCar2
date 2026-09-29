@@ -143,39 +143,6 @@ public sealed class RejectExtensionViewModel
     public string Reason { get; set; } = string.Empty;
 }
 
-public sealed class MaintenanceFormViewModel
-{
-    [Required]
-    public int VehicleId { get; set; }
-
-    [Required]
-    public DateTime StartDate { get; set; } = DateTime.Now;
-
-    [Required]
-    [StringLength(1000)]
-    public string Content { get; set; } = string.Empty;
-
-    [Range(0, double.MaxValue)]
-    public decimal Cost { get; set; }
-
-    [StringLength(200)]
-    public string? ServiceProvider { get; set; }
-
-    [Range(0, int.MaxValue)]
-    public int Mileage { get; set; }
-}
-
-public sealed class CompleteMaintenanceViewModel
-{
-    public int MaintenanceId { get; set; }
-
-    [Range(0, double.MaxValue)]
-    public decimal FinalCost { get; set; }
-
-    [StringLength(1000)]
-    public string? CompletionNote { get; set; }
-}
-
 public sealed class ReviewFormViewModel
 {
     public int BookingId { get; set; }
