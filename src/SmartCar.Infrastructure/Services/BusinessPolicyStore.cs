@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure.Persistence;
@@ -21,7 +22,15 @@ public static class BusinessPolicyStore
         var policy = RentalPolicySnapshot.FromJson(row?.PolicyJson);
         policy.DepositHoldDays = row == null ? DepositHoldPolicy.DefaultDays : DepositHoldPolicy.NormalizeDays(row.DepositHoldDays);
 
-        policy = PrepareForNewBooking(policy);
+        // BusinessSettings cũ của Quy_2 có thể chưa có DeliveryLeadMinutes do field từng bị bỏ.
+        // Cấu hình hiện hành/đơn mới dùng lại mặc định 30 phút; booking cũ vẫn đọc snapshot riêng.
+        if (!HasProperty(row?.PolicyJson, nameof(RentalPolicySnapshot.DeliveryLeadMinutes)))
+        {
+            policy.DeliveryLeadMinutes = RentalPolicy.DeliveryLeadMinutes;
+        }
+
+        // Hủy trong cửa sổ miễn phí sau thanh toán được hoàn 100% tiền thuê.
+        // Không có thêm điều kiện tối thiểu bao nhiêu giờ trước thời điểm nhận xe.
         if (row?.PolicyJson == null)
         {
             policy.Version = "legacy-" + policy.DepositHoldDays;
@@ -32,11 +41,14 @@ public static class BusinessPolicyStore
         return policy;
     }
 
-    public static RentalPolicySnapshot PrepareForNewBooking(RentalPolicySnapshot policy)
+    private static bool HasProperty(string? json, string propertyName)
     {
-        // Chỉ tiền thuê cần còn đủ lead time mới hưởng cửa sổ hoàn 100%.
-        // PolicyJson của booking đã tồn tại không bị sửa.
-        policy.FreeCancellationRequiresMinimumLead = true;
-        return policy;
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return false;
+        }
+
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.TryGetProperty(propertyName, out _);
     }
 }

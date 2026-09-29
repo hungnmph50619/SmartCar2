@@ -280,6 +280,7 @@ internal sealed class BookingOperationService : IBookingOperationService
         else
         {
             var cancelledAt = DateTime.Now;
+            var cancelledAtUtc = DateTime.UtcNow;
             var rentalPaidAt = booking.Payments
                 .Where(payment => payment.Type == PaymentType.Rental
                     && payment.Status == PaymentStatus.Paid
@@ -288,16 +289,24 @@ internal sealed class BookingOperationService : IBookingOperationService
                 .Select(payment => payment.PaidAt)
                 .FirstOrDefault();
 
-            if (rentalPaidAt.HasValue && rentalPaidAt.Value.Kind == DateTimeKind.Utc)
-            {
-                rentalPaidAt = rentalPaidAt.Value.ToLocalTime();
-            }
+            // PaidAt được lưu bằng UTC. SQL Server đọc DateTime thường trả Kind=Unspecified,
+            // vì vậy không được so trực tiếp với DateTime.Now (giờ địa phương).
+            // So cửa sổ 60 phút hoàn toàn bằng UTC để tránh lệch múi giờ.
+            var withinFreeCancellationWindow =
+                rentalPaidAt.HasValue &&
+                CancellationRefundPolicy.IsWithinFreeCancellationWindowUtc(
+                    cancelledAtUtc,
+                    rentalPaidAt.Value,
+                    bookingPolicy.FreeCancellationWindowMinutes);
 
-            var refundRate = CancellationRefundPolicy.GetRentalRefundRate(
-                cancelledAt,
-                booking.PickupDate,
-                rentalPaidAt,
-                bookingPolicy);
+            var refundRate = withinFreeCancellationWindow
+                ? 1.00m
+                : CancellationRefundPolicy.GetRentalRefundRate(
+                    cancelledAt,
+                    booking.PickupDate,
+                    rentalPaidAt: null,
+                    bookingPolicy);
+
             var refundableRental = Math.Round(
                 rentalPaid * refundRate,
                 0,
@@ -305,7 +314,9 @@ internal sealed class BookingOperationService : IBookingOperationService
 
             refundableRevenueAmount = refundableRental + deliveryPaid;
             rentalRefundReason = revenuePaid > 0
-                ? CancellationRefundPolicy.GetVietnameseDescription(refundRate, bookingPolicy)
+                ? (withinFreeCancellationWindow
+                    ? $"Hủy trong {bookingPolicy.FreeCancellationWindowMinutes} phút sau khi thanh toán: hoàn 100% tiền thuê."
+                    : CancellationRefundPolicy.GetVietnameseDescription(refundRate, bookingPolicy))
                     + (deliveryPaid > 0 ? $" Hoàn 100% phí giao chưa thực hiện ({deliveryPaid:N0} đồng)." : string.Empty)
                 : "Không còn tiền thuê hoặc phí giao cần hoàn.";
         }
@@ -364,7 +375,7 @@ internal sealed class BookingOperationService : IBookingOperationService
             UserId = booking.CustomerId,
             Title = "Đơn thuê đã được hủy",
             Message = newRefundAmount > 0
-                ? $"Đơn #{booking.BookingId} đã hủy. Có thêm {newRefundAmount:N0} đồng đang chờ duyệt hoàn; mục tiêu xử lý trong {bookingPolicy.CancellationRefundProcessingHours} giờ."
+                ? $"Đơn #{booking.BookingId} đã hủy. {rentalRefundReason} Tổng {newRefundAmount:N0} đồng đang chờ Admin duyệt hoàn; mục tiêu xử lý trong {bookingPolicy.CancellationRefundProcessingHours} giờ."
                 : $"Đơn #{booking.BookingId} đã hủy và không phát sinh khoản hoàn mới."
         });
 

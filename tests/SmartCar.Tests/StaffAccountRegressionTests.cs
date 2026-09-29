@@ -1,12 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
@@ -157,6 +159,52 @@ public sealed class StaffAccountRegressionTests
     }
 
     [Fact]
+    public async Task AdminUploadsEmployeePhotoAndReplacesPreviousFile()
+    {
+        var webRoot = Path.Combine(Path.GetTempPath(), $"staff-avatar-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(webRoot);
+        try
+        {
+            using var users = new TestUserManager();
+            var audit = new TestAudit();
+            var controller = new AdminStaffController(users, null!, audit,
+                new TestWebHostEnvironment { WebRootPath = webRoot, ContentRootPath = webRoot });
+            PrepareAsAdmin(controller);
+
+            var first = await controller.UploadAvatar(users.Staff.Id, PngFile(), default);
+            Assert.IsType<RedirectToActionResult>(first);
+            var firstPath = users.Staff.AvatarPath;
+            Assert.StartsWith("/uploads/avatars/", firstPath);
+            Assert.True(File.Exists(Path.Combine(webRoot, firstPath!.TrimStart('/').Replace('/', Path.DirectorySeparatorChar))));
+
+            var second = await controller.UploadAvatar(users.Staff.Id, PngFile(), default);
+            Assert.IsType<RedirectToActionResult>(second);
+            Assert.NotEqual(firstPath, users.Staff.AvatarPath);
+            Assert.False(File.Exists(Path.Combine(webRoot, firstPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar))));
+            Assert.Equal(2, users.Updates);
+            Assert.Equal(2, audit.Writes);
+        }
+        finally
+        {
+            Directory.Delete(webRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AdminRejectsInvalidEmployeePhotoWithoutUpdatingAccount()
+    {
+        using var users = new TestUserManager();
+        var controller = new AdminStaffController(users, null!, new TestAudit(), null!);
+        PrepareAsAdmin(controller);
+
+        var result = await controller.UploadAvatar(users.Staff.Id, null, default);
+
+        Assert.IsType<RedirectToActionResult>(result);
+        Assert.Null(users.Staff.AvatarPath);
+        Assert.Equal(0, users.Updates);
+    }
+
+    [Fact]
     public async Task StaffWithAnExtraCustomerRoleStillSeesEmployeeProfile()
     {
         using var users = new TestUserManager();
@@ -217,6 +265,35 @@ public sealed class StaffAccountRegressionTests
         };
         claims.AddRange(additionalRoles.Select(role => new Claim(ClaimTypes.Role, role)));
         controller.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+    }
+
+    private static void PrepareAsAdmin(Controller controller)
+    {
+        Prepare(controller);
+        controller.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, "admin"),
+            new Claim(ClaimTypes.Role, RoleNames.Admin)
+        }, "test"));
+    }
+
+    private static IFormFile PngFile()
+    {
+        var bytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0 };
+        var file = new FormFile(new MemoryStream(bytes), 0, bytes.Length, "avatar", "employee.png");
+        file.Headers = new HeaderDictionary();
+        file.ContentType = "image/png";
+        return file;
+    }
+
+    private sealed class TestWebHostEnvironment : IWebHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "SmartCar.Tests";
+        public string EnvironmentName { get; set; } = "Development";
+        public string ContentRootPath { get; set; } = string.Empty;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+        public string WebRootPath { get; set; } = string.Empty;
+        public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private sealed class TestUserManager : UserManager<ApplicationUser>

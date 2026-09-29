@@ -109,6 +109,7 @@ public sealed class AdminStaffDetailsViewModel
     public string UserId { get; set; } = string.Empty;
     public string EmployeeCode { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
+    public string? AvatarPath { get; set; }
     public string Email { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
     public string MaskedCitizenIdNumber { get; set; } = "Chưa cập nhật";
@@ -121,4 +122,3 @@ public sealed class AdminStaffDetailsViewModel
     public DateTime? VerifiedAt { get; set; }
     public string? VerifiedByName { get; set; }
 }
-

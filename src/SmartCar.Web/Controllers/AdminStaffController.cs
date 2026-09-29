@@ -1,6 +1,8 @@
 using System.Data;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +10,7 @@ using SmartCar.Application.Features.Audits;
 using SmartCar.Domain.Constants;
 using SmartCar.Infrastructure.Identity;
 using SmartCar.Infrastructure.Persistence;
+using SmartCar.Web.Services;
 using SmartCar.Web.ViewModels;
 
 namespace SmartCar.Web.Controllers;
@@ -16,19 +19,24 @@ namespace SmartCar.Web.Controllers;
 public sealed class AdminStaffController : Controller
 {
     private const string EmployeeCodePrefix = "SC-NV";
+    private const long MaximumAvatarImageBytes = 2 * 1024 * 1024;
+    private const string AvatarUrlPrefix = "/uploads/avatars/";
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ApplicationDbContext _dbContext;
     private readonly IAuditService _auditService;
+    private readonly IWebHostEnvironment _environment;
 
     public AdminStaffController(
         UserManager<ApplicationUser> userManager,
         ApplicationDbContext dbContext,
-        IAuditService auditService)
+        IAuditService auditService,
+        IWebHostEnvironment environment)
     {
         _userManager = userManager;
         _dbContext = dbContext;
         _auditService = auditService;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -218,6 +226,83 @@ public sealed class AdminStaffController : Controller
         }
 
         return View(await BuildDetailsAsync(user, cancellationToken));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UploadAvatar(
+        string id,
+        IFormFile? avatar,
+        CancellationToken cancellationToken)
+    {
+        var user = await GetStaffAsync(id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var validationError = await ImageFileValidator.ValidateAsync(
+            avatar, MaximumAvatarImageBytes, cancellationToken);
+        if (validationError is not null)
+        {
+            TempData["ErrorMessage"] = validationError;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var webRoot = string.IsNullOrWhiteSpace(_environment.WebRootPath)
+            ? Path.Combine(_environment.ContentRootPath, "wwwroot")
+            : _environment.WebRootPath;
+        var avatarDirectory = Path.Combine(webRoot, "uploads", "avatars");
+        Directory.CreateDirectory(avatarDirectory);
+
+        var fileName = $"{Guid.NewGuid():N}{Path.GetExtension(avatar!.FileName).ToLowerInvariant()}";
+        var newFilePath = Path.Combine(avatarDirectory, fileName);
+        var previousAvatarPath = user.AvatarPath;
+        var saved = false;
+        try
+        {
+            await using (var output = new FileStream(newFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                await avatar.CopyToAsync(output, cancellationToken);
+            }
+
+            user.AvatarPath = AvatarUrlPrefix + fileName;
+            var result = await AccountInputGuard.SaveAsync(() => _userManager.UpdateAsync(user));
+            if (!result.Succeeded)
+            {
+                user.AvatarPath = previousAvatarPath;
+                TempData["ErrorMessage"] = string.Join("; ", result.Errors.Select(TranslateIdentityError));
+                System.IO.File.Delete(newFilePath);
+                return RedirectToAction(nameof(Details), new { id });
+            }
+            saved = true;
+
+            if (!string.IsNullOrWhiteSpace(previousAvatarPath) &&
+                previousAvatarPath.StartsWith(AvatarUrlPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var oldFilePath = Path.Combine(avatarDirectory, Path.GetFileName(previousAvatarPath));
+                if (System.IO.File.Exists(oldFilePath))
+                {
+                    System.IO.File.Delete(oldFilePath);
+                }
+            }
+
+            await WriteAuditAsync(
+                "UpdateStaffAvatar", user.Id,
+                $"Quản trị viên cập nhật ảnh nhân viên {user.EmployeeCode ?? user.Email}.",
+                cancellationToken);
+            TempData["SuccessMessage"] = "Đã cập nhật ảnh nhân viên.";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        catch
+        {
+            if (!saved && System.IO.File.Exists(newFilePath))
+            {
+                user.AvatarPath = previousAvatarPath;
+                System.IO.File.Delete(newFilePath);
+            }
+            throw;
+        }
     }
 
     [HttpPost]
@@ -439,6 +524,7 @@ public sealed class AdminStaffController : Controller
             FullName = user.FullName,
             Email = user.Email ?? string.Empty,
             PhoneNumber = user.PhoneNumber,
+            AvatarPath = user.AvatarPath,
             MaskedCitizenIdNumber = MaskCitizenId(user.CitizenIdNumber),
             HasCitizenIdNumber = !string.IsNullOrWhiteSpace(user.CitizenIdNumber),
             IsActive = user.IsActive,
@@ -604,4 +690,3 @@ public sealed class AdminStaffController : Controller
     private static string LastFour(string citizenIdNumber) =>
         citizenIdNumber.Length <= 4 ? citizenIdNumber : citizenIdNumber[^4..];
 }
-

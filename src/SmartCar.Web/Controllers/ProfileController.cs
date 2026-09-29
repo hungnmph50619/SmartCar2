@@ -93,6 +93,7 @@ public sealed class ProfileController : Controller
 
         model.FullName = ProfileInputRules.NormalizeFullName(model.FullName);
         model.PhoneNumber = ProfileInputRules.NormalizePhoneNumber(model.PhoneNumber);
+        model.Address = (model.Address ?? string.Empty).Trim();
         if (await AccountInputGuard.PhoneExistsAsync(_userManager, model.PhoneNumber, user.Id, cancellationToken))
         {
             ModelState.AddModelError(nameof(model.PhoneNumber), AccountInputGuard.DuplicatePhoneMessage);

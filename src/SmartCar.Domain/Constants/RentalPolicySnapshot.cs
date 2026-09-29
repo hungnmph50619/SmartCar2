@@ -52,13 +52,6 @@ public sealed class RentalPolicySnapshot : IValidatableObject
     [Range(0, 1440, ErrorMessage = "Cửa sổ hủy miễn phí phải từ 0 đến 1.440 phút.")]
     public int FreeCancellationWindowMinutes { get; set; } = 60;
 
-    [Range(0, 336, ErrorMessage = "Điều kiện thời gian còn lại phải từ 0 đến 336 giờ.")]
-    public int MinimumHoursForFreeCancellation { get; set; } = 24;
-
-    // Tương thích booking cũ: JSON cũ không có field này => true.
-    // Policy hiện hành cho đơn mới được BusinessPolicyStore chuyển thành false.
-    public bool FreeCancellationRequiresMinimumLead { get; set; } = true;
-
     [Range(1, 168, ErrorMessage = "Thời gian xử lý hoàn tiền sau hủy phải từ 1 đến 168 giờ.")]
     public int CancellationRefundProcessingHours { get; set; } = 24;
 
@@ -95,10 +88,27 @@ public sealed class RentalPolicySnapshot : IValidatableObject
         (int)Math.Ceiling(Math.Max(0, lateMinutes - LateReturnGraceMinutes) / 1440d);
 
     public string ToJson() => JsonSerializer.Serialize(this);
-    public static RentalPolicySnapshot FromJson(string? json) => string.IsNullOrWhiteSpace(json)
-        ? new RentalPolicySnapshot()
-        : JsonSerializer.Deserialize<RentalPolicySnapshot>(json)
+
+    public static RentalPolicySnapshot FromJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new RentalPolicySnapshot();
+        }
+
+        var policy = JsonSerializer.Deserialize<RentalPolicySnapshot>(json)
             ?? throw new InvalidOperationException("Không đọc được chính sách của đơn.");
+
+        // PolicyJson được tạo trong giai đoạn Quy_2 bỏ thời gian chuẩn bị giao tận nơi
+        // không có field này. Giữ 0 phút cho các booking cũ để không đổi snapshot giữa chừng.
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty(nameof(DeliveryLeadMinutes), out _))
+        {
+            policy.DeliveryLeadMinutes = 0;
+        }
+
+        return policy;
+    }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext context)
     {

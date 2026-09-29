@@ -5,6 +5,7 @@
     initializeImageInputs();
     initializeKycEditToggles();
     initializeAdminCustomerNavigation();
+    initializeRestrictedTextInputs();
 });
 
 function initializeForms() {
@@ -659,6 +660,68 @@ function initializeKycEditToggles() {
                 if (firstControl instanceof HTMLElement) {
                     firstControl.focus();
                 }
+            }
+        });
+    });
+}
+
+function initializeRestrictedTextInputs() {
+    document.querySelectorAll("[data-name-only]").forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
+        // Tuyệt đối không bắt keydown, beforeinput hoặc input ở ô họ tên.
+        // Cốc Cốc + UniKey/Telex cần toàn quyền xử lý chuỗi phím để ghép dấu tiếng Việt.
+        input.addEventListener("blur", () => {
+            const currentValue = input.value;
+            const sanitizedValue = currentValue
+                .replace(/[^\p{L}\p{M}\s]/gu, "")
+                .replace(/\s{2,}/g, " ")
+                .trim();
+
+            if (sanitizedValue !== currentValue) {
+                input.value = sanitizedValue;
+                input.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+        });
+
+        input.addEventListener("paste", (event) => {
+            const pastedText = event.clipboardData?.getData("text") ?? "";
+            const sanitizedText = pastedText.replace(/[^\p{L}\p{M}\s]/gu, "");
+
+            if (sanitizedText === pastedText) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const selectionStart = input.selectionStart ?? input.value.length;
+            const selectionEnd = input.selectionEnd ?? selectionStart;
+            const maximumLength = input.maxLength > 0 ? input.maxLength : Number.MAX_SAFE_INTEGER;
+            const availableLength = Math.max(
+                0,
+                maximumLength - (input.value.length - (selectionEnd - selectionStart)));
+
+            input.setRangeText(
+                sanitizedText.slice(0, availableLength),
+                selectionStart,
+                selectionEnd,
+                "end");
+        });
+    });
+
+    document.querySelectorAll("[data-digits-only]").forEach((input) => {
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
+        input.addEventListener("input", () => {
+            const maximumLength = input.maxLength > 0 ? input.maxLength : Number.MAX_SAFE_INTEGER;
+            const sanitizedValue = input.value.replace(/\D/g, "").slice(0, maximumLength);
+
+            if (sanitizedValue !== input.value) {
+                input.value = sanitizedValue;
             }
         });
     });
