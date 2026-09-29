@@ -120,14 +120,6 @@
     <partial name="_ValidationScriptsPartial" />
     <script>
         (() => {
-            const fullNameInput = document.getElementById('staffFullName');
-            fullNameInput?.addEventListener('input', () => {
-                fullNameInput.value = fullNameInput.value
-                    .replace(/[^\p{L}\s]/gu, '')
-                    .replace(/\s{2,}/g, ' ')
-                    .slice(0, 100);
-            });
-
             document.querySelectorAll('.password-toggle').forEach(button => {
                 button.addEventListener('click', () => {
                     const input = document.getElementById(button.dataset.target);
@@ -149,4 +141,3 @@
         })();
     </script>
 }
-

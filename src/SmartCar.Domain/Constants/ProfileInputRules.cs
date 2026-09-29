@@ -11,7 +11,7 @@ public static class ProfileInputRules
     public const string PhoneError = "Số điện thoại phải gồm 10 chữ số bắt đầu bằng 0, hoặc dùng mã quốc gia +84.";
 
     public static string NormalizeFullName(string? value) =>
-        string.Join(' ', (value ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        string.Join(' ', (value ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)).Normalize();
 
     public static string NormalizePhoneNumber(string? value)
     {
@@ -31,5 +31,5 @@ public sealed class ValidFullNameAttribute : ValidationAttribute
     public ValidFullNameAttribute() : base(ProfileInputRules.FullNameError) { }
 
     public override bool IsValid(object? value) => value is null ||
-        (value is string name && name.All(character => char.IsLetter(character) || character == ' '));
+        (value is string name && name.Normalize().All(character => char.IsLetter(character) || character == ' '));
 }

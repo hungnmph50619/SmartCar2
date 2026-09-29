@@ -71,16 +71,4 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    <script>
-        (() => {
-            const fullNameInput = document.getElementById('staffFullName');
-            fullNameInput?.addEventListener('input', () => {
-                fullNameInput.value = fullNameInput.value
-                    .replace(/[^\p{L}\s]/gu, '')
-                    .replace(/\s{2,}/g, ' ')
-                    .slice(0, 100);
-            });
-        })();
-    </script>
 }
-

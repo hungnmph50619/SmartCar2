@@ -100,6 +100,7 @@ public sealed class StaffAccountRegressionTests
 
     [Theory]
     [InlineData("Nguyễn Văn An", true)]
+    [InlineData("Nguye\u0302\u0303n Va\u0306n An", true)]
     [InlineData("Nguyễn Văn 123", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
@@ -109,6 +110,10 @@ public sealed class StaffAccountRegressionTests
         Assert.Equal(expected, ValidProperty(new AdminStaffEditViewModel(), "FullName", name));
         Assert.Equal(expected, ValidProperty(new ProfileViewModel(), "FullName", name));
     }
+
+    [Fact]
+    public void StaffFullNameNormalizesDecomposedVietnameseAfterSubmission() =>
+        Assert.Equal("Nguyễn Văn An", ProfileInputRules.NormalizeFullName("  Nguye\u0302\u0303n   Va\u0306n An  "));
 
     [Fact]
     public void ProfileRejectsValuesLongerThanDatabaseColumns()
